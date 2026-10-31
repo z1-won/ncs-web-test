@@ -14,7 +14,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
 from ncs_core import Rule
 from ncs_service import ReviewRequest, execute_review
@@ -148,7 +147,7 @@ class ServiceTests(unittest.TestCase):
     def run_cli(self, check, *args):
         return subprocess.run(
             [sys.executable, "-m", f"ncs_{check}", *map(str, args)],
-            cwd=self.folder, env={**os.environ, "PYTHONPATH": str(ROOT / "src"), "PYTHONDONTWRITEBYTECODE": "1"},
+            cwd=self.folder, env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
             capture_output=True, text=True, timeout=30,
         )
 

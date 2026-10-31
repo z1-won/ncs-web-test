@@ -14,7 +14,6 @@ from collections.abc import Sequence
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 
 from ncs_core import Rule, ReviewResult, SavedReport, VERDICTS, flatten
 from ncs_core.f02_items import F02_ITEMS
@@ -130,9 +129,9 @@ class EngineContractTests(unittest.TestCase):
                 self.assertEqual(json.loads(whole.read_text(encoding="utf-8")), execution.result.checklist)
 
     def test_web_server_and_frontend_list_every_engine(self):
-        """엔진을 등록하면 webapp/server.py의 CheckName·health 목록과 화면의 CHECKS도 함께 갱신해야 한다."""
+        """엔진을 등록하면 src/ncs_web/server.py의 CheckName·health 목록과 화면의 CHECKS도 함께 갱신해야 한다."""
         registered = set(ENGINES)
-        server = (ROOT / "webapp" / "server.py").read_text(encoding="utf-8")
+        server = (ROOT / "src" / "ncs_web" / "server.py").read_text(encoding="utf-8")
         literal = re.search(r"CheckName = Literal\[(.*?)\]", server).group(1)
         self.assertEqual(set(re.findall(r'"(\w+)"', literal)), registered, "server.py CheckName")
         health = re.search(r'"checks":\s*\[(.*?)\]', server).group(1)

@@ -119,6 +119,6 @@ tests/compare_with_original.py   원본 패키지와 체크리스트 동일성 �
 ## 6. 남은 과제 (이번 범위 밖)
 
 - 기존 `docs/REVIEW.md`의 위치 ⑤ 정확성 과제(코드 번호 기반 행 선택 등)는 그대로다.
-- 설치형 Python 패키지 배포를 위한 패키징 설정은 아직 없다. 현재 웹 서버와 CLI는 `src/` 경로의 공통 코어를 사용한다.
+- 설치형 Python 패키지 구성은 `pyproject.toml`로 반영했다. 웹은 `src/ncs_web`, 엔진·서비스는 기존 `src/ncs_*`에서 설치하며, `--src`와 런타임 검색 경로 주입은 제거했다. 기본 엔진·웹·테스트 의존성을 구분하고 결과·화면 경로는 별도로 지정한다.
 - 라인 길이 120자 기준 `black -l 120` 적용(이 환경에는 black이 없어 수동 정리).
 - `ncs_overview/compare.py`의 `diff_list`는 `ncs_core.manuscript.names.diff_list`와 본체가 같고 정규화 규칙만 다르다. 정규화 함수를 인자로 받게 하면 하나로 합칠 수 있다.

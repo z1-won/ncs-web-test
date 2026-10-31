@@ -1,7 +1,7 @@
 # F02 검수 웹앱·Python 패키지
 
 HWP/HWPX 원고와 개발계획서를 읽어 위치·차례·개요·필요 지식을 검수합니다.
-검수 엔진은 Python 3.10 이상과 표준 라이브러리만 사용하며, 웹 백엔드는 FastAPI·Uvicorn, 화면은 React·Vite 기반입니다.
+검수 엔진은 Python 3.10 이상과 표준 라이브러리만 사용합니다. 고정된 웹 의존성은 Python 3.11 이상이 필요하며 Python 3.14.5에서 검증했습니다. 웹 백엔드는 FastAPI·Uvicorn, 화면은 React·Vite 기반입니다.
 개발·수정 기준은 `src/`의 Python 소스입니다. 웹 서버와 CLI는 `ncs_service`를 통해 같은 검수·저장 경로를 사용합니다.
 
 ## 폴더 구조
@@ -10,7 +10,9 @@ HWP/HWPX 원고와 개발계획서를 읽어 위치·차례·개요·필요 지�
 - `src/ncs_core/manuscript/`: 차례·개요·본문·개발계획서 구조 파서와 명칭 비교 도우미. 네 검수 패키지가 공유합니다.
 - `src/ncs_position/`, `src/ncs_toc/`, `src/ncs_overview/`, `src/ncs_knowledge/`: 검수 패키지. 서로를 import하지 않고 `ncs_core` 위에 평행하게 섭니다(`tests/test_layering.py`가 검사).
 - `src/ncs_service/`: HTTP와 독립적인 검수 실행·저장 조정
-- `webapp/`: FastAPI 서버와 React 화면. [실행 안내](webapp/README.md)
+- `src/ncs_web/`: 설치형 FastAPI 서버와 웹 실행 명령
+- `pyproject.toml`: Python 패키지·선택 의존성·실행 명령 정의
+- `webapp/`: 호환 실행 파일과 React 화면. [실행 안내](webapp/README.md)
 - `webapp/frontend/dist/`: 웹 화면 빌드 결과
 - `tests/`: 합성 입력 생성, 기존 구현 비교, 서비스·웹 API 검증, 패키지 계층(`test_layering.py`)과 엔진 계약(`test_engines.py`) 검사
 - `original/`: 리팩토링 전 비교용 Python 소스
@@ -23,8 +25,8 @@ HWP/HWPX 원고와 개발계획서를 읽어 위치·차례·개요·필요 지�
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -r webapp/requirements.txt
-.venv/bin/python webapp/server.py --out webapp/결과
+.venv/bin/python -m pip install -e ".[web]"
+.venv/bin/ncs-web --out webapp/결과
 ```
 
 별도 터미널에서 화면을 실행합니다.
@@ -42,14 +44,22 @@ API 문서는 `http://127.0.0.1:8765/docs`에서 확인합니다.
 
 ## CLI 실행
 
-저장소 루트에서 실행하며, 입력 파일 경로는 실제 파일 위치로 바꿉니다.
+엔진만 필요하면 `python -m pip install -e .`로 설치합니다(웹 의존성 제외).
+설치 후에는 `PYTHONPATH` 없이 어느 폴더에서든 가상환경의 명령을 실행할 수 있습니다.
+다음은 저장소 루트에서 실행하는 예시이며, 입력 파일 경로는 실제 위치로 바꿉니다.
 
 ```bash
-PYTHONPATH=src python3 -m ncs_toc 원고.hwpx 개발계획서.hwpx --out 결과
-PYTHONPATH=src python3 -m ncs_position 원고.hwpx 개발계획서.hwpx --out 결과
-PYTHONPATH=src python3 -m ncs_overview 원고.hwpx 개발계획서.hwpx --out 결과
-PYTHONPATH=src python3 -m ncs_knowledge 원고.hwpx 개발계획서.hwpx --out 결과
+.venv/bin/ncs-toc 원고.hwpx 개발계획서.hwpx --out 결과
+.venv/bin/ncs-position 원고.hwpx 개발계획서.hwpx --out 결과
+.venv/bin/ncs-overview 원고.hwpx 개발계획서.hwpx --out 결과
+.venv/bin/ncs-knowledge 원고.hwpx 개발계획서.hwpx --out 결과
 ```
+
+기존 `python -m ncs_toc` 등 모듈 실행도 설치 후 사용할 수 있습니다.
+`-e`는 수정한 Python 소스를 다음 실행에 반영하는 개발용 설치이며, 실행 중인 서버는 재시작해야 합니다.
+`--src`는 제거했습니다. 다른 소스를 사용할 때는 해당 가상환경에서 `pip install -e /프로젝트/경로`로 등록합니다.
+배포용 복사 설치는 `pip install ".[web]"` 또는 wheel 설치를 사용합니다.
+프런트엔드 빌드 파일은 Python 배포본에 포함하지 않으며 `--dist`로 별도 지정합니다.
 
 ## 검수 범위
 
@@ -69,7 +79,7 @@ HWP는 글꼴·음영을 읽지 않아 위치 ⑤가 판단불가입니다.
 실행 조정 계층·CLI·웹 API 검증:
 
 ```bash
-.venv/bin/python -m pip install -r webapp/requirements-dev.txt
+.venv/bin/python -m pip install -e ".[test]"
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 

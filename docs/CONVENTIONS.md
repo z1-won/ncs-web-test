@@ -18,7 +18,7 @@
 
 ## 공개 API (모든 검수 패키지 동일)
 `tests/test_engines.py`가 `ncs_service.registry.ENGINES`에 등록된 모든 엔진에 대해 이 계약을 검사한다(공개 이름, frozen `CheckConfig`, 체크리스트 행 키, 확인서 행이 F02 원문 항목과 일치, 저장 파일·ZIP, 빈 규칙 목록, 다른 엔진 설정 거절).
-새 구성요소 엔진은 **`ENGINES`에 등록 → `webapp/server.py`의 `CheckName`·`/api/health`·오류 메시지 → `webapp/frontend/src/App.jsx`의 `CHECKS`** 세 곳을 같이 고친다. 하나라도 빠지면 같은 테스트가 알려 준다.
+새 구성요소 엔진은 **`ENGINES`에 등록 → `src/ncs_web/server.py`의 `CheckName`·`/api/health`·오류 메시지 → `webapp/frontend/src/App.jsx`의 `CHECKS`** 세 곳을 같이 고친다. 하나라도 빠지면 같은 테스트가 알려 준다.
 ```python
 run_review(paths, *, roles=None, module_code="", config=DEFAULT_CONFIG, rules=DEFAULT_RULES) -> ReviewResult
 prepare_review(manuscript: Document, plan: Document | None, *, module_code="", config=...) -> ReviewContext
@@ -36,17 +36,18 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 항목 꼬리말은 각 패키지 `reporting.ITEM_FILES`에 둔다.
 
 ## 코드 스타일
-- 검수 엔진·실행 조정 계층은 Python 3.10+, 표준 라이브러리만. 웹 계층은 FastAPI·Uvicorn을 사용하며 의존성은 `webapp/requirements.txt`에서 관리한다. 타입 힌트는 공개 함수와 dataclass에 붙인다.
+- 검수 엔진·실행 조정 계층은 Python 3.10+, 표준 라이브러리만. 웹 계층은 FastAPI·Uvicorn을 사용하며 설치는 `pyproject.toml`로 통일하고 `web` extra는 `webapp/requirements.txt`, `test` extra는 추가로 `tests/requirements.txt`의 고정 버전을 읽는다. 타입 힌트는 공개 함수와 dataclass에 붙인다.
 - black 스타일, 줄 길이 120. 한 줄에 여러 문장(`if …: a; b`) 금지. 한 글자 변수는 짧은 comprehension 안에서만.
 - 모듈 첫 줄은 한국어 docstring 한 문단. 사용자에게 보이는 문자열(비고·오류)은 한국어.
 - 오류는 `ValueError`로 올리고, 웹 서버·CLI가 잡아서 메시지를 보여준다. 규칙·파서는 `print`하지 않는다.
 
 ## 실행과 수정
+프로젝트를 가상환경에 설치한 뒤 실행한다(`pip install -e ".[web]"`, 테스트는 `.[test]`). 런타임 `sys.path` 주입과 `--src`는 사용하지 않는다. 검수 CLI는 `ncs-position` 등 설치 명령 또는 기존 `python -m ncs_position`을 사용한다.
 검수 엔진의 수정 원본은 `src/`이다. 웹 서버와 네 CLI는 모두 `ncs_service.execute_review()` 및 `persist_review()`를 통해 검수·저장을 실행한다.
 `ncs_service`는 파일 경로를 받아 문서 선택·엔진 실행·저장을 조정하며 HTTP 요청이나 업로드 객체를 받지 않는다.
 `ReviewRequest.config`에는 선택한 엔진의 `CheckConfig`, `rules`에는 사용자 지정 `Rule` 목록을 전달할 수 있다. 둘 다 `None`이면 엔진 기본값을 사용하며 `rules=()`는 규칙을 실행하지 않는다. 다른 엔진의 설정 객체는 `ValueError`로 거절한다.
 각 엔진의 기존 `run_review()` 공개 API는 Python 호출자와의 호환성을 위해 유지한다.
-FastAPI 요청·응답 모델 및 오류 상태 코드는 `webapp/server.py`에서 관리한다. 기존 `/api/review`의 입력 오류는 400, 저장 I/O 오류 등은 500을 유지한다.
+FastAPI 요청·응답 모델 및 오류 상태 코드는 `src/ncs_web/server.py`에서 관리한다. 기존 `/api/review`의 입력 오류는 400, 저장 I/O 오류 등은 500을 유지한다.
 결과 저장 경로(`--out`)와 정적 화면 경로(`--dist`)는 서버 코드 위치에서 유도하지 않는다. 상대 경로는 앱 생성 시 실행 위치를 기준으로 확정한다. `--out` 기본값은 실행 위치의 `결과/`, `--dist` 생략 시 API 전용이다.
 웹 화면은 `webapp/frontend/src/`에서 수정하고, 프런트엔드 폴더에서 `npm run build`로 `webapp/frontend/dist/`를 생성한다.
 

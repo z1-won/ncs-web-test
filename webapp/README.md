@@ -1,22 +1,23 @@
 # F02 검수 로컬 웹앱
 
 FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다.
-서버는 파일 업로드·요청 검증·HTTP 응답을, `src/ncs_service/`는 검수 실행·저장 조정을 담당합니다.
+`src/ncs_web/server.py`는 파일 업로드·요청 검증·HTTP 응답을, `src/ncs_service/`는 검수 실행·저장 조정을 담당합니다.
 `src/ncs_core/`와 네 검수 패키지는 웹 프레임워크 없이도 실행할 수 있습니다.
 
 ## 설치·실행
 
-저장소 루트에서 프로젝트 가상환경을 만듭니다. 현재 웹 서버 의존성은 Python 3.14.5에서 검증했습니다.
+저장소 루트에서 프로젝트 가상환경을 만들고 프로젝트를 설치합니다. 고정된 웹 의존성은 Python 3.11 이상이 필요하며 Python 3.14.5에서 검증했습니다. 엔진만 설치할 때는 Python 3.10 이상을 지원합니다.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -r webapp/requirements.txt
-.venv/bin/python webapp/server.py --out webapp/결과
+.venv/bin/python -m pip install -e ".[web]"
+.venv/bin/ncs-web --out webapp/결과
 ```
 
 기본 주소는 `http://127.0.0.1:8765`입니다. 위 명령은 결과를 기존 `webapp/결과/`의 실행별 폴더에 저장합니다.
-기존 `--port`, `--src`, `--out` 옵션을 유지합니다. `--src`에는 `ncs_core`, 네 검수 패키지와 `ncs_service`가 있어야 합니다.
-가상환경을 활성화한 경우 `python3 webapp/server.py --out webapp/결과`로도 실행할 수 있습니다.
+`--port`, `--out`, `--dist` 옵션을 사용합니다. `--src`는 제거하고 설치된 Python 패키지를 사용하도록 통일했습니다.
+프로젝트 설치 후에는 기존 `python webapp/server.py --out webapp/결과` 명령도 호환 진입점을 통해 실행됩니다. 이 파일은 설치된 `ncs_web.server`를 호출하며 검색 경로를 추가하지 않습니다.
+가상환경을 활성화하면 `ncs-web` 또는 `python -m ncs_web`로도 실행할 수 있습니다.
 
 별도 터미널에서 화면을 실행합니다.
 
@@ -30,7 +31,7 @@ npm run dev
 프런트엔드 폴더에서 `npm run build`를 실행한 뒤, 저장소 루트에서 아래처럼 시작하면 빌드된 화면도 8765에서 제공합니다.
 
 ```bash
-.venv/bin/python webapp/server.py --out webapp/결과 --dist webapp/frontend/dist
+.venv/bin/ncs-web --out webapp/결과 --dist webapp/frontend/dist
 ```
 
 ## 저장·화면 경로 분리
@@ -50,7 +51,7 @@ npm run dev
 Uvicorn으로 직접 실행할 수도 있습니다. 다음 명령은 저장소 루트에서 실행하며, 기본 설정(API 전용·실행 위치의 `결과/` 저장)을 사용합니다. 경로를 지정할 때는 위의 서버 실행 명령을 사용하세요.
 
 ```bash
-.venv/bin/python -m uvicorn webapp.server:create_app --factory --host 127.0.0.1 --port 8765
+.venv/bin/python -m uvicorn ncs_web.server:create_app --factory --host 127.0.0.1 --port 8765
 ```
 
 ## API
@@ -100,7 +101,7 @@ FastAPI 업로드 → 임시 파일 → execute_review(ReviewRequest)
 
 ### 설정과 규칙 전달
 
-Python 실행 요청에 엔진별 설정과 규칙 목록을 전달할 수 있습니다. 예시는 저장소 루트에서 `PYTHONPATH=src`로 실행합니다.
+Python 실행 요청에 엔진별 설정과 규칙 목록을 전달할 수 있습니다. 프로젝트를 설치한 가상환경의 Python으로 실행하며 `PYTHONPATH` 설정은 필요하지 않습니다.
 
 ```python
 from pathlib import Path
@@ -132,7 +133,7 @@ CLI는 기존 섹션 옵션을 설정 객체로 전달합니다. HTTP로 임의 
 저장소 루트에서 실행합니다.
 
 ```bash
-.venv/bin/python -m pip install -r webapp/requirements-dev.txt
+.venv/bin/python -m pip install -e ".[test]"
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
@@ -140,4 +141,20 @@ CLI는 기존 섹션 옵션을 설정 객체로 전달합니다. HTTP로 임의 
 저장 실패, 임시 파일 정리, API 문서·CORS·정적 화면 및 HTTP 없는 실행을 검사합니다.
 서비스·CLI 테스트는 엔진별 설정·규칙 전달, 역할·모듈 코드 지정, 섹션을 바꾼 문서 검수,
 빈 규칙 목록, 잘못된 설정, CLI 실행 경로·종료 코드·저장 결과를 검사합니다.
-`requirements.txt`는 서버 의존성, `requirements-dev.txt`는 API 테스트 의존성을 고정합니다.
+`pyproject.toml`이 설치 진입점입니다. 기본 설치는 외부 런타임 의존성이 없는 엔진·서비스이며,
+`web` extra는 `webapp/requirements.txt`, `test` extra는 여기에 `tests/requirements.txt`를 합쳐 읽습니다.
+`requirements-dev.txt`는 기존 의존성 설치 명령을 위한 호환 목록입니다. 이 파일만 설치하면 프로젝트 자체는 설치되지 않으므로 위의 `pip install -e ".[test]"`를 사용하세요.
+
+## 설치 구조
+
+- `ncs-web`: `ncs_web.server:main`
+- `ncs-position`, `ncs-toc`, `ncs-overview`, `ncs-knowledge`: 각 패키지의 CLI
+- `pip install -e .`: 엔진 전용 개발 설치
+- `pip install -e ".[web]"`: 웹 개발 설치
+- `pip install -e ".[test]"`: 웹·테스트 개발 설치
+- `pip install ".[web]"`: 소스를 복사하는 일반 설치
+
+설치 대상은 `src/ncs_*` 패키지입니다. React 소스·빌드, 기존 비교용 소스, 검수 결과는 Python wheel에 포함되지 않습니다.
+결과와 화면 경로는 위의 `--out`·`--dist` 설정을 사용하며 가상환경 설치 폴더에 자동 저장하지 않습니다.
+공통 엔진·서비스는 FastAPI를 import하지 않습니다. 설치된 패키지의 사용을 검증하기 위해 일반 테스트도 `sys.path`를 주입하지 않습니다.
+기존 두 소스 트리를 번갈아 불러오는 `compare_with_original.py`만 비교 목적의 경로 교체를 유지합니다.

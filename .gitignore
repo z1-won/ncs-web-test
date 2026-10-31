@@ -6,3 +6,8 @@ __pycache__/
 # Generated review reports
 /webapp/결과/
 /결과/
+
+# Python package build artifacts
+/build/
+/dist/
+*.egg-info/

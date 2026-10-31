@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ncs-f02-review"
+version = "0.1.0"
+description = "F02 HWP/HWPX document review engines and local web API"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+dynamic = ["optional-dependencies"]
+
+[project.scripts]
+ncs-web = "ncs_web.server:main"
+ncs-position = "ncs_position.__main__:main"
+ncs-toc = "ncs_toc.__main__:main"
+ncs-overview = "ncs_overview.__main__:main"
+ncs-knowledge = "ncs_knowledge.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ncs_*"]
+namespaces = false
+
+[tool.setuptools.dynamic.optional-dependencies]
+web = {file = ["webapp/requirements.txt"]}
+test = {file = ["webapp/requirements.txt", "tests/requirements.txt"]}

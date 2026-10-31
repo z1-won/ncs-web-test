@@ -22,12 +22,12 @@ def imported_packages(package: str) -> dict[str, set[str]]:
 class LayeringTest(unittest.TestCase):
     def test_engines_do_not_import_each_other(self):
         for engine in ENGINES:
-            others = set(ENGINES) - {engine}
+            others = (set(ENGINES) - {engine}) | {"ncs_web"}
             for file, names in imported_packages(engine).items():
                 self.assertFalse(names & others, f"{file}이(가) 다른 검수 패키지를 import합니다: {sorted(names & others)}")
 
     def test_core_imports_no_engine_or_service(self):
-        forbidden = set(ENGINES) | {"ncs_service"}
+        forbidden = set(ENGINES) | {"ncs_service", "ncs_web"}
         for file, names in imported_packages("ncs_core").items():
             self.assertFalse(names & forbidden, f"{file}이(가) 상위 계층을 import합니다: {sorted(names & forbidden)}")
 

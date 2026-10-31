@@ -13,10 +13,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "src"))
-from webapp.server import create_app
-from webapp import server
+from ncs_web.server import create_app
+from ncs_web import server
 
 FIXTURES = ROOT / "tests" / "fixtures"
 PLAN = FIXTURES / "개발계획서_LM1203020201_24v3.hwpx"

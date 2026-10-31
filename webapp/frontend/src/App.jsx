@@ -154,7 +154,7 @@ export default function App() {
       if (!response.ok) setError(data.error + (data.traceback ? "\n\n" + data.traceback : ""));
       else setResult(data);
     } catch (e) {
-      setError(`서버에 연결하지 못했습니다: ${e.message}\n(python3 webapp/server.py 가 실행 중인지 확인)`);
+      setError(`서버에 연결하지 못했습니다: ${e.message}\n(가상환경의 ncs-web 서버가 실행 중인지 확인)`);
     } finally {
       setBusy(false);
     }
