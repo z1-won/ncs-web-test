@@ -1,0 +1,82 @@
+# F02 차례(v2) · 위치(v1.2) 리팩토링본 일관성 평가와 통합 리팩토링
+
+대상: 리팩토링 전 차례 검수(`ncs_toc`)와 위치 검수(`ncs_position`) Python 소스.
+결과: 공통 코어 `ncs_core`를 뽑아내고 두 패키지를 같은 구조·규약으로 재구성했다.
+판정 정책과 JSON 키는 바꾸지 않았다(합성 원고 6종 × 개발계획서 유무 = 18건에서 체크리스트가 원본과 동일).
+
+## 1. 평가 — 두 패키지가 서로 달랐던 점
+
+| 영역 | ncs_toc (차례 v2) | ncs_position (위치 v1.2) | 문제 |
+|---|---|---|---|
+| 의존성 | 표준 라이브러리만 (`xml.etree`) | `lxml`, `olefile` 필수 | 같은 HWPX를 두 가지 파서로 읽음. 외부 의존성 설치 여부에 따라 실행 가능 환경이 달라짐 |
+| HWP(CFB) 로더 | `_read_cfb` 사본 A: 순환 체인 검출, 레코드 잘림 검출, 섹터 오프셋 `(n+1)*ssz` | 사본 B: `512 + n*ssz`, 순환 검출 없음(`len(out) < 10**6`), 잘림 검출 없음 | **동일 함수의 두 사본이 미묘하게 다름.** 섹터 크기 4096인 파일에서 B는 틀린 오프셋(CFB 규격은 `(n+1)*ssz`). 버그 수정이 한쪽에만 들어가는 구조 |
+| HWPX 문단 텍스트 | `_hwpx_para_text` (ET) | `_hwpx_para_text` (lxml) + 표 전용 `_hwpx_text` | 세 사본. 중첩 표 셀 처리가 다름(차례: 자기 셀 문단만, 위치: 중첩 포함) |
+| 형식 판별 | 머리 8바이트만 | OLE면 `FileHeader` 서명까지 확인 | 엄격도가 다름 |
+| 정규화 `norm` | `^(학습 )?\d+(-\d+)?\.\s*` 제거 + 공백 축약 | `^\d+\.\s*` 제거만 | 정책 차이는 정당하지만, 함수 본체가 중복 |
+| `_verdict`, `visible`, `PUA`, `flatten` | `common.py` + `reporting.py` | `common.py` | 완전히 같은 코드가 두 곳 |
+| 모듈 코드 | `pipeline.resolve_module_code` (`findall`, 형식만 검사) | `module_code.py` (경계 lookaround, 01 이상 검사) | 같은 입력에 다른 결과 가능 |
+| 입력 검증 | 역할 자동 판별 `detect_role`, 중복 경로 검출 | 경로 존재·크기·SHA-256 동일 파일 검출 | 서로 유용한 검사를 한쪽만 가짐 |
+| 공개 API | `inspect_files(paths, roles=)`, `inspect_documents(ms, plan)` | `prepare_review(plan, ms)`, `evaluate_review(ctx)`, `run_review(plan, ms)` | 이름·인자 순서·단계 분리 방식이 다름 |
+| 결과 모델 | `InspectionResult(code, checklist, findings, diagnostics, context)` | `ReviewResult(code, checklist, findings)` + `SavedReport` | 진단 정보가 한쪽에만 있음 |
+| 규칙 등록 | `registry.py` `Rule(item_id, run)` + item_id 검증 | `pipeline.py` 안 `Rule(key, evaluate)` + key 중복 검증 | 위치는 한 규칙이 여러 item_id(`⑤`, `⑤-세분류`)를 내므로 차례 방식으로는 등록 불가 |
+| 규칙 배치 | `rules/` 하위 패키지 | `content_rules.py`, `emphasis_rules.py` 평면 | 폴더 구조 불일치 |
+| 설정 | `CheckConfig`(섹션·임계값) | 없음(하드코딩) | 양식 변경 대응력이 다름 |
+| 저장 | `save_results(checklist, findings, code, out_dir, diagnostics=)` → `(summary, zip 경로 str)`, **out_dir에 덮어씀** | `save_results(result, out_dir)` → `SavedReport`, **실행별 하위 폴더** | 시그니처·반환형·덮어쓰기 정책이 다름 |
+| CLI | `paths...` 위치 인자 + `--manuscript/--plan` 역할 지정, `--out-dir` | `--plan/--manuscript` 필수, `--out` | 옵션 이름이 다름 |
+| 코드 스타일 | 한 줄 압축(`if …: a; b`), 한 글자 변수, 타입 힌트 거의 없음 | black 스타일, 타입 힌트·TypedDict | 읽는 사람이 두 가지 규약을 익혀야 함 |
+
+요약: 두 구현은 각각은 "확장성/수정가능성"을 고려해 모듈화됐지만, **같은 일을 하는 코드(문서 읽기, 판정, 저장, 모듈 코드)가 서로 다른 사본으로 존재**하고 공개 API·저장 정책·스타일이 어긋나 있었다. 한쪽에서 고친 로더 버그가 다른 쪽에 전파되지 않는 구조가 가장 큰 위험이었다.
+
+## 2. 통합 리팩토링 — 무엇을 어디로 옮겼나
+
+```
+src/
+  ncs_core/            두 검수가 공유 (정책 없음)
+    documents.py       Document(path, format, sections, tables, images), load_document, detect_format
+    hwp.py             CFB 리더(차례의 안전한 버전 + 규격 오프셋), 문단·표 추출
+    hwpx.py            ET 기반 문단·표(셀 텍스트+서식)·그림 이름 추출 (섹션당 1회 순회)
+    text.py            PUA/O/X/△/-, make_normalizer(prefix) → (norm, same), visible, verdict, flatten
+    inputs.py          detect_role, select_documents(paths, roles, required=), validate_distinct(SHA-256)
+    module_code.py     validate_module_code, resolve_module_code (위치의 엄격한 버전)
+    rules.py           Rule(key, item_prefix, run), run_rules — key 중복·item_id 접두 검증
+    reporting.py       save_report(result, out_dir, name=, item_files=, other_tail=, per_run_dir=)
+    tables.py          column, column_cells, header_columns, find_table
+    models.py          ReviewResult(code, checklist, findings, diagnostics, context), SavedReport
+  ncs_toc/  ncs_position/      동일한 파일 구성
+    __init__.py  __main__.py  config.py  patterns.py  text.py  compare.py
+    parsers.py  models.py(ReviewContext)  registry.py(DEFAULT_RULES)  pipeline.py  reporting.py
+    rules/<규칙별 모듈>.py
+    (ncs_toc만: presence.py, evaluation.py)
+tests/make_fixtures.py    합성 HWPX 생성
+tests/compare_with_original.py   원본 패키지와 체크리스트 동일성 비교 (18/18 동일)
+```
+
+양쪽에 같은 이름으로 존재하는 것: `CheckConfig`, `ReviewContext`, `DEFAULT_RULES`, `prepare_review`/`evaluate_review`/`run_review(paths, *, roles, module_code, config, rules)`, `save_results(result, out_dir, *, per_run_dir=True) -> SavedReport`, CLI(`python -m <패키지> 경로... [--manuscript] [--plan] [--module-code] [--front-section] [--out]`).
+
+## 3. 의도적으로 바꾼 동작 (정책은 아님)
+
+| 변경 | 이유 | 영향 |
+|---|---|---|
+| 위치 검수에서 `lxml`·`olefile` 제거 | 차례와 같은 표준 라이브러리 파서로 통일 | 외부 의존성 설치 없이 실행 가능 |
+| HWP 섹터 오프셋을 `(n+1)*ssz`로 통일 | CFB 규격. 512바이트 섹터에서는 두 식이 같음 | 4096바이트 섹터 HWP에서 위치 검수가 올바르게 읽힘 |
+| HWPX 중첩 표: 바깥 셀에 안쪽 표 텍스트를 합치지 않음(차례 방식) | 중첩 표는 자체 표로 따로 나옴. HWP 로더도 원래 이 방식 | 위치 표 안에 표를 중첩한 비정형 원고에서 셀 텍스트가 달라질 수 있음 |
+| 위치 검수 `norm`이 연속 공백을 하나로 축약 | 공통 `make_normalizer`. 로더가 이미 공백을 정리하므로 실질 차이 없음 | — |
+| 위치 검수 모듈 코드 추출을 차례에도 적용(경계 lookaround, 01 이상) | 한 규칙으로 통일 | 파일명에 코드가 다른 영숫자에 붙어 있으면 차례 검수가 "코드 없음"으로 멈춤 → `MODULE_CODE` 지정 |
+| 차례 결과 저장도 실행별 하위 폴더(`per_run_dir=True`) | 위치와 통일, 이전 ZIP 재사용 방지. 덮어쓰기가 필요하면 `per_run_dir=False` | 결과 경로가 `결과/<코드>_xxxx/`로 바뀜 |
+| 위치 검수에도 `*_진단.json` 추가(경고·개수·미구현) | 차례와 통일 | 파일 1개 추가 |
+| 판정 표현을 반영/미반영 → **적합/부적합**(판단불가 유지)으로, 요약 JSON에 항목별·전체 `검수결과` 추가 | 검수 확인서의 검수결과 표현과 일치 (피드백 반영) | `판정`·`verdict` 값과 `*_00_요약.json` 구조가 바뀜. 원본 비교 테스트는 표현을 맞춘 뒤 비교 |
+| 위치 검수 입력도 역할 자동 판별 + 동일 파일 검출, 차례도 동일 파일 검출 | 양쪽 검사를 모두 적용 | 업로드 순서 무관 |
+| HWP에서도 표 셀을 읽음 → 차례 ③ 평가 대조가 HWP에서도 표 기반으로 동작 가능 | 공통 로더가 HWP 표를 지원 | 원래는 HWP면 문단 휴리스틱(△)만. 실제 HWP로 확인 필요(합성 HWP 픽스처 없음) |
+| `header_columns`가 같은 머리글이 두 열에 있으면 먼저 나온 열 사용 | 원본 dict comprehension은 마지막 열 | 머리글이 중복된 비정형 표에서만 차이 |
+
+## 4. 검증
+
+- `python3 -I tests/make_fixtures.py fixtures` : 원고 6종(정상, PUA 문자, 학습명 불일치, 소분류 불일치, 세분류 순서 바뀜, 평가 표 불일치) + 개발계획서.
+- `python3 -I tests/compare_with_original.py original src fixtures` : 차례(계획서 유/무) 12건 + 위치 6건 = 18건, 체크리스트 JSON 완전 일치.
+- 미검증: 실제 HWP(바이너리) 파일. CFB 로더는 원본 코드를 합친 것이지만 합성 HWP를 만들지 못해 픽스처 비교는 HWPX만 했다. 실제 원고·개발계획서 쌍으로 한 번 돌려본 뒤 운영에 쓸 것.
+
+## 5. 남은 과제 (이번 범위 밖)
+
+- 기존 `docs/REVIEW.md`의 위치 ⑤ 정확성 과제(코드 번호 기반 행 선택 등)는 그대로다.
+- 설치형 Python 패키지 배포를 위한 패키징 설정은 아직 없다. 현재 웹 서버와 CLI는 `src/` 경로의 공통 코어를 사용한다.
+- 라인 길이 120자 기준 `black -l 120` 적용(이 환경에는 black이 없어 수동 정리).

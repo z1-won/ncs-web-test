@@ -1,0 +1,145 @@
+"""FastAPI와 기존 엔진의 결과 일치·업로드 수명·오류 계약을 확인한다."""
+
+import importlib
+import json
+import sys
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
+from webapp.server import create_app
+
+FIXTURES = ROOT / "tests" / "fixtures"
+PLAN = FIXTURES / "개발계획서_LM1203020201_24v3.hwpx"
+MANUSCRIPT = FIXTURES / "원고_ok_LM1203020201_24v3.hwpx"
+PACKAGES = {"position": "ncs_position", "toc": "ncs_toc", "overview": "ncs_overview", "knowledge": "ncs_knowledge"}
+
+
+class WebappTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="ncs_api_test_")
+        self.addCleanup(self.temp.cleanup)
+        self.output = Path(self.temp.name) / "results"
+        self.client = TestClient(create_app(out_dir=self.output, dist_dir=Path(self.temp.name) / "no_build"))
+        self.addCleanup(self.client.close)
+
+    def upload(self, check="position", manuscript=MANUSCRIPT, with_plan=True, **data):
+        paths = [manuscript, PLAN] if with_plan else [manuscript]
+        return self.client.post("/api/review", data={"check": check, **data}, files=[
+            ("files", (p.name, p.read_bytes(), "application/octet-stream")) for p in paths
+        ])
+
+    def test_all_engines_match_direct_results_and_save(self):
+        for check, package in PACKAGES.items():
+            engine = importlib.import_module(package)
+            for manuscript in sorted(FIXTURES.glob("원고_*.hwpx")):
+                with self.subTest(check=check, file=manuscript.name):
+                    expected = engine.run_review([str(manuscript), str(PLAN)])
+                    response = self.upload(check, manuscript)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    body = response.json()
+                    self.assertEqual(body["전체"], expected.checklist)
+                    self.assertEqual(body["지적사항"], expected.findings)
+                    self.assertEqual(body["검수확인서"], expected.sheet)
+                    self.assertEqual(body["module_code"], expected.module_code)
+                    with zipfile.ZipFile(body["저장"]["zip"]) as archive:
+                        self.assertIsNone(archive.testzip())
+                        name = next(name for name in archive.namelist() if name.endswith("_전체.json"))
+                        self.assertEqual(json.loads(archive.read(name)), body["전체"])
+                    for path in body["진단"]["inputs"].values():
+                        if path:
+                            self.assertFalse(Path(path).exists(), "업로드 임시 파일 정리")
+
+    def test_plan_requirements(self):
+        self.assertEqual(self.upload(with_plan=False).status_code, 400)
+        for check in ("toc", "overview", "knowledge"):
+            with self.subTest(check=check):
+                self.assertEqual(self.upload(check, with_plan=False).status_code, 200)
+
+    def test_missing_invalid_and_empty_inputs(self):
+        responses = [
+            self.client.post("/api/review"),
+            self.upload("unknown"),
+            self.upload(module_code="invalid"),
+            self.client.post("/api/review", files={"files": ("empty.hwpx", b"")}),
+            self.client.post("/api/review", files={"files": ("bad.hwpx", b"invalid")}),
+        ]
+        for response in responses:
+            with self.subTest(body=response.text):
+                self.assertEqual(response.status_code, 400)
+                self.assertIsInstance(response.json()["error"], str)
+                self.assertNotIn("traceback", response.json())
+
+    def test_default_check_and_same_filename(self):
+        # 역할 판별은 파일명이나 업로드 순서에 의존하지 않는다.
+        response = self.client.post("/api/review", data={"module_code": "LM1203020201_24v3"}, files=[
+            ("files", ("same.hwpx", PLAN.read_bytes())),
+            ("files", ("same.hwpx", MANUSCRIPT.read_bytes())),
+        ])
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["check"], "position")
+
+    def test_save_failure_returns_500_and_cleans_uploads(self):
+        captured = []
+
+        def fail(review, output):
+            captured.extend(review.result.diagnostics["inputs"].values())
+            raise OSError("저장 실패 테스트")
+
+        with patch("ncs_service.persist_review", side_effect=fail):
+            client = TestClient(create_app(out_dir=self.output))
+            with client:
+                response = client.post("/api/review", files=[
+                    ("files", (p.name, p.read_bytes())) for p in (MANUSCRIPT, PLAN)
+                ])
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("저장 실패 테스트", response.json()["error"])
+        self.assertIn("traceback", response.json())
+        self.assertTrue(captured)
+        self.assertTrue(all(not Path(path).exists() for path in captured))
+
+    def test_health_docs_and_cors(self):
+        health = self.client.get("/api/health")
+        self.assertEqual(health.json(), {"ok": True, "checks": list(PACKAGES)})
+        self.assertEqual(health.headers["access-control-allow-origin"], "*")
+        self.assertEqual(self.client.get("/docs").status_code, 200)
+        schema = self.client.get("/openapi.json").json()
+        responses = schema["paths"]["/api/review"]["post"]["responses"]
+        self.assertIn("400", responses)
+        self.assertNotIn("422", responses)
+        preflight = self.client.options("/api/review", headers={
+            "Origin": "http://localhost:5173", "Access-Control-Request-Method": "POST",
+        })
+        self.assertEqual(preflight.status_code, 204)
+        self.assertEqual(preflight.headers["access-control-allow-origin"], "*")
+
+    def test_static_files_and_api_routing(self):
+        self.assertEqual(self.client.get("/").status_code, 404)
+        dist = Path(self.temp.name) / "dist"
+        dist.mkdir()
+        (dist / "index.html").write_text("<h1>F02</h1>")
+        (dist / "app.js").write_text("console.log('F02')")
+        with TestClient(create_app(out_dir=self.output, dist_dir=dist)) as client:
+            self.assertEqual(client.get("/").text, "<h1>F02</h1>")
+            self.assertEqual(client.get("/app.js").status_code, 200)
+            self.assertEqual(client.get("/api/health").status_code, 200)
+            self.assertEqual(client.get("/api/missing").status_code, 404)
+
+    def test_service_runs_without_http(self):
+        from ncs_service import ReviewRequest, execute_review, persist_review
+
+        result = execute_review(ReviewRequest((MANUSCRIPT, PLAN)))
+        self.assertFalse(self.output.exists())
+        saved = persist_review(result, self.output)
+        self.assertTrue(saved.zip_path.is_file())
+
+
+if __name__ == "__main__":
+    unittest.main()

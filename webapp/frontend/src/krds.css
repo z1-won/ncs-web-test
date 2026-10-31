@@ -1,0 +1,124 @@
+/* KRDS(디지털정부서비스 UI/UX 가이드라인)의 색·간격·타이포 토큰을 최소한으로 가져온 로컬 테스트용 스타일.
+   필요한 컴포넌트(제목, 입력, 버튼, 표, 배지, 알림)만 둔다. */
+:root {
+  --krds-primary: #246beb;
+  --krds-primary-dark: #0b50d0;
+  --krds-gray-0: #ffffff;
+  --krds-gray-5: #f4f5f6;
+  --krds-gray-10: #e6e8ea;
+  --krds-gray-30: #b1b8be;
+  --krds-gray-60: #58616a;
+  --krds-gray-90: #1e2124;
+  --krds-success: #008a1e;
+  --krds-danger: #eb003b;
+  --krds-warning: #9e6a00;
+  --krds-warning-bg: #fff4d6;
+  --krds-success-bg: #e8f5ec;
+  --krds-danger-bg: #fdecf0;
+  --krds-radius: 8px;
+  --krds-space: 8px;
+  --krds-font: "Pretendard GOV", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--krds-font);
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--krds-gray-90);
+  background: var(--krds-gray-5);
+}
+.krds-page { max-width: 1200px; margin: 0 auto; padding: calc(var(--krds-space) * 4) calc(var(--krds-space) * 2); }
+.krds-page h1 { font-size: 28px; margin: 0 0 calc(var(--krds-space) * 1); }
+.krds-page h2 { font-size: 20px; margin: calc(var(--krds-space) * 4) 0 calc(var(--krds-space) * 2); }
+.krds-caption { color: var(--krds-gray-60); font-size: 15px; margin: 0 0 calc(var(--krds-space) * 3); }
+.krds-form {
+  background: var(--krds-gray-0);
+  border: 1px solid var(--krds-gray-10);
+  border-radius: var(--krds-radius);
+  padding: calc(var(--krds-space) * 3);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: calc(var(--krds-space) * 3);
+  align-items: end;
+}
+.krds-field label { display: block; font-weight: 700; font-size: 15px; margin-bottom: var(--krds-space); }
+.krds-field input, .krds-field select {
+  width: 100%;
+  height: 48px;
+  padding: 0 calc(var(--krds-space) * 1.5);
+  font: inherit;
+  border: 1px solid var(--krds-gray-30);
+  border-radius: var(--krds-radius);
+  background: var(--krds-gray-0);
+}
+.krds-field input[type="file"] { padding-top: 10px; }
+.krds-field input:focus, .krds-field select:focus { outline: 2px solid var(--krds-primary); outline-offset: 1px; }
+.krds-hint { color: var(--krds-gray-60); font-size: 14px; margin-top: 4px; }
+.krds-btn {
+  height: 48px;
+  padding: 0 calc(var(--krds-space) * 3);
+  font: inherit;
+  font-weight: 700;
+  color: var(--krds-gray-0);
+  background: var(--krds-primary);
+  border: 0;
+  border-radius: var(--krds-radius);
+  cursor: pointer;
+}
+.krds-btn:hover { background: var(--krds-primary-dark); }
+.krds-btn:disabled { background: var(--krds-gray-30); cursor: not-allowed; }
+.krds-alert {
+  margin-top: calc(var(--krds-space) * 3);
+  padding: calc(var(--krds-space) * 2);
+  border-radius: var(--krds-radius);
+  border: 1px solid var(--krds-danger);
+  background: var(--krds-danger-bg);
+  white-space: pre-wrap;
+  font-size: 15px;
+}
+.krds-result-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--krds-space) * 2);
+  flex-wrap: wrap;
+  margin-top: calc(var(--krds-space) * 4);
+}
+.krds-result-head .code { color: var(--krds-gray-60); font-size: 15px; }
+.krds-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.krds-badge.lg { font-size: 18px; padding: 6px 16px; }
+.krds-badge.pass { color: var(--krds-success); background: var(--krds-success-bg); border-color: var(--krds-success); }
+.krds-badge.fail { color: var(--krds-danger); background: var(--krds-danger-bg); border-color: var(--krds-danger); }
+.krds-badge.undecided { color: var(--krds-warning); background: var(--krds-warning-bg); border-color: var(--krds-warning); }
+.krds-table { width: 100%; border-collapse: collapse; background: var(--krds-gray-0); font-size: 15px; }
+.krds-table th, .krds-table td {
+  border-top: 1px solid var(--krds-gray-10);
+  border-bottom: 1px solid var(--krds-gray-10);
+  padding: calc(var(--krds-space) * 1.5);
+  text-align: left;
+  vertical-align: top;
+}
+.krds-table th { background: var(--krds-gray-5); font-weight: 700; white-space: nowrap; }
+.krds-table td.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
+.krds-table td.num { text-align: right; white-space: nowrap; }
+.krds-empty { color: var(--krds-gray-60); padding: calc(var(--krds-space) * 2) 0; }
+details.krds-raw { margin-top: calc(var(--krds-space) * 2); }
+details.krds-raw summary { cursor: pointer; font-weight: 700; }
+details.krds-raw pre {
+  background: var(--krds-gray-0);
+  border: 1px solid var(--krds-gray-10);
+  border-radius: var(--krds-radius);
+  padding: calc(var(--krds-space) * 2);
+  overflow: auto;
+  max-height: 480px;
+  font-size: 13px;
+}
+.krds-warnings { margin: 0; padding-left: 20px; color: var(--krds-warning); font-size: 15px; }
