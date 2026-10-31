@@ -20,7 +20,7 @@ from .figtab import _flatten, collect_labels
 from .models import ReviewContext
 from .plan import parse_plan_goals
 from .registry import ALL_ITEM_IDS, DEFAULT_RULES
-from .structure import cell_paragraphs, unit_regions
+from .structure import unit_regions
 from .sheet import sheet
 
 
@@ -45,7 +45,7 @@ def prepare_review(
     body = parse_body(sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config)
     units = unit_regions(body, config)
     plan_goals = parse_plan_goals(plan, code) if plan else None
-    table_paragraphs = cell_paragraphs(manuscript.path, config.body_section) if manuscript.format == "hwpx" else None
+    table_paragraphs = manuscript.section_table_paragraphs(config.body_section)
     flat = _flatten(sections)
     caps, refs, bare = collect_labels(flat)
     position = {(s, i): k for k, (s, i, _) in enumerate(flat)}

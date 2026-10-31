@@ -1,10 +1,6 @@
-"""본문 구조 보조: 학습 내용(N-M) 구간·머리말, hwpx 표 셀 문단 집합."""
+"""본문 구조 보조: 학습 내용(N-M) 구간·머리말. 표 안 문단 여부는 Document.table_paragraphs에서 읽는다."""
 
 import re
-import zipfile
-from xml.etree import ElementTree as ET
-
-from ncs_core.hwpx import HP, section_names
 
 from .config import DEFAULT_CONFIG, CheckConfig
 
@@ -59,26 +55,4 @@ def unit_regions(body: dict, config: CheckConfig = DEFAULT_CONFIG) -> list[dict]
                         break
                 break
         out.append({"no": sub["no"], "sub": sub["sub"], "text": sub["text"], "k0": sub["k"], "k1": k1, "lesson": lesson, "goal": goal, "goal_k": goal_k})
-    return out
-
-
-def cell_paragraphs(path, section: int) -> set[int] | None:
-    """hwpx: 해당 섹션에서 표 셀 안에 든 문단의 인덱스(ncs_core.hwpx와 같은 순회 순서). hwp면 None."""
-    try:
-        with zipfile.ZipFile(path) as archive:
-            names = section_names(archive)
-            if section >= len(names):
-                return set()
-            root = ET.fromstring(archive.read(names[section]))
-    except zipfile.BadZipFile:
-        return None
-    parents = {child: parent for parent in root.iter() for child in parent}
-    out = set()
-    for index, paragraph in enumerate(root.iter(HP + "p")):
-        current = parents.get(paragraph)
-        while current is not None:
-            if current.tag == HP + "tbl":
-                out.add(index)
-                break
-            current = parents.get(current)
     return out

@@ -17,6 +17,7 @@ class Document:
     sections: 섹션별 문단 텍스트(표 셀 안 문단 포함, 문서 순서).
     tables:   표 목록(문서 순서). 'styles'는 hwpx일 때만 채워진다.
     images:   (섹션, 문단 인덱스, 원본 그림 이름). hwpx만.
+    table_paragraphs: 섹션별 표 셀 안에 든 문단 인덱스 집합. hwp는 표 안 문단을 구분하지 못하므로 None.
     """
 
     path: Path
@@ -24,6 +25,7 @@ class Document:
     sections: list[list[str]]
     tables: list[Table] = field(default_factory=list)
     images: list[tuple[int, int, str]] = field(default_factory=list)
+    table_paragraphs: list[frozenset[int]] | None = None
 
     @property
     def has_styles(self) -> bool:
@@ -31,6 +33,12 @@ class Document:
 
     def section_tables(self, index: int) -> list[Table]:
         return [t for t in self.tables if t["section"] == index]
+
+    def section_table_paragraphs(self, index: int) -> frozenset[int] | None:
+        """해당 섹션에서 표 셀 안에 든 문단 인덱스. 구분할 수 없는 형식(hwp)이면 None, 섹션이 없으면 빈 집합."""
+        if self.table_paragraphs is None:
+            return None
+        return self.table_paragraphs[index] if index < len(self.table_paragraphs) else frozenset()
 
 
 def detect_format(path) -> str:
@@ -58,12 +66,12 @@ def load_document(path) -> Document:
     fmt = detect_format(path)
     if fmt == "hwp":
         sections, tables = hwp.load_hwp(path.read_bytes())
-        images = []
+        images, table_paragraphs = [], None
     else:
-        sections, tables, images = hwpx.load_hwpx(path)
+        sections, tables, images, table_paragraphs = hwpx.load_hwpx(path)
     sections = [[_clean(p) for p in section] for section in sections]
     for table in tables:
         table["cells"] = {key: _clean(value) for key, value in table["cells"].items()}
     if not any(line for section in sections for line in section):
         raise ValueError(f"문단 텍스트를 추출하지 못했습니다: {path}")
-    return Document(path, fmt, sections, tables, images)
+    return Document(path, fmt, sections, tables, images, table_paragraphs)

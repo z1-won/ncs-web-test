@@ -19,5 +19,5 @@ class ReviewContext:
     body: dict[str, Any]                # ncs_toc.parsers.parse_body
     units: list[dict[str, Any]]         # structure.unit_regions — 학습 내용(N-M) 구간
     plan_goals: dict[str, Any] | None   # plan.parse_plan_goals — 계획서 학습 내용별 학습 목표
-    table_paragraphs: set[int] | None   # 본문 섹션에서 표 셀 안에 든 문단 인덱스 (hwpx만, hwp는 None)
+    table_paragraphs: frozenset[int] | None   # 본문 섹션에서 표 셀 안에 든 문단 인덱스 (Document에서 옴, hwp는 None)
     labels: dict[str, Any]              # figtab.collect_labels — flat, caps, refs, bare, lesson_spans

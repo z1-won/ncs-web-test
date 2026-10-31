@@ -99,10 +99,18 @@ tests/compare_with_original.py   원본 패키지와 체크리스트 동일성 �
 
 검증: 네 엔진 × 합성 원고 6종 × 계획서 유/무 = 42건의 체크리스트·지적사항·확인서·진단 JSON이 전후 동일. `tests/compare_with_original.py` 18/18 동일. `tests/test_service.py` 7건 통과.
 
+### 5.1 표 안 문단 정보를 `Document`에 싣기 (2026-10-31)
+
+문제: `ncs_knowledge/structure.py`의 `cell_paragraphs`가 hwpx zip을 다시 열어 본문 섹션 XML을 두 번째로 순회했다. "문서는 한 번 읽는다"는 `ncs_core.documents`의 약속을 깨고, 같은 정보를 두 코드가 각자 계산했다.
+
+조치: `ncs_core.hwpx.parse_section`이 이미 갖고 있는 문단 위치 정보로 표(중첩 포함) 안 문단 인덱스 집합을 함께 돌려주고, `Document.table_paragraphs: list[frozenset[int]] | None`(섹션별, hwp는 None)에 싣는다.
+`Document.section_table_paragraphs(index)`로 읽는다. `cell_paragraphs`와 `structure.py`의 `zipfile`·`ElementTree` 의존을 제거했다.
+
+검증: 42건 스냅샷 동일, 원본 비교 18/18 동일.
+
 ## 6. 남은 과제 (이번 범위 밖)
 
 - 기존 `docs/REVIEW.md`의 위치 ⑤ 정확성 과제(코드 번호 기반 행 선택 등)는 그대로다.
 - 설치형 Python 패키지 배포를 위한 패키징 설정은 아직 없다. 현재 웹 서버와 CLI는 `src/` 경로의 공통 코어를 사용한다.
 - 라인 길이 120자 기준 `black -l 120` 적용(이 환경에는 black이 없어 수동 정리).
 - `ncs_overview/compare.py`의 `diff_list`는 `ncs_core.manuscript.names.diff_list`와 본체가 같고 정규화 규칙만 다르다. 정규화 함수를 인자로 받게 하면 하나로 합칠 수 있다.
-- `ncs_knowledge/structure.py`의 `cell_paragraphs`는 hwpx zip을 다시 연다. `Document`에 표 셀 문단 정보를 실어 두 번 읽지 않게 할 것(피드백 ②).
