@@ -10,13 +10,12 @@ from collections.abc import Sequence
 from typing import Any
 
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
+from ncs_core.manuscript import parse_body, parse_overview_lines, parse_plan_toc, parse_toc, section_presence
 from ncs_core.text import flatten
 
 from .config import DEFAULT_CONFIG, CheckConfig
 from .evaluation import evaluation_tables
 from .models import ReviewContext
-from .parsers import parse_body, parse_overview, parse_plan_toc, parse_toc
-from .presence import section_presence
 from .registry import ALL_ITEM_IDS, DEFAULT_RULES
 from .sheet import sheet
 
@@ -36,11 +35,12 @@ def prepare_review(
     toc = parse_toc(sections)
     if not toc or not toc["학습"]:
         raise ValueError("차례 또는 차례 학습명을 읽지 못했습니다. 양식과 섹션 설정을 확인하세요")
-    overview = parse_overview(sections)
+    overview = parse_overview_lines(sections)
     plan_toc = parse_plan_toc(plan.sections, code) if plan else None
     images = [(p, name) for s, p, name in manuscript.images if s == config.body_section]
-    presence = section_presence(sections, images, config)
-    body = parse_body(sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=config)
+    parse_config = config.parse_config()
+    presence = section_presence(sections, images, parse_config)
+    body = parse_body(sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config)
     eval_tables = evaluation_tables(manuscript.section_tables(config.body_section))
     return ReviewContext(manuscript, plan, code, config, toc, overview, plan_toc, body, presence, eval_tables)
 

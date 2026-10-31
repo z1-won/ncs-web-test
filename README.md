@@ -7,7 +7,8 @@ HWP/HWPX 원고와 개발계획서를 읽어 위치·차례·개요·필요 지�
 ## 폴더 구조
 
 - `src/ncs_core/`: 공통 문서 읽기·입력 검증·규칙 실행·결과 저장
-- `src/ncs_position/`, `src/ncs_toc/`, `src/ncs_overview/`, `src/ncs_knowledge/`: 검수 패키지. 필요지식은 차례·개요 파서를 재사용합니다.
+- `src/ncs_core/manuscript/`: 차례·개요·본문·개발계획서 구조 파서와 명칭 비교 도우미. 네 검수 패키지가 공유합니다.
+- `src/ncs_position/`, `src/ncs_toc/`, `src/ncs_overview/`, `src/ncs_knowledge/`: 검수 패키지. 서로를 import하지 않고 `ncs_core` 위에 평행하게 섭니다(`tests/test_layering.py`가 검사).
 - `src/ncs_service/`: HTTP와 독립적인 검수 실행·저장 조정
 - `webapp/`: FastAPI 서버와 React 화면. [실행 안내](webapp/README.md)
 - `webapp/frontend/dist/`: 웹 화면 빌드 결과

@@ -4,7 +4,7 @@ import re
 
 from ncs_core import O, PUA, TRI, X, visible
 
-from ..text import norm, same
+from ncs_core.manuscript import norm, same
 from .common import row
 
 CODE = re.compile(r"(LM\s?)?\d{10}_\d{2}v\d+(\.\d+)?|LM\s?\d{8,10}|\(\s*\d{10}[^)]*\)")  # 능력단위·요소·모듈 코드

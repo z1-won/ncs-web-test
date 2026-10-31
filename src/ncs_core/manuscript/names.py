@@ -1,11 +1,15 @@
-"""목록 비교 도우미. 규칙 모듈이 함께 쓴다. 비교 정책은 v1.1을 유지한다."""
+"""학습명·학습 내용명 비교 도우미. 차례·필요 지식 검수가 같은 규칙으로 명칭을 맞춘다.
+
+머리 번호 '학습 1. ' / '1. ' / '1-1. '을 지우고 비교한다. 개요 검수는 자체 규칙(ncs_overview.text)을 쓴다.
+"""
 
 import difflib
 from collections.abc import Iterable, Sequence
 
-from ncs_core import O, PUA, X, visible
+from ..text import O, PUA, X, make_normalizer, visible
 
-from .text import norm
+HEAD_NUMBER = r"^(학습\s*)?\d+(-\d+)?\.\s*"
+norm, same = make_normalizer(HEAD_NUMBER)
 
 
 def diff_list(label: str, expected: Sequence[str], actual: Sequence[str]) -> tuple[str, list[str]]:

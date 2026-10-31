@@ -1,7 +1,7 @@
 """F02 필요지식 ④: 본문 학습 내용명(N-M.) = 차례 면 = 내용체계 표, N = 놓인 학습, M 연번."""
 
 from ncs_core import O, PUA, TRI, X, visible
-from ncs_toc.compare import diff_list
+from ncs_core.manuscript import diff_list
 
 from .common import row
 

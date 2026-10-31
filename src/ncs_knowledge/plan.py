@@ -1,12 +1,12 @@
 """개발계획서 모듈 블록에서 학습 내용별 학습 목표(수행 준거) 문장을 읽는다.
 
-블록 기준은 ncs_overview.parsers.parse_plan과 같다. 그 파서는 학습명·내용명·요소만 읽으므로 여기서는 목표 문장을 더 읽는다.
+블록 기준은 ncs_core.manuscript.parse_plan과 같다. 그 파서는 학습명·내용명·요소만 읽으므로 여기서는 목표 문장을 더 읽는다.
 """
 
 import re
 
 from ncs_core import Document
-from ncs_overview.patterns import ELEMENT_CODE, OV_SUB, PLAN_LESSON
+from ncs_core.manuscript.patterns import ELEMENT_CODE, OV_SUB, PLAN_LESSON
 
 GOAL_SENTENCE = re.compile(r"^\d+\.\d+\s+\S")  # '1.1 호텔의 …할 수 있다.'
 

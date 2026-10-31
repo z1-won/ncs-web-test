@@ -1,4 +1,4 @@
-"""F02 학습모듈의 개요 ①·②·⑤·⑥·⑧ 검수. 읽기·판정·저장은 ncs_core를 쓴다."""
+"""F02 학습모듈의 개요 ①·②·⑤·⑥·⑧ 검수. 읽기·판정·저장은 ncs_core, 개요·계획서 파서는 ncs_core.manuscript를 쓴다."""
 
 from ncs_core import ReviewResult, SavedReport
 

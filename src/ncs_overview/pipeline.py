@@ -5,11 +5,11 @@ from collections.abc import Sequence
 from typing import Any
 
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
+from ncs_core.manuscript import parse_overview, parse_plan
 from ncs_core.text import flatten
 
 from .config import DEFAULT_CONFIG, CheckConfig
 from .models import ReviewContext
-from .parsers import parse_overview, parse_plan
 from .registry import ALL_ITEM_IDS, DEFAULT_RULES
 from .sheet import sheet
 

@@ -1,13 +1,12 @@
 """학습모듈의 개요(목표·선수학습·내용체계·핵심 용어)와 개발계획서 모듈 블록을 추출한다.
 
 내용체계는 표 셀(hwp·hwpx 모두 표 셀 텍스트가 있다)을 우선 읽고, 표를 못 찾으면 문단 줄로 읽는다.
-차례 검수(ncs_toc.parsers)의 OV_LESSON/OV_SUB 규칙과 같은 정규식을 쓴다.
+문단 줄만 보는 차례 기준의 내용체계는 toc.parse_overview_lines에 있다.
 """
 
 import re
 
-from ncs_core import Document, Table
-
+from ..documents import Document, Table
 from .patterns import (
     ELEMENT_CODE,
     HEAD_GOAL,
@@ -19,10 +18,26 @@ from .patterns import (
     OV_SUB,
     PLAN_LESSON,
 )
-from .text import split_items
 
 HEADINGS = (HEAD_GOAL, HEAD_PREREQ, HEAD_STRUCTURE, HEAD_TERMS)
 STRUCTURE_HEADERS = ("학습", "학습 내용", "코드번호", "요소 명칭")
+
+
+def split_items(text: str) -> list[str]:
+    """쉼표로 나눈 항목 목록. 괄호 안의 쉼표(예: '체크 인(Check In, 투숙)')는 나누지 않는다."""
+    items, depth, current = [], 0, []
+    for ch in text:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth = max(depth - 1, 0)
+        if ch in ",，、" and depth == 0:
+            items.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    items.append("".join(current))
+    return [item.strip() for item in items if item.strip()]
 
 
 def _block(lines: list[tuple[int, str]], head, stop_heads) -> tuple[int | None, list[tuple[int, str]]]:
@@ -124,7 +139,7 @@ def parse_overview(document: Document, section: int) -> dict:
 def parse_plan(document: Document, module_code: str) -> dict | None:
     """개발계획서 모듈 블록 → {'정의','목표','학습명':[...],'내용명':[{no,sub,text}],'요소':[{code,name}]}.
 
-    블록은 '능력단위 코드번호' 다음 줄의 코드부터 'NCS (수정 금지)' 전까지 (ncs_toc.parsers.parse_plan_toc와 같은 기준).
+    블록은 '능력단위 코드번호' 다음 줄의 코드부터 'NCS (수정 금지)' 전까지 (toc.parse_plan_toc와 같은 기준).
     """
     lines = [l for section in document.sections for l in section]
     code = module_code.replace("LM", "")

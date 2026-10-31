@@ -1,7 +1,7 @@
-"""필요 지식 검수의 조정 가능한 양식 가정. 차례 파서(ncs_toc)의 CheckConfig를 함께 만든다."""
+"""필요 지식 검수의 조정 가능한 양식 가정. 공통 본문 파서(ncs_core.manuscript)는 기본 임계값으로 쓴다."""
 from dataclasses import dataclass
 
-from ncs_toc.config import CheckConfig as TocConfig
+from ncs_core.manuscript import DEFAULT_PARSE_CONFIG, ParseConfig
 
 
 @dataclass(frozen=True)
@@ -26,8 +26,8 @@ class CheckConfig:
             if getattr(self, name) < 1:
                 raise ValueError(f"{name}은 1 이상이어야 합니다")
 
-    def toc_config(self) -> TocConfig:
-        return TocConfig(front_section=self.front_section, body_section=self.body_section)
+    def parse_config(self) -> ParseConfig:
+        return DEFAULT_PARSE_CONFIG
 
 
 DEFAULT_CONFIG = CheckConfig()

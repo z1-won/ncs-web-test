@@ -1,12 +1,18 @@
 # 검수 패키지 공통 규약
 
-두 검수 패키지(`ncs_toc`, `ncs_position`)와 앞으로 추가될 F02 항목 패키지는 이 규약을 따른다.
+네 검수 패키지(`ncs_position`, `ncs_toc`, `ncs_overview`, `ncs_knowledge`)와 앞으로 추가될 F02 항목 패키지는 이 규약을 따른다.
 
 ## 구조
 - 공통 코어 `ncs_core`: 문서 읽기, 문자 정규화·판정, 입력 역할 판별, 모듈 코드, 규칙 실행기, 저장. **판정 정책을 두지 않는다.**
-- 검수 패키지의 파일 구성은 고정이다.
-  `config.py`(양식 가정, frozen dataclass) · `patterns.py`(정규식·라벨) · `text.py`(`norm, same = make_normalizer(접두 패턴)`) ·
-  `compare.py`(목록 비교 도우미) · `parsers.py`(추출, I/O 없음) · `models.py`(`ReviewContext`) ·
+- 공통 파서 `ncs_core.manuscript`: 차례 면(`parse_toc`, `parse_overview_lines`, `parse_plan_toc`), 개요(`parse_overview`, `parse_plan`),
+  본문(`parse_body`), 꼬리 섹션(`section_presence`), 양식 인식 패턴(`patterns`), 학습명 비교(`names`: `norm`/`same`/`diff_list`/`pua_note`).
+  임계값은 `ParseConfig`로 받는다. 양식 구조를 읽는 코드는 여기에 두고, 검수 패키지는 자기 항목에만 필요한 추출만 가진다.
+- **계층 규칙**: 검수 패키지는 `ncs_core`만 import한다. 다른 검수 패키지를 import하지 않으며, `ncs_core`는 검수 패키지·`ncs_service`를 모른다.
+  `tests/test_layering.py`가 이를 검사한다. 두 패키지가 같은 추출이 필요해지면 `ncs_core.manuscript`로 올린다.
+- 검수 패키지의 파일 구성은 고정이다. 공통 파서로 충분한 파일은 생략한다.
+  `config.py`(양식 가정, frozen dataclass; 공통 파서를 쓰면 `parse_config() -> ParseConfig`) · `patterns.py`(그 패키지 판정에만 쓰는 정규식·라벨) ·
+  `text.py`(`norm, same = make_normalizer(접두 패턴)`; 차례·필요 지식은 `ncs_core.manuscript.names`를 쓰므로 없음) ·
+  `compare.py`(목록 비교 도우미) · `parsers.py`(그 패키지 고유 추출, I/O 없음) · `models.py`(`ReviewContext`) ·
   `rules/<규칙>.py`(판정, I/O 없음) · `registry.py`(`DEFAULT_RULES`, `ALL_ITEM_IDS`) · `pipeline.py` · `reporting.py` · `__main__.py`.
 - 규칙은 `Rule(key, item_prefix, run)`으로 등록한다. `run`은 `ReviewContext` 하나를 받아 체크리스트 행 목록을 돌려주고, 행의 `item_id`는 `item_prefix`로 시작해야 한다.
 

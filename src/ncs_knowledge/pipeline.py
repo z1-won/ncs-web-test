@@ -1,8 +1,8 @@
 """입력 선택 → 추출 → 규칙 실행. 저장과 화면 출력은 호출자가 결정한다. (ncs_toc.pipeline과 같은 구조)
 
-추출은 기존 모듈을 그대로 쓴다:
-  차례·본문·참고 자료 위치: ncs_toc.parsers / ncs_toc.presence
-  내용체계 표:             ncs_overview.parsers.parse_overview
+추출은 공통 파서를 쓴다:
+  차례·본문·참고 자료 위치: ncs_core.manuscript (parse_toc / parse_body / section_presence)
+  내용체계 표:             ncs_core.manuscript.parse_overview
   계획서 학습 목표:        ncs_knowledge.plan
   그림·표 캡션:            ncs_knowledge.figtab.collect_labels
 """
@@ -12,10 +12,8 @@ from collections.abc import Sequence
 from typing import Any
 
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
+from ncs_core.manuscript import parse_body, parse_overview, parse_toc, section_presence
 from ncs_core.text import flatten
-from ncs_overview.parsers import parse_overview
-from ncs_toc.parsers import parse_body, parse_toc
-from ncs_toc.presence import section_presence
 
 from .config import DEFAULT_CONFIG, CheckConfig
 from .figtab import _flatten, collect_labels
@@ -36,15 +34,15 @@ def prepare_review(
     code = resolve_module_code(manuscript.path, module_code)
     if max(config.front_section, config.body_section) >= len(manuscript.sections):
         raise ValueError("지정한 차례/본문 섹션이 없습니다. 문서 구조와 CheckConfig를 확인하세요")
-    toc_config = config.toc_config()
+    parse_config = config.parse_config()
     sections = [manuscript.sections[config.front_section], manuscript.sections[config.body_section]]
     toc = parse_toc(sections)
     if not toc or not toc["학습"]:
         raise ValueError("차례 또는 차례 학습명을 읽지 못했습니다. 양식과 섹션 설정을 확인하세요")
     overview = parse_overview(manuscript, config.front_section).get("내용체계")
     images = [(p, name) for s, p, name in manuscript.images if s == config.body_section]
-    presence = section_presence(sections, images, toc_config)
-    body = parse_body(sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=toc_config)
+    presence = section_presence(sections, images, parse_config)
+    body = parse_body(sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config)
     units = unit_regions(body, config)
     plan_goals = parse_plan_goals(plan, code) if plan else None
     table_paragraphs = cell_paragraphs(manuscript.path, config.body_section) if manuscript.format == "hwpx" else None

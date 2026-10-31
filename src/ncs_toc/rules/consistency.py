@@ -5,8 +5,7 @@
 
 from ncs_core import O, PASS, PUA, TRI, UNDECIDED, verdict, visible, X
 
-from ..compare import diff_list, pua_note
-from ..text import norm, same
+from ncs_core.manuscript import diff_list, norm, pua_note, same
 
 ITEM_ID = "F02-차례-③"
 

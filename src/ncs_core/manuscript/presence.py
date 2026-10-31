@@ -2,13 +2,13 @@
 
 import re
 
-from .config import DEFAULT_CONFIG, CheckConfig
+from .config import DEFAULT_PARSE_CONFIG, ParseConfig
 from .patterns import REF_LINE
 
 TAIL_PATTERNS = {"참고 자료": r"참\s*고\s*자\s*료", "활용 서식": r"활\s*용\s*서\s*식", "부록": r"부\s*록"}
 
 
-def section_presence(sections, images, config: CheckConfig = DEFAULT_CONFIG) -> dict:
+def section_presence(sections, images, config: ParseConfig = DEFAULT_PARSE_CONFIG) -> dict:
     """{이름: {'있음': bool|None, '근거': str, 'k': 위치}}.
 
     images: 본문 섹션의 (문단 인덱스, 원본 그림 이름). None은 '배너만 있고 내용은 없음'으로 사람 확인.

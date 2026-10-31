@@ -75,8 +75,34 @@ tests/compare_with_original.py   원본 패키지와 체크리스트 동일성 �
 - `python3 -I tests/compare_with_original.py original src fixtures` : 차례(계획서 유/무) 12건 + 위치 6건 = 18건, 체크리스트 JSON 완전 일치.
 - 미검증: 실제 HWP(바이너리) 파일. CFB 로더는 원본 코드를 합친 것이지만 합성 HWP를 만들지 못해 픽스처 비교는 HWPX만 했다. 실제 원고·개발계획서 쌍으로 한 번 돌려본 뒤 운영에 쓸 것.
 
-## 5. 남은 과제 (이번 범위 밖)
+## 5. 공통 파서 승격 — `ncs_core.manuscript` (2026-10-31)
+
+문제: 필요 지식 검수(`ncs_knowledge`)가 형제 패키지의 내부 모듈을 직접 썼다.
+`ncs_toc.parsers/presence/text/compare/config`, `ncs_overview.parsers/patterns`. 차례 파서를 고치면 필요 지식이 깨지는데 그 사실을 차례 쪽 테스트는 모르는 구조였다.
+
+조치: "원고 구조를 읽는 코드"는 정책이 아니라 메커니즘이므로 코어로 올렸다. 판정 정책과 JSON 키는 바꾸지 않았다.
+
+| 원래 자리 | 새 자리 (`src/ncs_core/manuscript/`) |
+|---|---|
+| `ncs_toc/parsers.py` `parse_toc`, `parse_plan_toc`, `parse_overview` | `toc.py` (`parse_overview` → `parse_overview_lines`로 개명: 표를 우선 읽는 개요 파서와 구분) |
+| `ncs_toc/parsers.py` `parse_body` | `body.py` |
+| `ncs_toc/presence.py` | `presence.py` |
+| `ncs_toc/patterns.py` + `ncs_overview/patterns.py`의 양식 인식 패턴 | `patterns.py` (차례의 `OV_SUB`는 명칭이 같은 줄에 있어야 하므로 `OV_SUB_NAMED`로, 개요의 `OV_SUB`는 그대로) |
+| `ncs_toc/text.py` `norm`/`same`, `ncs_toc/compare.py` `diff_list`/`pua_note` | `names.py` |
+| `ncs_overview/parsers.py` `parse_overview`, `parse_plan`, `ncs_overview/text.py` `split_items` | `overview.py` |
+| `ncs_toc.CheckConfig`의 파서 임계값 5개 | `config.py` `ParseConfig` (`ncs_toc.CheckConfig.parse_config()`가 만들어 넘김) |
+
+- `ncs_knowledge.CheckConfig.toc_config()` → `parse_config()` (기본 `ParseConfig`; 종전에도 차례 기본 임계값을 썼다).
+- `ncs_overview/patterns.py`에는 판정용 패턴(`GOAL_END`, `DEFINITION_*`, `TERM_PREDICATE`)만 남는다. `ncs_overview/text.py`의 `norm`/`same`은 개요 고유 규칙(‘학습 N.’ 접두를 지우지 않음)이므로 그대로 둔다.
+- 삭제: `ncs_toc/{parsers,patterns,presence,text,compare}.py`, `ncs_overview/parsers.py`, `ncs_knowledge/text.py`.
+- 추가: `tests/test_layering.py` — 검수 패키지 간 import, `ncs_core`→상위 계층 import, CLI 밖의 `ncs_service` 사용을 금지한다.
+
+검증: 네 엔진 × 합성 원고 6종 × 계획서 유/무 = 42건의 체크리스트·지적사항·확인서·진단 JSON이 전후 동일. `tests/compare_with_original.py` 18/18 동일. `tests/test_service.py` 7건 통과.
+
+## 6. 남은 과제 (이번 범위 밖)
 
 - 기존 `docs/REVIEW.md`의 위치 ⑤ 정확성 과제(코드 번호 기반 행 선택 등)는 그대로다.
 - 설치형 Python 패키지 배포를 위한 패키징 설정은 아직 없다. 현재 웹 서버와 CLI는 `src/` 경로의 공통 코어를 사용한다.
 - 라인 길이 120자 기준 `black -l 120` 적용(이 환경에는 black이 없어 수동 정리).
+- `ncs_overview/compare.py`의 `diff_list`는 `ncs_core.manuscript.names.diff_list`와 본체가 같고 정규화 규칙만 다르다. 정규화 함수를 인자로 받게 하면 하나로 합칠 수 있다.
+- `ncs_knowledge/structure.py`의 `cell_paragraphs`는 hwpx zip을 다시 연다. `Document`에 표 셀 문단 정보를 실어 두 번 읽지 않게 할 것(피드백 ②).

@@ -1,5 +1,7 @@
-"""차례 검수의 조정 가능한 양식 가정. 정규식 자체는 patterns.py에서 관리한다."""
+"""차례 검수의 조정 가능한 양식 가정. 섹션 선택과 공통 파서(ncs_core.manuscript)의 임계값을 함께 둔다."""
 from dataclasses import dataclass
+
+from ncs_core.manuscript import ParseConfig
 
 
 @dataclass(frozen=True)
@@ -22,6 +24,16 @@ class CheckConfig:
                      "ambiguous_tail_min_paragraphs"):
             if getattr(self, name) < 1:
                 raise ValueError(f"{name}은 1 이상이어야 합니다")
+
+    def parse_config(self) -> ParseConfig:
+        """공통 본문·꼬리 섹션 파서에 넘길 임계값."""
+        return ParseConfig(
+            body_heading_max_length=self.body_heading_max_length,
+            eval_candidate_max_length=self.eval_candidate_max_length,
+            tail_min_paragraphs=self.tail_min_paragraphs,
+            reference_min_lines=self.reference_min_lines,
+            ambiguous_tail_min_paragraphs=self.ambiguous_tail_min_paragraphs,
+        )
 
 
 DEFAULT_CONFIG = CheckConfig()

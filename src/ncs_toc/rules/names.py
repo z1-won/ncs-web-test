@@ -4,7 +4,7 @@ import re
 
 from ncs_core import FAIL, NA, O, PASS, PUA, TRI, verdict, visible, X
 
-from ..text import norm, same
+from ncs_core.manuscript import norm, same
 
 ITEM_ID = "F02-차례-①"
 
