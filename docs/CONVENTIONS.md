@@ -34,8 +34,10 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 - 오류는 `ValueError`로 올리고, 웹 서버·CLI가 잡아서 메시지를 보여준다. 규칙·파서는 `print`하지 않는다.
 
 ## 실행과 수정
-검수 엔진의 수정 원본은 `src/`이다. 웹 서버는 `ncs_service`를 통해 엔진을 실행하고, 기존 CLI는 각 검수 패키지를 직접 사용한다.
+검수 엔진의 수정 원본은 `src/`이다. 웹 서버와 네 CLI는 모두 `ncs_service.execute_review()` 및 `persist_review()`를 통해 검수·저장을 실행한다.
 `ncs_service`는 파일 경로를 받아 문서 선택·엔진 실행·저장을 조정하며 HTTP 요청이나 업로드 객체를 받지 않는다.
+`ReviewRequest.config`에는 선택한 엔진의 `CheckConfig`, `rules`에는 사용자 지정 `Rule` 목록을 전달할 수 있다. 둘 다 `None`이면 엔진 기본값을 사용하며 `rules=()`는 규칙을 실행하지 않는다. 다른 엔진의 설정 객체는 `ValueError`로 거절한다.
+각 엔진의 기존 `run_review()` 공개 API는 Python 호출자와의 호환성을 위해 유지한다.
 FastAPI 요청·응답 모델 및 오류 상태 코드는 `webapp/server.py`에서 관리한다. 기존 `/api/review`의 입력 오류는 400, 저장 I/O 오류 등은 500을 유지한다.
 웹 화면은 `webapp/frontend/src/`에서 수정하고, 프런트엔드 폴더에서 `npm run build`로 `webapp/frontend/dist/`를 생성한다.
 

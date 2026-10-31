@@ -77,7 +77,37 @@ FastAPI 업로드 → 임시 파일 → execute_review(ReviewRequest)
 `ncs_service`는 표준 라이브러리와 기존 엔진만 사용합니다.
 `execute_review()`는 입력 역할·필수 파일을 확인하고 문서를 읽은 뒤 해당 엔진의 `prepare_review()`와 `evaluate_review()`를 실행합니다.
 `persist_review()`는 같은 검수 종류의 `save_results()`를 호출합니다.
-기존 검수 패키지의 공개 API·설정·CLI는 그대로 사용할 수 있습니다.
+네 CLI도 동일한 `execute_review()`·`persist_review()` 경로를 사용합니다. 기존 명령·옵션·출력 형식은 유지합니다.
+각 검수 패키지의 `run_review()` 공개 API도 Python 호출자와의 호환성을 위해 유지합니다.
+
+### 설정과 규칙 전달
+
+Python 실행 요청에 엔진별 설정과 규칙 목록을 전달할 수 있습니다. 예시는 저장소 루트에서 `PYTHONPATH=src`로 실행합니다.
+
+```python
+from pathlib import Path
+from ncs_overview import CheckConfig, DEFAULT_RULES
+from ncs_service import ReviewRequest, execute_review, persist_review
+
+request = ReviewRequest(
+    paths=(Path("원고.hwpx"), Path("개발계획서.hwpx")),
+    check="overview",
+    config=CheckConfig(max_prerequisites=3, max_terms=8),
+    rules=DEFAULT_RULES[:2],  # 목표·선수학습 규칙만 실행
+)
+review = execute_review(request)
+saved = persist_review(review, "결과")
+```
+
+- `config=None`: 선택한 엔진의 기본 설정을 사용합니다.
+- `config=CheckConfig(...)`: 해당 엔진의 설정을 그대로 전달합니다. 다른 엔진의 설정 객체는 입력 오류입니다.
+- `rules=None`: 엔진의 기본 규칙을 사용합니다.
+- `rules=목록`: 지정한 규칙만 실행합니다. 중복 key와 item_id 접두는 기존 규칙 실행기가 검증합니다.
+- `rules=()`: 규칙을 실행하지 않습니다. 전체 체크리스트는 비어 있고 확인서 항목은 미검사입니다.
+- `roles`: Python 호출과 CLI에서 원고·계획서 역할을 명시할 수 있습니다.
+
+웹 API의 입력 필드는 기존 그대로입니다. 이 설정·규칙 확장은 Python 서비스 API에 적용되며,
+CLI는 기존 섹션 옵션을 설정 객체로 전달합니다. HTTP로 임의 Python 규칙을 받지 않습니다.
 
 ## 테스트
 
@@ -85,9 +115,11 @@ FastAPI 업로드 → 임시 파일 → execute_review(ReviewRequest)
 
 ```bash
 .venv/bin/python -m pip install -r webapp/requirements-dev.txt
-.venv/bin/python -m unittest discover -s tests -p 'test_webapp.py' -v
+.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 네 엔진 × 합성 원고 6종의 결과 일치·ZIP 내용, 계획서 필수 조건, 입력 오류,
 저장 실패, 임시 파일 정리, API 문서·CORS·정적 화면 및 HTTP 없는 실행을 검사합니다.
+서비스·CLI 테스트는 엔진별 설정·규칙 전달, 역할·모듈 코드 지정, 섹션을 바꾼 문서 검수,
+빈 규칙 목록, 잘못된 설정, CLI 실행 경로·종료 코드·저장 결과를 검사합니다.
 `requirements.txt`는 서버 의존성, `requirements-dev.txt`는 API 테스트 의존성을 고정합니다.

@@ -10,12 +10,18 @@ from .registry import get_engine
 
 def execute_review(request: ReviewRequest) -> ExecutedReview:
     engine = get_engine(request.check)
-    documents = select_documents(request.paths, request.roles, required=engine.required)
     module = engine.load()
+    if request.config is not None and not isinstance(request.config, module.CheckConfig):
+        raise ValueError(f"{request.check} 검수의 config는 {engine.package}.CheckConfig여야 합니다")
+    prepare_options = {"module_code": request.module_code}
+    if request.config is not None:
+        prepare_options["config"] = request.config
+    evaluate_options = {} if request.rules is None else {"rules": request.rules}
+    documents = select_documents(request.paths, request.roles, required=engine.required)
     context = module.prepare_review(
-        documents["manuscript"], documents.get("plan"), module_code=request.module_code
+        documents["manuscript"], documents.get("plan"), **prepare_options
     )
-    return ExecutedReview(request.check, module.evaluate_review(context))
+    return ExecutedReview(request.check, module.evaluate_review(context, **evaluate_options))
 
 
 def persist_review(review: ExecutedReview, out_dir: str | Path) -> SavedReport:

@@ -2,8 +2,11 @@
 
 import argparse
 import json
+from pathlib import Path
 
-from . import CheckConfig, run_review, save_results
+from ncs_service import ReviewRequest, execute_review, persist_review
+
+from . import CheckConfig
 
 
 def main() -> None:
@@ -22,8 +25,17 @@ def main() -> None:
         roles[args.plan] = "plan"
     try:
         config = CheckConfig(front_section=args.front_section)
-        result = run_review(args.paths, roles=roles, module_code=args.module_code, config=config)
-        saved = save_results(result, args.out)
+        execution = execute_review(
+            ReviewRequest(
+                paths=tuple(Path(path) for path in args.paths),
+                check="position",
+                roles=roles,
+                module_code=args.module_code,
+                config=config,
+            )
+        )
+        result = execution.result
+        saved = persist_review(execution, args.out)
     except (OSError, ValueError) as error:
         parser.exit(2, f"검수 실행 실패: {error}\n")
     print(json.dumps({"요약": saved.summary, "진단": result.diagnostics}, ensure_ascii=False, indent=2))

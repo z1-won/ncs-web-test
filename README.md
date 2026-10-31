@@ -2,7 +2,7 @@
 
 HWP/HWPX 원고와 개발계획서를 읽어 위치·차례·개요·필요 지식을 검수합니다.
 검수 엔진은 Python 3.10 이상과 표준 라이브러리만 사용하며, 웹 백엔드는 FastAPI·Uvicorn, 화면은 React·Vite 기반입니다.
-개발·수정 기준은 `src/`의 Python 소스입니다. 웹 서버와 CLI가 같은 패키지를 직접 사용합니다.
+개발·수정 기준은 `src/`의 Python 소스입니다. 웹 서버와 CLI는 `ncs_service`를 통해 같은 검수·저장 경로를 사용합니다.
 
 ## 폴더 구조
 
@@ -65,11 +65,11 @@ HWP는 글꼴·음영을 읽지 않아 위치 ⑤가 판단불가입니다.
 
 ## 변경 검증
 
-웹 API 검증:
+실행 조정 계층·CLI·웹 API 검증:
 
 ```bash
 .venv/bin/python -m pip install -r webapp/requirements-dev.txt
-.venv/bin/python -m unittest discover -s tests -p 'test_webapp.py' -v
+.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 기존 구현과 비교:
