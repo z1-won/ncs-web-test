@@ -15,7 +15,7 @@ HWP/HWPX 원고와 개발계획서를 읽어 위치·차례·개요·필요 지�
 - `webapp/`: 호환 실행 파일과 React 화면. [실행 안내](webapp/README.md)
 - `webapp/frontend/dist/`: 웹 화면 빌드 결과
 - `tests/`: 합성 입력 생성, 기존 구현 비교, 서비스·웹 API 검증, 패키지 계층(`test_layering.py`)과 엔진 계약(`test_engines.py`) 검사
-- `original/`: 리팩토링 전 비교용 Python 소스
+- `tests/golden/`: 네 엔진 × 합성 원고의 기준 검수 결과(JSON). 리팩토링 전후 동일성 비교의 정답지
 - `docs/CONVENTIONS.md`: 공통 개발 규약
 - `docs/CONSISTENCY_REVIEW.md`: 통합 리팩토링 기록
 
@@ -83,12 +83,11 @@ HWP는 글꼴·음영을 읽지 않아 위치 ⑤가 판단불가입니다.
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-기존 구현과 비교:
+수정 전후 검수 결과가 같은지는 골든 테스트가 확인합니다. `tests/golden/`에 네 엔진 × 합성 원고 6종 × 개발계획서 유/무 = 42건의 체크리스트·지적사항·확인서·진단 JSON이 저장되어 있고, `tests/test_golden.py`가 현재 결과와 비교합니다(위 `unittest discover`에 포함).
+
+판정 정책을 **의도적으로** 바꿨을 때만 정답지를 다시 만듭니다. 생기는 diff가 바뀐 내용의 기록이므로 `docs/CONSISTENCY_REVIEW.md`의 '의도적으로 바꾼 동작' 표와 함께 커밋합니다.
 
 ```bash
-python3 -I tests/make_fixtures.py tests/fixtures
-python3 -I tests/compare_with_original.py original src tests/fixtures
+.venv/bin/python tests/make_fixtures.py tests/fixtures   # 합성 원고를 바꿨을 때
+.venv/bin/python tests/make_golden.py                    # 정책을 바꿨을 때
 ```
-
-비교 검증은 합성 HWPX에 대한 기존 차례·위치 항목을 대상으로 합니다.
-비교용 기존 위치 구현에는 `lxml`이 필요합니다. 현재 검수 엔진과 웹 서버에는 필요하지 않습니다.

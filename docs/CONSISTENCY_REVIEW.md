@@ -116,6 +116,14 @@ tests/compare_with_original.py   원본 패키지와 체크리스트 동일성 �
 
 하지 않은 것: `typing.Protocol` 타입 도입. 정적 검사기(mypy/pyright)가 없는 현재는 이름 존재만 확인할 수 있어 실행 기반 테스트보다 덜 잡고, 엔진별로 다른 `ReviewContext`·`CheckConfig` 때문에 `Any` 또는 제네릭이 필요해 계약을 바꿀 때 비용만 늘린다. 정적 검사기를 도입할 때 함께 검토한다.
 
+### 5.3 `original/` 제거 — 골든 결과로 대체 (2026-10-31)
+
+`original/`(리팩토링 전 차례·위치 소스)은 `tests/compare_with_original.py`가 "전후 결과 동일"을 보이는 기준으로만 쓰였다. 소스라서 `lxml`이 필요했고, 매 비교마다 옛 코드를 다시 돌렸으며, 개요·필요지식은 덮지 못했다.
+
+조치: 제거 직전 `original` 대 `src` 18/18 동일을 마지막으로 확인한 뒤, 현재 `src/`가 내는 결과를 `tests/golden/*.json` 42건(네 엔진 × 원고 6종 × 계획서 유/무)으로 저장했다. 이 42건은 이날 리팩토링(§5·5.1·5.2) 시작 전 결과와도 동일하므로, 골든은 곧 `original`의 답이다. `tests/test_golden.py`가 현재 결과와 골든을 비교하고 사례에 없는 골든 파일도 잡는다. `tests/make_golden.py`는 정책을 의도적으로 바꿀 때만 실행한다. `original/`과 `compare_with_original.py`는 삭제했고 `lxml`은 어디에도 필요하지 않다.
+
+골든에서 제외한 것: 진단의 `inputs`(입력 파일 경로 — 실행 환경마다 다름).
+
 ## 6. 남은 과제 (이번 범위 밖)
 
 - 기존 `docs/REVIEW.md`의 위치 ⑤ 정확성 과제(코드 번호 기반 행 선택 등)는 그대로다.

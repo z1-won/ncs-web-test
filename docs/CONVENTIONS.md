@@ -52,5 +52,5 @@ FastAPI 요청·응답 모델 및 오류 상태 코드는 `src/ncs_web/server.py
 웹 화면은 `webapp/frontend/src/`에서 수정하고, 프런트엔드 폴더에서 `npm run build`로 `webapp/frontend/dist/`를 생성한다.
 
 ## 변경 검증
-정책을 바꾸지 않는 리팩토링은 `tests/compare_with_original.py`(또는 같은 방식의 전후 비교)로 체크리스트 JSON이 동일함을 보인다.
+정책을 바꾸지 않는 리팩토링은 `tests/test_golden.py`가 통과함으로써(현재 결과 == `tests/golden/*.json`) 검수 결과가 동일함을 보인다. 이때 `tests/make_golden.py`를 실행하지 않는다.
 정책을 바꾸면 `docs/CONSISTENCY_REVIEW.md`의 "의도적으로 바꾼 동작" 표에 적는다.

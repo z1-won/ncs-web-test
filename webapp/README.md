@@ -154,7 +154,7 @@ CLI는 기존 섹션 옵션을 설정 객체로 전달합니다. HTTP로 임의 
 - `pip install -e ".[test]"`: 웹·테스트 개발 설치
 - `pip install ".[web]"`: 소스를 복사하는 일반 설치
 
-설치 대상은 `src/ncs_*` 패키지입니다. React 소스·빌드, 기존 비교용 소스, 검수 결과는 Python wheel에 포함되지 않습니다.
+설치 대상은 `src/ncs_*` 패키지입니다. React 소스·빌드, 테스트 골든 결과, 검수 결과는 Python wheel에 포함되지 않습니다.
 결과와 화면 경로는 위의 `--out`·`--dist` 설정을 사용하며 가상환경 설치 폴더에 자동 저장하지 않습니다.
 공통 엔진·서비스는 FastAPI를 import하지 않습니다. 설치된 패키지의 사용을 검증하기 위해 일반 테스트도 `sys.path`를 주입하지 않습니다.
-기존 두 소스 트리를 번갈아 불러오는 `compare_with_original.py`만 비교 목적의 경로 교체를 유지합니다.
+골든 테스트(`test_golden.py`·`make_golden.py`)는 공용 모듈 `golden_cases.py`를 찾기 위해 자기 폴더(`tests/`)만 경로에 추가하며, `src`는 주입하지 않습니다.
