@@ -47,6 +47,7 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 `ReviewRequest.config`에는 선택한 엔진의 `CheckConfig`, `rules`에는 사용자 지정 `Rule` 목록을 전달할 수 있다. 둘 다 `None`이면 엔진 기본값을 사용하며 `rules=()`는 규칙을 실행하지 않는다. 다른 엔진의 설정 객체는 `ValueError`로 거절한다.
 각 엔진의 기존 `run_review()` 공개 API는 Python 호출자와의 호환성을 위해 유지한다.
 FastAPI 요청·응답 모델 및 오류 상태 코드는 `webapp/server.py`에서 관리한다. 기존 `/api/review`의 입력 오류는 400, 저장 I/O 오류 등은 500을 유지한다.
+결과 저장 경로(`--out`)와 정적 화면 경로(`--dist`)는 서버 코드 위치에서 유도하지 않는다. 상대 경로는 앱 생성 시 실행 위치를 기준으로 확정한다. `--out` 기본값은 실행 위치의 `결과/`, `--dist` 생략 시 API 전용이다.
 웹 화면은 `webapp/frontend/src/`에서 수정하고, 프런트엔드 폴더에서 `npm run build`로 `webapp/frontend/dist/`를 생성한다.
 
 ## 변경 검증

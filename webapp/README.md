@@ -11,12 +11,12 @@ FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다.
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r webapp/requirements.txt
-.venv/bin/python webapp/server.py
+.venv/bin/python webapp/server.py --out webapp/결과
 ```
 
-기본 주소는 `http://127.0.0.1:8765`이며 결과는 `webapp/결과/`의 실행별 폴더에 저장합니다.
+기본 주소는 `http://127.0.0.1:8765`입니다. 위 명령은 결과를 기존 `webapp/결과/`의 실행별 폴더에 저장합니다.
 기존 `--port`, `--src`, `--out` 옵션을 유지합니다. `--src`에는 `ncs_core`, 네 검수 패키지와 `ncs_service`가 있어야 합니다.
-가상환경을 활성화한 경우 기존 명령 `python3 webapp/server.py`도 사용할 수 있습니다.
+가상환경을 활성화한 경우 `python3 webapp/server.py --out webapp/결과`로도 실행할 수 있습니다.
 
 별도 터미널에서 화면을 실행합니다.
 
@@ -27,9 +27,27 @@ npm run dev
 ```
 
 화면은 기본 `http://localhost:5173`이며 `/api` 요청은 8765로 프록시합니다.
-프런트엔드 폴더에서 `npm run build`를 실행한 뒤 Python 서버를 시작하면 빌드된 화면도 8765에서 제공합니다.
+프런트엔드 폴더에서 `npm run build`를 실행한 뒤, 저장소 루트에서 아래처럼 시작하면 빌드된 화면도 8765에서 제공합니다.
 
-Uvicorn으로 직접 실행할 수도 있습니다. 다음 명령은 저장소 루트에서 실행합니다.
+```bash
+.venv/bin/python webapp/server.py --out webapp/결과 --dist webapp/frontend/dist
+```
+
+## 저장·화면 경로 분리
+
+| 설정 | 생략 시 | 의미 |
+|---|---|---|
+| `--out` / `create_app(out_dir=...)` | 실행 위치의 `결과/` | 검수 JSON·ZIP 저장 경로 |
+| `--dist` / `create_app(dist_dir=...)` | 정적 화면 제공 안 함 | React 빌드 파일 경로 |
+
+두 경로는 서버 파일의 설치 위치에서 계산하지 않습니다. 상대 경로는 앱 생성 시 실행 위치를 기준으로 절대 경로로 확정합니다.
+다른 위치에서 실행할 때는 절대 경로를 지정하면 같은 결과 폴더와 화면 빌드를 계속 사용할 수 있습니다.
+결과 폴더는 첫 저장 때 생성하며, 화면 폴더는 빌드된 파일을 읽는 용도입니다.
+화면 경로가 없거나 지정되지 않으면 `/`는 안내와 함께 404를 반환하고 API·`/docs`는 계속 사용할 수 있습니다.
+기존 결과 파일은 이동하거나 삭제하지 않습니다. 기존 위치를 쓰려면 위 예시처럼 `--out webapp/결과`를 명시하세요.
+데이터베이스 없이 기존 JSON·ZIP 파일 저장 방식을 유지합니다.
+
+Uvicorn으로 직접 실행할 수도 있습니다. 다음 명령은 저장소 루트에서 실행하며, 기본 설정(API 전용·실행 위치의 `결과/` 저장)을 사용합니다. 경로를 지정할 때는 위의 서버 실행 명령을 사용하세요.
 
 ```bash
 .venv/bin/python -m uvicorn webapp.server:create_app --factory --host 127.0.0.1 --port 8765

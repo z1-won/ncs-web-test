@@ -24,7 +24,7 @@ HWP/HWPX 원고와 개발계획서를 읽어 위치·차례·개요·필요 지�
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r webapp/requirements.txt
-.venv/bin/python webapp/server.py
+.venv/bin/python webapp/server.py --out webapp/결과
 ```
 
 별도 터미널에서 화면을 실행합니다.
@@ -36,9 +36,9 @@ npm run dev
 ```
 
 화면은 기본 `http://localhost:5173`, API는 `http://127.0.0.1:8765`입니다.
-프런트엔드 폴더에서 `npm run build`를 실행하면 Python 서버가 빌드된 화면도 제공합니다.
+프런트엔드 폴더에서 `npm run build`를 실행한 뒤, 서버에 `--dist webapp/frontend/dist`를 지정하면 빌드된 화면도 제공합니다(저장소 루트에서 실행).
 API 문서는 `http://127.0.0.1:8765/docs`에서 확인합니다.
-검수 결과 JSON·ZIP은 기본 `webapp/결과/`의 실행별 폴더에 저장합니다.
+위 명령은 검수 결과 JSON·ZIP을 기존 `webapp/결과/`에 저장합니다. `--out` 생략 시 실행 위치의 `결과/`를 사용하며, `--dist` 생략 시 API만 제공합니다. 두 경로는 서버 코드 위치와 독립적입니다.
 
 ## CLI 실행
 

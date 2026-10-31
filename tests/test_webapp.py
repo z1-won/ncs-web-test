@@ -2,6 +2,7 @@
 
 import importlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 from webapp.server import create_app
+from webapp import server
 
 FIXTURES = ROOT / "tests" / "fixtures"
 PLAN = FIXTURES / "개발계획서_LM1203020201_24v3.hwpx"
@@ -139,6 +141,58 @@ class WebappTests(unittest.TestCase):
         self.assertFalse(self.output.exists())
         saved = persist_review(result, self.output)
         self.assertTrue(saved.zip_path.is_file())
+
+    def test_default_output_uses_startup_directory_and_frontend_is_opt_in(self):
+        startup = Path(self.temp.name) / "startup"
+        startup.mkdir()
+        previous = Path.cwd()
+        try:
+            os.chdir(startup)
+            app = create_app()
+        finally:
+            os.chdir(previous)
+        with TestClient(app) as client:
+            self.assertEqual(client.get("/").status_code, 404)
+            self.assertEqual(client.get("/api/health").status_code, 200)
+            response = client.post("/api/review", files=[
+                ("files", (p.name, p.read_bytes())) for p in (MANUSCRIPT, PLAN)
+            ])
+        self.assertEqual(response.status_code, 200, response.text)
+        saved = Path(response.json()["저장"]["folder"])
+        self.assertEqual(saved.parent, (startup / "결과").resolve())
+        self.assertTrue(Path(response.json()["저장"]["zip"]).is_file())
+
+    def test_explicit_paths_are_independent_and_resolved_at_startup(self):
+        startup = Path(self.temp.name) / "runtime"
+        startup.mkdir()
+        dist = startup / "ui"
+        dist.mkdir()
+        (dist / "index.html").write_text("<h1>External UI</h1>")
+        previous = Path.cwd()
+        try:
+            os.chdir(startup)
+            app = create_app(out_dir="reports", dist_dir="ui")
+        finally:
+            os.chdir(previous)
+        with TestClient(app) as client:
+            self.assertEqual(client.get("/").text, "<h1>External UI</h1>")
+            response = client.post("/api/review", files=[
+                ("files", (p.name, p.read_bytes())) for p in (MANUSCRIPT, PLAN)
+            ])
+            self.assertEqual(response.status_code, 200, response.text)
+            saved = Path(response.json()["저장"]["folder"])
+            self.assertEqual(saved.parent, (startup / "reports").resolve())
+            zip_path = Path(response.json()["저장"]["zip"])
+            self.assertEqual(client.get(f"/{saved.name}/{zip_path.name}").status_code, 404)
+        self.assertEqual(sorted(p.name for p in dist.iterdir()), ["index.html"])
+
+    def test_server_cli_accepts_output_and_frontend_paths(self):
+        args = ["server.py", "--out", str(self.output), "--dist", str(Path(self.temp.name) / "ui"), "--port", "8766"]
+        with patch.object(sys, "argv", args), patch.object(server, "create_app") as create, patch.object(server.uvicorn, "run") as run:
+            server.main()
+        self.assertEqual(create.call_args.kwargs["out_dir"], str(self.output))
+        self.assertEqual(create.call_args.kwargs["dist_dir"], str(Path(self.temp.name) / "ui"))
+        run.assert_called_once_with(create.return_value, host="127.0.0.1", port=8766)
 
 
 if __name__ == "__main__":

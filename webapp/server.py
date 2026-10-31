@@ -17,7 +17,6 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
 ROOT = Path(__file__).resolve().parent
-DIST = ROOT / "frontend" / "dist"
 CheckName = Literal["position", "toc", "overview", "knowledge"]
 CORS_HEADERS = {"Access-Control-Allow-Origin": "*"}
 
@@ -48,10 +47,10 @@ def error_response(status: int, message: str, **extra: Any) -> JSONResponse:
 
 
 def create_app(
-    *, src_dir: str | Path = ROOT.parent / "src", out_dir: str | Path = ROOT / "결과",
-    dist_dir: str | Path = DIST,
+    *, src_dir: str | Path = ROOT.parent / "src", out_dir: str | Path = "결과",
+    dist_dir: str | Path | None = None,
 ) -> FastAPI:
-    """API와 정적 화면을 구성한다. Uvicorn의 --factory로도 실행할 수 있다."""
+    """경로는 앱 생성 시 실행 위치를 기준으로 확정한다. dist_dir 생략 시 API만 제공한다."""
     src = Path(src_dir).resolve()
     packages = ("ncs_core", "ncs_position", "ncs_toc", "ncs_overview", "ncs_knowledge", "ncs_service")
     missing = [name for name in packages if not (src / name / "__init__.py").is_file()]
@@ -62,7 +61,8 @@ def create_app(
     from ncs_service import ReviewRequest, execute_review, persist_review
 
     app = FastAPI(title="F02 검수 API")
-    output = Path(out_dir)
+    output = Path(out_dir).expanduser().resolve()
+    dist = Path(dist_dir).expanduser().resolve() if dist_dir is not None else None
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError) -> JSONResponse:
@@ -148,13 +148,17 @@ def create_app(
         return schema
 
     app.openapi = openapi
-    dist = Path(dist_dir)
-    if dist.is_dir():
+    if dist is not None and dist.is_dir():
         app.mount("/", StaticFiles(directory=str(dist), html=True), name="frontend")
     else:
         @app.get("/", include_in_schema=False)
         def no_frontend() -> JSONResponse:
-            return error_response(404, "frontend/dist 가 없습니다. 'npm run build' 하거나 Vite dev 서버로 여세요")
+            message = (
+                f"화면 빌드 폴더를 찾을 수 없습니다: {dist}"
+                if dist is not None
+                else "화면 빌드 폴더가 지정되지 않았습니다"
+            )
+            return error_response(404, message + ". --dist로 빌드 경로를 지정하거나 Vite dev 서버로 여세요")
     return app
 
 
@@ -162,10 +166,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="F02 FastAPI 로컬 서버")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--src", default=str(ROOT.parent / "src"))
-    parser.add_argument("--out", default=str(ROOT / "결과"))
+    parser.add_argument("--out", default="결과", help="결과 저장 폴더 (기본: 실행 위치의 결과/)")
+    parser.add_argument("--dist", help="React 빌드 폴더. 생략하면 API만 제공")
     args = parser.parse_args()
     try:
-        app = create_app(src_dir=args.src, out_dir=args.out)
+        app = create_app(src_dir=args.src, out_dir=args.out, dist_dir=args.dist)
     except ValueError as error:
         parser.exit(2, f"서버 실행 실패: {error}\n")
     uvicorn.run(app, host="127.0.0.1", port=args.port)
