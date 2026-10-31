@@ -16,7 +16,9 @@
   `rules/<규칙>.py`(판정, I/O 없음) · `registry.py`(`DEFAULT_RULES`, `ALL_ITEM_IDS`) · `pipeline.py` · `reporting.py` · `__main__.py`.
 - 규칙은 `Rule(key, item_prefix, run)`으로 등록한다. `run`은 `ReviewContext` 하나를 받아 체크리스트 행 목록을 돌려주고, 행의 `item_id`는 `item_prefix`로 시작해야 한다.
 
-## 공개 API (두 패키지 동일)
+## 공개 API (모든 검수 패키지 동일)
+`tests/test_engines.py`가 `ncs_service.registry.ENGINES`에 등록된 모든 엔진에 대해 이 계약을 검사한다(공개 이름, frozen `CheckConfig`, 체크리스트 행 키, 확인서 행이 F02 원문 항목과 일치, 저장 파일·ZIP, 빈 규칙 목록, 다른 엔진 설정 거절).
+새 구성요소 엔진은 **`ENGINES`에 등록 → `webapp/server.py`의 `CheckName`·`/api/health`·오류 메시지 → `webapp/frontend/src/App.jsx`의 `CHECKS`** 세 곳을 같이 고친다. 하나라도 빠지면 같은 테스트가 알려 준다.
 ```python
 run_review(paths, *, roles=None, module_code="", config=DEFAULT_CONFIG, rules=DEFAULT_RULES) -> ReviewResult
 prepare_review(manuscript: Document, plan: Document | None, *, module_code="", config=...) -> ReviewContext

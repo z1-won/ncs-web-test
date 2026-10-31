@@ -12,7 +12,7 @@ HWP/HWPX 원고와 개발계획서를 읽어 위치·차례·개요·필요 지�
 - `src/ncs_service/`: HTTP와 독립적인 검수 실행·저장 조정
 - `webapp/`: FastAPI 서버와 React 화면. [실행 안내](webapp/README.md)
 - `webapp/frontend/dist/`: 웹 화면 빌드 결과
-- `tests/`: 합성 입력 생성과 기존 구현 비교
+- `tests/`: 합성 입력 생성, 기존 구현 비교, 서비스·웹 API 검증, 패키지 계층(`test_layering.py`)과 엔진 계약(`test_engines.py`) 검사
 - `original/`: 리팩토링 전 비교용 Python 소스
 - `docs/CONVENTIONS.md`: 공통 개발 규약
 - `docs/CONSISTENCY_REVIEW.md`: 통합 리팩토링 기록

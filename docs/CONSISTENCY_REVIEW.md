@@ -108,6 +108,14 @@ tests/compare_with_original.py   원본 패키지와 체크리스트 동일성 �
 
 검증: 42건 스냅샷 동일, 원본 비교 18/18 동일.
 
+### 5.2 엔진 계약 테스트 (2026-10-31)
+
+문제: 엔진이 제공해야 할 공개 API(`CheckConfig`, `DEFAULT_RULES`, `prepare_review`, `evaluate_review`, `run_review`, `save_results`)와 결과 형식은 CONVENTIONS에만 적혀 있었고, `ncs_service`는 모듈에 그 이름이 있다고 믿고 호출했다. 기존 `tests/test_service.py`는 엔진 이름 넷을 하드코딩해서 다섯 번째 엔진을 등록해도 자동으로 검사하지 않았다.
+
+조치: `tests/test_engines.py` 추가. `ncs_service.registry.ENGINES`를 순회하므로 엔진을 등록하면 자동으로 검사 대상이 된다. 검사 내용: 등록 항목 형식, 공개 이름과 `__all__`, frozen `CheckConfig`, 규칙 key 중복, 체크리스트 행 키·판정값·item_id 접두, 확인서 행이 `f02_items`의 해당 구성요소 항목 번호·문구와 일치, `findings == flatten(checklist)`, 진단 키, `rules=()` → 전부 미검사, 다른 엔진의 설정 거절, 저장 폴더·표준 JSON 5종·ZIP 내용, 그리고 `webapp/server.py`·`App.jsx`의 check 목록이 `ENGINES`와 같은지.
+
+하지 않은 것: `typing.Protocol` 타입 도입. 정적 검사기(mypy/pyright)가 없는 현재는 이름 존재만 확인할 수 있어 실행 기반 테스트보다 덜 잡고, 엔진별로 다른 `ReviewContext`·`CheckConfig` 때문에 `Any` 또는 제네릭이 필요해 계약을 바꿀 때 비용만 늘린다. 정적 검사기를 도입할 때 함께 검토한다.
+
 ## 6. 남은 과제 (이번 범위 밖)
 
 - 기존 `docs/REVIEW.md`의 위치 ⑤ 정확성 과제(코드 번호 기반 행 선택 등)는 그대로다.
