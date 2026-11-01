@@ -124,6 +124,18 @@ tests/compare_with_original.py   원본 패키지와 체크리스트 동일성 �
 
 골든에서 제외한 것: 진단의 `inputs`(입력 파일 경로 — 실행 환경마다 다름).
 
+### 5.4 엔진 목록 단일화·스키마 마이그레이션 (2026-11-01)
+
+문제: PostgreSQL 이력 저장(`db71258`)이 엔진 목록을 두 곳에 더 적었다. `postgres.py`의 `REPORTS` 사전(check → reporting 모듈·한국어 이름)과 SQL의 `CHECK (check_name IN (…))`. 전자는 `ENGINES`와 각 엔진 `reporting.py`에 이미 있는 정보의 복사였고, 후자는 `CREATE TABLE IF NOT EXISTS`로는 기존 DB에 반영되지 않아 다섯 번째 엔진 추가 시 기존 설치에서만 INSERT가 실패하는 함정이었다. 또 `save_report`가 `report_summary`와 같은 요약 계산을 따로 갖고 있었다.
+
+조치:
+- 각 엔진 `reporting.py`에 `REPORT_NAME`과 `summary(result)` 노출. `postgres.py`·`postgres_cli.py`는 `REPORTS` 대신 `ENGINES`를 순회하고 `reporting_for(check)`로 모듈을 얻는다.
+- SQL에서 `check_name` CHECK 제약 제거. `migrate()`를 번호 마이그레이션(`MIGRATIONS` + `schema_version` 표)으로 바꾸고, `002_drop_check_name_constraint`가 기존 설치의 제약을 뗀다. 이미 테이블이 있던 DB는 재시작 한 번으로 맞춰진다.
+- `save_report`가 `report_summary`를 호출하고 `_buckets`를 공유. 요약 계산은 한 곳.
+- 테스트: `test_engines.py`에 `REPORT_NAME`·`summary()`·파일 요약 일치·이름 중복 금지 추가, `test_migrations.py` 신설(번호 연속·중복 금지·SQL에 엔진 이름 금지·`IF (NOT) EXISTS` 보호).
+
+검증: 골든 42건 동일(요약 통합이 출력을 바꾸지 않음).
+
 ## 6. 남은 과제 (이번 범위 밖)
 
 - 기존 `docs/REVIEW.md`의 위치 ⑤ 정확성 과제(코드 번호 기반 행 선택 등)는 그대로다.

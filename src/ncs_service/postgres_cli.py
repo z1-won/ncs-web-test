@@ -3,16 +3,18 @@
 import argparse
 import json
 import os
-from importlib import import_module
 from datetime import datetime, timezone
+from importlib import import_module
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
-from .postgres import REPORTS, import_review, migrate
+from .postgres import import_review, migrate, reporting_for
+from .registry import ENGINES, get_engine
 
 
 def import_directory(dsn: str, directory: Path) -> bool | None:
-    for check, (_, name) in REPORTS.items():
+    for check in ENGINES:
+        name = reporting_for(check).REPORT_NAME
         suffix = f"_{name}_00_요약.json"
         matches = list(directory.glob(f"*{suffix}"))
         if not matches:
@@ -31,7 +33,7 @@ def import_directory(dsn: str, directory: Path) -> bool | None:
         if sheet_file.exists():
             sheet = read("검수확인서")
         else:
-            sheet = import_module(f"ncs_{check}.sheet").sheet(checklist)
+            sheet = import_module(get_engine(check).package + ".sheet").sheet(checklist)
             diagnostics.setdefault("warnings", []).append(
                 "과거 결과에 검수확인서 파일이 없어 현재 표 형식으로 재구성했습니다"
             )
@@ -57,9 +59,9 @@ def main() -> None:
     dsn = os.getenv("DATABASE_URL")
     if not dsn:
         parser.error("DATABASE_URL 환경 변수가 필요합니다")
-    migrate(dsn)
+    applied = migrate(dsn)
     if args.command == "migrate":
-        print("PostgreSQL 스키마 준비 완료")
+        print("PostgreSQL 스키마 준비 완료" + (f" (적용: {', '.join(applied)})" if applied else " (변경 없음)"))
         return
     if args.directory is None or not args.directory.is_dir():
         parser.error("import에는 기존 결과 폴더 경로가 필요합니다")

@@ -31,13 +31,19 @@ def overall_verdict(verdicts) -> str:
     return PASS
 
 
-def report_summary(result: ReviewResult, *, name: str, item_files: Sequence[tuple[str, str]], other_tail: str) -> dict:
-    """파일을 만들지 않고 기존 보고서와 동일한 요약을 계산한다."""
+def _buckets(result: ReviewResult, item_files: Sequence[tuple[str, str]], other_tail: str) -> dict[str, list]:
+    """체크리스트 행을 항목별 파일 꼬리말로 나눈다. item_files에 없는 item_id는 other_tail로 모인다."""
     buckets: dict[str, list] = {tail: [] for _, tail in item_files}
     by_length = sorted(item_files, key=lambda pair: -len(pair[0]))
     for row in result.checklist:
         tail = next((t for prefix, t in by_length if row["item_id"].startswith(prefix)), other_tail)
         buckets.setdefault(tail, []).append(row)
+    return buckets
+
+
+def report_summary(result: ReviewResult, *, name: str, item_files: Sequence[tuple[str, str]], other_tail: str) -> dict:
+    """파일을 만들지 않고 기존 보고서와 동일한 요약을 계산한다. save_report와 DB 이력 저장이 함께 쓴다."""
+    buckets = _buckets(result, item_files, other_tail)
     items = {}
     for tail, rows in buckets.items():
         verdicts = [row["판정"] for row in rows]
@@ -69,14 +75,8 @@ def save_report(
     root.mkdir(parents=True, exist_ok=True)
     directory = Path(tempfile.mkdtemp(prefix=f"{code}_", dir=root)) if per_run_dir else root
 
-    buckets: dict[str, list] = {tail: [] for _, tail in item_files}
-    by_length = sorted(item_files, key=lambda pair: -len(pair[0]))
-    for row in result.checklist:
-        tail = next((t for prefix, t in by_length if row["item_id"].startswith(prefix)), other_tail)
-        buckets.setdefault(tail, []).append(row)
-
+    buckets = _buckets(result, item_files, other_tail)
     paths: list[Path] = []
-    summary: dict = {}
 
     def write(tail: str, value) -> Path:
         path = directory / f"{code}_{tail}.json"
@@ -85,10 +85,9 @@ def save_report(
         return path
 
     for tail, rows in buckets.items():
-        path = write(tail, rows)
-        verdicts = [row["판정"] for row in rows]
-        summary[tail] = {"검수결과": overall_verdict(verdicts), "행 수": {v: verdicts.count(v) for v in VERDICTS}, "파일": path.name}
-    summary = {"검수결과": overall_verdict(row["판정"] for row in result.checklist), "항목": summary}
+        write(tail, rows)
+    # 요약은 report_summary 한 곳에서 계산한다(DB 이력 저장과 같은 값).
+    summary = report_summary(result, name=name, item_files=item_files, other_tail=other_tail)
     write(f"{name}_00_요약", summary)
     write(f"{name}_지적사항", result.findings)
     write(f"{name}_전체", result.checklist)

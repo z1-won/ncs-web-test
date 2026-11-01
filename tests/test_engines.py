@@ -5,6 +5,7 @@
 
 import dataclasses
 import json
+from importlib import import_module
 import re
 import sys
 import tempfile
@@ -46,8 +47,12 @@ class EngineContractTests(unittest.TestCase):
                 self.assertIn("manuscript", engine.required)
                 self.assertLessEqual(set(engine.required), {"manuscript", "plan"})
 
+    def test_report_names_are_unique(self):
+        names = [import_module(engine.package + ".reporting").REPORT_NAME for _, engine, _ in engines()]
+        self.assertEqual(len(names), len(set(names)), f"REPORT_NAME이 중복됩니다: {names}")
+
     def test_public_api_is_exported(self):
-        for check, _, module in engines():
+        for check, engine, module in engines():
             with self.subTest(check=check):
                 for name in PUBLIC_API:
                     self.assertTrue(hasattr(module, name), f"{module.__name__}에 {name}이 없습니다")
@@ -61,6 +66,13 @@ class EngineContractTests(unittest.TestCase):
                     self.assertIsInstance(rule, Rule)
                 keys = [rule.key for rule in module.DEFAULT_RULES]
                 self.assertEqual(len(keys), len(set(keys)), "규칙 key가 중복됩니다")
+                # 보고서 이름·요약은 파일 저장과 DB 이력 저장이 함께 쓴다. 엔진 목록을 다른 곳에 복사하지 않기 위한 계약.
+                reporting = import_module(engine.package + ".reporting")
+                self.assertIsInstance(reporting.REPORT_NAME, str)
+                self.assertTrue(reporting.REPORT_NAME, f"{engine.package}.reporting.REPORT_NAME이 비어 있습니다")
+                self.assertTrue(callable(reporting.summary), f"{engine.package}.reporting.summary가 없습니다")
+                self.assertTrue(all(tail.startswith(reporting.REPORT_NAME) for _, tail in reporting.ITEM_FILES),
+                                "ITEM_FILES 꼬리말은 REPORT_NAME으로 시작해야 합니다(이관 시 파일 인식 기준)")
 
     def test_review_result_follows_checklist_and_sheet_contract(self):
         for check, _, module in engines():
@@ -119,6 +131,9 @@ class EngineContractTests(unittest.TestCase):
                 self.assertTrue(saved.directory.name.startswith(CODE + "_"), "실행별 폴더 이름은 <코드>_로 시작합니다")
                 self.assertIn("검수결과", saved.summary)
                 self.assertIn("항목", saved.summary)
+                reporting = import_module(ENGINES[check].package + ".reporting")
+                self.assertEqual(saved.summary, reporting.summary(execution.result),
+                                 "파일 저장 요약과 summary()가 다릅니다 — 두 저장 경로가 어긋났습니다")
                 names = sorted(p.name for p in saved.directory.glob("*.json"))
                 for tail in ("00_요약", "지적사항", "전체", "진단", "검수확인서"):
                     self.assertTrue(any(n.startswith(CODE + "_") and n.endswith(f"_{tail}.json") for n in names),

@@ -50,7 +50,7 @@ npm run dev
 
 ## PostgreSQL 검수 이력
 
-웹 서버에 `DATABASE_URL`을 설정하면 PostgreSQL에 검수 이력을 저장합니다. 이 모드에서 실행별 JSON·ZIP 폴더는 새로 만들지 않으며, ZIP은 이력 화면의 다운로드 링크를 누를 때 임시로 생성합니다. `DATABASE_URL`이 없으면 기존 파일 저장 방식으로 실행됩니다. 네 CLI의 `--out` 파일 출력은 계속 사용할 수 있습니다.
+웹 서버에 `DATABASE_URL`을 설정하면 PostgreSQL에 검수 이력을 저장합니다. 이 모드에서 실행별 JSON·ZIP 폴더는 새로 만들지 않으며, ZIP은 이력 화면의 다운로드 링크를 누를 때 임시로 생성합니다. `DATABASE_URL`이 없으면 기존 파일 저장 방식으로 실행됩니다. 네 CLI의 `--out` 파일 출력은 계속 사용할 수 있으며 DB에는 저장하지 않습니다(`source`는 `web`과 `import` 둘뿐). CLI로 만든 결과 폴더는 아래 `import` 명령으로 이력에 넣습니다.
 
 저장소 루트의 `compose.yaml`은 로컬 PostgreSQL 18을 `127.0.0.1:55432`에서 실행합니다. 데이터는 `ncs-review_postgres_data` Docker 볼륨에 저장되어 컨테이너를 다시 만들어도 유지됩니다. Docker Desktop을 켜고 저장소 루트에서 실행하세요. 새로 복제한 작업 공간이라면 `.env.example`을 `.env`로 복사해 `NCS_DB_PASSWORD`와 `NCS_DB_ADMIN_PASSWORD`를 서로 다른 강한 값으로 바꾸고, `DATABASE_URL`의 비밀번호는 `NCS_DB_PASSWORD`와 같게 입력합니다. 이 작업 공간의 `.env`는 이미 생성되어 있습니다.
 
@@ -69,7 +69,7 @@ set +a
 .venv/bin/ncs-web --dist webapp/frontend/dist
 ```
 
-앱 전용 데이터베이스와 관리자 권한이 없는 `ncs_app` 계정은 PostgreSQL 볼륨을 처음 만들 때 생성됩니다. `.env`는 저장소에서 제외됩니다. `docker compose stop db`로 중지하고 `docker compose start db`로 다시 시작할 수 있습니다. `docker compose down`은 컨테이너만 제거하고 데이터 볼륨은 유지하지만, `docker compose down -v`는 데이터 볼륨도 삭제합니다. 앱 시작 시에도 필요한 테이블이 없으면 생성합니다. 운영 중 스키마를 바꿀 때는 별도 마이그레이션 절차가 필요합니다.
+앱 전용 데이터베이스와 관리자 권한이 없는 `ncs_app` 계정은 PostgreSQL 볼륨을 처음 만들 때 생성됩니다. `.env`는 저장소에서 제외됩니다. `docker compose stop db`로 중지하고 `docker compose start db`로 다시 시작할 수 있습니다. `docker compose down`은 컨테이너만 제거하고 데이터 볼륨은 유지하지만, `docker compose down -v`는 데이터 볼륨도 삭제합니다. 앱 시작 시와 `postgres_cli migrate`는 `ncs_service/postgres.py`의 `MIGRATIONS`(번호 붙은 SQL 목록) 중 아직 적용되지 않은 것만 순서대로 실행하고 `schema_version` 표에 기록합니다. 스키마를 바꿀 때는 적용된 항목을 수정하지 말고 다음 번호를 뒤에 추가합니다. 코드를 올리고 서버를 재시작하면 DB가 따라옵니다. check 이름의 허용값은 DB 제약이 아니라 `ncs_service.registry.ENGINES`가 검증하므로, 엔진을 추가해도 DB 쪽 작업은 없습니다.
 
 기존 결과를 가져올 때는 다음 명령을 실행합니다. 재실행하면 이미 가져온 폴더를 건너뛰며 원본 파일은 삭제하지 않습니다. 이관 시각은 요약 JSON의 수정 시각을 사용하고, 과거 입력 원본의 해시·엔진 버전은 복원할 수 없습니다.
 

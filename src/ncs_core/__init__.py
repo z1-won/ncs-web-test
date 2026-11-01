@@ -10,7 +10,7 @@ from .documents import Document, Table, load_document
 from .inputs import detect_role, select_documents, validate_distinct
 from .models import ReviewResult, SavedReport
 from .module_code import resolve_module_code, validate_module_code
-from .reporting import save_report
+from .reporting import report_summary, save_report
 from .rules import Rule, run_rules
 from .text import FAIL, NA, O, PASS, PUA, TRI, UNDECIDED, VERDICTS, X, flatten, make_normalizer, verdict, visible
 
@@ -25,6 +25,7 @@ __all__ = [
     "SavedReport",
     "resolve_module_code",
     "validate_module_code",
+    "report_summary",
     "save_report",
     "Rule",
     "run_rules",

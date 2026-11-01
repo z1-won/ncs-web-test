@@ -13,11 +13,13 @@
   `config.py`(양식 가정, frozen dataclass; 공통 파서를 쓰면 `parse_config() -> ParseConfig`) · `patterns.py`(그 패키지 판정에만 쓰는 정규식·라벨) ·
   `text.py`(`norm, same = make_normalizer(접두 패턴)`; 차례·필요 지식은 `ncs_core.manuscript.names`를 쓰므로 없음) ·
   `compare.py`(목록 비교 도우미) · `parsers.py`(그 패키지 고유 추출, I/O 없음) · `models.py`(`ReviewContext`) ·
-  `rules/<규칙>.py`(판정, I/O 없음) · `registry.py`(`DEFAULT_RULES`, `ALL_ITEM_IDS`) · `pipeline.py` · `reporting.py` · `__main__.py`.
+  `rules/<규칙>.py`(판정, I/O 없음) · `registry.py`(`DEFAULT_RULES`, `ALL_ITEM_IDS`) · `pipeline.py` ·
+  `reporting.py`(`REPORT_NAME`, `ITEM_FILES`, `summary(result)`, `save_results`) · `__main__.py`.
+- 엔진 목록(check 이름)의 원본은 `ncs_service.registry.ENGINES` 하나다. 다른 코드(DB 저장, 이관, SQL 제약)에 엔진 이름을 다시 적지 않고 `ENGINES`를 순회하거나 엔진 `reporting`의 `REPORT_NAME`을 읽는다.
 - 규칙은 `Rule(key, item_prefix, run)`으로 등록한다. `run`은 `ReviewContext` 하나를 받아 체크리스트 행 목록을 돌려주고, 행의 `item_id`는 `item_prefix`로 시작해야 한다.
 
 ## 공개 API (모든 검수 패키지 동일)
-`tests/test_engines.py`가 `ncs_service.registry.ENGINES`에 등록된 모든 엔진에 대해 이 계약을 검사한다(공개 이름, frozen `CheckConfig`, 체크리스트 행 키, 확인서 행이 F02 원문 항목과 일치, 저장 파일·ZIP, 빈 규칙 목록, 다른 엔진 설정 거절).
+`tests/test_engines.py`가 `ncs_service.registry.ENGINES`에 등록된 모든 엔진에 대해 이 계약을 검사한다(공개 이름, frozen `CheckConfig`, 체크리스트 행 키, 확인서 행이 F02 원문 항목과 일치, `reporting.REPORT_NAME`·`summary()`와 파일 요약 일치, 저장 파일·ZIP, 빈 규칙 목록, 다른 엔진 설정 거절).
 새 구성요소 엔진은 **`ENGINES`에 등록 → `src/ncs_web/server.py`의 `CheckName`·`/api/health`·오류 메시지 → `webapp/frontend/src/App.jsx`의 `CHECKS`** 세 곳을 같이 고친다. 하나라도 빠지면 같은 테스트가 알려 준다.
 ```python
 run_review(paths, *, roles=None, module_code="", config=DEFAULT_CONFIG, rules=DEFAULT_RULES) -> ReviewResult
@@ -30,6 +32,9 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 ## 체크리스트 행 (JSON 키는 한국어, 기존 호환)
 `item_id`, `region_path`, `원고`, `체크`({이름: O|X|△|-}), `판정`(적합|부적합|판단불가, `ncs_core.PASS/FAIL/UNDECIDED`), `비고`(dict 또는 list), `수정 제안`.
 추가 키(`개발계획서`, `기준`, `자리`, `해당 행 근거` 등)는 패키지가 정한다. 판정은 반드시 `ncs_core.verdict`로 계산한다.
+
+## DB 이력 (PostgreSQL 모드)
+스키마 변경은 `ncs_service/postgres.py`의 `MIGRATIONS`에 `NNN_이름` 항목을 **뒤에 추가**해서만 한다. 적용된 항목은 고치지 않는다. 모든 문장은 `IF (NOT) EXISTS`로 보호해 시작마다 돌아도 안전하게 한다(`tests/test_migrations.py`가 검사). 엔진 이름을 SQL에 적지 않는다.
 
 ## 저장 파일
 `<out>/<코드>_xxxx/` 아래 `<코드>_<항목 꼬리말>.json`, `<코드>_<이름>_00_요약.json`, `_지적사항.json`, `_전체.json`, `_진단.json`, `<코드>_<이름>_검수결과.zip`.

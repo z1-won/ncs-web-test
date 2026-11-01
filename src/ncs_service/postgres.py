@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+from importlib import import_module
 from importlib.metadata import version
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -12,14 +13,16 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from ncs_core.reporting import report_summary
 from .models import ExecutedReview
+from .registry import get_engine
 
+# 001: 최초 스키마. check_name의 허용값은 Python(registry.ENGINES)이 검증하므로 DB 제약으로 두지 않는다 — 엔진을
+# 추가할 때 DB를 바꿀 필요가 없게 하기 위해서다.
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS review_runs (
     id uuid PRIMARY KEY,
     created_at timestamptz NOT NULL DEFAULT now(),
-    check_name text NOT NULL CHECK (check_name IN ('position', 'toc', 'overview', 'knowledge')),
+    check_name text NOT NULL,
     module_code text NOT NULL,
     verdict text NOT NULL,
     engine_version text,
@@ -47,26 +50,40 @@ CREATE TABLE IF NOT EXISTS review_inputs (
 );
 """
 
-REPORTS = {
-    "position": ("ncs_position.reporting", "위치"),
-    "toc": ("ncs_toc.reporting", "차례"),
-    "overview": ("ncs_overview.reporting", "개요"),
-    "knowledge": ("ncs_knowledge.reporting", "필요지식"),
-}
+# 번호 순서로 한 번씩만 적용되는 스키마 변경. 적용된 항목은 수정하지 않고 새 번호를 뒤에 붙인다.
+# 002: 초기 설치본에 있던 check_name CHECK 제약 제거(이름은 PostgreSQL 자동 명명 규칙 <표>_<열>_check).
+MIGRATIONS: tuple[tuple[str, str], ...] = (
+    ("001_initial", SCHEMA),
+    ("002_drop_check_name_constraint",
+     "ALTER TABLE review_runs DROP CONSTRAINT IF EXISTS review_runs_check_name_check"),
+)
 
 
-def migrate(dsn: str) -> None:
+def migrate(dsn: str) -> list[str]:
+    """아직 적용되지 않은 MIGRATIONS를 순서대로 실행하고 schema_version에 기록한다. 적용한 이름 목록을 돌려준다."""
+    applied = []
     with psycopg.connect(dsn) as connection:
-        connection.execute(SCHEMA)
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS schema_version ("
+            "name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())"
+        )
+        done = {row[0] for row in connection.execute("SELECT name FROM schema_version").fetchall()}
+        for name, sql in MIGRATIONS:
+            if name in done:
+                continue
+            connection.execute(sql)
+            connection.execute("INSERT INTO schema_version (name) VALUES (%s)", (name,))
+            applied.append(name)
+    return applied
+
+
+def reporting_for(check: str):
+    """해당 엔진의 reporting 모듈(REPORT_NAME, ITEM_FILES, summary, save_results)."""
+    return import_module(get_engine(check).package + ".reporting")
 
 
 def summary_for(review: ExecutedReview) -> dict:
-    from importlib import import_module
-
-    module_name, name = REPORTS[review.check]
-    reporting = import_module(module_name)
-    return report_summary(review.result, name=name, item_files=reporting.ITEM_FILES,
-                          other_tail=f"{name}_기타")
+    return reporting_for(review.check).summary(review.result)
 
 
 def input_metadata(diagnostics: dict, uploads: list[tuple[str, Path]]) -> list[dict]:
