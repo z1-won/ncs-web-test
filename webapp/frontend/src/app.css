@@ -27,7 +27,7 @@
   border-radius: var(--krds-radius-medium2);
   background: var(--krds-light-color-background-white);
 }
-.review-form .form-actions { display: flex; align-items: flex-end; }
+.review-form .form-actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--krds-gap-3); }
 .review-form .krds-btn { width: 100%; }
 .selected-files { margin-top: var(--krds-gap-7); }
 .result-head {
@@ -48,7 +48,8 @@
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: var(--krds-pc-font-size-body-xsmall);
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;   /* 긴 토큰은 필요할 때만 자르고, 보통 글은 단어 단위로 줄바꿈 */
+  word-break: keep-all;
 }
 .tbl td.num { text-align: right; white-space: nowrap; }
 .empty { color: var(--krds-light-color-text-subtle); padding: var(--krds-padding-5) 0; }
@@ -94,3 +95,9 @@ details.raw pre {
 .sheet-more { margin-top: var(--krds-gap-2); }
 .tbl tr.sheet-detail > td { padding: var(--krds-padding-3) var(--krds-padding-5); background: var(--krds-light-color-surface-secondary-subtler); }
 .tbl tr.sheet-detail .krds-table-wrap { margin: 0; }
+
+/* 지적사항 표: 열 너비 고정. 위치 경로는 '>' 단위로, 긴 사유·수정 제안은 단어 단위로 줄바꿈하고 너무 길면 칸 안에서 스크롤 */
+.tbl.findings { table-layout: fixed; }
+.tbl.findings td.path { font-size: var(--krds-pc-font-size-body-xsmall); color: var(--krds-light-color-text-subtle); word-break: keep-all; overflow-wrap: anywhere; }
+.tbl.findings td.long { white-space: pre-line; word-break: keep-all; overflow-wrap: anywhere; }
+.tbl.findings td.long .clamp { max-height: 16em; overflow: auto; }   /* 긴 목록(수정 제안 데이터 등)은 칸 안에서 스크롤 */

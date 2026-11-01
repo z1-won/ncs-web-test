@@ -169,8 +169,17 @@ function FindingsTable({ findings, compact = false }) {
   if (!findings.length) return <p className="empty">지적사항이 없습니다.</p>;
   return (
     <div className="krds-table-wrap">
-      <table className="tbl col data">
+      <table className="tbl col data findings">
         <caption>검수에서 부적합 또는 판단불가로 나온 체크 목록</caption>
+        {/* 열 너비를 고정해 긴 사유·수정 제안이 다른 열을 한 글자씩 세로로 쪼개지 않게 한다 */}
+        <colgroup>
+          {!compact && <col style={{ width: "11%" }} />}
+          <col style={{ width: "17%" }} />
+          <col style={{ width: "8%" }} />
+          <col style={{ width: "16%" }} />
+          <col />
+          <col style={{ width: "20%" }} />
+        </colgroup>
         <thead>
           <tr>
             {!compact && <th scope="col">항목</th>}
@@ -187,9 +196,9 @@ function FindingsTable({ findings, compact = false }) {
               {!compact && <td>{f.item_id}</td>}
               <td>{f.check}</td>
               <td><Badge value={f.verdict} /></td>
-              <td className="mono">{f.region_path}</td>
-              <td>{withBoxNumbers(f.reason)}</td>
-              <td className="mono">{asText(f.suggestion)}</td>
+              <td className="path">{f.region_path}</td>
+              <td className="long"><div className="clamp">{withBoxNumbers(f.reason)}</div></td>
+              <td className="long"><div className="clamp">{asText(f.suggestion)}</div></td>
             </tr>
           ))}
         </tbody>
@@ -481,6 +490,10 @@ export default function App() {
           <button className="krds-btn primary large" type="submit" disabled={busy || files.length === 0}>
             {busy ? "검사 중…" : "검사 실행"}
           </button>
+          {/* 실행·이력 열기 오류는 버튼 바로 아래에 — 검수 이력 표보다 먼저 보이도록 */}
+          {error && (
+            <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error}</p>
+          )}
         </div>
       </form>
 
@@ -510,12 +523,6 @@ export default function App() {
             </div>
           )}
         </section>
-      )}
-
-      {error && (
-        <div className="form-group selected-files" role="alert">
-          <p className="form-hint-invalid" style={{ whiteSpace: "pre-wrap" }}>{error}</p>
-        </div>
       )}
 
       {result && (

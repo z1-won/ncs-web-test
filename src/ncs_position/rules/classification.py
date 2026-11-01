@@ -32,7 +32,7 @@ def check_classification(plan_values: dict[str, str], manuscript_values: dict[st
                 "체크": checks,
                 "판정": result,
                 "비고": notes,
-                "수정 제안": None if result == PASS else expected,
+                "수정 제안": None if result == PASS else (f'개발계획서대로 "{expected}"로 수정' if not ok else "기호 글꼴 문자를 일반 문자로 교체"),
             }
         )
     return rows
