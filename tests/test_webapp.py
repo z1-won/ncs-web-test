@@ -104,7 +104,8 @@ class WebappTests(unittest.TestCase):
                 self.assertEqual(via_token.json()["검수확인서"], direct["검수확인서"])
                 self.assertEqual(via_token.json()["group"], token["group"])
                 # 파일 저장소는 묶음 폴더 아래에 모아 둔다
-                self.assertEqual(Path(via_token.json()["저장"]["folder"]).parent, self.output / token["group"])
+                # macOS는 /var → /private/var 심볼릭 링크라 양쪽을 resolve해서 비교
+                self.assertEqual(Path(via_token.json()["저장"]["folder"]).parent.resolve(), (self.output / token["group"]).resolve())
         self.assertEqual(self.client.delete(f"/api/uploads/{token['upload']}").status_code, 204)
         self.assertEqual(self.client.delete(f"/api/uploads/{token['upload']}").status_code, 404)
         expired = self.client.post("/api/review", data={"check": "toc", "upload": token["upload"]})
@@ -119,7 +120,7 @@ class WebappTests(unittest.TestCase):
         single = self.client.post("/api/review", data={"check": "toc", "upload": only_manuscript["upload"]})
         self.assertEqual(single.status_code, 200)
         self.assertIsNone(single.json()["group"], "group 없이 토큰만 보내면 묶음이 아닌 단독 실행")
-        self.assertEqual(Path(single.json()["저장"]["folder"]).parent, self.output)
+        self.assertEqual(Path(single.json()["저장"]["folder"]).parent.resolve(), self.output.resolve())
         for response in (
             self.client.post("/api/uploads"),
             self.client.post("/api/uploads", files={"files": ("empty.hwpx", b"")}),
