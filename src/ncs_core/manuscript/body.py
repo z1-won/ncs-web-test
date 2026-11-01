@@ -47,11 +47,18 @@ def _eval_candidates(lines, start: int, end: int, config: ParseConfig) -> list[s
 
 
 def parse_body(
-    sections, n_lessons: int, cutoff: int | None = None, config: ParseConfig = DEFAULT_PARSE_CONFIG
+    sections,
+    n_lessons: int,
+    cutoff: int | None = None,
+    config: ParseConfig = DEFAULT_PARSE_CONFIG,
+    table_paragraphs: frozenset[int] | set[int] | None = None,
 ) -> dict:
     """본문 → 내비게이터 묶음 / 학습 구간 / 필요지식 N-M. 제목 / 학습별 교수·평가 제목 위치와 평가 후보.
 
     cutoff: 참고 자료 시작 인덱스(raw) — 마지막 학습 구간을 여기서 끊는다.
+    table_paragraphs: 본문 섹션에서 표 셀 안에 든 문단 인덱스(raw). 같은 N-M 번호가 여러 번 나오면
+        표 밖 문단을 제목으로 우선하고, 없으면 처음 나온 것을 쓴다(평가·수행 내용 표의 "1-1. 명" 셀이
+        본문 제목을 덮어쓰지 않게). None이면 처음 나온 것만 쓴다.
     """
     raw = sections[1] if len(sections) > 1 else []
     lines = [(i, l) for i, l in enumerate(raw) if l]  # (원래 인덱스, 텍스트)
@@ -60,12 +67,22 @@ def parse_body(
     last = next((k for k, (i, _) in enumerate(lines) if cutoff is not None and i >= cutoff), len(lines))
     spans = [(i + 1, starts[i], starts[i + 1] if i + 1 < len(starts) else last) for i in range(len(starts))]
 
-    subs = []  # 필요지식 N-M. 제목 (같은 줄 또는 다음 줄)
-    for k, (_, line) in enumerate(lines):
+    # 필요지식 N-M. 제목 (같은 줄 또는 다음 줄). 같은 번호가 여러 번이면 표 밖 문단 → 먼저 나온 것 순으로 하나만.
+    in_table = table_paragraphs or frozenset()
+    candidates: dict[tuple[int, int], list[dict]] = {}
+    for k, (raw_index, line) in enumerate(lines):
         if (m := BODY_SUB.match(line)) and len(line) < config.body_heading_max_length:
             text = m.group(3).strip() or (lines[k + 1][1] if k + 1 < len(lines) else "")
             if not re.search(r"\s\d+$", line):  # 차례 줄(끝 쪽수) 제외
-                subs.append({"no": int(m.group(1)), "sub": int(m.group(2)), "text": text, "k": k})
+                key = (int(m.group(1)), int(m.group(2)))
+                candidates.setdefault(key, []).append(
+                    {"no": key[0], "sub": key[1], "text": text, "k": k, "in_table": raw_index in in_table}
+                )
+    subs = []
+    for found in candidates.values():
+        chosen = next((c for c in found if not c["in_table"]), found[0])
+        subs.append({"no": chosen["no"], "sub": chosen["sub"], "text": chosen["text"], "k": chosen["k"]})
+    subs.sort(key=lambda s: s["k"])
 
     lessons = []
     for no, a, b in spans:

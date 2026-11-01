@@ -1,18 +1,19 @@
-"""차례 면·개요 내용체계(문단 기준)·개발계획서 명칭을 문단 줄에서 추출한다.
+"""차례 면과 개발계획서 명칭을 문단 줄에서 추출한다. 개요 내용체계는 overview.parse_overview가 읽는다.
 
 sections는 [차례·개요 문단, 본문 문단]의 두 섹션 목록이다(각 pipeline이 실제 섹션을 연결한다).
 """
 
 import re
 
-from .patterns import OV_LESSON, OV_SUB_BARE, OV_SUB_NAMED, TOC_LESSON, TOC_LINE, TOC_SUB, TOC_TAIL
+from .patterns import OV_SUB_BARE, OV_SUB_NAMED, TOC_LESSON, TOC_LINE, TOC_SUB, TOC_TAIL
 
 TAIL_NAMES = {"참고자료": "참고 자료", "활용서식": "활용 서식", "부록": "부록"}
 
 
 def parse_toc(sections) -> dict | None:
     """차례 블록 → {'학습': [{'no','text'}], '내용': [{'no','sub','text','page'}],
-    '줄': [{'lesson','kind','page','after'}], '꼬리': {참고 자료: 쪽, ...}, 'span': (s, e)}"""
+    '줄': [{'lesson','kind','page','after'}], '꼬리': {참고 자료: 쪽, ...}, 'span': (s, e),
+    '건너뜀': [{'no','text','기대'}] — 번호가 이어지지 않아 학습으로 받지 않은 '학습 N.' 줄}"""
     lines = [l for l in sections[0] if l] if sections else []
     start = next((i for i, l in enumerate(lines) if re.fullmatch(r"차\s*례", l)), None)
     if start is None:
@@ -25,10 +26,14 @@ def parse_toc(sections) -> dict | None:
         ),
         len(lines),
     )
-    toc = {"학습": [], "내용": [], "줄": [], "꼬리": {}, "span": (start, end)}
+    toc = {"학습": [], "내용": [], "줄": [], "꼬리": {}, "span": (start, end), "건너뜀": []}
     for line in lines[start + 1 : end]:
-        if (m := TOC_LESSON.match(line)) and int(m.group(1)) == len(toc["학습"]) + 1:
-            toc["학습"].append({"no": int(m.group(1)), "text": m.group(2).strip()})
+        if m := TOC_LESSON.match(line):
+            if int(m.group(1)) == len(toc["학습"]) + 1:
+                toc["학습"].append({"no": int(m.group(1)), "text": m.group(2).strip()})
+            else:
+                # 번호가 이어지지 않는 '학습 N.' 줄. 학습으로 받지 않되 진단에서 알릴 수 있게 남긴다.
+                toc["건너뜀"].append({"no": int(m.group(1)), "text": m.group(2).strip(), "기대": len(toc["학습"]) + 1})
         elif m := TOC_SUB.match(line):
             toc["내용"].append(
                 {"no": int(m.group(1)), "sub": int(m.group(2)), "text": m.group(3).strip(), "page": m.group(4)}
@@ -42,25 +47,6 @@ def parse_toc(sections) -> dict | None:
         elif m := TOC_TAIL.match(line):
             toc["꼬리"][TAIL_NAMES[re.sub(r"\s+", "", m.group(1))]] = m.group(2)
     return toc
-
-
-def parse_overview_lines(sections) -> dict | None:
-    """학습모듈의 개요 > 내용체계를 문단 줄로 읽는다 → {'학습': [{'no','text'}], '내용': [{'no','sub','text'}]}.
-
-    표 셀 우선으로 읽는 overview.parse_overview와 달리 문단 순서만 본다(차례 검수 ③의 기준).
-    """
-    lines = [l for l in sections[0] if l] if sections else []
-    start = next((i for i, l in enumerate(lines) if re.fullmatch(r"학습모듈의\s*내용\s*체계", l)), None)
-    if start is None:
-        return None
-    end = next((i for i in range(start + 1, len(lines)) if re.fullmatch(r"핵심\s*용어", lines[i])), len(lines))
-    overview = {"학습": [], "내용": []}
-    for line in lines[start + 1 : end]:
-        if m := OV_SUB_NAMED.match(line):
-            overview["내용"].append({"no": int(m.group(1)), "sub": int(m.group(2)), "text": m.group(3).strip()})
-        elif (m := OV_LESSON.match(line)) and int(m.group(1)) == len(overview["학습"]) + 1:
-            overview["학습"].append({"no": int(m.group(1)), "text": m.group(2).strip()})
-    return overview
 
 
 def parse_plan_toc(sections, module_code: str) -> dict | None:

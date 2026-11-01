@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
-from ncs_core.manuscript import parse_body, parse_overview_lines, parse_plan_toc, parse_toc, section_presence
+from ncs_core.manuscript import parse_body, parse_overview, parse_plan_toc, parse_toc, section_presence
 from ncs_core.text import flatten
 
 from .config import DEFAULT_CONFIG, CheckConfig
@@ -35,12 +35,16 @@ def prepare_review(
     toc = parse_toc(sections)
     if not toc or not toc["학습"]:
         raise ValueError("차례 또는 차례 학습명을 읽지 못했습니다. 양식과 섹션 설정을 확인하세요")
-    overview = parse_overview_lines(sections)
+    # 내용체계는 표 우선으로 읽는다(개요·필요지식 엔진과 같은 파서). 셀 안에서 '1-1.'과 명칭이 두 문단으로 갈려도 읽힌다.
+    overview = parse_overview(manuscript, config.front_section).get("내용체계")
     plan_toc = parse_plan_toc(plan.sections, code) if plan else None
     images = [(p, name) for s, p, name in manuscript.images if s == config.body_section]
     parse_config = config.parse_config()
     presence = section_presence(sections, images, parse_config)
-    body = parse_body(sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config)
+    body = parse_body(
+        sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config,
+        table_paragraphs=manuscript.section_table_paragraphs(config.body_section),
+    )
     eval_tables = evaluation_tables(manuscript.section_tables(config.body_section))
     return ReviewContext(manuscript, plan, code, config, toc, overview, plan_toc, body, presence, eval_tables)
 
@@ -63,6 +67,11 @@ def _actual_sections(value: Any, config: CheckConfig) -> Any:
 def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     manuscript, plan, config = context.manuscript, context.plan, context.config
     warnings = []
+    for skipped in context.toc.get("건너뜀", []):
+        warnings.append(
+            f"차례에서 '학습 {skipped['no']}. {skipped['text']}' 줄을 학습으로 받지 않았습니다"
+            f"(학습 {skipped['기대']}을 기대). 번호가 건너뛰었거나 중복됐습니다. 이후 학습이 누락될 수 있습니다"
+        )
     if not context.plan_toc:
         warnings.append("개발계획서가 없거나 해당 모듈 블록을 읽지 못했습니다")
     elif not context.plan_toc["학습명"] or not context.plan_toc["내용명"]:

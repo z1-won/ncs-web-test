@@ -42,7 +42,10 @@ def prepare_review(
     overview = parse_overview(manuscript, config.front_section).get("내용체계")
     images = [(p, name) for s, p, name in manuscript.images if s == config.body_section]
     presence = section_presence(sections, images, parse_config)
-    body = parse_body(sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config)
+    body = parse_body(
+        sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config,
+        table_paragraphs=manuscript.section_table_paragraphs(config.body_section),
+    )
     units = unit_regions(body, config)
     plan_goals = parse_plan_goals(plan, code) if plan else None
     table_paragraphs = manuscript.section_table_paragraphs(config.body_section)
@@ -70,6 +73,11 @@ def _actual_sections(value: Any, config: CheckConfig) -> Any:
 def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     manuscript, plan, config = context.manuscript, context.plan, context.config
     warnings = []
+    for skipped in context.toc.get("건너뜀", []):
+        warnings.append(
+            f"차례에서 '학습 {skipped['no']}. {skipped['text']}' 줄을 학습으로 받지 않았습니다"
+            f"(학습 {skipped['기대']}을 기대). 번호가 건너뛰었거나 중복됐습니다. 이후 학습이 누락될 수 있습니다"
+        )
     if not plan:
         warnings.append("개발계획서가 없어 ⑤ 학습 목표 대조는 생략(-)입니다")
     elif not context.plan_goals:

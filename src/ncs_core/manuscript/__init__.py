@@ -8,7 +8,7 @@ from .config import DEFAULT_PARSE_CONFIG, ParseConfig
 from .names import HEAD_NUMBER, diff_list, norm, pua_note, same
 from .overview import parse_overview, parse_plan, split_items
 from .presence import section_presence
-from .toc import parse_overview_lines, parse_plan_toc, parse_toc
+from .toc import parse_plan_toc, parse_toc
 
 __all__ = [
     "DEFAULT_PARSE_CONFIG",
@@ -18,7 +18,6 @@ __all__ = [
     "norm",
     "parse_body",
     "parse_overview",
-    "parse_overview_lines",
     "parse_plan",
     "parse_plan_toc",
     "parse_toc",

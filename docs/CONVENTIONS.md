@@ -4,7 +4,7 @@
 
 ## 구조
 - 공통 코어 `ncs_core`: 문서 읽기, 문자 정규화·판정, 입력 역할 판별, 모듈 코드, 규칙 실행기, 저장. **판정 정책을 두지 않는다.**
-- 공통 파서 `ncs_core.manuscript`: 차례 면(`parse_toc`, `parse_overview_lines`, `parse_plan_toc`), 개요(`parse_overview`, `parse_plan`),
+- 공통 파서 `ncs_core.manuscript`: 차례 면(`parse_toc`, `parse_plan_toc`), 개요·내용체계(`parse_overview` — 표 우선, 네 엔진 공용, `parse_plan`),
   본문(`parse_body`), 꼬리 섹션(`section_presence`), 양식 인식 패턴(`patterns`), 학습명 비교(`names`: `norm`/`same`/`diff_list`/`pua_note`).
   임계값은 `ParseConfig`로 받는다. 양식 구조를 읽는 코드는 여기에 두고, 검수 패키지는 자기 항목에만 필요한 추출만 가진다.
 - **계층 규칙**: 검수 패키지는 `ncs_core`만 import한다. 다른 검수 패키지를 import하지 않으며, `ncs_core`는 검수 패키지·`ncs_service`를 모른다.
