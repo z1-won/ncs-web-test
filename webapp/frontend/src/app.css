@@ -214,7 +214,3 @@ details.raw pre {
 .run-buttons { display: flex; gap: var(--krds-gap-3); width: 100%; }
 .run-buttons .krds-btn.primary { flex: 1; }
 .review-form .run-buttons .krds-btn { width: auto; }
-
-/* 파일명 앞 역할 배지(원고/개발계획서) — 고른 즉시 서버가 판별 */
-.file-roles { display: flex; flex-wrap: wrap; gap: var(--krds-gap-2) var(--krds-gap-5); }
-.file-roles .file-role { display: inline-flex; align-items: center; gap: var(--krds-gap-2); }
