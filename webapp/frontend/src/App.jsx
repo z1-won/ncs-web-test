@@ -4,7 +4,8 @@ import { api } from "./lib/api.js";
 import { ALL_CHECK, ALL_OPTION, CHECKS, checksFromEngines } from "./lib/checks.js";
 import { formatDate } from "./lib/format.jsx";
 import { AllResults, ComponentResult } from "./components/AllResults.jsx";
-import { Badge } from "./components/Badge.jsx";
+import { Badge, Spinner } from "./components/Badge.jsx";
+import { FileUpload } from "./components/FileUpload.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
 import { KrdsSelect } from "./components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
@@ -22,7 +23,11 @@ export default function App() {
   const [allRun, setAllRun] = useState(null);   // 전체 실행 진행·결과: { group, roles, items: {check: {status, data, error}}, running, created_at }
   const [history, setHistory] = useState(null);
   const resultsRef = useRef(null);
-  const fileInput = useRef(null);    // 숨긴 <input type=file> — 진짜 <button>이 대신 열어 키보드(Enter/Space)로도 동작   // 결과 영역 — 검사 실행·이력 열기 뒤 여기로 화면을 내린다(이력 표가 길면 결과가 화면 밖에 있다)
+  // 파일을 고르면 바로 /api/uploads에 올려 토큰·역할을 받아 둔다. 실행은 이 토큰으로(파일을 다시 보내지 않음), 만료되면 다시 올린다.
+  const [upload, setUpload] = useState({ status: "idle" });   // { status, token, group, roles, error }
+  const uploadRef = useRef(upload);
+  uploadRef.current = upload;
+  const aborter = useRef(null);      // 진행 중 요청의 AbortController — 취소 버튼
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
   const [historyExpanded, setHistoryExpanded] = useState(false); // 이력은 기본 최근 5건만, '더 보기'로 전체
   const [deleting, setDeleting] = useState(false);
@@ -35,6 +40,35 @@ export default function App() {
     if (groups.ok) groups.data.forEach((g) => rows.push({ ...g, id: g.group_id, kind: "group", check_name: ALL_CHECK }));
     rows.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     setHistory(rows);
+  }
+
+  useEffect(() => {
+    const previous = uploadRef.current.token;
+    if (previous) api.uploads.remove(previous);
+    if (!files.length) { setUpload({ status: "idle" }); return undefined; }
+    const controller = new AbortController();
+    setUpload({ status: "uploading" });
+    api.uploads.create(files, controller.signal).then(({ ok, data, error: message, aborted }) => {
+      if (aborted) return;
+      setUpload(ok ? { status: "ready", token: data.upload, group: data.group, roles: data.roles } : { status: "error", error: message });
+    });
+    return () => controller.abort();
+  }, [files]);
+
+  // 실행에 쓸 토큰. 미리 올린 것이 없거나(오류) 만료됐으면 지금 다시 올린다. 실패하면 null(오류는 setError).
+  async function ensureUpload(signal) {
+    const current = uploadRef.current;
+    if (current.status === "ready") return current;
+    const { ok, data, error: message, aborted } = await api.uploads.create(files, signal);
+    if (aborted) return null;
+    if (!ok) { setError(message); return null; }
+    const fresh = { status: "ready", token: data.upload, group: data.group, roles: data.roles };
+    setUpload(fresh);
+    return fresh;
+  }
+
+  function cancel() {
+    aborter.current?.abort();
   }
 
   // 단독 결과가 오거나 전체 실행이 시작(묶음 id가 바뀜)되면 결과 영역으로 스크롤. 전체 실행 중 구성요소가 채워질 때는 다시 움직이지 않는다.
@@ -63,12 +97,24 @@ export default function App() {
     setError(null);
     setResult(null);
     setAllRun(null);
-    const { ok, data, error: message } = await api.review({ check, moduleCode, files });
-    if (!ok) setError(message);
-    else {
-      setResult(data);
-      if (data.id) refreshHistory();
+    const controller = new AbortController();
+    aborter.current = controller;
+    let kept = await ensureUpload(controller.signal);
+    let answer = kept ? await api.review({ check, moduleCode, upload: kept.token, signal: controller.signal }) : null;
+    if (answer && !answer.ok && answer.status === 400 && /만료/.test(answer.error)) {
+      setUpload({ status: "idle" });
+      uploadRef.current = { status: "idle" };
+      kept = await ensureUpload(controller.signal);
+      answer = kept ? await api.review({ check, moduleCode, upload: kept.token, signal: controller.signal }) : null;
     }
+    if (answer && !answer.aborted) {
+      if (!answer.ok) setError(answer.error);
+      else {
+        setResult(answer.data);
+        if (answer.data.id) refreshHistory();
+      }
+    }
+    aborter.current = null;
     setBusy(false);
   }
 
@@ -78,9 +124,13 @@ export default function App() {
     setError(null);
     setResult(null);
     const order = checks.map((c) => c.value);
-    const created = await api.uploads.create(files);
+    const controller = new AbortController();
+    aborter.current = controller;
+    // 미리 올린 토큰은 단독 실행용. 전체 실행은 이력 묶음 id가 실행마다 달라야 해서 새 토큰(새 묶음)을 만든다.
+    const created = await api.uploads.create(files, controller.signal);
     if (!created.ok) {
-      setError(created.error);
+      if (!created.aborted) setError(created.error);
+      aborter.current = null;
       setBusy(false);
       return;
     }
@@ -93,14 +143,18 @@ export default function App() {
     });
     setAllRun({ group: upload.group, roles: upload.roles, items, running: true, created_at: new Date().toISOString() });
     const update = (value, patch) => setAllRun((prev) => (prev ? { ...prev, items: { ...prev.items, [value]: { ...prev.items[value], ...patch } } } : prev));
+    let cancelled = false;
     for (const value of order) {
       if (items[value].status === "skipped") continue;
+      if (cancelled) { update(value, { status: "cancelled" }); continue; }
       update(value, { status: "running" });
-      const { ok, data, error: message } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group });
+      const { ok, data, error: message, aborted } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group, signal: controller.signal });
+      if (aborted) { cancelled = true; update(value, { status: "cancelled" }); continue; }
       update(value, ok ? { status: "done", data } : { status: "error", error: message });
     }
     api.uploads.remove(upload.upload);  // 끝났으니 바로 반납(안 해도 만료 시 정리)
-    setAllRun((prev) => (prev ? { ...prev, running: false } : prev));
+    setAllRun((prev) => (prev ? { ...prev, running: false, cancelled } : prev));
+    aborter.current = null;
     setBusy(false);
     if (history) refreshHistory();
   }
@@ -162,15 +216,18 @@ export default function App() {
           </p>
         </div>
 
-        <div className="form-group">
+        <div className="form-group form-files">
           <div className="form-tit"><label htmlFor="files">파일</label></div>
           <div className="form-conts">
-            <input ref={fileInput} id="files" type="file" multiple accept=".hwp,.hwpx" className="sr-only" tabIndex={-1} aria-describedby="files-hint"
-                   onChange={(e) => setFiles(Array.from(e.target.files || []))} />
-            {/* 진짜 버튼이어야 Enter/Space·스크린리더 '버튼' 역할이 모두 된다. span[role=button]은 키보드로 열리지 않았다 */}
-            <button type="button" className="krds-btn medium tertiary" onClick={() => fileInput.current?.click()}>파일 선택</button>
+            <FileUpload files={files} onChange={setFiles} upload={upload} disabled={busy} />
           </div>
-          <p className="form-hint" id="files-hint">{files.length ? files.map((f) => f.name).join(", ") : "선택된 파일 없음"}</p>
+          {/* 실행 전에 알 수 있는 것: 고른 구성요소에 개발계획서가 필요한데 없음 */}
+          {upload.status === "ready" && !upload.roles?.plan && (selected.required || []).includes("plan") && (
+            <p className="form-hint-invalid">이 구성요소는 개발계획서가 필요합니다. 개발계획서를 함께 올리세요.</p>
+          )}
+          {upload.status === "ready" && !upload.roles?.manuscript && (
+            <p className="form-hint-invalid">원고를 찾지 못했습니다. 원고 파일을 올리세요.</p>
+          )}
         </div>
 
         <div className="form-group">
@@ -182,9 +239,12 @@ export default function App() {
         </div>
 
         <div className="form-group form-actions">
-          <button className="krds-btn primary large" type="submit" disabled={busy || files.length === 0}>
-            {busy ? "검사 중…" : check === ALL_CHECK ? "전체 검사 실행" : "검사 실행"}
-          </button>
+          <div className="run-buttons">
+            <button className="krds-btn primary large" type="submit" disabled={busy || files.length === 0 || upload.status === "uploading"}>
+              {busy ? "검사 중…" : check === ALL_CHECK ? "전체 검사 실행" : "검사 실행"}
+            </button>
+            {busy && <button className="krds-btn tertiary large" type="button" onClick={cancel}>취소</button>}
+          </div>
           {/* 실행·이력 열기 오류는 버튼 바로 아래에 — 검수 이력 표보다 먼저 보이도록 */}
           {error && (
             <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error}</p>
@@ -194,6 +254,9 @@ export default function App() {
 
       <div id="review-result" ref={resultsRef} className="results-anchor nav-anchor" />
 
+      {busy && !allRun && (
+        <div className="result-head"><Spinner label={`검사 중 — ${selected.label}`} /></div>
+      )}
       {!allRun && !result && !busy && (
         <p className="empty result-placeholder">검사를 실행하면 결과가 여기에 표시됩니다{history?.length ? " — 아래 검수 이력에서 이전 결과를 열 수도 있습니다" : ""}.</p>
       )}

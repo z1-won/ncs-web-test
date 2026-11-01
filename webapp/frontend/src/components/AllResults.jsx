@@ -11,6 +11,7 @@ export function ItemStatus({ item }) {
   if (item.status === "pending") return <span className="krds-badge bg-light-gray">대기</span>;
   if (item.status === "running") return <Spinner label="검사 중…" />;
   if (item.status === "skipped") return <span className="krds-badge bg-light-gray">미실행 — 개발계획서 없음</span>;
+  if (item.status === "cancelled") return <span className="krds-badge bg-light-gray">취소됨</span>;
   if (item.status === "error") return <span className="krds-badge bg-light-danger">오류</span>;
   const counts = countVerdicts(item.data?.검수확인서);
   return (
@@ -52,6 +53,7 @@ export function AllResults({ run, checks }) {
         <span className="meta">{moduleCode}{moduleCode ? " · " : ""}전체 실행{run.created_at ? ` · ${formatDate(run.created_at)}` : ""}</span>
         <span className="meta">적합 {total.적합} · 부적합 {total.부적합} · 판단불가 {total.판단불가} 항목</span>
         {run.roles && !run.roles.plan && <span className="krds-badge bg-light-warning">개발계획서 없음 — 위치 미실행</span>}
+        {run.cancelled && <span className="krds-badge bg-light-gray">중간에 취소됨</span>}
         <span className="toolbar">
           {view === "accordion" && (
             <>
@@ -106,6 +108,7 @@ export function AllResults({ run, checks }) {
               </h5>
               <div id={bodyId} className="accordion-collapse collapse" aria-labelledby={headerId}>
                 <div className="accordion-body">
+                  {open && item.status === "cancelled" && <p className="empty">취소되어 실행하지 않았습니다.</p>}
                   {open && item.status === "skipped" && (
                     <p className="empty">개발계획서가 없어 실행하지 않았습니다. 위치 ①~⑤는 원고와 개발계획서를 함께 올렸을 때만 검사합니다.</p>
                   )}
@@ -130,7 +133,7 @@ function FullSheet({ items }) {
   const sheet = done.flatMap((i) => (i.data.검수확인서 || []).map((row) => ({ ...row, _check: i.check })));
   const findings = done.flatMap((i) => (i.data.지적사항 || []).map((f) => ({ ...f, _check: i.check })));
   const missing = items.filter((i) => i.status !== "done");
-  const label = { skipped: "미실행(개발계획서 없음)", error: "오류", pending: "대기", running: "검사 중" };
+  const label = { skipped: "미실행(개발계획서 없음)", error: "오류", pending: "대기", running: "검사 중", cancelled: "취소됨" };
   return (
     <>
       <h2 className="section-title">검수 확인서 (구성요소 {done.length}/{items.length})</h2>

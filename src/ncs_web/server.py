@@ -167,7 +167,8 @@ def create_app(
                     raise ValueError("업로드 토큰이 없거나 만료되었습니다. 파일을 다시 올려 주세요")
                 if group and group != kept.group_id:
                     raise ValueError("group이 업로드 토큰의 묶음 id와 다릅니다")
-                payload = _run(kept.files, check, module_code, group or kept.group_id)
+                # group을 보내지 않으면 단독 실행(묶음 없음) — 화면이 파일을 미리 올려 두고 토큰만으로 1건 돌리는 경우
+                payload = _run(kept.files, check, module_code, group or None)
             else:
                 if group:
                     raise ValueError("group은 upload 토큰과 함께만 쓸 수 있습니다")

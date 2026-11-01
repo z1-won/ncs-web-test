@@ -210,3 +210,14 @@ details.raw pre {
 .view-switch { margin-top: var(--krds-gap-7); }
 .view-switch + .tab-conts > .section-title { margin-top: var(--krds-gap-7); }
 .full-sheet-missing { margin: calc(-1 * var(--krds-gap-3)) 0 var(--krds-gap-5); }
+
+/* 파일 영역: KRDS 파일 업로드. 폼 그리드에서 한 줄을 다 쓴다 */
+.review-form .form-files { grid-column: 1 / -1; }
+.krds-file-upload .file-upload.is-dragging { outline: 2px dashed var(--krds-light-color-border-primary); outline-offset: -2px; background: var(--krds-light-color-surface-primary-subtler); }
+.krds-file-upload .file-list .total .roles { color: var(--krds-light-color-text-subtle); font-weight: var(--krds-font-weight-regular); }
+.krds-file-upload .file-list .total .missing { color: var(--krds-light-color-text-danger); }
+.krds-file-upload .file-name .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.krds-file-upload .krds-spinner { display: inline-flex; width: auto; height: auto; z-index: auto; }
+.run-buttons { display: flex; gap: var(--krds-gap-3); width: 100%; }
+.run-buttons .krds-btn.primary { flex: 1; }
+.review-form .run-buttons .krds-btn { width: auto; }

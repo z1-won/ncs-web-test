@@ -116,7 +116,10 @@ class WebappTests(unittest.TestCase):
         self.assertEqual(only_manuscript["roles"], {"manuscript": MANUSCRIPT.name, "plan": None})
         # 개발계획서가 필요한 위치 검수는 토큰으로도 400 — 화면은 roles.plan이 없으면 위치를 건너뛴다
         self.assertEqual(self.client.post("/api/review", data={"check": "position", "upload": only_manuscript["upload"]}).status_code, 400)
-        self.assertEqual(self.client.post("/api/review", data={"check": "toc", "upload": only_manuscript["upload"]}).status_code, 200)
+        single = self.client.post("/api/review", data={"check": "toc", "upload": only_manuscript["upload"]})
+        self.assertEqual(single.status_code, 200)
+        self.assertIsNone(single.json()["group"], "group 없이 토큰만 보내면 묶음이 아닌 단독 실행")
+        self.assertEqual(Path(single.json()["저장"]["folder"]).parent, self.output)
         for response in (
             self.client.post("/api/uploads"),
             self.client.post("/api/uploads", files={"files": ("empty.hwpx", b"")}),

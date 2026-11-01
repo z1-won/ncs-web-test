@@ -9,6 +9,7 @@ export async function request(path, options = {}) {
   try {
     response = await fetch(path, options);
   } catch (e) {
+    if (e.name === "AbortError") return { ok: false, status: 0, data: null, error: "취소됨", aborted: true };
     return { ok: false, status: 0, data: null, error: `${CONNECT_FAILED}: ${e.message}\n${CONNECT_HINT}` };
   }
   if (response.status === 204) return { ok: true, status: 204, data: null, error: null };
@@ -33,10 +34,11 @@ function multipart(fields, files = []) {
 export const api = {
   health: () => request("/api/health"),
   // 검수 1건: files로 직접 올리거나 upload(토큰)+group으로 올려 둔 파일을 쓴다
-  review: ({ check, moduleCode, files = [], upload, group }) =>
-    request("/api/review", { method: "POST", body: multipart({ check, module_code: moduleCode, upload, group }, files) }),
+  // signal: AbortController.signal — 취소 버튼
+  review: ({ check, moduleCode, files = [], upload, group, signal }) =>
+    request("/api/review", { method: "POST", body: multipart({ check, module_code: moduleCode, upload, group }, files), signal }),
   uploads: {
-    create: (files) => request("/api/uploads", { method: "POST", body: multipart({}, files) }),
+    create: (files, signal) => request("/api/uploads", { method: "POST", body: multipart({}, files), signal }),
     remove: (token) => request(`/api/uploads/${token}`, { method: "DELETE" }),
   },
   reviews: {
