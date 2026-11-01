@@ -66,6 +66,17 @@ class PostgresModeTests(unittest.TestCase):
                     with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
                         self.assertIsNone(archive.testzip())
 
+    def test_database_web_delete_history(self):
+        with patch("ncs_service.postgres.migrate"), \
+             patch("ncs_service.postgres.delete_review", side_effect=[True, False]) as delete:
+            with TestClient(create_app(database_url="postgresql://example")) as client:
+                self.assertEqual(client.delete("/api/reviews/run-1").status_code, 204)
+                missing = client.delete("/api/reviews/run-2")
+        self.assertEqual(missing.status_code, 404)
+        self.assertEqual(missing.json()["error"], "검수 이력을 찾을 수 없습니다")
+        self.assertEqual([call.args[1] for call in delete.call_args_list], ["run-1", "run-2"])
+        self.assertIn("DELETE", client.options("/api/reviews/run-1").headers["Access-Control-Allow-Methods"])
+
     def test_existing_folder_can_be_imported_without_mutation(self):
         folder = next((ROOT / "webapp" / "결과").glob("*"), None)
         if folder is None:

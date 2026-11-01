@@ -133,6 +133,20 @@ def get_review(dsn: str, run_id: str) -> dict | None:
             "지적사항": row["findings"], "전체": row["checklist"]}
 
 
+def delete_review(dsn: str, run_id: str) -> bool:
+    """이력 한 건을 지운다. review_results·review_inputs는 ON DELETE CASCADE로 함께 지워진다.
+
+    지웠으면 True, 없는 id(또는 UUID 형식이 아닌 값)면 False.
+    """
+    try:
+        UUID(run_id)
+    except ValueError:
+        return False
+    with psycopg.connect(dsn) as connection:
+        deleted = connection.execute("DELETE FROM review_runs WHERE id = %s", (run_id,)).rowcount
+    return deleted > 0
+
+
 def import_review(dsn: str, *, run_id: str, created_at, check: str, module_code: str,
                   summary: dict, sheet: list, diagnostics: dict, findings: list, checklist: list) -> bool:
     with psycopg.connect(dsn) as connection:

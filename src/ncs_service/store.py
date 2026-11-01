@@ -72,6 +72,11 @@ class PostgresStore:
 
         return postgres.get_review(self.dsn, run_id)
 
+    def delete_review(self, run_id: str) -> bool:
+        from . import postgres
+
+        return postgres.delete_review(self.dsn, run_id)
+
     def export_zip(self, run_id: str) -> tuple[bytes, str] | None:
         """저장된 이력을 해당 엔진의 save_results로 다시 만들어 (ZIP 바이트, 파일 이름)을 돌려준다."""
         from ncs_core.models import ReviewResult

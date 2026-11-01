@@ -10,7 +10,7 @@ import psycopg
 from fastapi.testclient import TestClient
 
 from ncs_service import ReviewRequest, execute_review, persist_review
-from ncs_service.postgres import get_review, input_metadata, list_reviews, migrate, save_review
+from ncs_service.postgres import delete_review, get_review, input_metadata, list_reviews, migrate, save_review
 from ncs_service.postgres_cli import import_directory
 from ncs_web.server import create_app
 
@@ -60,6 +60,16 @@ class PostgresIntegrationTests(unittest.TestCase):
                 self.assertTrue(import_directory(DSN, saved.directory))
                 self.assertFalse(import_directory(DSN, saved.directory))
                 self.assertEqual(get_review(DSN, imported_id)["source"], "import")
+
+            with TestClient(create_app(database_url=DSN)) as client:
+                self.assertEqual(client.delete(f"/api/reviews/{web_id}").status_code, 204)
+                self.assertEqual(client.delete(f"/api/reviews/{web_id}").status_code, 404)
+            self.assertIsNone(get_review(DSN, web_id))
+            with psycopg.connect(DSN) as connection:
+                for table in ("review_results", "review_inputs"):
+                    self.assertEqual(connection.execute(
+                        f"SELECT count(*) FROM {table} WHERE run_id = %s", (web_id,)).fetchone()[0], 0, table)
+            self.assertFalse(delete_review(DSN, "not-a-uuid"))
         finally:
             with psycopg.connect(DSN) as connection:
                 for run_id in ids:

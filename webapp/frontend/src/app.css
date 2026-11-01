@@ -64,3 +64,14 @@ details.raw pre {
   overflow: auto;
   font-size: var(--krds-pc-font-size-body-xsmall);
 }
+
+/* 네모 번호: 한컴 기호 글꼴의 󰊱 — 유니코드에 없어 상자로 그린다. 결과 JSON에는 [1]로 적혀 있다 */
+.box-number {
+  display: inline-block; min-width: 1.15em; height: 1.15em; line-height: 1.05em; padding: 0 0.1em;
+  margin: 0 0.1em; border: 1px solid currentColor; border-radius: 2px; text-align: center;
+  font-size: 0.9em; font-weight: var(--krds-font-weight-bold); vertical-align: 0.05em;
+}
+
+/* 이력 삭제 버튼: KRDS 아이콘(ico-del)은 기본이 primary 글자색(흰색)이라 tertiary 버튼 위에서 보이도록 글자색을 따른다 */
+.btn-delete-history { gap: var(--krds-gap-1); }
+.btn-delete-history .svg-icon { background-color: currentColor; }

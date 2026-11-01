@@ -27,7 +27,7 @@ class StoreSelectionTests(unittest.TestCase):
                     self.assertTrue(hasattr(store, name), f"{type(store).__name__}.{name}")
         self.assertFalse(FileStore("x").supports_history)
         self.assertTrue(PostgresStore("postgresql://example").supports_history)
-        for name in ("list_reviews", "get_review", "export_zip"):
+        for name in ("list_reviews", "get_review", "export_zip", "delete_review"):
             self.assertTrue(callable(getattr(PostgresStore("postgresql://example"), name)))
 
 
@@ -78,6 +78,12 @@ class PostgresStoreDelegationTests(unittest.TestCase):
         self.assertTrue(filename.endswith("_위치_검수결과.zip"), filename)
         with patch("ncs_service.postgres.get_review", return_value=None):
             self.assertIsNone(store.export_zip("missing"))
+
+    def test_delete_review_delegates_to_postgres(self):
+        store = PostgresStore("postgresql://example")
+        with patch("ncs_service.postgres.delete_review", return_value=True) as delete:
+            self.assertTrue(store.delete_review("run-1"))
+        delete.assert_called_once_with("postgresql://example", "run-1")
 
 
 if __name__ == "__main__":

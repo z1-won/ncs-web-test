@@ -14,11 +14,14 @@ class Engine:
         return import_module(self.package)
 
 
+# 순서 = F02 검수 확인서의 구성요소 순서. 화면·서버 목록도 이 순서를 따른다.
 ENGINES = {
     "position": Engine("ncs_position", ("manuscript", "plan")),
     "toc": Engine("ncs_toc"),
     "overview": Engine("ncs_overview"),
     "knowledge": Engine("ncs_knowledge"),
+    "perform": Engine("ncs_perform"),
+    "evaluation": Engine("ncs_evaluation"),
 }
 
 

@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+// 순서 = F02 검수 확인서의 구성요소 순서(위치 → 차례 → 개요 → 필요 지식 → 수행 내용 → 교수·학습 방법 → 평가 → …)
 const CHECKS = [
   { value: "position", label: "NCS-학습모듈의 위치 ①~⑤", files: "원고 + 개발계획서 (2개 필수)" },
   { value: "toc", label: "차례 ①·③·④·⑤·⑥", files: "원고 (+ 개발계획서 선택)" },
   { value: "overview", label: "학습모듈의 개요 ①·②·⑤·⑥·⑧", files: "원고 (+ 개발계획서 선택)" },
   { value: "knowledge", label: "필요 지식 ①~⑧", files: "원고 (+ 개발계획서: ⑤에만 필요)" },
+  { value: "perform", label: "수행 내용 ①·④", files: "원고 (hwpx 권장)" },
+  { value: "evaluation", label: "평가 ① 학습 내용명 일치", files: "원고 + 개발계획서 (없으면 판단불가)" },
 ];
 
 // 검수결과 → KRDS 배지 변형
@@ -13,6 +16,15 @@ const MARK = { 적합: "pass", 부적합: "fail", 판단불가: "undecided" };
 
 function Badge({ value, large }) {
   return <span className={`krds-badge ${large ? "large " : ""}${BADGE[value] || "bg-light-gray"}`}>{value}</span>;
+}
+
+// 결과 텍스트의 네모 번호 표기 [1]~[20]을 한컴 원고처럼 네모 안 숫자로 그린다(유니코드에 대응 글자가 없어 CSS로 그림).
+function withBoxNumbers(text) {
+  if (typeof text !== "string" || !/\[\d{1,2}\]/.test(text)) return text;
+  const parts = text.split(/(\[\d{1,2}\])/);
+  return parts.map((part, i) => (/^\[\d{1,2}\]$/.test(part)
+    ? <span key={i} className="box-number" aria-label={`네모 번호 ${part.slice(1, -1)}`}>{part.slice(1, -1)}</span>
+    : part));
 }
 
 function asText(value) {
@@ -53,11 +65,11 @@ function SheetTable({ sheet }) {
           {sheet.map((row, i) => (
             <tr key={row.번호}>
               {i === 0 && <th scope="rowgroup" className="component" rowSpan={sheet.length}>{row.구성요소}</th>}
-              <td style={{ whiteSpace: "pre-wrap" }}>{row.번호} {row["체크 항목"]}</td>
+              <td style={{ whiteSpace: "pre-wrap" }}>{row.번호} {withBoxNumbers(row["체크 항목"])}</td>
               <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "적합" ? "✓" : ""}</td>
               <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "부적합" ? "✓" : ""}</td>
               <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "판단불가" ? "△" : ""}</td>
-              <td>{row.비고}</td>
+              <td>{withBoxNumbers(row.비고)}</td>
             </tr>
           ))}
         </tbody>
@@ -89,7 +101,7 @@ function FindingsTable({ findings }) {
               <td>{f.check}</td>
               <td><Badge value={f.verdict} /></td>
               <td className="mono">{f.region_path}</td>
-              <td>{f.reason}</td>
+              <td>{withBoxNumbers(f.reason)}</td>
               <td className="mono">{asText(f.suggestion)}</td>
             </tr>
           ))}
@@ -120,12 +132,48 @@ function ChecklistTable({ rows }) {
               <td className="mono">{r.region_path}</td>
               <td><Badge value={r.판정} /></td>
               <td className="mono">{Object.entries(r.체크).map(([k, v]) => `${v} ${k}`).join("\n")}</td>
-              <td className="mono">{asText(r.원고)}</td>
+              <td className="mono">{withBoxNumbers(asText(r.원고))}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+// KRDS 모달(krds-modal) 마크업을 그대로 쓰되, 열기/닫기는 ui-script.js 대신 React 상태로 제어한다.
+// 열리면 첫 버튼에 초점을 두고, ESC로 닫는다(KRDS 모달 스크립트와 같은 동작).
+function ConfirmDialog({ title, children, confirmLabel = "확인", busy = false, onConfirm, onCancel }) {
+  const firstButton = useRef(null);
+  useEffect(() => {
+    firstButton.current?.focus();
+    function onKey(event) { if (event.key === "Escape" && !busy) onCancel(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [busy, onCancel]);
+
+  return (
+    <section className="krds-modal shown in" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div className="modal-dialog modal-sm">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h2 id="confirm-title" className="modal-title">{title}</h2>
+          </div>
+          <div className="modal-conts">
+            <div className="conts-area">{children}</div>
+          </div>
+          <div className="modal-btn btn-wrap">
+            <button ref={firstButton} type="button" className="krds-btn medium tertiary" onClick={onCancel} disabled={busy}>취소</button>
+            <button type="button" className="krds-btn medium primary" onClick={onConfirm} disabled={busy}>{busy ? "삭제 중…" : confirmLabel}</button>
+          </div>
+          <button type="button" className="krds-btn medium icon btn-close" onClick={onCancel} disabled={busy}>
+            <span className="sr-only">닫기</span>
+            <i className="svg-icon ico-popup-close" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+      <div className="modal-back in" onClick={busy ? undefined : onCancel}></div>
+    </section>
   );
 }
 
@@ -137,6 +185,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
+  const [deleting, setDeleting] = useState(false);
 
   async function refreshHistory() {
     const response = await fetch("/api/reviews");
@@ -186,6 +236,25 @@ export default function App() {
       setResult(data);
     } catch (e) {
       setError(e.message);
+    }
+  }
+
+  async function deleteHistory(row) {
+    setError(null);
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/reviews/${row.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "이력을 삭제할 수 없습니다");
+      }
+      if (result?.id === row.id) setResult(null); // 지운 이력의 결과가 화면에 열려 있으면 함께 내린다
+      await refreshHistory();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
     }
   }
 
@@ -240,7 +309,7 @@ export default function App() {
             <div className="krds-table-wrap">
               <table className="tbl col data">
                 <caption>최근 검수 실행</caption>
-                <thead><tr><th scope="col">실행 시각</th><th scope="col">모듈</th><th scope="col">검수</th><th scope="col">판정</th><th scope="col">열기</th></tr></thead>
+                <thead><tr><th scope="col">실행 시각</th><th scope="col">모듈</th><th scope="col">검수</th><th scope="col">판정</th><th scope="col">열기</th><th scope="col">삭제</th></tr></thead>
                 <tbody>{history.map((row) => (
                   <tr key={row.id}>
                     <td>{new Date(row.created_at).toLocaleString("ko-KR")}</td>
@@ -248,6 +317,11 @@ export default function App() {
                     <td>{CHECKS.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
                     <td><Badge value={row.verdict} /></td>
                     <td><button className="krds-btn small tertiary" type="button" onClick={() => openHistory(row.id)}>결과 보기</button></td>
+                    <td>
+                      <button className="krds-btn small tertiary btn-delete-history" type="button" onClick={() => setPendingDelete(row)}>
+                        <i className="svg-icon ico-del" aria-hidden="true"></i>삭제
+                      </button>
+                    </td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -293,6 +367,18 @@ export default function App() {
             <pre>{JSON.stringify(result, null, 1)}</pre>
           </details>
         </section>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog title="검수 이력 삭제" confirmLabel="삭제" busy={deleting}
+                       onConfirm={() => deleteHistory(pendingDelete)} onCancel={() => setPendingDelete(null)}>
+          <p>정말 삭제하시겠습니까?</p>
+          <p className="meta">
+            {new Date(pendingDelete.created_at).toLocaleString("ko-KR")} · {pendingDelete.module_code} ·{" "}
+            {CHECKS.find((item) => item.value === pendingDelete.check_name)?.label || pendingDelete.check_name}
+          </p>
+          <p className="meta">삭제한 이력은 되돌릴 수 없습니다.</p>
+        </ConfirmDialog>
       )}
     </main>
   );

@@ -19,7 +19,7 @@ from ncs_web import server
 FIXTURES = ROOT / "tests" / "fixtures"
 PLAN = FIXTURES / "개발계획서_LM1203020201_24v3.hwpx"
 MANUSCRIPT = FIXTURES / "원고_ok_LM1203020201_24v3.hwpx"
-PACKAGES = {"position": "ncs_position", "toc": "ncs_toc", "overview": "ncs_overview", "knowledge": "ncs_knowledge"}
+PACKAGES = {"position": "ncs_position", "toc": "ncs_toc", "overview": "ncs_overview", "knowledge": "ncs_knowledge", "perform": "ncs_perform", "evaluation": "ncs_evaluation"}
 
 
 class WebappTests(unittest.TestCase):
@@ -88,7 +88,7 @@ class WebappTests(unittest.TestCase):
 
     def test_health_reports_history_support(self):
         body = self.client.get("/api/health").json()
-        self.assertEqual(body["checks"], ["position", "toc", "overview", "knowledge"])
+        self.assertEqual(body["checks"], list(PACKAGES))
         self.assertIs(body["history"], False, "파일 저장소는 이력 API가 없다")
         self.assertEqual(self.client.get("/api/reviews").status_code, 405, "이력 API 미등록(OPTIONS 전체 경로 핸들러 때문에 404 대신 405)")
 

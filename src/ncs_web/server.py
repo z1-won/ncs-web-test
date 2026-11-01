@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
-CheckName = Literal["position", "toc", "overview", "knowledge"]
+CheckName = Literal["position", "toc", "overview", "knowledge", "perform", "evaluation"]
 CORS_HEADERS = {"Access-Control-Allow-Origin": "*"}
 
 
@@ -73,7 +73,7 @@ def create_app(
             if field == "files" and detail["type"] == "missing":
                 messages.append("업로드된 파일이 없습니다")
             elif field == "check":
-                messages.append("check는 position / toc / overview / knowledge 중 하나여야 합니다")
+                messages.append("check는 position / toc / overview / knowledge / perform / evaluation 중 하나여야 합니다")
             else:
                 messages.append(f"{field}: {detail['msg']}")
         return error_response(400, "; ".join(messages))
@@ -86,13 +86,13 @@ def create_app(
     def health(response: Response) -> dict[str, Any]:
         response.headers.update(CORS_HEADERS)
         # history: 이력 API(/api/reviews)가 등록되어 있는가. 화면이 이력 영역을 켤지 결정하는 데 쓴다.
-        return {"ok": True, "checks": ["position", "toc", "overview", "knowledge"], "history": store.supports_history}
+        return {"ok": True, "checks": ["position", "toc", "overview", "knowledge", "perform", "evaluation"], "history": store.supports_history}
 
     @app.options("/{path:path}", include_in_schema=False)
     def options(path: str) -> Response:
         return Response(status_code=204, headers={
             **CORS_HEADERS,
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type",
         })
 
@@ -161,6 +161,12 @@ def create_app(
             if found is None:
                 raise HTTPException(404, "검수 이력을 찾을 수 없습니다")
             return found
+
+        @app.delete("/api/reviews/{run_id}", status_code=204)
+        def review_delete(run_id: str) -> Response:
+            if not store.delete_review(run_id):
+                raise HTTPException(404, "검수 이력을 찾을 수 없습니다")
+            return Response(status_code=204)
 
         @app.get("/api/reviews/{run_id}/zip")
         def review_zip(run_id: str) -> Response:
