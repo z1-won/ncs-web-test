@@ -1,7 +1,8 @@
 """기타 ①: 학습모듈의 개요·내비게이터·교수·학습 방법·평가·참고 자료·활용 서식·부록이 새 쪽에서 시작하는가.
 
-hwpx 문단의 '쪽 나누기' 표식(Document.page_breaks)을 본다. 머리 문단 자신 또는 그 앞의 빈 문단(표 틀 문단 포함)에
-쪽 나누기가 있으면 O. 섹션 첫 문단은 당연히 새 쪽이다. hwp는 표식을 읽을 수 없어 △.
+hwpx의 새 쪽 시작 문단(Document.page_breaks)을 본다 — '쪽 나누기' 표식이 있거나, 한글이 저장해 둔 배치 정보(linesegarray)상
+첫 줄이 쪽 맨 위에 놓인 문단. 그래서 쪽 나누기 기능을 쓰지 않고 글이 밀려 자연히 새 쪽에서 시작한 머리도 O다.
+머리 문단 자신 또는 그 앞의 빈 문단(표 틀 문단 포함)이 새 쪽 시작이면 O. 섹션 첫 문단은 당연히 새 쪽이다. hwp는 표식을 읽을 수 없어 △.
 """
 
 import re
@@ -71,7 +72,7 @@ def check_page_starts(context) -> list[dict]:
             ok = starts_new_page(index, manuscript.sections[section], section_breaks, manuscript.section_table_paragraphs(section) or frozenset())
             checks["새 쪽 시작"] = O if ok else X
             if not ok:
-                notes["새 쪽 시작"] = f"{name} 머리(p{index}) 앞에 쪽 나누기가 없음"
+                notes["새 쪽 시작"] = f"{name} 머리(p{index})가 새 쪽 맨 위에서 시작하지 않음 — 쪽 나누기도 없고 배치상 앞 쪽에 이어짐"
         rows.append(row("①", region, where, {"머리": name, "문단": index}, checks, notes, f"{name} 앞에 쪽 나누기 삽입"))
     if not rows:
         rows.append(row("①", "section1", "", None, {"새 쪽 시작": TRI}, {"새 쪽 시작": "검사할 머리(개요·내비게이터·교수·학습 방법·평가·참고 자료·활용 서식·부록)를 찾지 못함"}))

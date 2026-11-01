@@ -23,7 +23,7 @@ class Document:
     aside_paragraphs: 섹션별 본문 밖 문단 인덱스(메모·머리말·꼬리말·각주). 본문 문장 검사에서 제외한다. hwp는 None.
     numbers:  섹션별 문단 번호 — 한글 자동 번호(문단 번호·글머리표)를 복원한 글자('1.', '(가)', '•' …) 또는 None.
               텍스트에 번호가 없는 문단의 "보이는 번호"다. hwp는 None.
-    page_breaks: 섹션별 '쪽 나누기' 문단 인덱스(그 문단 앞에서 새 쪽 시작). hwp는 None.
+    page_breaks: 섹션별 새 쪽 시작 문단 인덱스 — '쪽 나누기' 표식이 있거나, 저장된 배치 정보상 쪽 맨 위에서 시작하는 최상위 문단. hwp는 None.
     pictures: 모든 그림의 (섹션, 문단, BinData id). binaries: {BinData id: {'href', 'bytes'}} — 그림 파일 유실 확인용. hwpx만.
     """
 

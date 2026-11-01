@@ -198,7 +198,15 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
     deleted = [not text and p.find(f".//{HP}deleteBegin") is not None for p, text in zip(paragraphs, texts)]
     numbers = (render_numbers([None if gone else p.get("paraPrIDRef") for p, gone in zip(paragraphs, deleted)], numbering_definitions)
                if numbering_definitions else [None] * len(paragraphs))
-    page_breaks = frozenset(i for i, p in enumerate(paragraphs) if p.get("pageBreak") == "1")
+    # 새 쪽 시작 문단 = '쪽 나누기' 표식(pageBreak) 또는 한글이 저장해 둔 배치 정보에서 첫 줄이 쪽 맨 위(vertpos=0)인 최상위 문단.
+    # 쪽 나누기 없이 글이 밀려 자연히 새 쪽 첫머리에 온 경우도 잡는다. 표·글상자 안 문단의 vertpos는 그 틀 기준이라 최상위만 본다.
+    # linesegarray는 한글이 저장할 때 계산해 넣는 캐시이므로 다른 도구가 만든 파일에는 없을 수 있다(그때는 표식만 본다).
+    def at_page_top(p):
+        segment = p.find(f"{HP}linesegarray/{HP}lineseg")
+        return segment is not None and segment.get("vertpos") == "0"
+
+    page_breaks = frozenset(i for i, p in enumerate(paragraphs)
+                            if p.get("pageBreak") == "1" or (parents.get(p) is root and at_page_top(p)))
     pictures = []  # (문단 인덱스, BinData id) — 그림 파일 존재 확인용
     for picture in root.iter(HP + "pic"):
         paragraph = owner_paragraph(picture)
