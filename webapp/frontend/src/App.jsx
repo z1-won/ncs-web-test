@@ -143,7 +143,13 @@ export default function App() {
     if (response.ok) setHistory(await response.json());
   }
 
-  useEffect(() => { refreshHistory().catch(() => {}); }, []);
+  // 서버가 이력 저장(DB 모드)을 지원할 때만 이력을 가져온다. 파일 모드에서는 /api/reviews가 없다.
+  useEffect(() => {
+    fetch("/api/health")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((health) => { if (health?.history) return refreshHistory(); })
+      .catch(() => {});
+  }, []);
 
   const selected = CHECKS.find((c) => c.value === check);
 

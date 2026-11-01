@@ -86,6 +86,12 @@ class WebappTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["check"], "position")
 
+    def test_health_reports_history_support(self):
+        body = self.client.get("/api/health").json()
+        self.assertEqual(body["checks"], ["position", "toc", "overview", "knowledge"])
+        self.assertIs(body["history"], False, "파일 저장소는 이력 API가 없다")
+        self.assertEqual(self.client.get("/api/reviews").status_code, 405, "이력 API 미등록(OPTIONS 전체 경로 핸들러 때문에 404 대신 405)")
+
     def test_save_failure_returns_500_and_cleans_uploads(self):
         captured = []
 
@@ -107,7 +113,7 @@ class WebappTests(unittest.TestCase):
 
     def test_health_docs_and_cors(self):
         health = self.client.get("/api/health")
-        self.assertEqual(health.json(), {"ok": True, "checks": list(PACKAGES)})
+        self.assertEqual(health.json(), {"ok": True, "checks": list(PACKAGES), "history": False})
         self.assertEqual(health.headers["access-control-allow-origin"], "*")
         self.assertEqual(self.client.get("/docs").status_code, 200)
         schema = self.client.get("/openapi.json").json()

@@ -58,6 +58,7 @@ class PostgresModeTests(unittest.TestCase):
             with patch("ncs_service.postgres.migrate"), patch("ncs_service.postgres.get_review", return_value=detail), \
                  patch("ncs_service.postgres.list_reviews", return_value=[{"id": response.json()["id"]}]):
                 with TestClient(create_app(database_url="postgresql://example")) as client:
+                    self.assertIs(client.get("/api/health").json()["history"], True)
                     self.assertEqual(len(client.get("/api/reviews").json()), 1)
                     self.assertEqual(client.get(f"/api/reviews/{response.json()['id']}").json(), detail)
                     exported = client.get(f"/api/reviews/{response.json()['id']}/zip")

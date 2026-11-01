@@ -18,6 +18,7 @@ python3 -m venv .venv
 `--port`, `--out`, `--dist` 옵션을 사용합니다. `--src`는 제거하고 설치된 Python 패키지를 사용하도록 통일했습니다.
 프로젝트 설치 후에는 기존 `python webapp/server.py --out webapp/결과` 명령도 호환 진입점을 통해 실행됩니다. 이 파일은 설치된 `ncs_web.server`를 호출하며 검색 경로를 추가하지 않습니다.
 가상환경을 활성화하면 `ncs-web` 또는 `python -m ncs_web`로도 실행할 수 있습니다.
+**패키지는 `.venv` 안에 설치되므로 반드시 그 Python으로 실행합니다.** `python3 webapp/server.py`처럼 시스템 Python으로 실행하면 `ModuleNotFoundError: No module named 'ncs_web'`이 납니다. `.venv/bin/ncs-web`, `.venv/bin/python …`, 또는 `source .venv/bin/activate` 뒤에 실행하세요.
 
 별도 터미널에서 화면을 실행합니다.
 

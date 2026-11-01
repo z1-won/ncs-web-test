@@ -83,7 +83,8 @@ def create_app(
     @app.get("/api/health")
     def health(response: Response) -> dict[str, Any]:
         response.headers.update(CORS_HEADERS)
-        return {"ok": True, "checks": ["position", "toc", "overview", "knowledge"]}
+        # history: 이력 API(/api/reviews)가 등록되어 있는가. 화면이 이력 영역을 켤지 결정하는 데 쓴다.
+        return {"ok": True, "checks": ["position", "toc", "overview", "knowledge"], "history": store.supports_history}
 
     @app.options("/{path:path}", include_in_schema=False)
     def options(path: str) -> Response:
