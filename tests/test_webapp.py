@@ -113,7 +113,12 @@ class WebappTests(unittest.TestCase):
 
     def test_health_docs_and_cors(self):
         health = self.client.get("/api/health")
-        self.assertEqual(health.json(), {"ok": True, "checks": list(PACKAGES), "history": False})
+        body = health.json()
+        self.assertEqual({k: v for k, v in body.items() if k != "engines"}, {"ok": True, "checks": list(PACKAGES), "history": False})
+        # engines: 화면 선택 목록의 글이 되는 엔진 설명 — 등록 순서대로, 구현 항목은 확인서 번호
+        self.assertEqual([e["check"] for e in body["engines"]], list(PACKAGES))
+        self.assertEqual(body["engines"][0]["component"], "NCS-학습모듈의 위치")
+        self.assertTrue(all(e["items"] and all(n in "①②③④⑤⑥⑦⑧" for n in e["items"]) and e["total"] >= len(e["items"]) for e in body["engines"]))
         self.assertEqual(health.headers["access-control-allow-origin"], "*")
         self.assertEqual(self.client.get("/docs").status_code, 200)
         schema = self.client.get("/openapi.json").json()

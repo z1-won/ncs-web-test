@@ -33,3 +33,19 @@ def get_engine(check: str) -> Engine:
     if check not in ENGINES:
         raise ValueError("check는 " + " / ".join(ENGINES) + " 중 하나여야 합니다")
     return ENGINES[check]
+
+
+def describe_engines() -> list[dict]:
+    """화면·API용 엔진 설명 — [{'check', 'component', 'items': ['①', …](구현된 확인서 항목), 'required'}]. 확인서 순서."""
+    out = []
+    for check, engine in ENGINES.items():
+        sheet = import_module(engine.package + ".sheet")
+        out.append({
+            "check": check,
+            "component": sheet.COMPONENT,
+            "items": [item.no for item in sheet.ITEMS if item.item_ids],
+            "total": len(sheet.ITEMS),
+            "required": list(engine.required),
+        })
+    return out
+

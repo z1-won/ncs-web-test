@@ -1,18 +1,59 @@
 import { useEffect, useRef, useState } from "react";
 
 // 순서 = F02 검수 확인서의 구성요소 순서(위치 → 차례 → 개요 → 필요 지식 → 수행 내용 → 교수·학습 방법 → 평가 → …)
+// 선택 목록의 기본값. 글(구성요소·항목 번호)은 서버 /api/health의 engines(실제 등록된 엔진·구현 항목)로 덮어쓴다.
+// 순서 = F02 검수 확인서의 구성요소 순서(위치 → 차례 → 개요 → 필요 지식 → 수행 내용 → 교수·학습 방법 → 평가 → 참고 자료 → 판권 → 기타)
+const FILE_HINTS = {
+  position: "원고 + 개발계획서 (2개 필수)",
+  toc: "원고 (+ 개발계획서 선택)",
+  overview: "원고 (+ 개발계획서 선택)",
+  knowledge: "원고 (+ 개발계획서: ⑤에만 필요)",
+  perform: "원고 (hwpx 권장)",
+  teaching: "원고 (hwpx 권장)",
+  evaluation: "원고 + 개발계획서 (없으면 ② 판단불가)",
+  references: "원고",
+  colophon: "원고 (hwpx 권장)",
+  misc: "원고 (hwpx 권장)",
+};
 const CHECKS = [
-  { value: "position", label: "NCS-학습모듈의 위치 ①~⑤", files: "원고 + 개발계획서 (2개 필수)" },
-  { value: "toc", label: "차례 ①·③·④·⑤·⑥", files: "원고 (+ 개발계획서 선택)" },
-  { value: "overview", label: "학습모듈의 개요 ①·②·⑤·⑥·⑧", files: "원고 (+ 개발계획서 선택)" },
-  { value: "knowledge", label: "필요 지식 ①~⑧", files: "원고 (+ 개발계획서: ⑤에만 필요)" },
-  { value: "perform", label: "수행 내용 ①·④", files: "원고 (hwpx 권장)" },
-  { value: "teaching", label: "교수·학습 방법 ①~④", files: "원고 (hwpx 권장)" },
-  { value: "evaluation", label: "평가 ①②③⑤", files: "원고 + 개발계획서 (없으면 ② 판단불가)" },
-  { value: "references", label: "참고 자료 ①②③", files: "원고" },
-  { value: "colophon", label: "개발 이력 및 판권 ①", files: "원고 (hwpx 권장)" },
-  { value: "misc", label: "기타 ①②⑥⑦", files: "원고 (hwpx 권장)" },
-];
+  { value: "position", label: "NCS-학습모듈의 위치 ①~⑤" },
+  { value: "toc", label: "차례 ①~⑥" },
+  { value: "overview", label: "학습모듈의 개요 ①·②·⑤~⑧" },
+  { value: "knowledge", label: "필요 지식 ①~⑧" },
+  { value: "perform", label: "수행 내용 ①·④" },
+  { value: "teaching", label: "교수·학습 방법 ①~④" },
+  { value: "evaluation", label: "평가 ①~③·⑤" },
+  { value: "references", label: "참고 자료 ①~③" },
+  { value: "colophon", label: "개발 이력 및 판권 ①" },
+  { value: "misc", label: "기타 ①·②·⑥·⑦" },
+].map((c) => ({ ...c, files: FILE_HINTS[c.value] || "원고" }));
+
+const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
+
+// 구현된 항목 번호 목록 → "①~③·⑤" (연속 3개 이상은 범위로)
+function formatItems(items) {
+  const idx = items.map((n) => CIRCLED.indexOf(n)).filter((i) => i >= 0).sort((a, b) => a - b);
+  const parts = [];
+  for (let i = 0; i < idx.length;) {
+    let j = i;
+    while (j + 1 < idx.length && idx[j + 1] === idx[j] + 1) j += 1;
+    parts.push(j - i >= 2 ? `${CIRCLED[idx[i]]}~${CIRCLED[idx[j]]}` : idx.slice(i, j + 1).map((k) => CIRCLED[k]).join("·"));
+    i = j + 1;
+  }
+  return parts.join("·");
+}
+
+// 서버가 알려 준 엔진 목록으로 선택 목록을 만든다. 구성요소 이름의 띄어쓰기는 확인서 원문(예: "개발 이력 및판권")을 읽기 좋게 고른다.
+function checksFromEngines(engines) {
+  if (!Array.isArray(engines) || !engines.length) return CHECKS;
+  return engines.map((e) => ({
+    value: e.check,
+    label: `${String(e.component).replace("및판권", "및 판권")} ${formatItems(e.items || [])}`,
+    files: FILE_HINTS[e.check] || (e.required?.includes("plan") ? "원고 + 개발계획서" : "원고"),
+    items: e.items,
+    total: e.total,
+  }));
+}
 
 // 검수결과 → KRDS 배지 변형
 const BADGE = { 적합: "bg-light-success", 부적합: "bg-light-danger", 판단불가: "bg-light-warning", 미검사: "bg-light-gray" };
@@ -156,6 +197,95 @@ function ChecklistTable({ rows }) {
   );
 }
 
+// KRDS 셀렉트 + 드롭다운 메뉴. 브라우저 기본 <select>는 펼친 목록의 모양을 바꿀 수 없어서, 닫힌 모양은 KRDS 셀렉트(krds-form-select),
+// 펼친 목록은 KRDS 드롭다운(krds-drop-wrap › drop-menu › drop-list › item-link)으로 그린다.
+// 동작은 KRDS 셀렉트 가이드대로: 클릭·Enter·Space로 열고 닫기, Esc로 닫고 초점은 컨테이너로, 닫힌 상태에서 ↑↓로 바로 이전·다음 값,
+// 열린 상태에서 ↑↓·Home·End로 이동 후 Enter로 선택, Tab·바깥 클릭이면 닫힘. 값이 바뀌어도 폼은 제출하지 않는다.
+function KrdsSelect({ id, value, options, onChange, title, describedBy }) {
+  const [open, setOpen] = useState(false);
+  const [focusIndex, setFocusIndex] = useState(0);
+  const wrap = useRef(null);
+  const button = useRef(null);
+  const selectedIndex = Math.max(0, options.findIndex((o) => o.value === value));
+  const selected = options[selectedIndex];
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setFocusIndex(selectedIndex);
+    function onDocumentClick(event) { if (!wrap.current?.contains(event.target)) setOpen(false); }
+    document.addEventListener("mousedown", onDocumentClick);
+    return () => document.removeEventListener("mousedown", onDocumentClick);
+  }, [open, selectedIndex]);
+
+  useEffect(() => {
+    if (open) wrap.current?.querySelector(`#${id}-opt-${focusIndex}`)?.focus();
+  }, [open, focusIndex, id]);
+
+  function choose(index) {
+    onChange(options[index].value);
+    setOpen(false);
+    button.current?.focus();
+  }
+
+  function onButtonKey(event) {
+    const last = options.length - 1;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (open) setFocusIndex((i) => Math.min(last, Math.max(0, i + (event.key === "ArrowDown" ? 1 : -1))));
+      else onChange(options[Math.min(last, Math.max(0, selectedIndex + (event.key === "ArrowDown" ? 1 : -1)))].value);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setOpen((o) => !o);
+    } else if (event.key === "Escape" && open) {
+      event.preventDefault();
+      setOpen(false);
+    }
+  }
+
+  function onOptionKey(event, index) {
+    const last = options.length - 1;
+    const moves = { ArrowDown: Math.min(last, index + 1), ArrowUp: Math.max(0, index - 1), Home: 0, End: last };
+    if (event.key in moves) {
+      event.preventDefault();
+      setFocusIndex(moves[event.key]);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      choose(index);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      button.current?.focus();
+    } else if (event.key === "Tab") {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div ref={wrap} className={`krds-drop-wrap drop-left check-select${open ? " is-open" : ""}`}>
+      <button ref={button} type="button" id={id} className={`krds-form-select${value ? " completed" : ""}${open ? " is-active" : ""}`}
+              title={title} aria-haspopup="listbox" aria-expanded={open} aria-controls={`${id}-list`} aria-describedby={describedBy}
+              onClick={() => setOpen((o) => !o)} onKeyDown={onButtonKey}>
+        {selected?.label}
+      </button>
+      <div className="drop-menu" id={`${id}-list`} hidden={!open}>
+        <div className="drop-in">
+          <ul className="drop-list" role="listbox" aria-labelledby={id}>
+            {options.map((option, index) => (
+              <li key={option.value} role="none">
+                <button type="button" role="option" id={`${id}-opt-${index}`} tabIndex={index === focusIndex ? 0 : -1}
+                        className={`item-link${option.value === value ? " active" : ""}`} aria-selected={option.value === value}
+                        onClick={() => choose(index)} onKeyDown={(event) => onOptionKey(event, index)}>
+                  {option.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // KRDS 모달(krds-modal) 마크업을 그대로 쓰되, 열기/닫기는 ui-script.js 대신 React 상태로 제어한다.
 // 열리면 첫 버튼에 초점을 두고, ESC로 닫는다(KRDS 모달 스크립트와 같은 동작).
 function ConfirmDialog({ title, children, confirmLabel = "확인", busy = false, onConfirm, onCancel }) {
@@ -194,6 +324,7 @@ function ConfirmDialog({ title, children, confirmLabel = "확인", busy = false,
 
 export default function App() {
   const [check, setCheck] = useState("position");
+  const [checks, setChecks] = useState(CHECKS);
   const [files, setFiles] = useState([]);
   const [moduleCode, setModuleCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -212,11 +343,14 @@ export default function App() {
   useEffect(() => {
     fetch("/api/health")
       .then((response) => (response.ok ? response.json() : null))
-      .then((health) => { if (health?.history) return refreshHistory(); })
+      .then((health) => {
+        if (health?.engines) setChecks(checksFromEngines(health.engines));
+        if (health?.history) return refreshHistory();
+      })
       .catch(() => {});
   }, []);
 
-  const selected = CHECKS.find((c) => c.value === check);
+  const selected = checks.find((c) => c.value === check) || checks[0];
 
   async function submit(event) {
     event.preventDefault();
@@ -284,11 +418,13 @@ export default function App() {
         <div className="form-group">
           <div className="form-tit"><label htmlFor="check">검수 항목</label></div>
           <div className="form-conts">
-            <select id="check" className="krds-form-select" title="검수 항목 선택" value={check} onChange={(e) => setCheck(e.target.value)}>
-              {CHECKS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
+            {/* KRDS 셀렉트: 레이블(form-tit) + 선택완료 상태(completed) + 도움말(form-hint). 값이 바뀌어도 폼은 제출하지 않는다 */}
+            <KrdsSelect id="check" value={check} options={checks} onChange={setCheck} title="검수 항목 선택" describedBy="check-hint" />
           </div>
-          <p className="form-hint">{selected.files}</p>
+          <p className="form-hint" id="check-hint">
+            필요한 파일: {selected.files}
+            {selected.items && selected.total ? ` · 확인서 항목 ${selected.total}개 중 ${selected.items.length}개 검사` : ""}
+          </p>
         </div>
 
         <div className="form-group">
@@ -329,7 +465,7 @@ export default function App() {
                   <tr key={row.id}>
                     <td>{new Date(row.created_at).toLocaleString("ko-KR")}</td>
                     <td>{row.module_code}</td>
-                    <td>{CHECKS.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
+                    <td>{checks.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
                     <td><Badge value={row.verdict} /></td>
                     <td><button className="krds-btn small tertiary" type="button" onClick={() => openHistory(row.id)}>결과 보기</button></td>
                     <td>
@@ -355,7 +491,7 @@ export default function App() {
         <section>
           <div className="result-head">
             <Badge value={result.요약.검수결과} large />
-            <span className="meta">{result.module_code} · {CHECKS.find((item) => item.value === result.check)?.label || result.check}</span>
+            <span className="meta">{result.module_code} · {checks.find((item) => item.value === result.check)?.label || result.check}</span>
             {result.id ? <a href={`/api/reviews/${result.id}/zip`}>ZIP 다운로드</a> : <span className="meta">저장: {result.저장?.zip}</span>}
           </div>
 
@@ -390,7 +526,7 @@ export default function App() {
           <p>정말 삭제하시겠습니까?</p>
           <p className="meta">
             {new Date(pendingDelete.created_at).toLocaleString("ko-KR")} · {pendingDelete.module_code} ·{" "}
-            {CHECKS.find((item) => item.value === pendingDelete.check_name)?.label || pendingDelete.check_name}
+            {checks.find((item) => item.value === pendingDelete.check_name)?.label || pendingDelete.check_name}
           </p>
           <p className="meta">삭제한 이력은 되돌릴 수 없습니다.</p>
         </ConfirmDialog>

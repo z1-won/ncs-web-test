@@ -59,6 +59,7 @@ def create_app(
     저장소는 open_store()가 고른다: database_url이 있으면 PostgreSQL 이력, 없으면 out_dir의 파일 폴더.
     """
     from ncs_service import ReviewRequest, execute_review, open_store
+    from ncs_service.registry import ENGINES, describe_engines
 
     app = FastAPI(title="F02 검수 API")
     dist = Path(dist_dir).expanduser().resolve() if dist_dir is not None else None
@@ -86,7 +87,8 @@ def create_app(
     def health(response: Response) -> dict[str, Any]:
         response.headers.update(CORS_HEADERS)
         # history: 이력 API(/api/reviews)가 등록되어 있는가. 화면이 이력 영역을 켤지 결정하는 데 쓴다.
-        return {"ok": True, "checks": ["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "references", "colophon", "misc"], "history": store.supports_history}
+        # engines: 검수 항목마다 구성요소 이름과 구현된 확인서 항목 번호 — 화면의 선택 목록 글이 여기서 나온다
+        return {"ok": True, "checks": list(ENGINES), "engines": describe_engines(), "history": store.supports_history}
 
     @app.options("/{path:path}", include_in_schema=False)
     def options(path: str) -> Response:
