@@ -556,8 +556,8 @@ function Header() {
           <div className="header-container">
             <div className="inner">
               <div className="header-branding">
-                <h2 className="logo logo-text">
-                  <a href="/">NCS 학습모듈 검수</a>
+                <h2 className="logo">
+                  <a href="/"><span className="sr-only">NCS 학습모듈 검수 — 동국대학교</span></a>
                 </h2>
               </div>
             </div>
@@ -568,29 +568,25 @@ function Header() {
   );
 }
 
-/* 푸터 — KRDS 푸터(#krds-footer) 구조: 서비스 로고 → 연락처 → 유틸리티 링크 → 정책 링크 → 저작권. 관련 사이트·SNS·운영기관 식별자는 쓰지 않는다. */
+/* 푸터 — KRDS 푸터(#krds-footer) 표준 구조·치수 그대로: 서비스 로고(.f-logo 13.7×4.8rem) → 연락처(.f-info) → 유틸리티 링크(.f-link) → 정책 링크·저작권(.f-btm-text) → 운영기관 식별자(.krds-identifier). 관련 사이트(.foot-quick)·SNS는 두지 않는다. */
 function Footer() {
   return (
     <footer id="krds-footer">
       <div className="inner">
-        <div className="f-logo f-logo-text">
-          <div className="f-logo-imgs">
-            <a href="https://ai.dongguk.edu/main" target="_blank" rel="noopener noreferrer" title="새 창 열기"><img src="/img/logo_dongguk.png" alt="동국대학교" /></a>
-            <a href="https://www.krivet.re.kr/kor/index.do" target="_blank" rel="noopener noreferrer" title="새 창 열기"><img src="/img/logo_krivet.png" alt="한국직업능력연구원" /></a>
-          </div>
-          <strong>동국대학교 종합설계1(김동우) · 프로토콜</strong>
-          <span>생성형 AI를 활용한 NCS 학습모듈 활용 및 사업운영 지원체계 구축</span>
+        <div className="f-logo">
+          <span className="sr-only">동국대학교</span>
         </div>
         <div className="f-cnt">
           <div className="f-info">
+            <p className="info-addr">동국대학교 종합설계1(김동우) · 프로토콜 팀 — 생성형 AI를 활용한 NCS 학습모듈 활용 및 사업운영 지원체계 구축</p>
             <ul className="info-cs">
-              <li><strong className="strong">이메일</strong><span className="span"><a href="mailto:dgu2026protocol@gmail.com">dgu2026protocol@gmail.com</a></span></li>
+              <li><strong className="strong">이메일 dgu2026protocol@gmail.com</strong></li>
             </ul>
           </div>
           <div className="f-link">
             <div className="link-go">
-              <a href="https://www.krivet.re.kr/kor/index.do" className="krds-btn medium text" target="_blank" rel="noopener noreferrer" title="새 창 열기">한국직업능력연구원 <i className="svg-icon ico-angle right"></i></a>
               <a href="https://ai.dongguk.edu/main" className="krds-btn medium text" target="_blank" rel="noopener noreferrer" title="새 창 열기">동국대학교 첨단융합대학 <i className="svg-icon ico-angle right"></i></a>
+              <a href="https://www.krivet.re.kr/kor/index.do" className="krds-btn medium text" target="_blank" rel="noopener noreferrer" title="새 창 열기">한국직업능력연구원 <i className="svg-icon ico-angle right"></i></a>
             </div>
           </div>
         </div>
@@ -601,6 +597,12 @@ function Footer() {
               <span className="point">개인정보처리방침</span>
             </div>
             <p className="f-copy">© 2026 동국대학교 종합설계1 프로토콜 팀. All rights reserved.</p>
+          </div>
+          <div className="krds-identifier">
+            <span className="logo">
+              <span className="sr-only">한국직업능력연구원</span>
+            </span>
+            <span className="ban-txt">검수 기준: 한국직업능력연구원 NCS 학습모듈 검수 확인서</span>
           </div>
         </div>
       </div>
