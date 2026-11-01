@@ -193,3 +193,19 @@ details.raw pre {
   color: var(--krds-light-color-text-basic);
   text-decoration: none;
 }
+
+/* ── 공식 배너 변주(테스트 페이지 안내) ── KRDS 기본은 태극기 아이콘 + 회색 바탕. 공식 누리집이 아니므로 아이콘을 안내(i) 아이콘으로 바꾸고 경고 톤 바탕을 쓴다 */
+#krds-masthead.masthead-test { --krds-masthead--color-surface: var(--krds-light-color-surface-warning-subtler); }
+#krds-masthead.masthead-test .toggle-head .nuri-txt { color: var(--krds-light-color-text-basic); font-weight: var(--krds-font-weight-bold); }
+#krds-masthead.masthead-test .toggle-head .nuri-txt::before {
+  background-image: none;
+  background-color: var(--krds-light-color-text-warning) !important;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2v6h-2zm0-3h2v2h-2z'/></svg>") no-repeat center / contain;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2v6h-2zm0-3h2v2h-2z'/></svg>") no-repeat center / contain;
+}
+
+/* 푸터 로고 이미지(동국대·직능연) */
+#krds-footer .f-logo-imgs { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-7); margin-bottom: var(--krds-gap-3); }
+#krds-footer .f-logo-imgs a { display: inline-flex; }
+#krds-footer .f-logo-imgs img { height: 4rem; width: auto; }
+@media (max-width: 1023px) { #krds-footer .f-logo-imgs img { height: 3.2rem; } }

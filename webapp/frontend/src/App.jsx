@@ -541,6 +541,16 @@ function Header() {
       <div id="krds-skip-link">
         <a href="#container">본문 바로가기</a>
       </div>
+      {/* 공식 배너(#krds-masthead) 변주 — 정부 누리집 식별 배너 자리에 '공식 서비스가 아닌 테스트 페이지'임을 알린다. 태극기 아이콘은 쓰지 않는다. */}
+      <div id="krds-masthead" className="masthead-test">
+        <div className="toggle-wrap">
+          <div className="toggle-head">
+            <div className="inner">
+              <span className="nuri-txt">이 누리집은 공식 서비스가 아닌 테스트 페이지입니다. (동국대학교 종합설계1 프로토콜 팀)</span>
+            </div>
+          </div>
+        </div>
+      </div>
       <header id="krds-header">
         <div className="header-in">
           <div className="header-container">
@@ -564,6 +574,10 @@ function Footer() {
     <footer id="krds-footer">
       <div className="inner">
         <div className="f-logo f-logo-text">
+          <div className="f-logo-imgs">
+            <a href="https://ai.dongguk.edu/main" target="_blank" rel="noopener noreferrer" title="새 창 열기"><img src="/img/logo_dongguk.png" alt="동국대학교" /></a>
+            <a href="https://www.krivet.re.kr/kor/index.do" target="_blank" rel="noopener noreferrer" title="새 창 열기"><img src="/img/logo_krivet.png" alt="한국직업능력연구원" /></a>
+          </div>
           <strong>동국대학교 종합설계1(김동우) · 프로토콜</strong>
           <span>생성형 AI를 활용한 NCS 학습모듈 활용 및 사업운영 지원체계 구축</span>
         </div>
