@@ -2,7 +2,8 @@
 
 import unittest
 
-from ncs_core.manuscript import parse_body, parse_toc
+from ncs_core.manuscript import parse_body, parse_toc, section_presence
+from ncs_toc.rules.tail import check_toc6
 
 FRONT = [
     "차례",
@@ -67,6 +68,47 @@ class TocSkippedLessonTests(unittest.TestCase):
         toc = parse_toc([FRONT, []])
         self.assertEqual([L["no"] for L in toc["학습"]], [1, 2])
         self.assertEqual(toc["건너뜀"], [])
+
+
+class TailPresenceTests(unittest.TestCase):
+    """꼬리 섹션(참고 자료·활용 서식·부록) 존재 판정. 제목이 이름 없는 이미지인 실제 원고 사례를 본뜬다."""
+
+    REFS = [f"• 저자{i}(2020). 제목{i}. 출판사." for i in range(4)]
+    FORMS = [f"서식 내용 {i}" for i in range(12)]
+
+    def test_content_before_appendix_banner_is_identified_as_forms(self):
+        """참고 자료 → (제목 없는 내용) → 부록 배너 → 개발 이력: 그 내용은 꼬리 순서상 활용 서식이다."""
+        body = ["본문"] + self.REFS + self.FORMS + ["(부록 배너 자리)", "※ 부록은 KoPub돋움체로 작성", "NCS학습모듈 개발이력"]
+        banner_at = body.index("(부록 배너 자리)")
+        presence = section_presence([["차례"], body], [(banner_at, "부록.JPG")])
+        self.assertTrue(presence["참고 자료"]["있음"])
+        self.assertIs(presence["활용 서식"]["있음"], True)
+        self.assertIn("꼬리 순서상 활용 서식", presence["활용 서식"]["근거"])
+        self.assertIsNone(presence["부록"]["있음"])
+        self.assertTrue(presence["부록"].get("배너만"))
+
+    def test_content_without_any_appendix_marker_stays_ambiguous(self):
+        body = ["본문"] + self.REFS + self.FORMS + ["NCS학습모듈 개발이력"]
+        presence = section_presence([["차례"], body], [])
+        self.assertIsNone(presence["활용 서식"]["있음"], "부록 위치를 모르면 활용 서식인지 부록인지 확정하지 않는다")
+        self.assertFalse(presence["활용 서식"].get("배너만"))
+
+    def test_toc6_banner_remnant_absent_from_toc_passes_with_note(self):
+        body = ["본문"] + self.REFS + self.FORMS + ["(부록 배너 자리)", "※ 안내", "NCS학습모듈 개발이력"]
+        presence = section_presence([["차례"], body], [(body.index("(부록 배너 자리)"), "부록.JPG")])
+        toc = {"꼬리": {"참고 자료": "96", "활용 서식": "98"}}
+        rows = {r["region_path"].split(" > ")[-1]: r for r in check_toc6(presence, toc)}
+        self.assertEqual(rows["활용 서식"]["판정"], "적합")
+        self.assertEqual(rows["활용 서식"]["비고"], {})
+        self.assertEqual(rows["부록"]["판정"], "적합", "미작성 부록이 차례에도 없으면 ⑥은 적합")
+        self.assertIn("배너 삭제 권장", list(rows["부록"]["비고"].values())[0])
+
+    def test_toc6_banner_remnant_listed_in_toc_is_undecided(self):
+        body = ["본문"] + self.REFS + self.FORMS + ["(부록 배너 자리)", "※ 안내", "NCS학습모듈 개발이력"]
+        presence = section_presence([["차례"], body], [(body.index("(부록 배너 자리)"), "부록.JPG")])
+        toc = {"꼬리": {"참고 자료": "96", "활용 서식": "98", "부록": "101"}}
+        appendix = next(r for r in check_toc6(presence, toc) if r["region_path"].endswith("부록"))
+        self.assertEqual(appendix["판정"], "판단불가", "차례에는 있는데 본문은 배너만이면 사람이 본다")
 
 
 if __name__ == "__main__":

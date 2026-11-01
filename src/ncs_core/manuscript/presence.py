@@ -9,9 +9,11 @@ TAIL_PATTERNS = {"참고 자료": r"참\s*고\s*자\s*료", "활용 서식": r"�
 
 
 def section_presence(sections, images, config: ParseConfig = DEFAULT_PARSE_CONFIG) -> dict:
-    """{이름: {'있음': bool|None, '근거': str, 'k': 위치}}.
+    """{이름: {'있음': bool|None, '근거': str, 'k': 위치, ['배너만': True], ['end': 끝]}}.
 
-    images: 본문 섹션의 (문단 인덱스, 원본 그림 이름). None은 '배너만 있고 내용은 없음'으로 사람 확인.
+    images: 본문 섹션의 (문단 인덱스, 원본 그림 이름).
+    있음=None은 판단 보류: '배너만'이 True면 제목은 있는데 내용이 없는 경우, 아니면 내용은 있는데 활용 서식/부록 중
+    무엇인지 확정하지 못한 경우다.
     """
     raw = sections[1] if len(sections) > 1 else []
     lines = [(i, l) for i, l in enumerate(raw) if l]
@@ -46,6 +48,7 @@ def section_presence(sections, images, config: ParseConfig = DEFAULT_PARSE_CONFI
         if body_n < config.tail_min_paragraphs:
             out[name] = {
                 "있음": None,
+                "배너만": True,  # 제목(텍스트·배너)은 있는데 내용이 없음 → 양식 잔재일 가능성
                 "근거": f'{found["근거"]} 뒤에 내용이 없음(문단 {body_n}개) — 양식 배너만 남은 것인지 확인',
                 "k": found["k"],
             }
@@ -70,18 +73,36 @@ def section_presence(sections, images, config: ParseConfig = DEFAULT_PARSE_CONFI
                 "end": best[-1],
             }
 
-    # 활용 서식: 참고 자료 뒤 ~ 개발이력 앞에 내용이 있으면 '있을 가능성'
+    # 활용 서식: 제목(텍스트·배너)이 없을 때 참고 자료 뒤의 내용으로 추정한다.
+    # 양식의 꼬리 순서는 참고 자료 → 활용 서식 → 부록 → 개발 이력으로 고정이므로, 부록 제목(배너) 위치를 알면
+    # 참고 자료 끝과 부록 사이의 내용은 활용 서식으로 확정할 수 있다. 부록 위치를 모르면 둘 중 무엇인지 알 수 없어 None.
     if not out["활용 서식"]["있음"] and out["참고 자료"]["있음"]:
         start = out["참고 자료"].get("end", out["참고 자료"]["k"])
-        stop = next((i for i, l in lines if i > start and re.search(r"개발\s*이력", l)), len(raw))
+        appendix_k = out["부록"]["k"] if out["부록"]["있음"] is not False else None
+        stop = (
+            appendix_k
+            if appendix_k is not None and appendix_k > start
+            else next((i for i, l in lines if i > start and re.search(r"개발\s*이력", l)), len(raw))
+        )
         middle = [l for i, l in lines if start < i < stop and not REF_LINE.match(l) and not re.match(r"^※", l)]
         if len(middle) >= config.ambiguous_tail_min_paragraphs:
-            out["활용 서식"] = {
-                "있음": None,
-                "근거": (
-                    f'제목은 없지만 참고 자료 뒤~개발이력 앞에 문단 {len(middle)}개 있음 (예: "{middle[0][:30]}") '
-                    "— 활용 서식 또는 부록 내용으로 보임(제목이 이미지라 둘을 구분 못 함), 확인 필요"
-                ),
-                "k": start + 1,
-            }
+            if appendix_k is not None and stop == appendix_k:
+                out["활용 서식"] = {
+                    "있음": True,
+                    "근거": (
+                        f'제목 텍스트·배너 이름은 없지만 참고 자료 뒤~부록 제목 앞(section1 p{start + 1}~p{stop - 1})에 '
+                        f'문단 {len(middle)}개 있음 (예: "{middle[0][:30]}") — 꼬리 순서상 활용 서식'
+                    ),
+                    "k": start + 1,
+                    "end": stop - 1,
+                }
+            else:
+                out["활용 서식"] = {
+                    "있음": None,
+                    "근거": (
+                        f'제목은 없지만 참고 자료 뒤~개발이력 앞에 문단 {len(middle)}개 있음 (예: "{middle[0][:30]}") '
+                        "— 활용 서식 또는 부록 내용으로 보임(제목이 이미지라 둘을 구분 못 함), 확인 필요"
+                    ),
+                    "k": start + 1,
+                }
     return out

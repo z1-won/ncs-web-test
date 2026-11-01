@@ -38,7 +38,13 @@ def check_toc6(presence: dict, toc: dict) -> list[dict]:
     for name in ("활용 서식", "부록"):
         found, in_toc = presence[name], name in toc["꼬리"]
         toc_page = toc["꼬리"][name] or "" if in_toc else ""
-        if found["있음"] is None:
+        remnant = False
+        if found["있음"] is None and not in_toc and found.get("배너만"):
+            # 배너만 남고 내용이 없음 = 미작성. 차례에도 없으니 ⑥의 질문("없으면 차례에서 삭제했는가")에는 적합.
+            # 남은 양식 배너는 ⑥의 판정 사유가 아니라 정리 권고로만 적는다.
+            value, remnant = O, True
+            note = f'차례·본문 모두 없음(미작성) — 단, 본문에 양식 배너가 남아 있음: {found["근거"]} → 배너 삭제 권장'
+        elif found["있음"] is None:
             value = TRI
             note = f'본문: {found["근거"]}' + (f" / 차례에는 {name} {toc_page}" if in_toc else " / 차례에는 없음")
         elif in_toc and found["있음"]:
@@ -66,7 +72,7 @@ def check_toc6(presence: dict, toc: dict) -> list[dict]:
                 "원고": {"차례": toc["꼬리"].get(name) if in_toc else None, "본문": found["있음"]},
                 "체크": checks,
                 "판정": verdict(checks),
-                "비고": {label: note} if value != O or "해당 없음" in note else {},
+                "비고": {label: note} if value != O or "해당 없음" in note or remnant else {},
                 "수정 제안": suggestion,
             }
         )
