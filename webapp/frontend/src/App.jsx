@@ -535,10 +535,10 @@ function TopButton({ showAfter = 300, target = "#container" }) {
 }
 
 /* 헤더 — KRDS 헤더(#krds-header) 최소 구성: 건너뛰기 링크 + 로고(서비스 식별)만. 통합검색·로그인·메인메뉴·유틸리티 메뉴는 이 서비스에 없어 두지 않는다. */
-const NAV_ITEMS = [
+const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 동선) → 이력(부차)
   { id: "review-run", label: "검수 실행" },
-  { id: "review-history", label: "검수 이력" },
   { id: "review-result", label: "검수 결과" },
+  { id: "review-history", label: "검수 이력" },
 ];
 
 function Header({ hasHistory, hasResult }) {
@@ -645,6 +645,8 @@ function Footer() {
   );
 }
 
+const HISTORY_PREVIEW = 5;
+
 export default function App() {
   const [check, setCheck] = useState("position");
   const [checks, setChecks] = useState(CHECKS);
@@ -657,6 +659,7 @@ export default function App() {
   const [history, setHistory] = useState(null);
   const resultsRef = useRef(null);   // 결과 영역 — 검사 실행·이력 열기 뒤 여기로 화면을 내린다(이력 표가 길면 결과가 화면 밖에 있다)
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
+  const [historyExpanded, setHistoryExpanded] = useState(false); // 이력은 기본 최근 5건만, '더 보기'로 전체
   const [deleting, setDeleting] = useState(false);
 
   async function refreshHistory() {
@@ -871,38 +874,11 @@ export default function App() {
         </div>
       </form>
 
-      {history && (
-        <section id="review-history" className="nav-anchor">
-          <h2 className="section-title">검수 이력</h2>
-          {history.length === 0 ? <p className="empty">저장된 검수 이력이 없습니다.</p> : (
-            <div className="krds-table-wrap">
-              <table className="tbl col data">
-                <caption>최근 검수 실행</caption>
-                <thead><tr><th scope="col">실행 시각</th><th scope="col">모듈</th><th scope="col">검수</th><th scope="col">판정</th><th scope="col">열기</th><th scope="col">삭제</th></tr></thead>
-                <tbody>{history.map((row) => (
-                  <tr key={row.id}>
-                    <td>{new Date(row.created_at).toLocaleString("ko-KR")}</td>
-                    <td>{row.module_code}</td>
-                    <td>{row.kind === "group"
-                      ? `전체 실행 — 구성요소 ${row.checks.length}/${checks.length}`
-                      : checks.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
-                    <td><Badge value={row.verdict} /></td>
-                    <td><button className="krds-btn small tertiary" type="button" onClick={() => (row.kind === "group" ? openGroup(row.id) : openHistory(row.id))}>결과 보기</button></td>
-                    <td>
-                      <button className="krds-btn small tertiary btn-delete-history" type="button" onClick={() => setPendingDelete(row)}>
-                        <i className="svg-icon ico-del" aria-hidden="true"></i>삭제
-                      </button>
-                    </td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-
       <div id="review-result" ref={resultsRef} className="results-anchor nav-anchor" />
 
+      {!allRun && !result && !busy && (
+        <p className="empty result-placeholder">검사를 실행하면 결과가 여기에 표시됩니다{history?.length ? " — 아래 검수 이력에서 이전 결과를 열 수도 있습니다" : ""}.</p>
+      )}
       {allRun && <AllResults run={allRun} checks={checks} />}
 
       {result && (
@@ -935,6 +911,44 @@ export default function App() {
             <summary>원본 JSON (요약·진단·검수확인서·지적사항·전체)</summary>
             <pre>{JSON.stringify(result, null, 1)}</pre>
           </details>
+        </section>
+      )}
+
+      {history && (
+        <section id="review-history" className="nav-anchor history">
+          <div className="section-head">
+            <h2 className="section-title">검수 이력 <span className="meta">({history.length}건)</span></h2>
+            {history.length > HISTORY_PREVIEW && (
+              <button type="button" className="krds-btn small text" aria-expanded={historyExpanded} aria-controls="history-table"
+                      onClick={() => setHistoryExpanded((v) => !v)}>
+                {historyExpanded ? "최근 5건만 보기" : `더 보기 (${history.length - HISTORY_PREVIEW}건 더)`}
+              </button>
+            )}
+          </div>
+          {history.length === 0 ? <p className="empty">저장된 검수 이력이 없습니다.</p> : (
+            <div className="krds-table-wrap" id="history-table">
+              <table className="tbl col data">
+                <caption>최근 검수 실행</caption>
+                <thead><tr><th scope="col">실행 시각</th><th scope="col">모듈</th><th scope="col">검수</th><th scope="col">판정</th><th scope="col">열기</th><th scope="col">삭제</th></tr></thead>
+                <tbody>{(historyExpanded ? history : history.slice(0, HISTORY_PREVIEW)).map((row) => (
+                  <tr key={row.id} className={row.id === result?.id || row.id === allRun?.group ? "is-open" : undefined}>
+                    <td>{new Date(row.created_at).toLocaleString("ko-KR")}</td>
+                    <td>{row.module_code}</td>
+                    <td>{row.kind === "group"
+                      ? `전체 실행 — 구성요소 ${row.checks.length}/${checks.length}`
+                      : checks.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
+                    <td><Badge value={row.verdict} /></td>
+                    <td><button className="krds-btn small tertiary" type="button" onClick={() => (row.kind === "group" ? openGroup(row.id) : openHistory(row.id))}>결과 보기</button></td>
+                    <td>
+                      <button className="krds-btn small tertiary btn-delete-history" type="button" onClick={() => setPendingDelete(row)}>
+                        <i className="svg-icon ico-del" aria-hidden="true"></i>삭제
+                      </button>
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
 

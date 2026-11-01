@@ -192,3 +192,13 @@ details.raw pre {
   #krds-header .krds-main-menu .gnb-menu { overflow-x: auto; flex-wrap: nowrap; }
   #krds-header .krds-main-menu .gnb-menu .gnb-main-trigger { height: var(--krds-size-height-7); white-space: nowrap; }
 }
+
+/* 결과를 이력보다 위에 둔다(주 동선). 이력은 기본 최근 5건, 제목 줄 오른쪽의 '더 보기'로 전체 */
+.result-placeholder { margin-top: var(--krds-gap-9); }
+.history { margin-top: var(--krds-gap-9); }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--krds-gap-5); }
+.section-head .section-title { margin-bottom: 0; }
+.section-head .section-title .meta { font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-subtle); }
+.history .krds-table-wrap { margin-top: var(--krds-gap-5); }
+/* 지금 화면에 열려 있는 이력 행 */
+.history tr.is-open > td { background: var(--krds-light-color-surface-secondary-subtler); }
