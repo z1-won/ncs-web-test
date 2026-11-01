@@ -1,20 +1,12 @@
 // 페이지 틀 — KRDS 헤더(건너뛰기 링크·로고·메인 메뉴), 맨 위로 버튼, 푸터.
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useRef } from "react";
 
-/* 맨 위로(TOP) 버튼 — KRDS 아이콘 버튼 규격(app.css .krds-btn-top). 300px 넘게 내려가면 나타나고, 누르면 맨 위로 올린 뒤 포커스를 본문(#container)으로 옮긴다. */
-export function TopButton({ showAfter = 300, target = "#container" }) {
-  const [active, setActive] = useState(false);
-  useEffect(() => {
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => { setActive(window.scrollY > showAfter); ticking = false; });
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [showAfter]);
+import { useCssHeightVar, useScrollY } from "../lib/hooks.js";
+
+/* 맨 위로(TOP) 버튼 — KRDS 아이콘 버튼 규격(app.css .krds-btn-top). 화면 높이의 절반 넘게 내려가면 나타나고, 누르면 맨 위로 올린 뒤 포커스를 본문(#container)으로 옮긴다. */
+export function TopButton({ target = "#container" }) {
+  const y = useScrollY();
+  const active = y > (typeof window === "undefined" ? 0 : window.innerHeight / 2);
   function goTop() {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
@@ -40,24 +32,24 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
 ];
 
 export function Header({ hasHistory, hasResult }) {
-  const items = NAV_ITEMS.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" ? hasResult : true));
-  const [current, setCurrent] = useState(items[0]?.id);
-  // 화면이 하나라 메뉴는 영역 이동(앵커). 스크롤 위치에 따라 현재 영역을 활성 표시한다.
-  useEffect(() => {
-    const onScroll = () => {
-      const headerHeight = document.getElementById("krds-header")?.offsetHeight || 0;
-      let active = items[0]?.id;
-      for (const item of items) {
-        const el = document.getElementById(item.id);
-        // 앵커는 scroll-margin-top(헤더 + gap-7)만큼 띄워 멈추므로 그 여유(약 4rem)까지는 "현재 영역"으로 본다
-        if (el && el.getBoundingClientRect().top <= headerHeight + 40) active = item.id;
-      }
-      setCurrent(active);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [items.map((item) => item.id).join(",")]);
+  const items = useMemo(
+    () => NAV_ITEMS.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" ? hasResult : true)),
+    [hasHistory, hasResult],
+  );
+  const header = useRef(null);
+  useCssHeightVar(header, "--header-height");   // app.css의 앵커 scroll-margin-top이 이 값을 읽는다
+  // 화면이 하나라 메뉴는 영역 이동(앵커). 스크롤 위치에 따라 현재 영역을 활성 표시한다 — 렌더마다 계산(스크롤 값이 바뀔 때만 다시 그려진다).
+  const y = useScrollY();
+  const current = useMemo(() => {
+    const headerHeight = header.current?.offsetHeight || 0;
+    let active = items[0]?.id;
+    for (const item of items) {
+      const el = document.getElementById(item.id);
+      // 앵커는 scroll-margin-top(헤더 + gap-7)만큼 띄워 멈추므로 그 여유(약 4rem)까지는 "현재 영역"으로 본다
+      if (el && el.getBoundingClientRect().top <= headerHeight + 40) active = item.id;
+    }
+    return active;
+  }, [items, y]);
   function go(e, id) {
     e.preventDefault();
     const el = document.getElementById(id);
@@ -71,7 +63,7 @@ export function Header({ hasHistory, hasResult }) {
       <div id="krds-skip-link">
         <a href="#container">본문 바로가기</a>
       </div>
-      <header id="krds-header">
+      <header id="krds-header" ref={header}>
         <div className="header-in">
           <div className="header-container">
             <div className="inner">

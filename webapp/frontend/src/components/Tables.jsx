@@ -106,7 +106,7 @@ export function FindingsTable({ findings, compact = false }) {
         </thead>
         <tbody>
           {findings.map((f, i) => (
-            <tr key={i}>
+            <tr key={`${f.item_id}|${f.check}|${f.region_path}|${i}`}>
               {!compact && <td>{f.item_id}</td>}
               <td>{f.check}</td>
               <td><Badge value={f.verdict} /></td>
@@ -137,7 +137,7 @@ export function ChecklistTable({ rows }) {
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i}>
+            <tr key={`${r.item_id}|${r.region_path}|${i}`}>
               <td>{r.item_id}</td>
               <td className="mono">{r.region_path}</td>
               <td><Badge value={r.판정} /></td>

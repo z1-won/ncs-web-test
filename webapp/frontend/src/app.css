@@ -128,7 +128,8 @@ details.raw pre {
 
 /* 결과 영역 스크롤 기준점: 내려왔을 때 제목이 화면 맨 위에 붙지 않게 여백을 둔다 */
 /* KRDS 헤더(브랜딩 약 8.8rem + 메인 메뉴 5.6rem)가 sticky라 앵커 이동 시 그 높이만큼 더 띄운다 */
-.results-anchor, .nav-anchor { scroll-margin-top: calc(14.4rem + var(--krds-gap-7)); }
+/* 헤더 높이는 Header가 측정해 --header-height로 내려준다(lib/hooks.js useCssHeightVar). 측정 전 기본값 14.4rem */
+.results-anchor, .nav-anchor { scroll-margin-top: calc(var(--header-height, 14.4rem) + var(--krds-gap-7)); }
 /* 메뉴로 이동할 때 영역에 포커스를 두는데, KRDS 전역 *:focus(box-shadow)가 영역 전체를 감싸지 않게 */
 .nav-anchor:focus { outline: none; box-shadow: none; }
 
