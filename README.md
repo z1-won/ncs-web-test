@@ -74,18 +74,20 @@ API 문서는 `http://127.0.0.1:8765/docs`에서 확인합니다.
 HWP는 글꼴·음영을 읽지 않아 위치 ⑤가 판단불가입니다.
 차례·필요지식의 기본 양식은 section0=차례·개요, section1=본문이며 Python API와 CLI 설정으로 조정할 수 있습니다.
 
-## 행동명사 목록 갱신 (차례 ②)
+## 행동명사 목록 (차례 ②)
 
-차례 ②는 `src/ncs_core/data/action_nouns.txt`의 단어로 판정하며 목록에 없는 단어는 판단불가(△)로 두고 비고에 단어를 적습니다. 목록은 국립국어원 표준국어대사전 API로 확인해 키웁니다(`.env`에 `STDICT_API_KEY`).
+차례 ②는 학습 내용명의 머리어 W를 `src/ncs_core/data/action_nouns.txt`에서 찾고, 없으면 국립국어원 표준국어대사전 API로 ‘W하다’ 동사 표제어를 조회합니다. 있으면 목록에 추가하고 적합, 없으면 `action_nouns_rejected.txt`에 기록하고 부적합, 조회할 수 없으면(인증키 없음·오류) 판단불가입니다. 인증키는 `.env`의 `STDICT_API_KEY`이며 웹 서버·CLI가 실행되는 셸에 올라가 있어야 합니다(`set -a; source .env; set +a`).
+
+**운용 전에 목록을 채워 두세요.** 검수 중 조회는 예외여야 합니다.
 
 ```bash
 set -a; source .env; set +a
-.venv/bin/python scripts/build_action_nouns.py --from-file scripts/action_noun_candidates.txt   # 후보 일괄
-.venv/bin/python scripts/build_action_nouns.py --from-results webapp/결과                        # 검수에서 △로 나온 단어
-.venv/bin/python scripts/build_action_nouns.py 구성 산출                                          # 단어 직접
+.venv/bin/python scripts/build_action_nouns.py --from-plans 개발계획서폴더        # 승인된 학습 내용명의 머리어
+.venv/bin/python scripts/build_action_nouns.py --from-manuscripts 원고폴더
+.venv/bin/python scripts/build_action_nouns.py --from-file scripts/action_noun_candidates.txt
 ```
 
-API가 확인한 단어만 목록에 들어갑니다(출처 `stdict`, 근거에 target_code). "사전에 근거 없음"으로 나온 외래어·전문용어는 사람이 판단해 행동명사면 `action_nouns.txt`에 출처 `manual`과 근거를 적어 추가하고, 아니면 그대로 둡니다(검수에서 △로 남아 사람이 봅니다). ②는 O와 △만 내고 X는 내지 않습니다. 갱신 후 골든이 바뀌면 `tests/make_golden.py`로 재생성하고 함께 커밋합니다.
+사전에 ‘-하다’가 없는 외래어·전문용어는 `action_nouns_rejected.txt`에 남아 부적합이 됩니다. 행동명사가 맞으면 그 줄을 지우고 `action_nouns.txt`에 `단어 ⇥ manual ⇥ 날짜 ⇥ 근거`로 옮깁니다. 두 파일 모두 git으로 관리합니다.
 
 ## 변경 검증
 

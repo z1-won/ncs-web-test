@@ -13,3 +13,6 @@ __pycache__/
 /dist/
 *.egg-info/
 scripts/.stdict_debug.xml
+
+# 실제 원고·개발계획서 표본 (git 제외)
+/samples/
