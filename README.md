@@ -50,6 +50,15 @@ ncs-web --dist webapp/frontend/dist          # API + 빌드된 화면, http://12
 
 화면을 고칠 때는 `cd webapp/frontend && npm install && npm run dev`(개발 서버 5173) 또는 `npm run build` 후 위 명령. `--out 폴더`로 결과 저장 위치를 바꿉니다(기본 `결과/`). API 문서는 `/docs`. 포트가 잡혀 있으면 `lsof -ti :8765 | xargs kill`.
 
+검수 항목 목록의 마지막 **전체**를 고르면 구성요소 10개를 확인서 순서대로 한 번에 검사합니다(개발계획서가 없으면 '위치'만 건너뜀). 결과는 구성요소별 아코디언으로 열어 보고, 이력에는 한 묶음이 한 줄로 남습니다.
+
+| API | 쓰는 곳 |
+|---|---|
+| `POST /api/review` (`files[]`, `check`, `module_code`) | 검수 1건. 응답은 요약·검수확인서·진단·지적사항·전체 |
+| `POST /api/uploads` → `{upload, group, roles, expires_in}` / `DELETE /api/uploads/{token}` | 전체 실행: 파일을 한 번 올려 토큰을 받고, `POST /api/review`에 `upload=토큰&group=묶음id`로 엔진마다 부른다. 토큰은 10분 뒤 자동 삭제 |
+| `GET /api/reviews[?standalone=true]`, `GET/DELETE /api/reviews/{id}`, `GET /api/reviews/{id}/zip` | 단독 실행 이력(`DATABASE_URL` 설정 시) |
+| `GET /api/groups`, `GET/DELETE /api/groups/{group_id}` | 전체 실행 묶음 이력 — 한 묶음의 모든 검수를 한 번에 열고 지운다 |
+
 ## CLI 실행
 
 ```bash

@@ -37,8 +37,10 @@ class FileStore:
     def prepare(self) -> None:
         """시작 시 준비 작업. 폴더는 저장 시점에 만들므로 할 일이 없다."""
 
-    def save(self, review: ExecutedReview, uploads: list[UploadedInput] = ()) -> StoredReview:
-        saved = persist_review(review, self.out_dir)
+    def save(self, review: ExecutedReview, uploads: list[UploadedInput] = (), group_id: str | None = None) -> StoredReview:
+        # 전체 실행 묶음은 묶음 id 폴더 아래에 모아 둔다(이력 조회는 없지만 폴더만 봐도 한 묶음이 보이게)
+        target = self.out_dir / group_id if group_id else self.out_dir
+        saved = persist_review(review, target)
         return StoredReview(saved.summary, directory=saved.directory, zip_path=saved.zip_path)
 
 
@@ -55,11 +57,11 @@ class PostgresStore:
 
         return postgres.migrate(self.dsn)
 
-    def save(self, review: ExecutedReview, uploads: list[UploadedInput] = ()) -> StoredReview:
+    def save(self, review: ExecutedReview, uploads: list[UploadedInput] = (), group_id: str | None = None) -> StoredReview:
         from . import postgres
 
         inputs = postgres.input_metadata(review.result.diagnostics, list(uploads))
-        run_id, summary = postgres.save_review(self.dsn, review, inputs)
+        run_id, summary = postgres.save_review(self.dsn, review, inputs, group_id)
         return StoredReview(summary, run_id=run_id)
 
     def list_reviews(self, **filters) -> list[dict]:
@@ -76,6 +78,22 @@ class PostgresStore:
         from . import postgres
 
         return postgres.delete_review(self.dsn, run_id)
+
+    # 전체 실행 묶음(group_id) — 이력 화면에서 한 줄로 보이고 한 번에 열고 지운다
+    def list_groups(self, **filters) -> list[dict]:
+        from . import postgres
+
+        return postgres.list_groups(self.dsn, **filters)
+
+    def get_group(self, group_id: str) -> dict | None:
+        from . import postgres
+
+        return postgres.get_group(self.dsn, group_id)
+
+    def delete_group(self, group_id: str) -> bool:
+        from . import postgres
+
+        return postgres.delete_group(self.dsn, group_id)
 
     def export_zip(self, run_id: str) -> tuple[bytes, str] | None:
         """저장된 이력을 해당 엔진의 save_results로 다시 만들어 (ZIP 바이트, 파일 이름)을 돌려준다."""

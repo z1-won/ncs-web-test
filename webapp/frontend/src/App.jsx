@@ -26,7 +26,7 @@ const CHECKS = [
   { value: "references", label: "참고 자료 ①~③" },
   { value: "colophon", label: "개발 이력 및 판권 ①" },
   { value: "misc", label: "기타 ①·②·⑥·⑦" },
-].map((c) => ({ ...c, files: FILE_HINTS[c.value] || "원고" }));
+].map((c) => ({ ...c, files: FILE_HINTS[c.value] || "원고", required: c.value === "position" ? ["manuscript", "plan"] : ["manuscript"] }));
 
 const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
 
@@ -52,6 +52,7 @@ function checksFromEngines(engines) {
     files: FILE_HINTS[e.check] || (e.required?.includes("plan") ? "원고 + 개발계획서" : "원고"),
     items: e.items,
     total: e.total,
+    required: e.required || ["manuscript"],
   }));
 }
 
@@ -362,6 +363,146 @@ function ConfirmDialog({ title, children, confirmLabel = "확인", busy = false,
   );
 }
 
+// ───────────────────────── 전체 실행(구성요소 10개를 차례로) ─────────────────────────
+// 선택 목록의 마지막 항목. 서버의 check 값이 아니라 화면이 처리한다: 파일을 /api/uploads에 한 번 올려 토큰을 받고,
+// 엔진 순서대로 /api/review를 upload=토큰으로 부른다. 결과는 구성요소별 아코디언(KRDS krds-accordion)에 하나씩 채워진다.
+const ALL_CHECK = "all";
+const ALL_OPTION = {
+  value: ALL_CHECK,
+  label: "전체 — 구성요소 10개를 차례로 검수",
+  files: "원고 + 개발계획서 (개발계획서가 없으면 '위치'만 건너뛰고 나머지를 실행)",
+  all: true,
+};
+
+// 확인서 행의 검수결과 집계 → { 적합, 부적합, 판단불가, 미검사 }
+function countVerdicts(sheet) {
+  const counts = { 적합: 0, 부적합: 0, 판단불가: 0, 미검사: 0 };
+  (sheet || []).forEach((row) => { if (row.검수결과 in counts) counts[row.검수결과] += 1; });
+  return counts;
+}
+
+// 묶음 판정: 부적합 하나라도 있으면 부적합 → 판단불가 → 적합 (서버 group_verdict와 같은 규칙)
+function overallVerdict(verdicts) {
+  for (const candidate of ["부적합", "판단불가", "적합"]) if (verdicts.includes(candidate)) return candidate;
+  return null;
+}
+
+function Spinner({ label }) {
+  // KRDS 스피너: role=status + sr-only 글. 글을 눈에 보이게도 둔다(진행 중인 구성요소 이름)
+  return <span className="krds-spinner" role="status"><span className="sr-only">{label}</span><span aria-hidden="true">{label}</span></span>;
+}
+
+// 아코디언 머리의 상태 표시: 대기 / 검사 중 / 건너뜀 / 오류 / 판정 + 항목 수
+function ItemStatus({ item }) {
+  if (item.status === "pending") return <span className="krds-badge bg-light-gray">대기</span>;
+  if (item.status === "running") return <Spinner label="검사 중…" />;
+  if (item.status === "skipped") return <span className="krds-badge bg-light-gray">미실행 — 개발계획서 없음</span>;
+  if (item.status === "error") return <span className="krds-badge bg-light-danger">오류</span>;
+  const counts = countVerdicts(item.data?.검수확인서);
+  return (
+    <span className="item-status">
+      <Badge value={item.data?.요약?.검수결과} />
+      <span className="counts">
+        <span className="count pass">적합 {counts.적합}</span>
+        <span className="count fail">부적합 {counts.부적합}</span>
+        <span className="count undecided">판단불가 {counts.판단불가}</span>
+      </span>
+    </span>
+  );
+}
+
+function AllResults({ run, checks }) {
+  const [expanded, setExpanded] = useState(() => new Set());
+  const order = checks.filter((c) => !c.all).map((c) => c.value);
+  const items = order.map((check) => ({ check, option: checks.find((c) => c.value === check), ...(run.items[check] || { status: "pending" }) }));
+  const finished = items.filter((i) => i.status === "done");
+  const verdict = overallVerdict(finished.map((i) => i.data?.요약?.검수결과));
+  const total = finished.reduce((acc, i) => {
+    const c = countVerdicts(i.data?.검수확인서);
+    return { 적합: acc.적합 + c.적합, 부적합: acc.부적합 + c.부적합, 판단불가: acc.판단불가 + c.판단불가 };
+  }, { 적합: 0, 부적합: 0, 판단불가: 0 });
+  const moduleCode = finished[0]?.data?.module_code || run.module_code || "";
+  const openable = items.filter((i) => i.status !== "pending" && i.status !== "running").map((i) => i.check);
+
+  function toggle(check) {
+    setExpanded((prev) => { const next = new Set(prev); next.has(check) ? next.delete(check) : next.add(check); return next; });
+  }
+
+  return (
+    <section className="all-results" aria-live="polite">
+      <div className="result-head">
+        {run.running
+          ? <Spinner label={`검사 중 — ${items.filter((i) => i.status === "done" || i.status === "error" || i.status === "skipped").length}/${items.length} 구성요소 완료`} />
+          : verdict ? <Badge value={verdict} large /> : <span className="krds-badge large bg-light-gray">결과 없음</span>}
+        <span className="meta">{moduleCode}{moduleCode ? " · " : ""}전체 실행{run.created_at ? ` · ${new Date(run.created_at).toLocaleString("ko-KR")}` : ""}</span>
+        <span className="meta">적합 {total.적합} · 부적합 {total.부적합} · 판단불가 {total.판단불가} 항목</span>
+        {run.roles && !run.roles.plan && <span className="krds-badge bg-light-warning">개발계획서 없음 — 위치 미실행</span>}
+        <span className="toolbar">
+          <button type="button" className="krds-btn xsmall text" onClick={() => setExpanded(new Set(openable))} disabled={!openable.length}>모두 펼치기</button>
+          <button type="button" className="krds-btn xsmall text" onClick={() => setExpanded(new Set())} disabled={!expanded.size}>모두 접기</button>
+        </span>
+      </div>
+
+      <h2 className="section-title">구성요소별 검수 결과</h2>
+      {/* KRDS 아코디언: accordion-item(.active) › h5.accordion-header › button.btn-accordion(.active, aria-controls) + .accordion-collapse(aria-labelledby) › .accordion-body */}
+      <div className="krds-accordion">
+        {items.map((item) => {
+          const open = expanded.has(item.check);
+          const canOpen = openable.includes(item.check);
+          const headerId = `all-head-${item.check}`;
+          const bodyId = `all-body-${item.check}`;
+          return (
+            <div key={item.check} className={`accordion-item${open ? " active" : ""} status-${item.status}`}>
+              <h5 className="accordion-header">
+                <button type="button" id={headerId} className={`btn-accordion${open ? " active" : ""}`} aria-controls={bodyId} aria-expanded={open}
+                        disabled={!canOpen} onClick={() => toggle(item.check)}>
+                  <span className="acc-title">
+                    <span className="acc-name">{item.option?.label || item.check}</span>
+                    <ItemStatus item={item} />
+                  </span>
+                </button>
+              </h5>
+              <div id={bodyId} className="accordion-collapse collapse" aria-labelledby={headerId}>
+                <div className="accordion-body">
+                  {open && item.status === "skipped" && (
+                    <p className="empty">개발계획서가 없어 실행하지 않았습니다. 위치 ①~⑤는 원고와 개발계획서를 함께 올렸을 때만 검사합니다.</p>
+                  )}
+                  {open && item.status === "error" && (
+                    <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{item.error}</p>
+                  )}
+                  {open && item.status === "done" && <ComponentResult result={item.data} />}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// 아코디언 몸통: 그 구성요소의 확인서(행마다 지적사항 펼치기) + 진단 경고 + ZIP. 지적사항·전체 체크리스트는 접힌 상세로.
+function ComponentResult({ result }) {
+  return (
+    <div className="component-result">
+      <SheetTable sheet={result.검수확인서 || []} findings={result.지적사항 || []} />
+      {result.진단?.warnings?.length > 0 && (
+        <ul className="krds-info-list dash">
+          {result.진단.warnings.map((w, i) => <li key={i}>{w}</li>)}
+        </ul>
+      )}
+      <div className="component-foot">
+        {result.id ? <a href={`/api/reviews/${result.id}/zip`}>ZIP 다운로드</a> : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null}
+        <details>
+          <summary>지적사항 {result.지적사항?.length || 0}건 · 전체 체크리스트 {result.전체?.length || 0}행</summary>
+          <FindingsTable findings={result.지적사항 || []} />
+          <ChecklistTable rows={result.전체 || []} />
+        </details>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [check, setCheck] = useState("position");
   const [checks, setChecks] = useState(CHECKS);
@@ -370,13 +511,19 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [allRun, setAllRun] = useState(null);   // 전체 실행 진행·결과: { group, roles, items: {check: {status, data, error}}, running, created_at }
   const [history, setHistory] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
   const [deleting, setDeleting] = useState(false);
 
   async function refreshHistory() {
-    const response = await fetch("/api/reviews");
-    if (response.ok) setHistory(await response.json());
+    // 단독 실행(standalone)과 전체 실행 묶음(/api/groups)을 따로 받아 시각순으로 한 표에 섞는다. 묶음은 한 줄.
+    const [runs, groups] = await Promise.all([fetch("/api/reviews?standalone=true"), fetch("/api/groups")]);
+    if (!runs.ok) return;
+    const rows = (await runs.json()).map((row) => ({ ...row, kind: "run" }));
+    if (groups.ok) (await groups.json()).forEach((g) => rows.push({ ...g, id: g.group_id, kind: "group", check_name: ALL_CHECK }));
+    rows.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    setHistory(rows);
   }
 
   // 서버가 이력 저장(DB 모드)을 지원할 때만 이력을 가져온다. 파일 모드에서는 /api/reviews가 없다.
@@ -390,13 +537,16 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const selected = checks.find((c) => c.value === check) || checks[0];
+  const options = [...checks, ALL_OPTION];
+  const selected = options.find((c) => c.value === check) || options[0];
 
   async function submit(event) {
     event.preventDefault();
+    if (check === ALL_CHECK) return runAll();
     setBusy(true);
     setError(null);
     setResult(null);
+    setAllRun(null);
     const form = new FormData();
     form.append("check", check);
     form.append("module_code", moduleCode);
@@ -416,12 +566,84 @@ export default function App() {
     }
   }
 
+  // 전체 실행: 업로드 1회(토큰) → 엔진 순서대로 /api/review → 끝나면 토큰 반납. 한 구성요소의 오류는 그 칸에만 남기고 다음으로 간다.
+  async function runAll() {
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    const order = checks.map((c) => c.value);
+    let upload;
+    try {
+      const form = new FormData();
+      files.forEach((file) => form.append("files", file, file.name));
+      const response = await fetch("/api/uploads", { method: "POST", body: form });
+      upload = await response.json();
+      if (!response.ok) {
+        setError(upload.error || "업로드 실패");
+        setBusy(false);
+        return;
+      }
+    } catch (e) {
+      setError(`서버에 연결하지 못했습니다: ${e.message}\n(가상환경의 ncs-web 서버가 실행 중인지 확인)`);
+      setBusy(false);
+      return;
+    }
+    const hasPlan = Boolean(upload.roles?.plan);
+    const items = {};
+    order.forEach((value) => {
+      const needsPlan = (checks.find((c) => c.value === value)?.required || []).includes("plan");
+      items[value] = { status: needsPlan && !hasPlan ? "skipped" : "pending" };
+    });
+    setAllRun({ group: upload.group, roles: upload.roles, items, running: true, created_at: new Date().toISOString() });
+    const update = (value, patch) => setAllRun((prev) => (prev ? { ...prev, items: { ...prev.items, [value]: { ...prev.items[value], ...patch } } } : prev));
+    for (const value of order) {
+      if (items[value].status === "skipped") continue;
+      update(value, { status: "running" });
+      const form = new FormData();
+      form.append("check", value);
+      form.append("module_code", moduleCode);
+      form.append("upload", upload.upload);
+      form.append("group", upload.group);
+      try {
+        const response = await fetch("/api/review", { method: "POST", body: form });
+        const data = await response.json();
+        if (!response.ok) update(value, { status: "error", error: data.error + (data.traceback ? "\n\n" + data.traceback : "") });
+        else update(value, { status: "done", data });
+      } catch (e) {
+        update(value, { status: "error", error: `서버에 연결하지 못했습니다: ${e.message}` });
+      }
+    }
+    fetch(`/api/uploads/${upload.upload}`, { method: "DELETE" }).catch(() => {});
+    setAllRun((prev) => (prev ? { ...prev, running: false } : prev));
+    setBusy(false);
+    if (history) refreshHistory().catch(() => {});
+  }
+
+  // 이력의 전체 실행 묶음을 열어 아코디언으로 되살린다. 저장되지 않은 구성요소(위치: 개발계획서 없음)는 건너뜀으로 표시.
+  async function openGroup(id) {
+    setError(null);
+    try {
+      const response = await fetch(`/api/groups/${id}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "이력을 열 수 없습니다");
+      const items = {};
+      checks.forEach((c) => { items[c.value] = { status: "skipped" }; });
+      data.runs.forEach((run) => { items[run.check] = { status: "done", data: run }; });
+      const hasPlan = data.runs.some((run) => run.진단?.inputs?.plan);
+      setResult(null);
+      setAllRun({ group: id, roles: { manuscript: true, plan: hasPlan }, items, running: false, created_at: data.created_at, module_code: data.module_code });
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   async function openHistory(id) {
     setError(null);
     try {
       const response = await fetch(`/api/reviews/${id}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "이력을 열 수 없습니다");
+      setAllRun(null);
       setResult(data);
     } catch (e) {
       setError(e.message);
@@ -432,12 +654,13 @@ export default function App() {
     setError(null);
     setDeleting(true);
     try {
-      const response = await fetch(`/api/reviews/${row.id}`, { method: "DELETE" });
+      const response = await fetch(row.kind === "group" ? `/api/groups/${row.id}` : `/api/reviews/${row.id}`, { method: "DELETE" });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error || "이력을 삭제할 수 없습니다");
       }
       if (result?.id === row.id) setResult(null); // 지운 이력의 결과가 화면에 열려 있으면 함께 내린다
+      if (allRun?.group === row.id) setAllRun(null);
       await refreshHistory();
     } catch (e) {
       setError(e.message);
@@ -459,7 +682,7 @@ export default function App() {
           <div className="form-tit"><label htmlFor="check">검수 항목</label></div>
           <div className="form-conts">
             {/* KRDS 셀렉트: 레이블(form-tit) + 선택완료 상태(completed) + 도움말(form-hint). 값이 바뀌어도 폼은 제출하지 않는다 */}
-            <KrdsSelect id="check" value={check} options={checks} onChange={setCheck} title="검수 항목 선택" describedBy="check-hint" />
+            <KrdsSelect id="check" value={check} options={options} onChange={setCheck} title="검수 항목 선택" describedBy="check-hint" />
           </div>
           <p className="form-hint" id="check-hint">
             필요한 파일: {selected.files}
@@ -488,7 +711,7 @@ export default function App() {
 
         <div className="form-group form-actions">
           <button className="krds-btn primary large" type="submit" disabled={busy || files.length === 0}>
-            {busy ? "검사 중…" : "검사 실행"}
+            {busy ? "검사 중…" : check === ALL_CHECK ? "전체 검사 실행" : "검사 실행"}
           </button>
           {/* 실행·이력 열기 오류는 버튼 바로 아래에 — 검수 이력 표보다 먼저 보이도록 */}
           {error && (
@@ -509,9 +732,11 @@ export default function App() {
                   <tr key={row.id}>
                     <td>{new Date(row.created_at).toLocaleString("ko-KR")}</td>
                     <td>{row.module_code}</td>
-                    <td>{checks.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
+                    <td>{row.kind === "group"
+                      ? `전체 실행 — 구성요소 ${row.checks.length}/${checks.length}`
+                      : checks.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
                     <td><Badge value={row.verdict} /></td>
-                    <td><button className="krds-btn small tertiary" type="button" onClick={() => openHistory(row.id)}>결과 보기</button></td>
+                    <td><button className="krds-btn small tertiary" type="button" onClick={() => (row.kind === "group" ? openGroup(row.id) : openHistory(row.id))}>결과 보기</button></td>
                     <td>
                       <button className="krds-btn small tertiary btn-delete-history" type="button" onClick={() => setPendingDelete(row)}>
                         <i className="svg-icon ico-del" aria-hidden="true"></i>삭제
@@ -524,6 +749,8 @@ export default function App() {
           )}
         </section>
       )}
+
+      {allRun && <AllResults run={allRun} checks={checks} />}
 
       {result && (
         <section>
@@ -564,7 +791,7 @@ export default function App() {
           <p>정말 삭제하시겠습니까?</p>
           <p className="meta">
             {new Date(pendingDelete.created_at).toLocaleString("ko-KR")} · {pendingDelete.module_code} ·{" "}
-            {checks.find((item) => item.value === pendingDelete.check_name)?.label || pendingDelete.check_name}
+            {pendingDelete.kind === "group" ? `전체 실행 — 구성요소 ${pendingDelete.checks.length}개` : checks.find((item) => item.value === pendingDelete.check_name)?.label || pendingDelete.check_name}
           </p>
           <p className="meta">삭제한 이력은 되돌릴 수 없습니다.</p>
         </ConfirmDialog>

@@ -44,4 +44,8 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("001_initial", SCHEMA),
     ("002_drop_check_name_constraint",
      "ALTER TABLE review_runs DROP CONSTRAINT IF EXISTS review_runs_check_name_check"),
+    # 003: '전체 실행'(한 번 올린 파일로 구성요소 10개를 차례로 검수) 묶음 id. 단독 실행은 NULL.
+    ("003_group_id",
+     "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS group_id uuid;\n"
+     "CREATE INDEX IF NOT EXISTS review_runs_group_idx ON review_runs (group_id, created_at)"),
 )

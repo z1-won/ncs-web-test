@@ -62,18 +62,21 @@ def input_metadata(diagnostics: dict, uploads: list[tuple[str, Path]]) -> list[d
     return result
 
 
-def save_review(dsn: str, review: ExecutedReview, inputs: list[dict]) -> tuple[str, dict]:
+def save_review(dsn: str, review: ExecutedReview, inputs: list[dict], group_id: str | None = None) -> tuple[str, dict]:
+    """한 건을 저장하고 (run_id, 요약)을 돌려준다. group_id는 전체 실행 묶음(uuid 문자열) — 단독 실행이면 None."""
     summary = summary_for(review)
     run_id = str(uuid4())
+    if group_id is not None:
+        UUID(group_id)  # 형식이 틀리면 ValueError
     diagnostics = copy.deepcopy(review.result.diagnostics)
     # 요청이 끝나면 사라지는 임시 경로 대신 지속되는 입력 이름을 기록한다.
     names = {item["role"]: item["filename"] for item in inputs}
     diagnostics["inputs"] = {role: names.get(role) for role in diagnostics.get("inputs", {})}
     with psycopg.connect(dsn) as connection:
         connection.execute(
-            "INSERT INTO review_runs (id, check_name, module_code, verdict, engine_version) "
-            "VALUES (%s, %s, %s, %s, %s)",
-            (run_id, review.check, review.result.module_code, summary["검수결과"], version("ncs-f02-review")),
+            "INSERT INTO review_runs (id, check_name, module_code, verdict, engine_version, group_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (run_id, review.check, review.result.module_code, summary["검수결과"], version("ncs-f02-review"), group_id),
         )
         connection.execute(
             "INSERT INTO review_results (run_id, summary, sheet, diagnostics, findings, checklist) "
@@ -91,21 +94,80 @@ def save_review(dsn: str, review: ExecutedReview, inputs: list[dict]) -> tuple[s
 
 
 def list_reviews(dsn: str, *, module_code: str | None = None, check: str | None = None,
-                 verdict: str | None = None, limit: int = 50, offset: int = 0) -> list[dict]:
+                 verdict: str | None = None, standalone: bool = False, limit: int = 50, offset: int = 0) -> list[dict]:
+    """실행 목록(최신순). standalone=True면 전체 실행 묶음에 속하지 않은 단독 실행만."""
     clauses = []
     values: list = []
     for column, value in (("module_code", module_code), ("check_name", check), ("verdict", verdict)):
         if value:
             clauses.append(f"{column} = %s")
             values.append(value)
+    if standalone:
+        clauses.append("group_id IS NULL")
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
     with psycopg.connect(dsn, row_factory=dict_row) as connection:
         rows = connection.execute(
-            "SELECT id, created_at, check_name, module_code, verdict, engine_version, source "
+            "SELECT id, created_at, check_name, module_code, verdict, engine_version, source, group_id "
             "FROM review_runs" + where + " ORDER BY created_at DESC, id DESC LIMIT %s OFFSET %s",
             (*values, limit, offset),
         ).fetchall()
-    return [{**row, "id": str(row["id"]), "created_at": row["created_at"].isoformat()} for row in rows]
+    return [{**row, "id": str(row["id"]), "created_at": row["created_at"].isoformat(),
+             "group_id": str(row["group_id"]) if row["group_id"] else None} for row in rows]
+
+
+# 묶음 판정: 구성요소 하나라도 부적합이면 부적합, 아니면 판단불가가 있으면 판단불가, 모두 적합이면 적합.
+VERDICT_ORDER = ("부적합", "판단불가", "적합", "미검사")
+
+
+def group_verdict(verdicts: list[str]) -> str:
+    for candidate in VERDICT_ORDER:
+        if candidate in verdicts:
+            return candidate
+    return verdicts[0] if verdicts else "미검사"
+
+
+def list_groups(dsn: str, *, module_code: str | None = None, limit: int = 50, offset: int = 0) -> list[dict]:
+    """전체 실행 묶음 목록(최신순). 한 묶음 = 한 행: 시작 시각, 모듈, 들어 있는 검수 이름·판정, 묶음 판정."""
+    where = " AND module_code = %s" if module_code else ""
+    values: list = [module_code] if module_code else []
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        rows = connection.execute(
+            "SELECT group_id, min(created_at) AS created_at, module_code, "
+            "array_agg(check_name ORDER BY created_at, id) AS checks, array_agg(verdict ORDER BY created_at, id) AS verdicts "
+            "FROM review_runs WHERE group_id IS NOT NULL" + where +
+            " GROUP BY group_id, module_code ORDER BY min(created_at) DESC LIMIT %s OFFSET %s",
+            (*values, limit, offset),
+        ).fetchall()
+    return [{"group_id": str(row["group_id"]), "created_at": row["created_at"].isoformat(), "module_code": row["module_code"],
+             "checks": list(row["checks"]), "verdicts": list(row["verdicts"]), "verdict": group_verdict(list(row["verdicts"]))}
+            for row in rows]
+
+
+def get_group(dsn: str, group_id: str) -> dict | None:
+    """묶음 한 건: 실행 순서대로 각 검수의 전체 결과(get_review와 같은 모양) 목록."""
+    try:
+        UUID(group_id)
+    except ValueError:
+        return None
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        rows = connection.execute(
+            "SELECT id FROM review_runs WHERE group_id = %s ORDER BY created_at, id", (group_id,)
+        ).fetchall()
+    if not rows:
+        return None
+    runs = [found for found in (get_review(dsn, str(row["id"])) for row in rows) if found]
+    return {"group_id": group_id, "created_at": runs[0]["created_at"], "module_code": runs[0]["module_code"],
+            "verdict": group_verdict([run["verdict"] for run in runs]), "runs": runs}
+
+
+def delete_group(dsn: str, group_id: str) -> bool:
+    try:
+        UUID(group_id)
+    except ValueError:
+        return False
+    with psycopg.connect(dsn) as connection:
+        deleted = connection.execute("DELETE FROM review_runs WHERE group_id = %s", (group_id,)).rowcount
+    return deleted > 0
 
 
 def get_review(dsn: str, run_id: str) -> dict | None:

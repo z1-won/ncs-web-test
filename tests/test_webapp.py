@@ -86,6 +86,50 @@ class WebappTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["check"], "position")
 
+    def test_upload_token_runs_several_checks_on_one_upload(self):
+        """전체 실행의 서버 쪽 흐름: 업로드 1회 → 토큰으로 검수 여러 번 → 토큰 반납. 결과는 files로 직접 올린 것과 같다."""
+        created = self.client.post("/api/uploads", files=[
+            ("files", (p.name, p.read_bytes(), "application/octet-stream")) for p in (MANUSCRIPT, PLAN)
+        ])
+        self.assertEqual(created.status_code, 200, created.text)
+        token = created.json()
+        self.assertEqual(token["roles"], {"manuscript": MANUSCRIPT.name, "plan": PLAN.name})
+        self.assertEqual(sorted(token["files"]), sorted([MANUSCRIPT.name, PLAN.name]))
+        self.assertGreater(token["expires_in"], 0)
+        for check in ("position", "toc", "colophon"):
+            with self.subTest(check=check):
+                via_token = self.client.post("/api/review", data={"check": check, "upload": token["upload"], "group": token["group"]})
+                self.assertEqual(via_token.status_code, 200, via_token.text)
+                direct = self.upload(check).json()
+                self.assertEqual(via_token.json()["검수확인서"], direct["검수확인서"])
+                self.assertEqual(via_token.json()["group"], token["group"])
+                # 파일 저장소는 묶음 폴더 아래에 모아 둔다
+                self.assertEqual(Path(via_token.json()["저장"]["folder"]).parent, self.output / token["group"])
+        self.assertEqual(self.client.delete(f"/api/uploads/{token['upload']}").status_code, 204)
+        self.assertEqual(self.client.delete(f"/api/uploads/{token['upload']}").status_code, 404)
+        expired = self.client.post("/api/review", data={"check": "toc", "upload": token["upload"]})
+        self.assertEqual(expired.status_code, 400)
+        self.assertIn("만료", expired.json()["error"])
+
+    def test_upload_token_reports_missing_plan_and_rejects_bad_input(self):
+        only_manuscript = self.client.post("/api/uploads", files=[("files", (MANUSCRIPT.name, MANUSCRIPT.read_bytes()))]).json()
+        self.assertEqual(only_manuscript["roles"], {"manuscript": MANUSCRIPT.name, "plan": None})
+        # 개발계획서가 필요한 위치 검수는 토큰으로도 400 — 화면은 roles.plan이 없으면 위치를 건너뛴다
+        self.assertEqual(self.client.post("/api/review", data={"check": "position", "upload": only_manuscript["upload"]}).status_code, 400)
+        self.assertEqual(self.client.post("/api/review", data={"check": "toc", "upload": only_manuscript["upload"]}).status_code, 200)
+        for response in (
+            self.client.post("/api/uploads"),
+            self.client.post("/api/uploads", files={"files": ("empty.hwpx", b"")}),
+            self.client.post("/api/uploads", files={"files": ("bad.hwpx", b"invalid")}),
+            self.client.post("/api/review", data={"check": "toc", "upload": "no-such-token"}),
+            self.client.post("/api/review", data={"check": "toc", "upload": only_manuscript["upload"], "group": "other"}),
+            self.client.post("/api/review", data={"check": "toc", "group": "lonely"}, files={"files": (MANUSCRIPT.name, MANUSCRIPT.read_bytes())}),
+        ):
+            with self.subTest(body=response.text):
+                self.assertEqual(response.status_code, 400)
+                self.assertIsInstance(response.json()["error"], str)
+        self.assertEqual(len(self.client.app.state.uploads), 1, "실패한 업로드는 보관함에 남지 않는다")
+
     def test_health_reports_history_support(self):
         body = self.client.get("/api/health").json()
         self.assertEqual(body["checks"], list(PACKAGES))

@@ -70,6 +70,29 @@ class PostgresIntegrationTests(unittest.TestCase):
                     self.assertEqual(connection.execute(
                         f"SELECT count(*) FROM {table} WHERE run_id = %s", (web_id,)).fetchone()[0], 0, table)
             self.assertFalse(delete_review(DSN, "not-a-uuid"))
+
+            # 전체 실행 묶음: 토큰으로 두 검수 → /api/groups 한 줄 → 상세 → 삭제 시 묶음 전체가 지워진다
+            with TestClient(create_app(database_url=DSN)) as client:
+                token = client.post("/api/uploads", files=[
+                    ("files", (path.name, path.read_bytes())) for path in (MANUSCRIPT, PLAN)
+                ]).json()
+                group_ids = []
+                for check in ("position", "toc"):
+                    run = client.post("/api/review", data={"check": check, "upload": token["upload"], "group": token["group"]})
+                    self.assertEqual(run.status_code, 200, run.text)
+                    self.assertEqual(run.json()["group"], token["group"])
+                    group_ids.append(run.json()["id"])
+                ids.extend(group_ids)
+                groups = client.get("/api/groups").json()
+                mine = next(g for g in groups if g["group_id"] == token["group"])
+                self.assertEqual(mine["checks"], ["position", "toc"])
+                self.assertIn(mine["verdict"], ("적합", "부적합", "판단불가"))
+                self.assertTrue(all(row["id"] not in group_ids for row in client.get("/api/reviews?standalone=true").json()))
+                detail = client.get(f"/api/groups/{token['group']}").json()
+                self.assertEqual([run["check"] for run in detail["runs"]], ["position", "toc"])
+                self.assertEqual(client.delete(f"/api/groups/{token['group']}").status_code, 204)
+                self.assertEqual(client.get(f"/api/groups/{token['group']}").status_code, 404)
+                self.assertTrue(all(get_review(DSN, run_id) is None for run_id in group_ids))
         finally:
             with psycopg.connect(DSN) as connection:
                 for run_id in ids:

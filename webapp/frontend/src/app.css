@@ -101,3 +101,27 @@ details.raw pre {
 .tbl.findings td.path { font-size: var(--krds-pc-font-size-body-xsmall); color: var(--krds-light-color-text-subtle); word-break: keep-all; overflow-wrap: anywhere; }
 .tbl.findings td.long { white-space: pre-line; word-break: keep-all; overflow-wrap: anywhere; }
 .tbl.findings td.long .clamp { max-height: 16em; overflow: auto; }   /* 긴 목록(수정 제안 데이터 등)은 칸 안에서 스크롤 */
+
+/* ───── 전체 실행: 구성요소별 KRDS 아코디언 ───── */
+.result-head .toolbar { margin-left: auto; display: flex; gap: var(--krds-gap-2); }
+/* 아코디언 머리: 왼쪽 구성요소 이름, 오른쪽 상태(판정 배지 + 항목 수). KRDS 화살표(::after)는 버튼 오른쪽 여백에 그대로 둔다 */
+.all-results .acc-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--krds-gap-3); width: 100%; text-align: left; }
+.all-results .acc-name { font-weight: var(--krds-font-weight-bold); }
+.all-results .item-status { display: inline-flex; align-items: center; gap: var(--krds-gap-3); }
+.all-results .counts { display: inline-flex; gap: var(--krds-gap-3); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-subtle); }
+.all-results .count.pass { color: var(--krds-light-color-text-success); }
+.all-results .count.fail { color: var(--krds-light-color-text-danger); }
+.all-results .count.undecided { color: var(--krds-light-color-text-warning); }
+/* 대기·검사 중 칸은 아직 펼칠 내용이 없다 — 눌리지 않는 모양 */
+.all-results .btn-accordion:disabled { cursor: default; opacity: .75; }
+.all-results .btn-accordion:disabled::after { opacity: .3; }
+.all-results .accordion-item.status-running .btn-accordion { border-left: 3px solid var(--krds-light-color-border-primary); }
+/* KRDS 기본은 펼친 높이를 100vh로 제한한다 — 확인서 표가 길어도 잘리지 않게 푼다 */
+.all-results .accordion-item.active .accordion-collapse { max-height: none; }
+.all-results .accordion-body > .component-result { padding-top: var(--krds-padding-3); }
+.all-results .component-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-5); margin-top: var(--krds-gap-5); }
+.all-results .component-foot details { flex: 1 1 100%; }
+.all-results .component-foot summary { cursor: pointer; font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); }
+.all-results .component-foot details .krds-table-wrap { margin-top: var(--krds-gap-4); }
+/* KRDS 스피너는 기본이 가로·세로 100% 블록 — 머리글 안에서 글과 나란히 놓이게 크기를 글에 맞춘다 */
+.all-results .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); z-index: auto; }

@@ -21,7 +21,7 @@
 
 ## 공개 API (모든 검수 패키지 동일)
 `tests/test_engines.py`가 `ncs_service.registry.ENGINES`에 등록된 모든 엔진에 대해 이 계약을 검사한다(공개 이름, frozen `CheckConfig`, 체크리스트 행 키, 확인서 행이 F02 원문 항목과 일치, `reporting.REPORT_NAME`·`summary()`와 파일 요약 일치, 저장 파일·ZIP, 빈 규칙 목록, 다른 엔진 설정 거절).
-새 구성요소 엔진은 **`ENGINES`에 등록 → `src/ncs_web/server.py`의 `CheckName`·`/api/health`·오류 메시지 → `webapp/frontend/src/App.jsx`의 `CHECKS`** 세 곳을 같이 고친다. 하나라도 빠지면 같은 테스트가 알려 준다.
+새 구성요소 엔진은 **`ENGINES`에 등록 → `src/ncs_web/server.py`의 `CheckName`·`/api/health`·오류 메시지 → `webapp/frontend/src/App.jsx`의 `CHECKS`** 세 곳을 같이 고친다. 하나라도 빠지면 같은 테스트가 알려 준다. 화면의 **전체 실행**은 `/api/health`의 `engines` 순서를 그대로 돌리므로 따로 고칠 것이 없다(개발계획서 필요 여부도 `required`에서 읽는다).
 ```python
 run_review(paths, *, roles=None, module_code="", config=DEFAULT_CONFIG, rules=DEFAULT_RULES) -> ReviewResult
 prepare_review(manuscript: Document, plan: Document | None, *, module_code="", config=...) -> ReviewContext
