@@ -25,7 +25,7 @@ ncs-overview = "ncs_overview.__main__:main"
 ncs-knowledge = "ncs_knowledge.__main__:main"
 
 [tool.setuptools.package-data]
-ncs_core = ["data/*.txt"]
+ncs_core = ["data/*.txt", "data/*.tsv"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

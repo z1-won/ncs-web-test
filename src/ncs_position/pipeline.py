@@ -8,6 +8,7 @@ run_review: 둘을 이어 붙인 편의 함수.
 from collections.abc import Sequence
 
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
+from ncs_core.ncs_catalog import catalog
 from ncs_core.text import flatten
 
 from .config import DEFAULT_CONFIG, CheckConfig
@@ -31,26 +32,59 @@ def prepare_review(
         raise ValueError("지정한 위치 섹션이 없습니다. 문서 구조와 CheckConfig를 확인하세요")
     plan_lines = [l for section in plan.sections for l in section]
     front_lines = [l for l in manuscript.sections[config.front_section] if l]
+    plan_classification, plan_position = parse_classification(plan_lines), parse_position(plan.tables)
+    reference_classification, reference_position, source = catalog_reference(code)
+    if reference_position is None:
+        reference_classification, reference_position, source = plan_classification, plan_position, "개발계획서"
+    elif plan_position["세분류"]:
+        # ② 소분류의 세분류 목록: '학습모듈 분류보기'에는 학습모듈이 개발된 세분류만 있어 전체 목록이 아니다(온디바이스AIoT처럼
+        # 신설 세분류가 빠짐). 개발계획서가 세분류 목록을 적었으면 그것을 쓴다.
+        reference_position = {**reference_position, "세분류": plan_position["세분류"]}
     return ReviewContext(
         manuscript,
         plan,
         code,
         config,
-        parse_classification(plan_lines),
+        reference_classification,
         parse_classification(front_lines),
-        parse_position(plan.tables),
+        reference_position,
         parse_position(manuscript.tables),
         find_styled_position_table(manuscript.tables) if manuscript.has_styles else None,
         parse_plan_module_name(plan.sections, code),
+        source,
+        plan_classification if source != "개발계획서" else None,
+        plan_position if source != "개발계획서" else None,
     )
+
+
+def catalog_reference(module_code: str) -> tuple[dict | None, dict | None, str]:
+    """NCS 목록에서 이 모듈의 세분류를 찾아 위치 표의 기준값을 만든다. 없으면 (None, None, '').
+
+    세분류 목록 = 같은 소분류의 세분류(코드 순), 능력단위·학습모듈명 = 세분류의 능력단위명(NCS 학습모듈명은 능력단위명을 쓴다).
+    """
+    cat = catalog()
+    sub = cat.subclass(module_code) if cat else None
+    if sub is None:
+        return None, None, ""
+    names = [u.name for u in sub.units]
+    position = {
+        "세분류": [s.name for s in cat.subclasses_of_small(sub.code)],
+        "능력단위": names,
+        "학습모듈명": names,
+        "행쌍": [(n, n) for n in names],
+    }
+    return dict(sub.names), position, "NCS 목록"
 
 
 def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     warnings = []
+    basis = context.reference_source
     if len(context.plan_classification) < 3:
-        warnings.append("개발계획서에서 대·중·소분류를 모두 읽지 못했습니다")
+        warnings.append(f"{basis}에서 대·중·소분류를 모두 읽지 못했습니다")
     if not context.plan_position["세분류"] and not context.plan_position["능력단위"]:
-        warnings.append("개발계획서에서 세분류·능력단위·학습모듈명 표를 찾지 못했습니다")
+        warnings.append(f"{basis}에서 세분류·능력단위·학습모듈명 표를 찾지 못했습니다")
+    if basis == "개발계획서":
+        warnings.append("NCS 목록에 이 세분류가 없어 개발계획서를 기준으로 비교했습니다 (scripts/build_ncs_catalog.py로 목록 갱신)")
     if context.plan_module_name is None:
         warnings.append("개발계획서 학습모듈명을 읽지 못해 ⑤의 해당 행은 모듈 코드 번호로 정합니다")
     if not context.manuscript.has_styles:
@@ -60,6 +94,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         "module_code": context.module_code,
         "inputs": {"manuscript": str(context.manuscript.path), "plan": str(context.plan.path)},
         "format": context.manuscript.format,
+        "reference": context.reference_source,
         "sections": {"front": context.config.front_section},
         "counts": {
             "classification": len(context.manuscript_classification),

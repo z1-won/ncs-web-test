@@ -5,7 +5,11 @@
 """
 
 import json
+import os
 from pathlib import Path
+
+# 합성 원고·계획서는 실제 NCS와 다른 값을 쓰므로 NCS 목록을 끄고(개발계획서 기준) 돌린다. 목록 자체는 test_ncs_catalog가 검사한다.
+os.environ.setdefault("NCS_CATALOG_FILE", str(Path(__file__).with_name("no_catalog.tsv")))
 
 from ncs_service import ReviewRequest, execute_review
 from ncs_service.registry import ENGINES

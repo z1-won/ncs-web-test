@@ -13,7 +13,7 @@ class DiffTests(unittest.TestCase):
     def test_summary_counts_missing_and_changed(self):
         content, order, notes, info = list_diff("세분류", PLAN["세분류"], PLAN["세분류"][:8])
         self.assertEqual((content, order, len(info["missing"])), ("X", "O", 10))
-        self.assertEqual(summarize_diff("세분류", info), "세분류 원고 8 / 개발계획서 18 · 누락 10(세분류9, 세분류10, 세분류11 외 7)")
+        self.assertEqual(summarize_diff("세분류", info), "세분류 원고 8 / 개발계획서 18 · 누락 10(개발계획서에만: 세분류9, 세분류10, 세분류11 외 7)")
         content, order, notes, info = list_diff("능력단위", ["가", "나", "다"], ["가", "라", "다"])
         self.assertEqual(summarize_diff("능력단위", info), "능력단위 다름 1: 원고 「라」 / 개발계획서 「나」 — 글자가 다름")
         # 띄어쓰기 하나 차이도 어느 문서의 어떤 문구인지 각각 보인다

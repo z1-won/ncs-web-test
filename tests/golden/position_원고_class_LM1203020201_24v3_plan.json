@@ -164,10 +164,13 @@
   ],
   "module_code": "LM1203020201_24v3",
   "not_implemented": [],
+  "reference": "개발계획서",
   "sections": {
    "front": 0
   },
-  "warnings": []
+  "warnings": [
+   "NCS 목록에 이 세분류가 없어 개발계획서를 기준으로 비교했습니다 (scripts/build_ncs_catalog.py로 목록 갱신)"
+  ]
  },
  "findings": [
   {

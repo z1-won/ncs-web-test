@@ -7,8 +7,10 @@ from .rules.emphasis import check_emphasis
 from .rules.position import check_position
 
 DEFAULT_RULES = (
-    Rule("classification", "F02-위치-①", lambda c: check_classification(c.plan_classification, c.manuscript_classification)),
-    Rule("position", "F02-위치-②③④", lambda c: check_position(c.plan_position, c.manuscript_position)),
+    Rule("classification", "F02-위치-①",
+         lambda c: check_classification(c.plan_classification, c.manuscript_classification, basis=c.reference_source, plan=c.plan_only_classification)),
+    Rule("position", "F02-위치-②③④",
+         lambda c: check_position(c.plan_position, c.manuscript_position, basis=c.reference_source, plan_only=c.plan_only_position)),
     Rule(
         "emphasis",
         "F02-위치-⑤",
