@@ -221,7 +221,8 @@ export default function App() {
           <div className="form-conts">
             <input ref={fileInput} id="files" type="file" multiple accept=".hwp,.hwpx" className="sr-only" tabIndex={-1} aria-describedby="files-hint"
                    onChange={(e) => setFiles(Array.from(e.target.files || []))} />
-            <button type="button" className="krds-btn medium tertiary" disabled={busy} onClick={() => fileInput.current?.click()}>파일 선택</button>
+            {/* 셀렉트·입력칸과 같은 large 높이(--krds-size-height large)로 세 칸의 규격을 맞춘다 */}
+            <button type="button" className="krds-btn large tertiary" disabled={busy} onClick={() => fileInput.current?.click()}>파일 선택</button>
           </div>
           {/* 고른 즉시 서버가 내용으로 역할을 판별해 파일명 뒤에 적어 준다(원고/개발계획서). 실행 전에 '개발계획서 없음'을 알 수 있다 */}
           <p className="form-hint" id="files-hint">
