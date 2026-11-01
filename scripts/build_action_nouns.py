@@ -2,9 +2,10 @@
 
 검수 실행은 이 스크립트와 무관하다(네트워크를 쓰지 않고 목록 파일만 읽는다). 개발자가 가끔 돌린다.
 
-판정 방법: 단어 W를 search.do로 찾아 명사 항목들의 target_code를 얻고, 각각을 view.do로 열어
-파생어·관련어 가운데 'W하다'(또는 'W-하다') 동사가 있으면 행동명사로 본다. 없으면 'W하다'를 직접 검색해
-동사 표제어가 있는지 한 번 더 본다. 둘 다 없으면 '미확정'으로 남겨 사람이 결정한다(사전에 없음 ≠ 틀림).
+판정 방법: 'W하다'를 search.do로 정확 검색해 동사 표제어('설계-하다' 「동사」)가 있으면 행동명사로 본다.
+없으면 W 자체를 검색해 명사 표제어가 있는지 보고, 있으면 "사전상 '-하다' 근거 없음", 없으면 "표제어 없음"으로
+남겨 사람이 결정한다(사전에 없음 ≠ 틀림). view.do는 쓰지 않는다 — 명사 항목의 lexical_info에는 반대말·비슷한말만
+있고 파생어('W하다')는 실려 있지 않음을 확인했다(2026-11-01, '설계' target_code 174276).
 
 사용 (저장소 루트, .env의 STDICT_API_KEY 필요):
   set -a; source .env; set +a
@@ -12,7 +13,7 @@
   python scripts/build_action_nouns.py --from-file 후보.txt      # 한 줄 한 단어
   python scripts/build_action_nouns.py --from-results webapp/결과 # 차례② 결과 JSON에서 △ 단어 수집
   python scripts/build_action_nouns.py --debug 분석              # 첫 단어의 원응답을 scripts/.stdict_debug.json에 저장
-응답은 scripts/.stdict_cache.json에 캐시되어 같은 단어를 다시 묻지 않는다.
+응답(XML)은 scripts/.stdict_cache.json에 캐시되어 같은 단어를 다시 묻지 않는다. --debug는 첫 원응답을 scripts/.stdict_debug.xml에 둔다.
 """
 
 from __future__ import annotations
@@ -26,14 +27,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date
+from xml.etree import ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LEXICON = ROOT / "src" / "ncs_core" / "data" / "action_nouns.txt"
 CACHE = Path(__file__).resolve().parent / ".stdict_cache.json"
-DEBUG = Path(__file__).resolve().parent / ".stdict_debug.json"
+DEBUG = Path(__file__).resolve().parent / ".stdict_debug.xml"
 SEARCH_URL = "https://stdict.korean.go.kr/api/search.do"
-VIEW_URL = "https://stdict.korean.go.kr/api/view.do"
 PAUSE = 0.2  # 초. 연속 호출 간격
 
 
@@ -43,77 +44,70 @@ class Api:
         self.cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
         self.calls = 0
 
-    def _get(self, url: str, params: dict) -> dict:
+    def _get(self, url: str, params: dict) -> ET.Element:
+        """XML(기본 형식)로 요청해 루트 요소를 돌려준다. 캐시에는 XML 문자열을 둔다(키는 포함하지 않음)."""
         key = url + "?" + urllib.parse.urlencode(sorted(params.items()))
-        if key in self.cache:
-            return self.cache[key]
-        query = urllib.parse.urlencode({**params, "key": self.key, "req_type": "json"})
-        with urllib.request.urlopen(f"{url}?{query}", timeout=20) as response:
-            raw = response.read().decode("utf-8")
+        cached = self.cache.get(key)
+        if isinstance(cached, str) and cached.strip():  # 옛 형식(dict)·빈 항목은 다시 조회
+            return ET.fromstring(cached)
+        query = urllib.parse.urlencode({**params, "key": self.key})
+        request = urllib.request.Request(f"{url}?{query}", headers={"User-Agent": "ncs-f02-review/0.1"})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            status, headers = response.status, dict(response.headers)
+            raw = response.read().decode("utf-8", errors="replace")
         self.calls += 1
         time.sleep(PAUSE)
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            raise SystemExit(f"JSON이 아닌 응답(키 오류·한도 초과일 수 있음):\n{raw[:500]}")
         if self.debug and not DEBUG.exists():
-            DEBUG.write_text(json.dumps({"request": key, "response": data}, ensure_ascii=False, indent=1), encoding="utf-8")
-        self.cache[key] = data
-        return data
+            DEBUG.write_text(f"<!-- {key}\n HTTP {status} {headers} -->\n{raw}", encoding="utf-8")
+        if not raw.strip():
+            raise SystemExit(
+                f"빈 응답 (HTTP {status}, Content-Type {headers.get('Content-Type')}). "
+                "인증키가 틀렸거나 승인 전이거나 일일 한도를 넘었을 수 있습니다. "
+                "브라우저에서 같은 주소를 열어 메시지를 확인하세요:\n"
+                f"  {url}?{urllib.parse.urlencode({**params, 'key': '<키>'})}"
+            )
+        try:
+            root = ET.fromstring(raw)
+        except ET.ParseError:
+            raise SystemExit(f"XML이 아닌 응답(HTTP {status}):\n{raw[:800]}")
+        error = root.find(".//error_code")
+        if error is not None:
+            message = root.findtext(".//message") or ""
+            raise SystemExit(f"API 오류 {error.text}: {message}  ({key})")
+        self.cache[key] = raw
+        return root
 
     def search(self, word: str) -> list[dict]:
-        data = self._get(SEARCH_URL, {"q": word, "advanced": "y", "method": "exact", "type_search": "search", "num": 50})
-        items = (data.get("channel") or {}).get("item") or []
-        return items if isinstance(items, list) else [items]
-
-    def view(self, target_code: str) -> dict:
-        data = self._get(VIEW_URL, {"q": str(target_code), "method": "target_code"})
-        return (data.get("channel") or {}).get("item") or {}
+        """→ [{'word','pos','target_code'}]. 띄어쓰기·'-'·'^' 표기는 word에 그대로 둔다."""
+        root = self._get(SEARCH_URL, {"q": word, "advanced": "y", "method": "exact", "type_search": "search", "num": 50})
+        items = []
+        for item in root.iter("item"):
+            items.append({
+                "word": item.findtext("word", default=""),
+                "pos": item.findtext("pos", default="") or item.findtext(".//pos", default=""),
+                "target_code": item.findtext("target_code", default=""),
+            })
+        return items
 
     def save(self) -> None:
-        self.cache_path.write_text(json.dumps(self.cache, ensure_ascii=False, indent=1), encoding="utf-8")
-
-
-def _walk(value):
-    """중첩 dict/list를 모두 돌며 dict만 낸다."""
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _walk(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk(child)
+        self.cache_path.write_text(json.dumps(self.cache, ensure_ascii=False), encoding="utf-8")
 
 
 def _plain(word: str) -> str:
     return word.replace("-", "").replace("^", "").replace(" ", "")
 
 
-def has_hada_derivative(entry: dict, word: str) -> bool:
-    """view.do 항목 안의 파생어·관련어에 'W하다'가 있는가."""
-    target = word + "하다"
-    for node in _walk(entry):
-        text = node.get("word")
-        kind = str(node.get("type", "")) + str(node.get("relation_type", "")) + str(node.get("link_type", ""))
-        if isinstance(text, str) and _plain(text) == target and ("파생" in kind or "관련" in kind or kind == ""):
-            return True
-    return False
-
-
 def is_action_noun(api: Api, word: str) -> tuple[bool | None, str]:
     """→ (True 행동명사 / False 사전상 근거 없음 / None 사전에 단어 없음, 근거)."""
-    items = api.search(word)
-    nouns = [it for it in items if _plain(str(it.get("word", ""))) == word and "명사" in str(it.get("pos", ""))]
-    if not items:
-        return None, "표제어 없음"
-    for it in nouns:
-        code = it.get("target_code")
-        if code and has_hada_derivative(api.view(code), word):
-            return True, f"'{word}' 명사 항목(target_code {code})의 파생어 '{word}하다'"
-    verbs = [it for it in api.search(word + "하다") if "동사" in str(it.get("pos", ""))]
+    target = word + "하다"
+    verbs = [it for it in api.search(target) if _plain(it["word"]) == target and "동사" in it["pos"]]
     if verbs:
-        return True, f"'{word}하다' 동사 표제어(target_code {verbs[0].get('target_code')})"
-    return False, "명사 항목은 있으나 '-하다' 파생어·동사 표제어 없음" if nouns else "명사 표제어 없음"
+        return True, f"'{verbs[0]['word']}' 동사 표제어(target_code {verbs[0]['target_code']})"
+    nouns = [it for it in api.search(word) if _plain(it["word"]) == word]
+    if nouns:
+        kinds = sorted({it["pos"] for it in nouns})
+        return False, f"'{word}' 표제어({', '.join(kinds)})는 있으나 '{target}' 동사 표제어 없음"
+    return None, f"'{word}' 표제어 없음"
 
 
 def read_lexicon() -> dict[str, tuple[str, str]]:
@@ -146,7 +140,7 @@ def main() -> None:
     parser.add_argument("words", nargs="*")
     parser.add_argument("--from-file", type=Path)
     parser.add_argument("--from-results", type=Path, help="검수 결과 폴더(차례② JSON의 △ 단어 수집)")
-    parser.add_argument("--debug", action="store_true", help="첫 API 원응답을 scripts/.stdict_debug.json에 저장")
+    parser.add_argument("--debug", action="store_true", help="첫 API 원응답을 scripts/.stdict_debug.xml에 저장")
     parser.add_argument("--dry-run", action="store_true", help="목록 파일을 쓰지 않고 결과만 출력")
     args = parser.parse_args()
 

@@ -12,4 +12,4 @@ __pycache__/
 /build/
 /dist/
 *.egg-info/
-scripts/.stdict_debug.json
+scripts/.stdict_debug.xml
