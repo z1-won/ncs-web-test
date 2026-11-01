@@ -5,7 +5,6 @@ import { ALL_CHECK, ALL_OPTION, CHECKS, checksFromEngines } from "./lib/checks.j
 import { formatDate } from "./lib/format.jsx";
 import { AllResults, ComponentResult } from "./components/AllResults.jsx";
 import { Badge, Spinner } from "./components/Badge.jsx";
-import { FileUpload } from "./components/FileUpload.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
 import { KrdsSelect } from "./components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
@@ -28,6 +27,7 @@ export default function App() {
   const uploadRef = useRef(upload);
   uploadRef.current = upload;
   const aborter = useRef(null);      // 진행 중 요청의 AbortController — 취소 버튼
+  const fileInput = useRef(null);    // 숨긴 <input type=file> — 진짜 <button>이 대신 열어 키보드(Enter/Space)로도 동작
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
   const [historyExpanded, setHistoryExpanded] = useState(false); // 이력은 기본 최근 5건만, '더 보기'로 전체
   const [deleting, setDeleting] = useState(false);
@@ -216,12 +216,24 @@ export default function App() {
           </p>
         </div>
 
-        <div className="form-group form-files">
+        <div className="form-group">
           <div className="form-tit"><label htmlFor="files">파일</label></div>
           <div className="form-conts">
-            <FileUpload files={files} onChange={setFiles} upload={upload} disabled={busy} />
+            <input ref={fileInput} id="files" type="file" multiple accept=".hwp,.hwpx" className="sr-only" tabIndex={-1} aria-describedby="files-hint"
+                   onChange={(e) => setFiles(Array.from(e.target.files || []))} />
+            <button type="button" className="krds-btn medium tertiary" disabled={busy} onClick={() => fileInput.current?.click()}>파일 선택</button>
           </div>
-          {/* 실행 전에 알 수 있는 것: 고른 구성요소에 개발계획서가 필요한데 없음 */}
+          {/* 고른 즉시 서버가 내용으로 역할을 판별해 파일명 뒤에 적어 준다(원고/개발계획서). 실행 전에 '개발계획서 없음'을 알 수 있다 */}
+          <p className="form-hint" id="files-hint">
+            {!files.length ? "선택된 파일 없음"
+              : upload.status === "uploading" ? `${files.map((f) => f.name).join(", ")} — 역할 확인 중…`
+              : files.map((f) => {
+                const role = upload.status !== "ready" ? null
+                  : upload.roles?.manuscript === f.name ? "원고" : upload.roles?.plan === f.name ? "개발계획서" : "역할 미판별";
+                return role ? `${f.name} (${role})` : f.name;
+              }).join(", ")}
+          </p>
+          {upload.status === "error" && <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{upload.error}</p>}
           {upload.status === "ready" && !upload.roles?.plan && (selected.required || []).includes("plan") && (
             <p className="form-hint-invalid">이 구성요소는 개발계획서가 필요합니다. 개발계획서를 함께 올리세요.</p>
           )}
