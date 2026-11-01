@@ -21,7 +21,7 @@ DEFAULT_RULES = (
     Rule("goals", "F02-필요지식-⑤", lambda c: check_goals(c.plan_goals, c.units)),
     Rule("numbering", "F02-필요지식-⑥", lambda c: check_numbering(c.body, c.units, c.table_paragraphs, c.manuscript.section_numbers(c.config.body_section))),
     Rule("figures", "F02-필요지식-⑦", lambda c: check_figures(_sections(c), c.labels, min_agreement=c.config.figtab_min_agreement)),
-    Rule("sources", "F02-필요지식-⑧", lambda c: check_sources(_sections(c)[1], 1, c.labels["caps"], c.table_paragraphs, lookback=c.config.source_lookback, lookahead=c.config.source_lookahead)),
+    Rule("sources", "F02-필요지식-⑧", lambda c: check_sources(_sections(c)[1], 1, c.labels["caps"], c.table_paragraphs, lookback=c.config.source_lookback, lookahead=c.config.source_lookahead, lesson_spans=c.labels["lesson_spans"])),
 )
 
 ALL_ITEM_IDS = tuple("F02-필요지식-" + n for n in "①②③④⑤⑥⑦⑧")
