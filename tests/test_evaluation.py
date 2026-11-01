@@ -22,12 +22,19 @@ class EvaluationTests(unittest.TestCase):
     def result(self, ms=None, plan=True):
         return evaluate_review(prepare_review(ms or self.ms, self.plan if plan else None))
 
-    def test_complete_fixture_passes_only_item_one(self):
+    @staticmethod
+    def item_one(result):
+        """①의 행만. ②③은 같은 구역을 다른 기준으로 보므로 ① 검증에서는 뺀다."""
+        return [r for r in result.checklist if r["item_id"] == "F02-평가-①"]
+
+    def test_complete_fixture_passes_item_one(self):
         result = self.result()
-        self.assertEqual({r["판정"] for r in result.checklist}, {"적합"})
-        self.assertEqual([r["검수결과"] for r in result.sheet], ["적합"] + ["미검사"] * 4)
-        self.assertEqual(len([r for r in result.checklist if "평가 준거 >" in r["region_path"]]), 2)
-        self.assertEqual(len([r for r in result.checklist if "평가 방법 >" in r["region_path"]]), 2)
+        rows = self.item_one(result)
+        self.assertEqual({r["판정"] for r in rows}, {"적합"})
+        self.assertEqual(result.sheet[0]["검수결과"], "적합")
+        self.assertEqual([r["검수결과"] for r in result.sheet[3:]], ["미검사"] * 2)
+        self.assertEqual(len([r for r in rows if "평가 준거 >" in r["region_path"]]), 2)
+        self.assertEqual(len([r for r in rows if "평가 방법 >" in r["region_path"]]), 2)
 
     def test_no_plan_does_not_fall_back_to_toc(self):
         self.assertEqual(self.result(plan=False).sheet[0]["검수결과"], "판단불가")
@@ -35,7 +42,7 @@ class EvaluationTests(unittest.TestCase):
     def test_missing_method_table_cannot_pass(self):
         tables = [t for t in self.ms.tables if "학습 목표" in t["cells"].values() or t["section"] == 0]
         result = self.result(replace(self.ms, tables=tables))
-        method_rows = [r for r in result.checklist if r["region_path"].endswith("평가 방법")]
+        method_rows = [r for r in self.item_one(result) if r["region_path"].endswith("평가 방법")]
         self.assertEqual(len(method_rows), 2)
         self.assertEqual({r["판정"] for r in method_rows}, {"판단불가"})
 
@@ -44,8 +51,9 @@ class EvaluationTests(unittest.TestCase):
         target = next(t for t in tables if t["section"] == 1 and "학습 목표" not in t["cells"].values())
         target["cells"][(1, 0)] = "잘못된 학습 내용명"
         result = self.result(replace(self.ms, tables=tables))
-        self.assertTrue(any(r["판정"] == "부적합" and "평가 방법" in r["region_path"] for r in result.checklist))
-        self.assertTrue(all(r["판정"] == "적합" for r in result.checklist if "평가 준거" in r["region_path"]))
+        rows = self.item_one(result)
+        self.assertTrue(any(r["판정"] == "부적합" and "평가 방법" in r["region_path"] for r in rows))
+        self.assertTrue(all(r["판정"] == "적합" for r in rows if "평가 준거" in r["region_path"]))
 
     def test_numbered_names_are_compared_by_id_not_order(self):
         expected = {(1, 1): "가 분석", (1, 2): "나 분석"}

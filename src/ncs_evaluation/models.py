@@ -14,3 +14,5 @@ class ReviewContext:
     overview: dict | None
     plan_toc: dict | None
     body: dict
+    regions: list[dict]          # region.eval_regions — 학습별 평가 구역(준거 표·방법 목록)
+    plan_goals: dict | None      # ncs_core.manuscript.parse_plan_goals — 계획서 학습 내용별 학습 목표

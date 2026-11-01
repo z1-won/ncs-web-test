@@ -1,10 +1,11 @@
-"""공통 파서로 문맥을 준비하고 평가 ① 규칙을 실행한다."""
+"""공통 파서로 문맥을 준비하고 평가 ①②③ 규칙을 실행한다."""
 from collections.abc import Sequence
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
-from ncs_core.manuscript import parse_body, parse_overview, parse_plan_toc, parse_toc, section_presence
+from ncs_core.manuscript import parse_body, parse_overview, parse_plan_goals, parse_plan_toc, parse_toc, section_presence
 from ncs_core.text import flatten
 from .config import DEFAULT_CONFIG, CheckConfig
 from .models import ReviewContext
+from .region import eval_regions
 from .registry import ALL_ITEM_IDS, DEFAULT_RULES
 from .sheet import sheet
 
@@ -22,7 +23,21 @@ def prepare_review(manuscript: Document, plan: Document | None = None, *, module
     body = parse_body(sections, len((toc or {}).get("학습", [])),
                       cutoff=presence["참고 자료"]["k"],
                       table_paragraphs=manuscript.section_table_paragraphs(config.body_section))
-    return ReviewContext(manuscript, plan, code, config, toc, overview, plan_toc, body)
+    regions = eval_regions(manuscript, body, config.body_section)
+    plan_goals = parse_plan_goals(plan, code) if plan else None
+    return ReviewContext(manuscript, plan, code, config, toc, overview, plan_toc, body, regions, plan_goals)
+
+
+def _warnings(context: ReviewContext) -> list[str]:
+    warnings = ["평가 ①②③을 검사합니다(④⑤ 미구현). 표 구조·학습 연결이 불명확하면 판단불가입니다."]
+    if context.plan is None:
+        warnings.append("개발계획서가 없어 ② 학습 목표 대조는 생략(-)입니다")
+    elif context.plan_goals is None:
+        warnings.append("개발계획서에서 이 모듈 코드의 블록을 찾지 못했습니다. ②는 생략(-)입니다")
+    missing = [str(r["lesson"]) for r in context.regions if not r["found"]]
+    if missing:
+        warnings.append("평가 구역을 찾지 못한 학습: " + ", ".join(missing))
+    return warnings
 
 
 def evaluate_review(context: ReviewContext, *, rules: Sequence[Rule] = DEFAULT_RULES) -> ReviewResult:
@@ -32,7 +47,9 @@ def evaluate_review(context: ReviewContext, *, rules: Sequence[Rule] = DEFAULT_R
         "module_code": context.module_code,
         "implemented": implemented,
         "not_implemented": [i for i in ALL_ITEM_IDS if i not in implemented],
-        "warnings": ["평가 ①만 검사합니다. 표 구조·학습 연결이 불명확하면 판단불가입니다."],
+        "warnings": _warnings(context),
+        "counts": {"lessons": len(context.regions), "criteria_tables": sum(r["criteria_tables"] for r in context.regions),
+                   "methods": sum(len(r["methods"]) for r in context.regions)},
         "inputs": {"manuscript": str(context.manuscript.path),
                    "plan": str(context.plan.path) if context.plan else None},
         "sections": {"front": context.config.front_section, "body": context.config.body_section},

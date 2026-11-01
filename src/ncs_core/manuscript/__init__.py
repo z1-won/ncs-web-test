@@ -7,6 +7,7 @@ from .body import parse_body
 from .config import DEFAULT_PARSE_CONFIG, ParseConfig
 from .names import HEAD_NUMBER, diff_list, norm, pua_note, same
 from .overview import parse_overview, parse_plan, split_items
+from .plan_goals import parse_plan_goals
 from .presence import section_presence
 from .toc import parse_plan_toc, parse_toc
 
@@ -19,6 +20,7 @@ __all__ = [
     "parse_body",
     "parse_overview",
     "parse_plan",
+    "parse_plan_goals",
     "parse_plan_toc",
     "parse_toc",
     "pua_note",
