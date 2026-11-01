@@ -2,6 +2,7 @@
 
 from ncs_core import Rule
 
+from .rules.action_nouns import check_toc2
 from .rules.consistency import check_toc3
 from .rules.names import check_toc1
 from .rules.placement import check_toc4
@@ -15,11 +16,12 @@ def _check_toc4(c):
 
 DEFAULT_RULES = (
     Rule("names", "F02-차례-①", lambda c: check_toc1(c.plan_toc, c.toc)),
+    Rule("action_nouns", "F02-차례-②", lambda c: check_toc2(c.toc)),
     Rule("consistency", "F02-차례-③", lambda c: check_toc3(c.plan_toc, c.toc, c.overview, c.body, c.eval_tables)),
     Rule("placement", "F02-차례-④", _check_toc4),
     Rule("references", "F02-차례-⑤", lambda c: check_toc5(c.presence, c.toc)),
     Rule("appendix", "F02-차례-⑥", lambda c: check_toc6(c.presence, c.toc)),
 )
 
-# 차례 항목 ①~⑦ 중 규칙이 없는 것은 진단의 not_implemented로 보고한다.
+# 차례 항목 ①~⑦ 중 규칙이 없는 것(⑦: hwpx에 쪽 번호가 없어 불가)은 진단의 not_implemented로 보고한다.
 ALL_ITEM_IDS = tuple("F02-차례-" + n for n in "①②③④⑤⑥⑦")

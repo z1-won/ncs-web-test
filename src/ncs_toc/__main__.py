@@ -10,7 +10,7 @@ from . import CheckConfig
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="F02 차례 ①·③·④·⑤·⑥ 검수")
+    parser = argparse.ArgumentParser(description="F02 차례 ①~⑥ 검수")
     parser.add_argument("paths", nargs="+", help="원고와 (선택) 개발계획서. 순서 무관, 내용으로 역할 판별")
     parser.add_argument("--manuscript", help="자동 역할 판별 대신 원고로 지정할 입력 경로")
     parser.add_argument("--plan", help="자동 역할 판별 대신 개발계획서로 지정할 입력 경로")

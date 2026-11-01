@@ -15,6 +15,7 @@
   `compare.py`(목록 비교 도우미) · `parsers.py`(그 패키지 고유 추출, I/O 없음) · `models.py`(`ReviewContext`) ·
   `rules/<규칙>.py`(판정, I/O 없음) · `registry.py`(`DEFAULT_RULES`, `ALL_ITEM_IDS`) · `pipeline.py` ·
   `reporting.py`(`REPORT_NAME`, `ITEM_FILES`, `summary(result)`, `save_results`) · `__main__.py`.
+- 단어 지식이 필요한 판정(행동명사 등)은 `ncs_core/data/*.txt` 목록으로 한다. 검수 실행 중 네트워크·외부 분석기를 쓰지 않는다. 목록은 `scripts/`의 갱신 스크립트(국립국어원 API)와 사람 승인으로 키우고 git으로 이력을 남긴다.
 - 엔진 목록(check 이름)의 원본은 `ncs_service.registry.ENGINES` 하나다. 다른 코드(DB 저장, 이관, SQL 제약)에 엔진 이름을 다시 적지 않고 `ENGINES`를 순회하거나 엔진 `reporting`의 `REPORT_NAME`을 읽는다.
 - 규칙은 `Rule(key, item_prefix, run)`으로 등록한다. `run`은 `ReviewContext` 하나를 받아 체크리스트 행 목록을 돌려주고, 행의 `item_id`는 `item_prefix`로 시작해야 한다.
 

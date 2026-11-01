@@ -1,4 +1,4 @@
-"""F02 차례 ①·③·④·⑤·⑥ 검수. 읽기·판정·저장은 ncs_core, 차례·개요·본문 파서는 ncs_core.manuscript를 쓴다."""
+"""F02 차례 ①~⑥ 검수. 읽기·판정·저장은 ncs_core, 차례·개요·본문 파서는 ncs_core.manuscript를 쓴다."""
 
 from ncs_core import ReviewResult, SavedReport
 
