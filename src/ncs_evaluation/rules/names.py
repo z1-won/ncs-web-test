@@ -115,30 +115,28 @@ def check_names(context):
         rows.append(row(f"section{body_section} > 본문·평가", TRI,
                         note="내비게이터로 식별한 학습 구간과 계획서의 학습 번호가 달라 평가표 소속을 확정하지 못함"))
         return rows
-    table_paragraphs = context.manuscript.section_table_paragraphs(body_section)
-    if table_paragraphs is None:
-        rows.append(row(f"section{body_section} > 필요 지식", TRI,
-                        note="표 내부 명칭과 본문 제목을 구별할 수 없음. HWPX 입력 필요"))
-    else:
-        # parse_body가 중복 번호를 합치는 동작을 사용하지 않고 표 밖 제목을 직접 수집한다.
-        for lesson in lessons:
-            items = []
-            split_heading = False
-            start, end = lesson["raw_span"]
-            for p in range(start, end):
-                if p in table_paragraphs:
-                    continue
-                value = context.manuscript.sections[body_section][p]
-                match = NUMBERED.fullmatch(value)
-                if match:
-                    items.append({"no": int(match[1]), "sub": int(match[2]), "text": match[3]})
-                elif re.fullmatch(r"\d+\s*-\s*\d+\s*\.", value):
-                    split_heading = True
-                    rows.append(row(f"section{body_section} > 문단 {p}", TRI,
-                                    note="번호와 제목이 다른 문단으로 분리되어 제목 연결 확인 필요"))
-            if not split_heading:
-                own = {key: value for key, value in expected.items() if key[0] == lesson["no"]}
-                rows.append(compare_indexed(f"section{body_section} > 학습 {lesson['no']} > 필요 지식", items, own))
+    # 본문 학습 내용 제목: 'N-M. 제목' 한 문단, 또는 'N-M.' 문단 + 다음 문단(제목) — 실데이터는 둘 다 틀(표) 안에 있으므로
+    # 표 안 문단도 본다. parse_body처럼 중복 번호를 합치지 않고 전부 모아 indexed()가 중복을 잡게 둔다.
+    paragraphs = context.manuscript.sections[body_section]
+    for lesson in lessons:
+        items = []
+        start, end = lesson["raw_span"]
+        p = start
+        while p < end:
+            value = paragraphs[p].strip()
+            match = NUMBERED.fullmatch(value)
+            if match:
+                items.append({"no": int(match[1]), "sub": int(match[2]), "text": match[3]})
+            elif (m := re.fullmatch(r"(\d+)\s*-\s*(\d+)\s*\.", value)):
+                q = next((j for j in range(p + 1, min(p + 6, end)) if paragraphs[j].strip()), None)
+                if q is None or NUMBERED.fullmatch(paragraphs[q].strip()):
+                    rows.append(row(f"section{body_section} > 문단 {p}", TRI, note="번호만 있고 제목 문단을 찾지 못함"))
+                else:
+                    items.append({"no": int(m[1]), "sub": int(m[2]), "text": paragraphs[q].strip()})
+                    p = q
+            p += 1
+        own = {key: value for key, value in expected.items() if key[0] == lesson["no"]}
+        rows.append(compare_indexed(f"section{body_section} > 학습 {lesson['no']} > 필요 지식", items, own))
     for lesson in lessons:
         own = {key: value for key, value in expected.items() if key[0] == lesson["no"]}
         place = f"section{body_section} > 학습 {lesson['no']}"
@@ -154,8 +152,10 @@ def check_names(context):
                 continue
             parsed = table_names(table)
             if parsed is None:
-                rows.append(row(place + f" > 평가 > 문단 {table['paragraph']}", TRI,
-                                note="평가 영역의 표를 지원하는 헤더 구조로 식별하지 못함"))
+                # '학습 내용' 머리조차 없는 표(피드백·내비게이터 등)는 평가표가 아니므로 조용히 건너뛴다
+                if any(re.sub(r"\s", "", v) == "학습내용" for v in table["cells"].values()):
+                    rows.append(row(place + f" > 평가 > 문단 {table['paragraph']}", TRI,
+                                    note="'학습 내용' 머리는 있으나 '학습 목표'/'평가 항목' 열을 식별하지 못함"))
                 continue
             kind, values = parsed
             found.add(kind)

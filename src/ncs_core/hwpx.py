@@ -174,8 +174,8 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
                 if address is None:
                     raise ValueError("HWPX 표 셀에 cellAddr가 없습니다")
                 key = (int(address.get("rowAddr")), int(address.get("colAddr")))
-                # 중첩 표는 자체 표로 처리하므로 바깥 셀에 합치지 않는다.
-                own = [p for p in cell.iter(HP + "p") if owner_cell(p) is cell]
+                # 중첩 표는 자체 표로 처리하므로 바깥 셀에 합치지 않는다. 셀 안 메모(fieldBegin 아래 문단)도 셀 글이 아니다.
+                own = [p for p in cell.iter(HP + "p") if owner_cell(p) is cell and positions.get(p) not in aside]
                 cells[key] = re.sub(r"\s+", " ", " ".join(para_text(p) for p in own)).strip()
                 if styles is not None:
                     char_props, fills = styles

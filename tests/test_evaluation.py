@@ -55,6 +55,22 @@ class EvaluationTests(unittest.TestCase):
         self.assertTrue(any(r["판정"] == "부적합" and "평가 방법" in r["region_path"] for r in rows))
         self.assertTrue(all(r["판정"] == "적합" for r in rows if "평가 준거" in r["region_path"]))
 
+    def test_split_heading_inside_table_and_non_evaluation_tables(self):
+        """실데이터 양식: '1-1.'과 제목이 다른 문단이고 둘 다 틀(표) 안. 피드백·내비게이터 표는 평가표가 아니므로 조용히 건너뛴다."""
+        sections = deepcopy(self.ms.sections)
+        body = sections[1]
+        i = body.index("1-1. 현행 시스템 분석")
+        body[i:i + 1] = ["1-1.", "현행 시스템 분석"]
+        shift = lambda p: p + 1 if p > i else p  # 문단이 하나 늘어난 만큼 뒤 표 위치를 민다
+        tables = [dict(t, paragraph=shift(t["paragraph"])) if t["section"] == 1 else t for t in deepcopy(self.ms.tables)]
+        table_paragraphs = [self.ms.table_paragraphs[0], frozenset({shift(p) for p in self.ms.table_paragraphs[1]} | {i, i + 1})]
+        eval_start = next(p for p, t in enumerate(body) if t.strip() in ("평 가", "평가"))
+        tables.append({"section": 1, "paragraph": eval_start + 1, "rows": 1, "cols": 2,
+                       "cells": {(0, 0): "1. 서술형 시험", (0, 1): "피드백 내용"}, "styles": None})
+        ms = replace(self.ms, sections=sections, tables=tables, table_paragraphs=table_paragraphs)
+        rows = self.item_one(self.result(ms))
+        self.assertEqual({r["판정"] for r in rows}, {"적합"}, [r for r in rows if r["판정"] != "적합"])
+
     def test_numbered_names_are_compared_by_id_not_order(self):
         expected = {(1, 1): "가 분석", (1, 2): "나 분석"}
         self.assertEqual(compare_table("표", [(1, "1-2. 나 분석"), (2, "1-1. 가 분석")], expected)["판정"], "적합")
@@ -85,14 +101,15 @@ class EvaluationTests(unittest.TestCase):
             self.assertEqual(compare_table("표", values, expected)["판정"], "부적합")
         self.assertEqual(compare_table("표", [(1, "시스템\n분석"), (2, "요구 정의")], expected)["판정"], "적합")
 
-    def test_no_body_boundaries_or_hwp_table_ambiguity_cannot_pass(self):
+    def test_no_body_boundaries_cannot_pass_but_hwp_can(self):
         context = prepare_review(self.ms, self.plan)
         body = deepcopy(context.body)
         body["lessons"] = []
         result = evaluate_review(replace(context, body=body))
         self.assertEqual(result.sheet[0]["검수결과"], "판단불가")
+        # hwp는 표 안/밖 구분이 없지만 ①은 제목을 표 안에서도 읽으므로 hwpx와 같은 판정을 낸다
         result = self.result(replace(self.ms, format="hwp", table_paragraphs=None))
-        self.assertEqual(result.sheet[0]["검수결과"], "판단불가")
+        self.assertEqual(result.sheet[0]["검수결과"], "적합")
 
     def test_duplicate_body_heading_cannot_be_silently_deduplicated(self):
         sections = deepcopy(self.ms.sections)
