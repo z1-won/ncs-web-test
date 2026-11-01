@@ -58,6 +58,17 @@ class AskJsonTests(unittest.TestCase):
             with self.assertRaises(llm.LlmError):
                 llm.ask_json("t", "sys", "user2")
 
+    def test_only_allowlisted_tasks_can_call(self):
+        with mock.patch.object(llm, "_post") as post:
+            with self.assertRaises(llm.LlmError) as caught:
+                llm.ask_json("something_else", "s", "u")
+            post.assert_not_called()
+        self.assertIn("허용되지 않은 작업", str(caught.exception))
+        self.assertTrue(llm.task_allowed("perform2_brands"))
+        with mock.patch.dict(os.environ, {"LLM_ALLOWED_TASKS": "other"}, clear=False):
+            self.assertFalse(llm.task_allowed("perform2_brands"))  # 환경 변수로 더 좁힐 수는 있어도
+            self.assertFalse(llm.task_allowed("other"))            # 코드 목록 밖을 열 수는 없다
+
     def test_not_ready_raises_before_network(self):
         with mock.patch.dict(os.environ, {"LLM_ALLOW_UPLOAD": ""}, clear=False):
             with mock.patch.object(llm, "_post") as post:

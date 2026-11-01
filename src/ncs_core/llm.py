@@ -29,6 +29,13 @@ from pathlib import Path
 DEFAULT_MODEL = "gpt-5.4-mini"
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
+# LLM을 부를 수 있는 작업의 허용 목록. 여기 없는 task는 키·승인이 있어도 호출하지 않는다(LlmError).
+# 새 항목에 LLM을 붙일 때는 코드 리뷰로 이 목록에 추가한다 — 어떤 코드가 원고를 외부로 보내는지 한 곳에서 보이게.
+# 운영 중 임시로 좁히려면 .env에 LLM_ALLOWED_TASKS=perform2_brands 처럼 쉼표 목록으로 덮어쓸 수 있다(넓히는 건 불가).
+ALLOWED_TASKS = frozenset({
+    "perform2_brands",   # 수행 내용 ② 재료·기기의 상표·상품·제조사명 노출
+})
+
 
 class LlmError(RuntimeError):
     pass
@@ -77,6 +84,14 @@ class LlmAnswer:
     output_tokens: int
 
 
+def task_allowed(task: str) -> bool:
+    """코드의 허용 목록 ∩ (있으면) 환경 변수 LLM_ALLOWED_TASKS."""
+    if task not in ALLOWED_TASKS:
+        return False
+    narrowed = os.getenv("LLM_ALLOWED_TASKS")
+    return True if not narrowed else task in {t.strip() for t in narrowed.split(",") if t.strip()}
+
+
 def _cache_key(model: str, system: str, user: str) -> str:
     return hashlib.sha256(f"{model}\n\x00{system}\n\x00{user}".encode("utf-8")).hexdigest()
 
@@ -87,6 +102,8 @@ def ask_json(task: str, system: str, user: str, *, cfg: LlmSettings | None = Non
     task는 캐시·사용량 기록의 분류 이름(예: 'perform2_brands'). 같은 (model, system, user)는 캐시에서 돌려준다.
     """
     cfg = cfg or settings()
+    if not task_allowed(task):
+        raise LlmError(f"LLM 호출이 허용되지 않은 작업: {task} (ncs_core.llm.ALLOWED_TASKS)")
     if not cfg.ready:
         raise LlmError(cfg.why_not)
     key = _cache_key(cfg.model, system, user)

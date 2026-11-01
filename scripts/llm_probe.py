@@ -40,7 +40,7 @@ def main() -> None:
     if not cfg.ready:
         sys.exit(cfg.why_not)
     try:
-        answer = llm.ask_json(TASK + "_probe", SYSTEM, SAMPLE)
+        answer = llm.ask_json(TASK, SYSTEM, SAMPLE)
     except llm.LlmError as error:
         sys.exit(f"실패: {error}")
     print(f"응답 모델 {answer.model} · 캐시 {'적중' if answer.cached else '아님'} · 토큰 입력 {answer.input_tokens} / 출력 {answer.output_tokens}")
