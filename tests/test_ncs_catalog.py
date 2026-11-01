@@ -135,3 +135,45 @@ class PrerequisiteCodeTests(unittest.TestCase):
         row = self.run_items(["연회 예약 상담(LM1203020402_23v3)", "호텔 경영론"])
         self.assertEqual(row["판정"], "판단불가")
         self.assertIn("NCS 목록", row["비고"]["③ 코드 유효(NCS 목록)"])
+
+
+class PrerequisiteLevelTests(unittest.TestCase):
+    """개요 ④: 선수학습 능력단위 수준 ≤ 이 모듈 수준 (실데이터 수준 표 사용)."""
+
+    def setUp(self):
+        self.saved = os.environ.get("NCS_CATALOG_FILE")
+        os.environ["NCS_CATALOG_FILE"] = str(REAL)
+
+    def tearDown(self):
+        if self.saved is None:
+            os.environ.pop("NCS_CATALOG_FILE", None)
+        else:
+            os.environ["NCS_CATALOG_FILE"] = self.saved
+
+    @staticmethod
+    def run_items(items, code="LM1203020408_23v3"):
+        from ncs_overview.rules.prerequisite_codes import check_prerequisite_levels
+        [row] = check_prerequisite_levels({"선수학습": {"items": items, "text": ", ".join(items), "p": 1}}, code)
+        return row
+
+    @unittest.skipUnless(REAL.with_name("ncs_levels.tsv").is_file(), "수준 표 없음")
+    def test_levels_are_read(self):
+        cat = Catalog(REAL)
+        self.assertEqual((cat.level("LM1203020401_23v3"), cat.level("1203020405"), cat.level("LM2001021701_25v1")), (4, 2, 6))
+        self.assertIsNone(cat.level("9999999999"))
+
+    @unittest.skipUnless(REAL.with_name("ncs_levels.tsv").is_file(), "수준 표 없음")
+    def test_higher_level_is_rejected_and_subjects_are_ignored(self):
+        row = self.run_items(["연회 판촉(LM1203020401_23v3)", "연회 행사 진행(LM1203020405_23v2)", "호텔 경영론", "웨딩 행사 준비"])
+        self.assertEqual(row["판정"], "부적합")
+        self.assertEqual(row["비고"]["④ 선수학습 수준 ≤ 이 모듈 수준"], "「연회 판촉(LM1203020401_23v3)」 수준 4 > 이 모듈 수준 3")
+        self.assertEqual(row["이 모듈 수준"], 3)
+        ok = self.run_items(["연회 행사 진행(LM1203020405_23v2)", "웨딩 행사 준비"])  # 2, 3 ≤ 3
+        self.assertEqual(ok["판정"], "적합")
+        none = self.run_items(["호텔 경영론"])
+        self.assertEqual(none["체크"]["④ 선수학습 수준 ≤ 이 모듈 수준"], "-")
+
+    def test_without_levels_table_is_undecided(self):
+        os.environ["NCS_CATALOG_FILE"] = str(REAL) + ".missing"
+        row = self.run_items(["연회 판촉(LM1203020401_23v3)"])
+        self.assertEqual(row["판정"], "판단불가")

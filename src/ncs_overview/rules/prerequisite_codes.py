@@ -8,7 +8,7 @@ NCS 목록이 없으면 코드 형식만 보고 나머지는 △. ④(수준)는
 
 import re
 
-from ncs_core import O, PASS, TRI, X, make_normalizer, verdict, visible
+from ncs_core import NA, O, PASS, TRI, X, make_normalizer, verdict, visible
 from ncs_core.ncs_catalog import catalog
 
 ITEM_ID = "F02-개요-③"
@@ -45,9 +45,6 @@ def check_prerequisite_codes(overview: dict, module_code: str) -> list[dict]:
                 codes = ", ".join(f"LM{u.code}" for u in hits[:2])
                 notes["③ 코드 병기"].append(f"「{visible(item)}」 — NCS 학습모듈명인데 코드가 없음 (예: {visible(item)}({codes}))")
                 shown.append({"항목": item, "판단": "NCS 학습모듈 · 코드 없음"})
-                if any(u.base == module_code.replace("LM", "")[:10] for u in hits):
-                    checks["③ 코드 유효(NCS 목록)"] = X
-                    notes["③ 코드 유효(NCS 목록)"].append(f"「{visible(item)}」 — 이 학습모듈 자신을 선수학습으로 적음")
             else:
                 shown.append({"항목": item, "판단": "과목명으로 봄" if cat else "코드 없음(목록 없어 판단 못 함)"})
                 if not cat:
@@ -93,3 +90,78 @@ def _row(evidence, checks, notes, suggestion):
         "비고": notes,
         "수정 제안": None if result == PASS else suggestion,
     }
+
+
+# ──────────────────────────── ④ 수준 ────────────────────────────
+
+ITEM_ID_LEVEL = "F02-개요-④"
+
+
+def check_prerequisite_levels(overview: dict, module_code: str) -> list[dict]:
+    """F02 개요 ④: 선수학습으로 제시한 NCS 학습모듈(능력단위)의 수준이 이 학습모듈보다 높지 않은가.
+
+    항목을 코드(있으면) 또는 명칭(NCS 목록과 같으면)으로 능력단위에 연결하고 수준 표(ncs_levels.tsv)에서 수준을 읽는다.
+    선수학습 수준 > 이 모듈 수준 → X. 같거나 낮음 → O. 과목명(NCS 아님)은 해당 없음. 수준 표가 없거나 코드를 못 찾으면 △.
+    """
+    label = "④ 선수학습 수준 ≤ 이 모듈 수준"
+    block = overview.get("선수학습")
+    if not block or not block["items"]:
+        return [_level_row(None, {label: TRI}, {label: "'선수학습' 내용을 찾지 못함 (②에서 보고)"}, None)]
+    cat = catalog()
+    if cat is None or not cat.levels:
+        return [_level_row(block["items"], {label: TRI},
+                           {label: "NCS 능력단위 수준 표(ncs_levels.tsv)가 없어 대조 생략 — scripts/build_ncs_levels.py"}, None)]
+    own = cat.level(module_code)
+    if own is None:
+        return [_level_row(block["items"], {label: TRI}, {label: f"이 학습모듈({module_code})의 수준을 수준 표에서 찾지 못함"}, None)]
+    names: dict[str, list[dict]] = {}
+    for row in cat.levels.values():
+        names.setdefault(_norm_key(row["name"]), []).append(row)
+    shown, higher, unknown, compared = [], [], [], 0
+    for item in block["items"]:
+        m = CODE_IN_ITEM.match(item)
+        if m:
+            row = cat.level_row(m.group("code"))
+            if row is None:
+                unknown.append(f"「{visible(item)}」 — 수준 표에 없는 코드")
+                shown.append({"항목": item, "수준": "?"})
+                continue
+        else:
+            hits = names.get(_norm_key(item), [])
+            if not hits:
+                shown.append({"항목": item, "수준": "해당 없음(과목명)"})
+                continue
+            if len({h["level"] for h in hits}) > 1:
+                unknown.append(f"「{visible(item)}」 — 같은 이름의 능력단위가 여러 개라 수준을 정하지 못함")
+                shown.append({"항목": item, "수준": "?"})
+                continue
+            row = hits[0]
+        compared += 1
+        shown.append({"항목": item, "코드": row["code"], "수준": row["level"]})
+        if row["level"] is not None and row["level"] > own:
+            higher.append(f"「{visible(item)}」 수준 {row['level']} > 이 모듈 수준 {own}")
+    checks = {label: X if higher else (TRI if unknown else (O if compared else NA))}
+    notes = {}
+    if higher:
+        notes[label] = " / ".join(higher)
+    if unknown:
+        notes[label + " (확인)"] = " / ".join(unknown)
+    if not compared and not unknown:
+        notes[label] = "NCS 학습모듈을 제시하지 않음(과목명만) — 해당 없음"
+    return [_level_row(shown, checks, notes, f"이 학습모듈(수준 {own})보다 수준이 높은 능력단위는 선수학습에서 제외", own)]
+
+
+def _level_row(evidence, checks, notes, suggestion, own=None):
+    result = verdict(checks)
+    row = {
+        "item_id": ITEM_ID_LEVEL,
+        "region_path": REGION,
+        "원고": evidence,
+        "체크": checks,
+        "판정": result,
+        "비고": notes,
+        "수정 제안": None if result == PASS else suggestion,
+    }
+    if own is not None:
+        row["이 모듈 수준"] = own
+    return row
