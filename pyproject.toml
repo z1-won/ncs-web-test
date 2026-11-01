@@ -15,6 +15,7 @@ dynamic = ["optional-dependencies"]
 ncs-perform = "ncs_perform.__main__:main"
 ncs-teaching = "ncs_teaching.__main__:main"
 ncs-evaluation = "ncs_evaluation.__main__:main"
+ncs-misc = "ncs_misc.__main__:main"
 ncs-web = "ncs_web.server:main"
 ncs-position = "ncs_position.__main__:main"
 ncs-toc = "ncs_toc.__main__:main"

@@ -10,6 +10,7 @@ from .overview import parse_overview, parse_plan, split_items
 from .plan_goals import parse_plan_goals
 from .presence import section_presence
 from .toc import parse_plan_toc, parse_toc
+from .units import HEAD_MARK, MEMO_LINE, mark, unit_regions
 
 __all__ = [
     "DEFAULT_PARSE_CONFIG",
@@ -27,4 +28,8 @@ __all__ = [
     "same",
     "section_presence",
     "split_items",
+    "HEAD_MARK",
+    "MEMO_LINE",
+    "mark",
+    "unit_regions",
 ]

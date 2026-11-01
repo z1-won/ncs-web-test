@@ -23,6 +23,8 @@ class Document:
     aside_paragraphs: 섹션별 본문 밖 문단 인덱스(메모·머리말·꼬리말·각주). 본문 문장 검사에서 제외한다. hwp는 None.
     numbers:  섹션별 문단 번호 — 한글 자동 번호(문단 번호·글머리표)를 복원한 글자('1.', '(가)', '•' …) 또는 None.
               텍스트에 번호가 없는 문단의 "보이는 번호"다. hwp는 None.
+    page_breaks: 섹션별 '쪽 나누기' 문단 인덱스(그 문단 앞에서 새 쪽 시작). hwp는 None.
+    pictures: 모든 그림의 (섹션, 문단, BinData id). binaries: {BinData id: {'href', 'bytes'}} — 그림 파일 유실 확인용. hwpx만.
     """
 
     path: Path
@@ -35,6 +37,9 @@ class Document:
     styles: list[list[str]] | None = None
     aside_paragraphs: list[frozenset[int]] | None = None
     numbers: list[list[str | None]] | None = None
+    page_breaks: list[frozenset[int]] | None = None
+    pictures: list[tuple[int, int, str | None]] = field(default_factory=list)
+    binaries: dict[str, dict] = field(default_factory=dict)
 
     @property
     def has_styles(self) -> bool:
@@ -71,6 +76,16 @@ class Document:
             return None
         return self.numbers[index] if index < len(self.numbers) else []
 
+    def section_page_breaks(self, index: int) -> frozenset[int] | None:
+        """섹션의 쪽 나누기 문단 인덱스. hwp는 None."""
+        if self.page_breaks is None:
+            return None
+        return self.page_breaks[index] if index < len(self.page_breaks) else frozenset()
+
+    def section_pictures(self, index: int) -> list[tuple[int, str | None]]:
+        """섹션의 (문단, BinData id) 목록."""
+        return [(p, b) for s, p, b in self.pictures if s == index]
+
 
 def detect_format(path) -> str:
     """파일 내용으로 hwp/hwpx를 판별한다. 둘 다 아니면 ValueError."""
@@ -98,11 +113,14 @@ def load_document(path) -> Document:
     if fmt == "hwp":
         sections, tables = hwp.load_hwp(path.read_bytes())
         images, table_paragraphs, figures, styles, aside, numbers = [], None, [], None, None, None
+        page_breaks, pictures, binary_items = None, [], {}
     else:
-        sections, tables, images, table_paragraphs, figures, styles, aside, numbers = hwpx.load_hwpx(path)
+        (sections, tables, images, table_paragraphs, figures, styles, aside, numbers,
+         page_breaks, pictures, binary_items) = hwpx.load_hwpx(path)
     sections = [[_clean(p) for p in section] for section in sections]
     for table in tables:
         table["cells"] = {key: _clean(value) for key, value in table["cells"].items()}
     if not any(line for section in sections for line in section):
         raise ValueError(f"문단 텍스트를 추출하지 못했습니다: {path}")
-    return Document(path, fmt, sections, tables, images, table_paragraphs, figures, styles, aside, numbers)
+    return Document(path, fmt, sections, tables, images, table_paragraphs, figures, styles, aside, numbers,
+                    page_breaks, pictures, binary_items)

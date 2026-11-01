@@ -198,13 +198,38 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
     deleted = [not text and p.find(f".//{HP}deleteBegin") is not None for p, text in zip(paragraphs, texts)]
     numbers = (render_numbers([None if gone else p.get("paraPrIDRef") for p, gone in zip(paragraphs, deleted)], numbering_definitions)
                if numbering_definitions else [None] * len(paragraphs))
-    return texts, tables, images, frozenset(in_table), figures, style_of, frozenset(aside), numbers
+    page_breaks = frozenset(i for i, p in enumerate(paragraphs) if p.get("pageBreak") == "1")
+    pictures = []  # (문단 인덱스, BinData id) — 그림 파일 존재 확인용
+    for picture in root.iter(HP + "pic"):
+        paragraph = owner_paragraph(picture)
+        img = picture.find(f".//{HC}img")
+        if paragraph in positions:
+            pictures.append((positions[paragraph], img.get("binaryItemIDRef") if img is not None else None))
+    return texts, tables, images, frozenset(in_table), figures, style_of, frozenset(aside), numbers, page_breaks, pictures
+
+
+def binaries(archive: zipfile.ZipFile) -> dict[str, dict]:
+    """content.hpf 매니페스트의 BinData 항목 → {id: {'href', 'bytes'(없으면 None)}}. 그림 유실 확인용."""
+    try:
+        root = ET.fromstring(archive.read("Contents/content.hpf"))
+    except KeyError:
+        return {}
+    sizes = {info.filename: info.file_size for info in archive.infolist()}
+    out = {}
+    for item in root.iter():
+        if item.tag.endswith("}item") and item.get("id") and (item.get("href") or "").startswith("BinData/"):
+            href = item.get("href")
+            out[item.get("id")] = {"href": href, "bytes": sizes.get(href, sizes.get("Contents/" + href))}
+    return out
 
 
 def load_hwpx(path):
-    """(섹션별 문단, 표, 그림, 섹션별 표 안 문단, 모든 그림, 섹션별 문단 스타일 이름, 섹션별 본문 밖 문단, 섹션별 문단 번호)."""
+    """(섹션별 문단, 표, 그림, 섹션별 표 안 문단, 모든 그림, 섹션별 문단 스타일 이름, 섹션별 본문 밖 문단, 섹션별 문단 번호,
+    섹션별 쪽 나누기 문단, 모든 그림의 (섹션, 문단, BinData id), BinData 목록)."""
     sections, tables, images, table_paragraphs, figures, styles_by_section, aside_by_section, numbers_by_section = [], [], [], [], [], [], [], []
+    breaks_by_section, pictures = [], []
     with zipfile.ZipFile(path) as archive:
+        binary_items = binaries(archive)
         try:
             styles = header_styles(archive)
         except KeyError:
@@ -216,9 +241,8 @@ def load_hwpx(path):
             numbering_definitions = None
         for index, name in enumerate(section_names(archive)):
             root = ET.fromstring(archive.read(name))
-            paragraphs, section_tables, section_images, in_table, section_figures, style_of, aside, numbers = parse_section(
-                root, index, styles, names, numbering_definitions
-            )
+            (paragraphs, section_tables, section_images, in_table, section_figures, style_of, aside, numbers,
+             page_breaks, section_pictures) = parse_section(root, index, styles, names, numbering_definitions)
             sections.append(paragraphs)
             tables.extend(section_tables)
             images.extend((index, paragraph, image) for paragraph, image in section_images)
@@ -227,4 +251,7 @@ def load_hwpx(path):
             styles_by_section.append(style_of)
             aside_by_section.append(aside)
             numbers_by_section.append(numbers)
-    return sections, tables, images, table_paragraphs, figures, styles_by_section, aside_by_section, numbers_by_section
+            breaks_by_section.append(page_breaks)
+            pictures.extend((index, paragraph, bin_id) for paragraph, bin_id in section_pictures)
+    return (sections, tables, images, table_paragraphs, figures, styles_by_section, aside_by_section, numbers_by_section,
+            breaks_by_section, pictures, binary_items)

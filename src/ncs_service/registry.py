@@ -23,6 +23,7 @@ ENGINES = {
     "perform": Engine("ncs_perform"),
     "teaching": Engine("ncs_teaching"),
     "evaluation": Engine("ncs_evaluation"),
+    "misc": Engine("ncs_misc"),
 }
 
 
