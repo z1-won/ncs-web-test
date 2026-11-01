@@ -69,7 +69,7 @@ set +a
 .venv/bin/ncs-web --dist webapp/frontend/dist
 ```
 
-앱 전용 데이터베이스와 관리자 권한이 없는 `ncs_app` 계정은 PostgreSQL 볼륨을 처음 만들 때 생성됩니다. `.env`는 저장소에서 제외됩니다. `docker compose stop db`로 중지하고 `docker compose start db`로 다시 시작할 수 있습니다. `docker compose down`은 컨테이너만 제거하고 데이터 볼륨은 유지하지만, `docker compose down -v`는 데이터 볼륨도 삭제합니다. 앱 시작 시와 `postgres_cli migrate`는 `ncs_service/postgres.py`의 `MIGRATIONS`(번호 붙은 SQL 목록) 중 아직 적용되지 않은 것만 순서대로 실행하고 `schema_version` 표에 기록합니다. 스키마를 바꿀 때는 적용된 항목을 수정하지 말고 다음 번호를 뒤에 추가합니다. 코드를 올리고 서버를 재시작하면 DB가 따라옵니다. check 이름의 허용값은 DB 제약이 아니라 `ncs_service.registry.ENGINES`가 검증하므로, 엔진을 추가해도 DB 쪽 작업은 없습니다.
+앱 전용 데이터베이스와 관리자 권한이 없는 `ncs_app` 계정은 PostgreSQL 볼륨을 처음 만들 때 생성됩니다. `.env`는 저장소에서 제외됩니다. `docker compose stop db`로 중지하고 `docker compose start db`로 다시 시작할 수 있습니다. `docker compose down`은 컨테이너만 제거하고 데이터 볼륨은 유지하지만, `docker compose down -v`는 데이터 볼륨도 삭제합니다. 앱 시작 시와 `postgres_cli migrate`는 `ncs_service/migrations.py`의 `MIGRATIONS`(번호 붙은 SQL 목록) 중 아직 적용되지 않은 것만 순서대로 실행하고 `schema_version` 표에 기록합니다. 스키마를 바꿀 때는 적용된 항목을 수정하지 말고 다음 번호를 뒤에 추가합니다. 코드를 올리고 서버를 재시작하면 DB가 따라옵니다. check 이름의 허용값은 DB 제약이 아니라 `ncs_service.registry.ENGINES`가 검증하므로, 엔진을 추가해도 DB 쪽 작업은 없습니다.
 
 기존 결과를 가져올 때는 다음 명령을 실행합니다. 재실행하면 이미 가져온 폴더를 건너뛰며 원본 파일은 삭제하지 않습니다. 이관 시각은 요약 JSON의 수정 시각을 사용하고, 과거 입력 원본의 해시·엔진 버전은 복원할 수 없습니다.
 
@@ -121,7 +121,9 @@ Uvicorn으로 직접 실행할 수도 있습니다. 다음 명령은 저장소 �
 
 ```text
 FastAPI 업로드 → 임시 파일 → execute_review(ReviewRequest)
-                           → persist_review(ExecutedReview, out_dir)
+                           → store.save(ExecutedReview, uploads)      store = open_store(out_dir, database_url)
+                                FileStore     → persist_review → 실행별 폴더·ZIP   (DATABASE_URL 없음)
+                                PostgresStore → save_review   → 이력 행 + id        (DATABASE_URL 있음)
                            → 응답 모델 → JSON
 ```
 

@@ -34,7 +34,8 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 추가 키(`개발계획서`, `기준`, `자리`, `해당 행 근거` 등)는 패키지가 정한다. 판정은 반드시 `ncs_core.verdict`로 계산한다.
 
 ## DB 이력 (PostgreSQL 모드)
-스키마 변경은 `ncs_service/postgres.py`의 `MIGRATIONS`에 `NNN_이름` 항목을 **뒤에 추가**해서만 한다. 적용된 항목은 고치지 않는다. 모든 문장은 `IF (NOT) EXISTS`로 보호해 시작마다 돌아도 안전하게 한다(`tests/test_migrations.py`가 검사). 엔진 이름을 SQL에 적지 않는다.
+저장소 선택은 `ncs_service.store.open_store()` 한 곳에서만 한다. 웹 서버는 `store.save()`를 부르고 `store.supports_history`일 때만 이력 API를 등록한다. 저장 방식이 늘면 `store.py`에 같은 호출 모양(`prepare`·`save`·`supports_history`)의 클래스를 추가한다.
+스키마 변경은 `ncs_service/migrations.py`의 `MIGRATIONS`에 `NNN_이름` 항목을 **뒤에 추가**해서만 한다. 적용된 항목은 고치지 않는다. 모든 문장은 `IF (NOT) EXISTS`로 보호해 시작마다 돌아도 안전하게 한다(`tests/test_migrations.py`가 검사). 엔진 이름을 SQL에 적지 않는다.
 
 ## 저장 파일
 `<out>/<코드>_xxxx/` 아래 `<코드>_<항목 꼬리말>.json`, `<코드>_<이름>_00_요약.json`, `_지적사항.json`, `_전체.json`, `_진단.json`, `<코드>_<이름>_검수결과.zip`.

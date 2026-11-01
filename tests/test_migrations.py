@@ -6,7 +6,7 @@
 import re
 import unittest
 
-from ncs_service.postgres import MIGRATIONS, SCHEMA
+from ncs_service.migrations import MIGRATIONS, SCHEMA
 
 
 class MigrationListTests(unittest.TestCase):

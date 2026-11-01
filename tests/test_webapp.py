@@ -93,7 +93,7 @@ class WebappTests(unittest.TestCase):
             captured.extend(review.result.diagnostics["inputs"].values())
             raise OSError("저장 실패 테스트")
 
-        with patch("ncs_service.persist_review", side_effect=fail):
+        with patch("ncs_service.store.persist_review", side_effect=fail):  # FileStore.save가 부르는 지점
             client = TestClient(create_app(out_dir=self.output))
             with client:
                 response = client.post("/api/review", files=[

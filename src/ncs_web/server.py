@@ -52,15 +52,16 @@ def create_app(
     dist_dir: str | Path | None = None,
     database_url: str | None = None,
 ) -> FastAPI:
-    """경로는 앱 생성 시 실행 위치를 기준으로 확정한다. dist_dir 생략 시 API만 제공한다."""
-    from ncs_service import ReviewRequest, execute_review, persist_review
+    """경로는 앱 생성 시 실행 위치를 기준으로 확정한다. dist_dir 생략 시 API만 제공한다.
+
+    저장소는 open_store()가 고른다: database_url이 있으면 PostgreSQL 이력, 없으면 out_dir의 파일 폴더.
+    """
+    from ncs_service import ReviewRequest, execute_review, open_store
 
     app = FastAPI(title="F02 검수 API")
-    output = Path(out_dir).expanduser().resolve()
     dist = Path(dist_dir).expanduser().resolve() if dist_dir is not None else None
-    if database_url:
-        from ncs_service.postgres import migrate
-        migrate(database_url)
+    store = open_store(out_dir=out_dir, database_url=database_url)
+    store.prepare()
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError) -> JSONResponse:
@@ -126,16 +127,13 @@ def create_app(
                     raise ValueError("업로드된 파일이 없습니다")
                 execution = execute_review(ReviewRequest(tuple(paths), check, module_code.strip()))
                 result = execution.result
-                if database_url:
-                    from ncs_service.postgres import input_metadata, save_review
-                    run_id, summary = save_review(database_url, execution, input_metadata(result.diagnostics, uploads))
-                    saved_paths = None
-                else:
-                    saved = persist_review(execution, output)
-                    run_id, summary = None, saved.summary
-                    saved_paths = SavedPaths(folder=str(saved.directory), zip=str(saved.zip_path))
+                stored = store.save(execution, uploads)
+                saved_paths = (
+                    SavedPaths(folder=str(stored.directory), zip=str(stored.zip_path))
+                    if stored.directory is not None else None
+                )
                 payload = ReviewResponse(
-                    id=run_id, check=execution.check, module_code=result.module_code, 요약=summary,
+                    id=stored.run_id, check=execution.check, module_code=result.module_code, 요약=stored.summary,
                     검수확인서=result.sheet, 진단=result.diagnostics, 지적사항=result.findings,
                     전체=result.checklist, 저장=saved_paths,
                 )
@@ -146,37 +144,27 @@ def create_app(
         response.headers.update(CORS_HEADERS)
         return payload
 
-    if database_url:
-        from ncs_service.postgres import get_review, list_reviews
+    if store.supports_history:
 
         @app.get("/api/reviews")
         def reviews(module_code: str | None = None, check: CheckName | None = None,
                     verdict: str | None = None, limit: int = Query(50, ge=1, le=100),
                     offset: int = Query(0, ge=0)) -> list[dict]:
-            return list_reviews(database_url, module_code=module_code, check=check,
-                                verdict=verdict, limit=limit, offset=offset)
+            return store.list_reviews(module_code=module_code, check=check, verdict=verdict, limit=limit, offset=offset)
 
         @app.get("/api/reviews/{run_id}")
         def review_detail(run_id: str) -> dict:
-            found = get_review(database_url, run_id)
+            found = store.get_review(run_id)
             if found is None:
                 raise HTTPException(404, "검수 이력을 찾을 수 없습니다")
             return found
 
         @app.get("/api/reviews/{run_id}/zip")
         def review_zip(run_id: str) -> Response:
-            from ncs_core.models import ReviewResult
-            from ncs_service.registry import get_engine
-
-            found = get_review(database_url, run_id)
-            if found is None:
+            exported = store.export_zip(run_id)
+            if exported is None:
                 raise HTTPException(404, "검수 이력을 찾을 수 없습니다")
-            result = ReviewResult(found["module_code"], found["전체"], found["지적사항"],
-                                  found["진단"], sheet=found["검수확인서"])
-            with tempfile.TemporaryDirectory(prefix="ncs_export_") as folder:
-                saved = get_engine(found["check"]).load().save_results(result, folder)
-                content = saved.zip_path.read_bytes()
-                filename = saved.zip_path.name
+            content, filename = exported
             return Response(content, media_type="application/zip", headers={
                 "Content-Disposition": f"attachment; filename=review-{run_id}.zip; filename*=UTF-8''{quote(filename)}",
             })

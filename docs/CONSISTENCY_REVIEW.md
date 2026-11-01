@@ -136,6 +136,14 @@ tests/compare_with_original.py   원본 패키지와 체크리스트 동일성 �
 
 검증: 골든 42건 동일(요약 통합이 출력을 바꾸지 않음).
 
+### 5.5 저장소 추상화 — `ncs_service.store` (2026-11-01)
+
+문제: 웹 서버가 `if database_url:` 분기 세 곳(시작 시 migrate, 저장, 이력 API 등록)에서 시그니처가 다른 두 함수(`persist_review(execution, out_dir)` / `save_review(dsn, execution, inputs)`)를 골라 불렀고, ZIP 재생성·입력 메타데이터 계산도 서버 안에 있었다. 저장을 건드리는 다음 작업("업로드 한 번 → 확인서 한 장")에서 분기가 늘어날 자리였다.
+
+조치: `ncs_service/store.py`에 `FileStore`·`PostgresStore`(같은 호출 모양: `prepare()`·`save(review, uploads) -> StoredReview`·`supports_history`)와 `open_store(out_dir, database_url)`. 이력 조회(`list_reviews`·`get_review`·`export_zip`)는 `PostgresStore`만 갖고, 서버는 `supports_history`로 등록 여부를 정한다. ZIP 재생성과 `input_metadata` 호출이 서버에서 저장소로 이동. 서버의 `database_url`은 `open_store`에 넘기는 한 줄만 남았다. `psycopg`는 `PostgresStore` 메서드 호출 시점에만 import하므로 파일 모드는 `web` extra 없이도 뜬다.
+부수: SQL 스키마·`MIGRATIONS`를 `migrations.py`로 분리(psycopg 없이 import 가능 → `test_migrations.py`가 엔진만 설치한 환경에서도 돈다).
+테스트: `test_store.py` 신설(저장소 선택, 두 구현의 호출 모양, FileStore 저장, PostgresStore 위임·ZIP 재생성). `test_webapp.py`의 저장 실패 패치 지점을 `ncs_service.store.persist_review`로 이동.
+
 ## 6. 남은 과제 (이번 범위 밖)
 
 - 기존 `docs/REVIEW.md`의 위치 ⑤ 정확성 과제(코드 번호 기반 행 선택 등)는 그대로다.
