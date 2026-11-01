@@ -5,7 +5,7 @@ sections는 [차례·개요 문단, 본문 문단]의 두 섹션 목록이다(�
 
 import re
 
-from .patterns import OV_SUB_BARE, OV_SUB_NAMED, TOC_LESSON, TOC_LINE, TOC_SUB, TOC_TAIL
+from .patterns import PLAN_SUB, OV_SUB_BARE, OV_SUB_NAMED, TOC_LESSON, TOC_LINE, TOC_SUB, TOC_TAIL
 
 TAIL_NAMES = {"참고자료": "참고 자료", "활용서식": "활용 서식", "부록": "부록"}
 
@@ -65,7 +65,7 @@ def parse_plan_toc(sections, module_code: str) -> dict | None:
     for i, line in enumerate(block):
         if re.fullmatch(rf"{re.escape(code)}\.\d+", line) and i + 1 < len(block):
             plan["요소명"].append(block[i + 1])
-        if m := OV_SUB_NAMED.match(line):
+        if (m := PLAN_SUB.match(line)) and m.group(3):
             plan["내용명"].append({"no": int(m.group(1)), "sub": int(m.group(2)), "text": m.group(3).strip()})
         elif (m := OV_SUB_BARE.fullmatch(line)) and (text := _next_nonempty(block, i + 1)):
             # 실제 개발계획서(HWP)는 '1-1.'과 내용명이 한 셀 안의 두 문단으로 나뉜 경우가 있다.

@@ -16,6 +16,7 @@ from .patterns import (
     HEAD_TERMS,
     OV_LESSON,
     OV_SUB,
+    PLAN_SUB,
     PLAN_LESSON,
 )
 
@@ -160,8 +161,8 @@ def parse_plan(document: Document, module_code: str) -> dict | None:
             plan["목표"] = nxt
         elif (m := ELEMENT_CODE.match(line)) and m.group(1) == code:
             plan["요소"].append({"code": line, "name": nxt})
-        elif m := OV_SUB.match(line):
-            text = m.group(3).strip() or nxt
+        elif m := PLAN_SUB.match(line):
+            text = (m.group(3) or "").strip() or nxt
             plan["내용명"].append({"no": int(m.group(1)), "sub": int(m.group(2)), "text": text})
         elif (m := PLAN_LESSON.match(line)) and int(m.group(1)) == len(plan["학습명"]) + 1:
             plan["학습명"].append(m.group(2).strip())

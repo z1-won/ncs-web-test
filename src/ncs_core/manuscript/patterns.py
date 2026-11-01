@@ -6,7 +6,7 @@ import re
 TOC_LESSON = re.compile(r"^학습\s*(\d+)\.\s*(.+?)(?:\s+\d+)?$")  # 학습 1. 명 [쪽]
 TOC_SUB = re.compile(r"^(\d+)-(\d+)\.\s*(.+?)(?:\s*(\d+))?$")  # 1-1. 명 [쪽]  ('• 평가52' 처럼 붙은 쪽수도)
 TOC_LINE = re.compile(r"^[•·]\s*(교수\s*\W{0,3}\s*학습\s*방법|평가)\s*(\d+)?$")
-TOC_TAIL = re.compile(r"^(참고\s*자료|활용\s*서식|부록)\s*(\d+)?$")
+TOC_TAIL = re.compile(r"^(참고\s*자료|활용\s*서식|부\s*록)\s*(?:[.·ㆍ…⋯‥．。]\s*)*(\d+)?$")
 
 # 학습모듈의 개요
 HEAD_OVERVIEW = re.compile(r"학습모듈의\s*개요$")
@@ -22,6 +22,8 @@ ELEMENT_CODE = re.compile(r"^(\d{10}_\d+v\d+)\.(\d+)$")  # 1203020201_24v3.1
 
 # 개발계획서
 PLAN_LESSON = re.compile(r"^(\d+)\.\s+(\S.*)$")  # 계획서 학습명: 공백 필수 ("1.1 …" 수행준거와 구별)
+# 계획서의 학습 내용명: '1-1. 명' 외에 '1-1 명'(마침표 없음, AIoT 계획서)도 쓰인다. 원고 쪽(OV_SUB)은 마침표를 요구한다
+PLAN_SUB = re.compile(r"^(\d+)-(\d+)(?:\.\s*|\s+)(\S.*)?$")
 
 # 본문
 NAV_HEAD = re.compile(r"^학습\s*(\d+)$")

@@ -7,7 +7,7 @@
 import re
 
 from ..documents import Document
-from .patterns import ELEMENT_CODE, OV_SUB, PLAN_LESSON
+from .patterns import ELEMENT_CODE, PLAN_LESSON, PLAN_SUB
 
 GOAL_SENTENCE = re.compile(r"^\d+\.\d+\s+\S")  # '1.1 호텔의 …할 수 있다.'
 
@@ -35,8 +35,8 @@ def parse_plan_goals(document: Document, module_code: str) -> dict | None:
             current = None
             i += 2
             continue
-        if m := OV_SUB.match(line):
-            text = m.group(3).strip()
+        if m := PLAN_SUB.match(line):
+            text = (m.group(3) or "").strip()
             if not text and i + 1 < len(block):
                 text = block[i + 1]
                 i += 1

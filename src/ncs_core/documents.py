@@ -122,5 +122,60 @@ def load_document(path) -> Document:
         table["cells"] = {key: _clean(value) for key, value in table["cells"].items()}
     if not any(line for section in sections for line in section):
         raise ValueError(f"문단 텍스트를 추출하지 못했습니다: {path}")
-    return Document(path, fmt, sections, tables, images, table_paragraphs, figures, styles, aside, numbers,
-                    page_breaks, pictures, binary_items)
+    document = Document(path, fmt, sections, tables, images, table_paragraphs, figures, styles, aside, numbers,
+                        page_breaks, pictures, binary_items)
+    return split_single_section(document)
+
+
+BODY_START_STYLE = re.compile(r"^큰학습")                 # 내비게이터(학습 N 큰 제목)의 문단 스타일
+BODY_START_TEXT = re.compile(r"^학\s*습\s*1$")           # 스타일이 없을 때: 개요 뒤 첫 '학습 1' 줄
+FRONT_END_TEXT = re.compile(r"^(핵심\s*용어|학습\s*모듈의\s*내용\s*체계)")
+
+
+def body_start(document: "Document") -> int | None:
+    """구역이 하나뿐인 원고에서 본문이 시작하는 문단 인덱스 — 첫 내비게이터(큰학습 스타일), 없으면 개요 뒤 첫 '학습 1' 줄."""
+    paragraphs = document.sections[0]
+    styles = document.section_styles(0)
+    if styles:
+        for i, name in enumerate(styles):
+            if name and BODY_START_STYLE.match(name) and i > 0:
+                return i
+    front_end = next((i for i, t in enumerate(paragraphs) if FRONT_END_TEXT.match(t)), None)
+    if front_end is None:
+        return None
+    return next((i for i in range(front_end + 1, len(paragraphs)) if BODY_START_TEXT.match(paragraphs[i])), None)
+
+
+def split_single_section(document: "Document") -> "Document":
+    """구역이 하나뿐이면 앞부분(위치·차례·개요)과 본문을 두 구역으로 나눠 돌려준다 — 모든 엔진이 '구역 0 = 앞부분, 구역 1 = 본문'을 가정한다.
+
+    문단 인덱스는 본문 구역 기준으로 다시 매기고, 표·그림·스타일·번호·쪽 나누기·메모도 같이 옮긴다. 경계를 못 찾으면 그대로 둔다.
+    """
+    if len(document.sections) != 1:
+        return document
+    at = body_start(document)
+    if not at:
+        return document
+
+    def split_list(values):
+        return None if values is None else [values[0][:at], values[0][at:]]
+
+    def split_set(values):
+        return None if values is None else [frozenset(i for i in values[0] if i < at), frozenset(i - at for i in values[0] if i >= at)]
+
+    def move(section: int, paragraph: int) -> tuple[int, int]:
+        return (0, paragraph) if paragraph < at else (1, paragraph - at)
+
+    tables = []
+    for table in document.tables:
+        section, paragraph = move(table["section"], table["paragraph"])
+        tables.append({**table, "section": section, "paragraph": paragraph})
+    return Document(
+        document.path, document.format, split_list(document.sections), tables,
+        [(*move(s, p), name) for s, p, name in document.images],
+        split_set(document.table_paragraphs),
+        [(*move(s, p), name, w, h) for s, p, name, w, h in document.figures],
+        split_list(document.styles), split_set(document.aside_paragraphs), split_list(document.numbers),
+        split_set(document.page_breaks),
+        [(*move(s, p), b) for s, p, b in document.pictures], document.binaries,
+    )
