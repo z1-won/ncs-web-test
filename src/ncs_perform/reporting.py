@@ -5,6 +5,7 @@ from ncs_core import ReviewResult, SavedReport, report_summary, save_report
 REPORT_NAME = "수행"  # 저장 파일 이름과 DB 이력에 쓰는 보고서 이름
 ITEM_FILES = (
     ("F02-수행-①", "수행①_제목하기"),
+    ("F02-수행-②", "수행②_상표노출"),
     ("F02-수행-④", "수행④_한다종결"),
 )
 

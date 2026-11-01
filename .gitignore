@@ -16,3 +16,6 @@ scripts/.stdict_debug.xml
 
 # 실제 원고·개발계획서 표본 (git 제외)
 /samples/
+
+# LLM 응답 캐시·사용량(원고 문장이 들어 있음 — git 제외)
+/.llm_cache/
