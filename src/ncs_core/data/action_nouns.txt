@@ -1,114 +1,114 @@
 # 행동명사(‘~하다’를 붙이면 뜻이 통하는 명사) 목록. F02 차례 ②가 학습 내용명의 마지막 어절을 여기서 찾는다.
-# 형식: 단어<TAB>출처<TAB>날짜   출처 = stdict(표준국어대사전 파생어 확인) | manual(사람 승인)
+# 형식: 단어<TAB>출처<TAB>날짜<TAB>근거   출처 = stdict(표준국어대사전에 ‘단어하다’ 동사 표제어) | manual(사람 승인)
 # 갱신: scripts/build_action_nouns.py (국립국어원 API 조회 → 이 파일에 추가). 손으로 추가할 때는 출처를 manual로.
 # 정렬: 단어 순. 주석(#)과 빈 줄은 무시.
-가공	stdict	2026-11-01
-감독	stdict	2026-11-01
-개발	stdict	2026-11-01
-개선	stdict	2026-11-01
-검사	stdict	2026-11-01
-검증	stdict	2026-11-01
-검토	stdict	2026-11-01
-결산	stdict	2026-11-01
-결정	stdict	2026-11-01
-계약	stdict	2026-11-01
-계획	stdict	2026-11-01
-관리	stdict	2026-11-01
-교육	stdict	2026-11-01
-교정	stdict	2026-11-01
-구축	stdict	2026-11-01
-구현	stdict	2026-11-01
-기록	stdict	2026-11-01
-기획	stdict	2026-11-01
-녹음	stdict	2026-11-01
-도장	stdict	2026-11-01
-도출	stdict	2026-11-01
-디버깅	manual	2026-11-01
-모델링	manual	2026-11-01
-문서화	stdict	2026-11-01
-발주	stdict	2026-11-01
-배관	stdict	2026-11-01
-배선	stdict	2026-11-01
-배포	stdict	2026-11-01
-번역	stdict	2026-11-01
-변환	stdict	2026-11-01
-보고	stdict	2026-11-01
-보수	stdict	2026-11-01
-보완	stdict	2026-11-01
-분류	stdict	2026-11-01
-분석	manual	2026-11-01
-비교	stdict	2026-11-01
-산출	stdict	2026-11-01
-상담	stdict	2026-11-01
-선정	stdict	2026-11-01
-설계	stdict	2026-11-01
-설명	stdict	2026-11-01
-설치	stdict	2026-11-01
-세척	stdict	2026-11-01
-수립	stdict	2026-11-01
-수정	stdict	2026-11-01
-수주	stdict	2026-11-01
-수집	stdict	2026-11-01
-수행	stdict	2026-11-01
-시험	stdict	2026-11-01
-식별	stdict	2026-11-01
-안내	stdict	2026-11-01
-연마	stdict	2026-11-01
-연출	stdict	2026-11-01
-예측	stdict	2026-11-01
-용접	stdict	2026-11-01
-운반	stdict	2026-11-01
-운영	stdict	2026-11-01
-유지	stdict	2026-11-01
-이해	stdict	2026-11-01
-자동화	stdict	2026-11-01
-작성	stdict	2026-11-01
-저장	stdict	2026-11-01
-적용	stdict	2026-11-01
-적재	stdict	2026-11-01
-절단	stdict	2026-11-01
-점검	stdict	2026-11-01
-정리	stdict	2026-11-01
-정산	stdict	2026-11-01
-정의	manual	2026-11-01
-제시	stdict	2026-11-01
-제작	stdict	2026-11-01
-조리	stdict	2026-11-01
-조립	stdict	2026-11-01
-조사	stdict	2026-11-01
-조율	stdict	2026-11-01
-조정	stdict	2026-11-01
-조형	stdict	2026-11-01
-준비	stdict	2026-11-01
-지도	stdict	2026-11-01
-지원	stdict	2026-11-01
-진단	stdict	2026-11-01
-집필	stdict	2026-11-01
-처리	stdict	2026-11-01
-청구	stdict	2026-11-01
-촬영	stdict	2026-11-01
-최적화	stdict	2026-11-01
-추정	stdict	2026-11-01
-추출	stdict	2026-11-01
-측정	stdict	2026-11-01
-코딩	manual	2026-11-01
-테스트	stdict	2026-11-01
-통제	stdict	2026-11-01
-통합	stdict	2026-11-01
-파악	stdict	2026-11-01
-판매	stdict	2026-11-01
-편집	stdict	2026-11-01
-평가	stdict	2026-11-01
-포장	stdict	2026-11-01
-표준화	stdict	2026-11-01
-프로그래밍	manual	2026-11-01
-하차	stdict	2026-11-01
-해석	stdict	2026-11-01
-협력	stdict	2026-11-01
-협상	stdict	2026-11-01
-협의	stdict	2026-11-01
-홍보	stdict	2026-11-01
-확인	manual	2026-11-01
-활용	stdict	2026-11-01
-회계	stdict	2026-11-01
-회수	stdict	2026-11-01
+가공	stdict	2026-11-01	'가공-하다' 동사 표제어(target_code 385788)
+감독	stdict	2026-11-01	'감독-하다' 동사 표제어(target_code 510241)
+개발	stdict	2026-11-01	'개발-하다' 동사 표제어(target_code 389360)
+개선	stdict	2026-11-01	'개선-하다' 동사 표제어(target_code 394617)
+검사	stdict	2026-11-01	'검사-하다' 동사 표제어(target_code 14823)
+검증	stdict	2026-11-01	'검증-하다' 동사 표제어(target_code 15352)
+검토	stdict	2026-11-01	'검토-하다' 동사 표제어(target_code 16592)
+결산	stdict	2026-11-01	'결산-하다' 동사 표제어(target_code 17098)
+결정	stdict	2026-11-01	'결정-하다' 동사 표제어(target_code 17709)
+계약	stdict	2026-11-01	'계약-하다' 동사 표제어(target_code 20850)
+계획	stdict	2026-11-01	'계획-하다' 동사 표제어(target_code 22618)
+관리	stdict	2026-11-01	'관리-하다' 동사 표제어(target_code 398062)
+교육	stdict	2026-11-01	'교육-하다' 동사 표제어(target_code 398629)
+교정	stdict	2026-11-01	'교정-하다' 동사 표제어(target_code 36159)
+구축	stdict	2026-11-01	'구축-하다' 동사 표제어(target_code 395312)
+구현	stdict	2026-11-01	'구현-하다' 동사 표제어(target_code 397002)
+기록	stdict	2026-11-01	'기록-하다' 동사 표제어(target_code 405075)
+기획	stdict	2026-11-01	'기획-하다' 동사 표제어(target_code 51380)
+녹음	stdict	2026-11-01	'녹음-하다' 동사 표제어(target_code 69074)
+도장	stdict	2026-11-01	'도장-하다' 동사 표제어(target_code 84686)
+도출	stdict	2026-11-01	'도출-하다' 동사 표제어(target_code 86943)
+디버깅	manual	2026-11-01	외래어, 실무 통용('디버깅하다'); 사전에는 명사만
+모델링	manual	2026-11-01	외래어, 실무 통용; 사전에는 명사만
+문서화	stdict	2026-11-01	'문서화-하다' 동사 표제어(target_code 124325)
+발주	stdict	2026-11-01	'발주-하다' 동사 표제어(target_code 135249)
+배관	stdict	2026-11-01	'배관-하다' 동사 표제어(target_code 137630)
+배선	stdict	2026-11-01	'배선-하다' 동사 표제어(target_code 137556)
+배포	stdict	2026-11-01	'배포-하다' 동사 표제어(target_code 431961)
+번역	stdict	2026-11-01	'번역-하다' 동사 표제어(target_code 431702)
+변환	stdict	2026-11-01	'변환-하다' 동사 표제어(target_code 432475)
+보고	stdict	2026-11-01	'보고-하다' 동사 표제어(target_code 143831)
+보수	stdict	2026-11-01	'보수-하다' 동사 표제어(target_code 143956)
+보완	stdict	2026-11-01	'보완-하다' 동사 표제어(target_code 433540)
+분류	stdict	2026-11-01	'분류-하다' 동사 표제어(target_code 150214)
+분석	manual	2026-11-01	합성 원고 초기 목록
+비교	stdict	2026-11-01	'비교-하다' 동사 표제어(target_code 153326)
+산출	stdict	2026-11-01	'산출-하다' 동사 표제어(target_code 175573)
+상담	stdict	2026-11-01	'상담-하다' 동사 표제어(target_code 445606)
+선정	stdict	2026-11-01	'선정-하다' 동사 표제어(target_code 445302)
+설계	stdict	2026-11-01	'설계-하다' 동사 표제어(target_code 443566)
+설명	stdict	2026-11-01	'설명-하다' 동사 표제어(target_code 443122)
+설치	stdict	2026-11-01	'설치-하다' 동사 표제어(target_code 183752)
+세척	stdict	2026-11-01	'세척-하다' 동사 표제어(target_code 187432)
+수립	stdict	2026-11-01	'수립-하다' 동사 표제어(target_code 197935)
+수정	stdict	2026-11-01	'수정-하다' 동사 표제어(target_code 200505)
+수주	stdict	2026-11-01	'수주-하다' 동사 표제어(target_code 194046)
+수집	stdict	2026-11-01	'수집-하다' 동사 표제어(target_code 449838)
+수행	stdict	2026-11-01	'수행-하다' 동사 표제어(target_code 196368)
+시험	stdict	2026-11-01	'시험-하다' 동사 표제어(target_code 201949)
+식별	stdict	2026-11-01	'식별-하다' 동사 표제어(target_code 455491)
+안내	stdict	2026-11-01	'안내-하다' 동사 표제어(target_code 217088)
+연마	stdict	2026-11-01	'연마-하다' 동사 표제어(target_code 453876)
+연출	stdict	2026-11-01	'연출-하다' 동사 표제어(target_code 234431)
+예측	stdict	2026-11-01	'예측-하다' 동사 표제어(target_code 463717)
+용접	stdict	2026-11-01	'용접-하다' 동사 표제어(target_code 464483)
+운반	stdict	2026-11-01	'운반-하다' 동사 표제어(target_code 254802)
+운영	stdict	2026-11-01	'운영-하다' 동사 표제어(target_code 464504)
+유지	stdict	2026-11-01	'유지-하다' 동사 표제어(target_code 256909)
+이해	stdict	2026-11-01	'이해-하다' 동사 표제어(target_code 475570)
+자동화	stdict	2026-11-01	'자동화-하다' 동사 표제어(target_code 274402)
+작성	stdict	2026-11-01	'작성-하다' 동사 표제어(target_code 475485)
+저장	stdict	2026-11-01	'저장-하다' 동사 표제어(target_code 478298)
+적용	stdict	2026-11-01	'적용-하다' 동사 표제어(target_code 473990)
+적재	stdict	2026-11-01	'적재-하다' 동사 표제어(target_code 282456)
+절단	stdict	2026-11-01	'절단-하다' 동사 표제어(target_code 477979)
+점검	stdict	2026-11-01	'점검-하다' 동사 표제어(target_code 479146)
+정리	stdict	2026-11-01	'정리-하다' 동사 표제어(target_code 296740)
+정산	stdict	2026-11-01	'정산-하다' 동사 표제어(target_code 294841)
+정의	manual	2026-11-01	합성 원고 초기 목록
+제시	stdict	2026-11-01	'제시-하다' 동사 표제어(target_code 476964)
+제작	stdict	2026-11-01	'제작-하다' 동사 표제어(target_code 288962)
+조리	stdict	2026-11-01	'조리-하다' 동사 표제어(target_code 299000)
+조립	stdict	2026-11-01	'조립-하다' 동사 표제어(target_code 291814)
+조사	stdict	2026-11-01	'조사-하다' 동사 표제어(target_code 292408)
+조율	stdict	2026-11-01	'조율-하다' 동사 표제어(target_code 304711)
+조정	stdict	2026-11-01	'조정-하다' 동사 표제어(target_code 292759)
+조형	stdict	2026-11-01	'조형-하다' 동사 표제어(target_code 297451)
+준비	stdict	2026-11-01	'준비-하다' 동사 표제어(target_code 303329)
+지도	stdict	2026-11-01	'지도-하다' 동사 표제어(target_code 310214)
+지원	stdict	2026-11-01	'지원-하다' 동사 표제어(target_code 316484)
+진단	stdict	2026-11-01	'진단-하다' 동사 표제어(target_code 482359)
+집필	stdict	2026-11-01	'집필-하다' 동사 표제어(target_code 486184)
+처리	stdict	2026-11-01	'처리-하다' 동사 표제어(target_code 324395)
+청구	stdict	2026-11-01	'청구-하다' 동사 표제어(target_code 329560)
+촬영	stdict	2026-11-01	'촬영-하다' 동사 표제어(target_code 333389)
+최적화	stdict	2026-11-01	'최적화-하다' 동사 표제어(target_code 332101)
+추정	stdict	2026-11-01	'추정-하다' 동사 표제어(target_code 497588)
+추출	stdict	2026-11-01	'추출-하다' 동사 표제어(target_code 334911)
+측정	stdict	2026-11-01	'측정-하다' 동사 표제어(target_code 489839)
+코딩	manual	2026-11-01	외래어, 실무 통용; 사전에는 명사만
+테스트	stdict	2026-11-01	'테스트-하다' 동사 표제어(target_code 342749)
+통제	stdict	2026-11-01	'통제-하다' 동사 표제어(target_code 347408)
+통합	stdict	2026-11-01	'통합-하다' 동사 표제어(target_code 496096)
+파악	stdict	2026-11-01	'파악-하다' 동사 표제어(target_code 352228)
+판매	stdict	2026-11-01	'판매-하다' 동사 표제어(target_code 346581)
+편집	stdict	2026-11-01	'편집-하다' 동사 표제어(target_code 358061)
+평가	stdict	2026-11-01	'평가-하다' 동사 표제어(target_code 358539)
+포장	stdict	2026-11-01	'포장-하다' 동사 표제어(target_code 499854)
+표준화	stdict	2026-11-01	'표준화-하다' 동사 표제어(target_code 500355)
+프로그래밍	manual	2026-11-01	외래어, 실무 통용; 사전에는 명사만
+하차	stdict	2026-11-01	'하차-하다' 동사 표제어(target_code 495779)
+해석	stdict	2026-11-01	'해석-하다' 동사 표제어(target_code 364956)
+협력	stdict	2026-11-01	'협력-하다' 동사 표제어(target_code 507416)
+협상	stdict	2026-11-01	'협상-하다' 동사 표제어(target_code 369944)
+협의	stdict	2026-11-01	'협의-하다' 동사 표제어(target_code 505773)
+홍보	stdict	2026-11-01	'홍보-하다' 동사 표제어(target_code 376081)
+확인	manual	2026-11-01	합성 원고 초기 목록
+활용	stdict	2026-11-01	'활용-하다' 동사 표제어(target_code 506320)
+회계	stdict	2026-11-01	'회계-하다' 동사 표제어(target_code 379489)
+회수	stdict	2026-11-01	'회수-하다' 동사 표제어(target_code 382088)

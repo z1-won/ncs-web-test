@@ -4,7 +4,6 @@ from functools import lru_cache
 from importlib import resources
 
 ACTION_NOUNS_FILE = "action_nouns.txt"
-NON_ACTION_NOUNS_FILE = "non_action_nouns.txt"
 
 
 def _read_words(name: str) -> frozenset[str]:
@@ -23,8 +22,3 @@ def action_nouns() -> frozenset[str]:
     """행동명사 목록. ‘~하다’를 붙이면 뜻이 통하는 명사."""
     return _read_words(ACTION_NOUNS_FILE)
 
-
-@lru_cache(maxsize=None)
-def non_action_nouns() -> frozenset[str]:
-    """사람이 확인한 비행동명사 목록. ‘~하다’를 붙여도 뜻이 통하지 않는 명사."""
-    return _read_words(NON_ACTION_NOUNS_FILE)

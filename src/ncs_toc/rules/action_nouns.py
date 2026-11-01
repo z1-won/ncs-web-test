@@ -1,69 +1,59 @@
 """F02 차례 ②: ‘학습 내용명’은 행동명사로 종결하였는가?
 
 행동명사 = ‘~하다’를 붙였을 때 뜻이 통하는 단어(예: 제시·파악·이해·분석). 글자 모양으로는 판정할 수 없어
-패키지에 실린 행동명사 목록(ncs_core/data/action_nouns.txt)을 쓴다. 3단 판정:
-  O  마지막 어절(또는 복합어의 뒷부분)이 목록에 있음
-  X  비행동명사 목록(non_action_nouns.txt)에 있음, 또는 동사형으로 끝남(하기·되기·한다·된다·하는·되는)
-  △  그 외 — 목록에 없음(사람 확인 후 목록에 추가), 또는 함·됨·것·다로 끝나 서술형일 수 있음
-목록 조회가 먼저이므로 '포함'·'역할'처럼 함·할로 끝나는 정상 명사는 목록에 있으면 O다.
+패키지에 실린 행동명사 목록(ncs_core/data/action_nouns.txt — 표준국어대사전에서 ‘W하다’ 동사 표제어를 확인한
+단어와 사람이 승인한 단어)으로 판정한다. 검수 실행은 네트워크를 쓰지 않는다.
+
+  O  학습 내용명의 머리어(마지막 단어)가 목록에 있음
+  △  목록에 없음 — 사전이 모르는 것일 뿐 틀렸다는 뜻은 아니므로 사람이 확인한다. 미확인 단어는 진단에 모인다.
 """
 
 import re
 
-from ncs_core import O, TRI, X, verdict, visible
-from ncs_core.lexicon import action_nouns, non_action_nouns
+from ncs_core import O, TRI, verdict, visible
+from ncs_core.lexicon import action_nouns
 
 ITEM_ID = "F02-차례-②"
 CHECK = "행동명사 종결"
-# 명백한 동사형 종결 → X. (함·됨·것·다는 정상 명사와 겹칠 수 있어 △로만 둔다: 포함, 결함, 사다리)
-PREDICATE_END = re.compile(r"(하기|되기|한다|된다|하는|되는)$")
-MAYBE_PREDICATE_END = re.compile(r"(함|됨|것|다)$")
 TRAILING_NOTE = re.compile(r"\s*[\(（][^)）]*[\)）]\s*$")  # 끝의 괄호 보충 설명 "(실습)"
+# 나열 표지: 공백, 가운뎃점·빗금·쉼표, '및', 조사 '와/과'로 이어진 마지막 조각이 종결어다.
+SEPARATOR = re.compile(r"[\s·ㆍ・/,，]+|(?<=\S)(?:\s*및\s*)(?=\S)")
+TRAILING_PARTICLE = re.compile(r"(와|과)$")
 
 
-def last_word(name: str) -> str:
-    """학습 내용명의 마지막 어절. 끝의 괄호 설명과 문장부호는 뗀다."""
-    text = TRAILING_NOTE.sub("", name).strip().rstrip(".。·,")
-    return text.split()[-1] if text.split() else text
+def head_word(name: str) -> str:
+    """학습 내용명의 머리어(마지막 단어). 끝의 괄호 설명·문장부호를 떼고 나열 표지로 나눈 마지막 조각."""
+    text = TRAILING_NOTE.sub("", name).strip().rstrip(".。,")
+    pieces = [p for p in SEPARATOR.split(text) if p]
+    return pieces[-1] if pieces else text
 
 
-def classify(word: str, lexicon: frozenset[str], rejected: frozenset[str] = frozenset()) -> tuple[str, str | None, str | None]:
-    """→ (체크값, 비고, 판정에 쓴 단어). 복합어는 뒤에서 2~3글자를 다시 찾아본다('안전관리' → '관리')."""
+def classify(word: str, lexicon: frozenset[str]) -> tuple[str, str | None]:
+    """→ (체크값, 비고). 목록에 있으면 O, 아니면 △."""
     if not word:
-        return TRI, "학습 내용명이 비어 있음", None
+        return TRI, "학습 내용명이 비어 있음"
     if word in lexicon:
-        return O, None, word
-    if word in rejected:
-        return X, f"'{word}' — 행동명사가 아님(‘{word}하다’ 불성립, 확인된 단어). 행동명사로 고칠 것", word
-    for n in (3, 2):
-        tail = word[-n:]
-        if len(word) > n and tail in lexicon:
-            return O, f"복합어 '{word}'의 뒷부분 '{tail}'로 판정", tail
-    if PREDICATE_END.search(word):
-        return X, f"'{word}' — 동사형 종결(행동명사 아님). 명사형으로 고칠 것", word
-    if MAYBE_PREDICATE_END.search(word):
-        return TRI, f"'{word}' — 서술형 종결일 수 있음(함·됨·것·다). 명사면 목록에 추가, 아니면 명사형으로 고칠 것", word
-    return TRI, f"'{word}' — 행동명사 목록에 없음. 사람 확인 후 목록에 추가(scripts/build_action_nouns.py)", word
+        return O, None
+    return TRI, f"행동명사 여부 확인 필요: '{word}'"
 
 
-def check_toc2(toc: dict, lexicon: frozenset[str] | None = None, rejected: frozenset[str] | None = None) -> list[dict]:
+def check_toc2(toc: dict, lexicon: frozenset[str] | None = None) -> list[dict]:
     lexicon = action_nouns() if lexicon is None else lexicon
-    rejected = non_action_nouns() if rejected is None else rejected
     rows = []
     for sub in toc["내용"]:
-        word = last_word(sub["text"])
-        value, note, used = classify(word, lexicon, rejected)
+        word = head_word(sub["text"])
+        value, note = classify(word, lexicon)
         checks = {CHECK: value}
         rows.append(
             {
                 "item_id": ITEM_ID,
                 "region_path": f"section0 > 차례 > {sub['no']}-{sub['sub']}",
                 "원고": visible(sub["text"]),
-                "마지막 어절": word,
+                "머리어": word,
                 "체크": checks,
                 "판정": verdict(checks),
                 "비고": {CHECK: note} if note else {},
-                "수정 제안": "학습 내용명을 행동명사(‘~하다’가 붙는 명사)로 종결" if value == X else None,
+                "수정 제안": None,
             }
         )
     if not rows:
@@ -72,6 +62,7 @@ def check_toc2(toc: dict, lexicon: frozenset[str] | None = None, rejected: froze
                 "item_id": ITEM_ID,
                 "region_path": "section0 > 차례",
                 "원고": None,
+                "머리어": None,
                 "체크": {CHECK: TRI},
                 "판정": verdict({CHECK: TRI}),
                 "비고": {CHECK: "차례에서 학습 내용명(N-M.)을 읽지 못해 판단할 수 없음"},
@@ -79,3 +70,8 @@ def check_toc2(toc: dict, lexicon: frozenset[str] | None = None, rejected: froze
             }
         )
     return rows
+
+
+def unknown_words(rows: list[dict]) -> list[str]:
+    """②에서 △로 남은 머리어 목록(진단용). 사전 갱신 스크립트가 읽는다."""
+    return sorted({r["머리어"] for r in rows if r["item_id"] == ITEM_ID and r["체크"].get(CHECK) == TRI and r.get("머리어")})

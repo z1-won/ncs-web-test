@@ -11,7 +11,7 @@
   set -a; source .env; set +a
   python scripts/build_action_nouns.py 분석 설계 구현            # 단어 직접
   python scripts/build_action_nouns.py --from-file 후보.txt      # 한 줄 한 단어
-  python scripts/build_action_nouns.py --from-results webapp/결과 # 차례② 결과 JSON에서 △ 단어 수집
+  python scripts/build_action_nouns.py --from-results webapp/결과 # 차례 진단 JSON의 '행동명사 미확인' 단어 수집
   python scripts/build_action_nouns.py --debug 분석              # 첫 단어의 원응답을 scripts/.stdict_debug.json에 저장
 응답(XML)은 scripts/.stdict_cache.json에 캐시되어 같은 단어를 다시 묻지 않는다. --debug는 첫 원응답을 scripts/.stdict_debug.xml에 둔다.
 """
@@ -110,28 +110,27 @@ def is_action_noun(api: Api, word: str) -> tuple[bool | None, str]:
     return None, f"'{word}' 표제어 없음"
 
 
-def read_lexicon() -> dict[str, tuple[str, str]]:
+def read_lexicon() -> dict[str, tuple[str, str, str]]:
+    """단어 → (출처, 날짜, 근거)."""
     out = {}
     for line in LEXICON.read_text(encoding="utf-8").splitlines():
         if line.strip() and not line.startswith("#"):
-            parts = (line.split("\t") + ["", ""])[:3]
-            out[parts[0].strip()] = (parts[1].strip(), parts[2].strip())
+            parts = (line.split("\t") + ["", "", ""])[:4]
+            out[parts[0].strip()] = (parts[1].strip(), parts[2].strip(), parts[3].strip())
     return out
 
 
-def write_lexicon(entries: dict[str, tuple[str, str]]) -> None:
+def write_lexicon(entries: dict[str, tuple[str, str, str]]) -> None:
     header = [l for l in LEXICON.read_text(encoding="utf-8").splitlines() if l.startswith("#")]
-    body = [f"{w}\t{src}\t{d}" for w, (src, d) in sorted(entries.items())]
+    body = [f"{w}\t{src}\t{d}\t{why}".rstrip("\t") for w, (src, d, why) in sorted(entries.items())]
     LEXICON.write_text("\n".join(header + body) + "\n", encoding="utf-8")
 
 
 def words_from_results(folder: Path) -> set[str]:
-    """차례② 결과 JSON에서 △(목록에 없음)로 나온 마지막 어절을 모은다."""
+    """차례 검수 진단 JSON의 '행동명사 미확인' 목록을 모은다(파일 모드 결과 폴더)."""
     words = set()
-    for path in folder.rglob("*차례②*.json"):
-        for row in json.loads(path.read_text(encoding="utf-8")):
-            if row.get("체크", {}).get("행동명사 종결") == "△" and row.get("마지막 어절"):
-                words.add(row["마지막 어절"])
+    for path in folder.rglob("*_차례_진단.json"):
+        words |= set(json.loads(path.read_text(encoding="utf-8")).get("행동명사 미확인", []))
     return words
 
 
@@ -139,7 +138,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="행동명사 목록을 표준국어대사전 API로 갱신")
     parser.add_argument("words", nargs="*")
     parser.add_argument("--from-file", type=Path)
-    parser.add_argument("--from-results", type=Path, help="검수 결과 폴더(차례② JSON의 △ 단어 수집)")
+    parser.add_argument("--from-results", type=Path, help="검수 결과 폴더(차례 진단 JSON의 '행동명사 미확인' 수집)")
     parser.add_argument("--debug", action="store_true", help="첫 API 원응답을 scripts/.stdict_debug.xml에 저장")
     parser.add_argument("--dry-run", action="store_true", help="목록 파일을 쓰지 않고 결과만 출력")
     args = parser.parse_args()
@@ -167,7 +166,7 @@ def main() -> None:
                 print(f"  {word}: 네트워크 오류 {error}", file=sys.stderr)
                 continue
             if verdict is True:
-                lexicon[word] = ("stdict", date.today().isoformat())
+                lexicon[word] = ("stdict", date.today().isoformat(), why)
                 added.append((word, why))
             elif verdict is False:
                 rejected.append((word, why))
@@ -185,7 +184,7 @@ def main() -> None:
         print(f"\n사전에 '-하다' 근거 없음 {len(rejected)} — 사람이 확인. 전문용어라 누락일 수 있음:")
         for w, why in rejected:
             print(f"  {w}\t{why}")
-        print("  → 행동명사가 맞으면 action_nouns.txt에 '단어<TAB>manual<TAB>날짜', 아니면 non_action_nouns.txt에 추가")
+        print("  → 행동명사가 맞으면 action_nouns.txt에 '단어<TAB>manual<TAB>날짜<TAB>근거' 로 추가. 아니면 그대로 둔다(검수에서 △로 남아 사람이 본다)")
     if unknown:
         print(f"\n표제어 자체가 없음 {len(unknown)} — 복합어·전문용어. 사람이 확인:")
         for w, why in unknown:

@@ -17,6 +17,7 @@ from .config import DEFAULT_CONFIG, CheckConfig
 from .evaluation import evaluation_tables
 from .models import ReviewContext
 from .registry import ALL_ITEM_IDS, DEFAULT_RULES
+from .rules.action_nouns import unknown_words
 from .sheet import sheet
 
 
@@ -110,6 +111,8 @@ def evaluate_review(context: ReviewContext, *, rules: Sequence[Rule] = DEFAULT_R
         if row["item_id"] == "F02-차례-⑤":
             row["원고"] = _actual_sections(row["원고"], config)
     diagnostics = _diagnostics(context, rules)
+    # ②에서 목록에 없어 △로 남은 머리어. scripts/build_action_nouns.py --from-results 가 이 키를 읽는다.
+    diagnostics["행동명사 미확인"] = unknown_words(checklist)
     return ReviewResult(context.module_code, checklist, flatten(checklist), diagnostics, context, sheet(checklist))
 
 

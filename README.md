@@ -85,7 +85,7 @@ set -a; source .env; set +a
 .venv/bin/python scripts/build_action_nouns.py 구성 산출                                          # 단어 직접
 ```
 
-API가 확인한 단어만 목록에 들어갑니다(출처 `stdict`). "사전에 근거 없음"으로 나온 전문용어는 사람이 판단해 `action_nouns.txt`(출처 `manual`) 또는 `non_action_nouns.txt`에 추가합니다. 갱신 후 골든이 바뀌면 `tests/make_golden.py`로 재생성하고 함께 커밋합니다.
+API가 확인한 단어만 목록에 들어갑니다(출처 `stdict`, 근거에 target_code). "사전에 근거 없음"으로 나온 외래어·전문용어는 사람이 판단해 행동명사면 `action_nouns.txt`에 출처 `manual`과 근거를 적어 추가하고, 아니면 그대로 둡니다(검수에서 △로 남아 사람이 봅니다). ②는 O와 △만 내고 X는 내지 않습니다. 갱신 후 골든이 바뀌면 `tests/make_golden.py`로 재생성하고 함께 커밋합니다.
 
 ## 변경 검증
 
