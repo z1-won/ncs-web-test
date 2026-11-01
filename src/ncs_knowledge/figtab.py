@@ -1,6 +1,6 @@
-"""F02 필요지식-⑦ 그림·표 번호 연속성 검사 (figtab v1.4 논리 그대로, ncs_core 어휘로 옮김).
+"""F02 필요지식-⑦ 그림·표 번호 연속성 검사 .
 
-check_figtab(sections, lesson_spans) -> findings: item_id / region_path / verdict / evidence_quote / reason / suggestion
+check_figtab(sections, lesson_spans) -> 체크리스트 행 목록(행 = 그림/표 × 학습 묶음, 본문 참조, 괄호 없는 번호).
 기준
   - 학습 N 안의 그림은 [그림 N-1], [그림 N-2] … 순서대로, 표는 〈표 N-1〉, 〈표 N-2〉 … 순서대로
   - 괄호: 그림은 [ ], 표는 〈 〉
@@ -8,15 +8,9 @@ check_figtab(sections, lesson_spans) -> findings: item_id / region_path / verdic
 """
 import re
 
-from ncs_core import FAIL, PASS, PUA, UNDECIDED, visible
+from ncs_core import NA, O, PUA, TRI as UNDECIDED_MARK, X, visible
 
 ITEM = 'F02-필요지식-⑦'
-
-def pua_finding(item_id, rp, txt):
-    if not PUA.search(txt or ''): return None
-    return {'item_id': item_id + '-문자', 'region_path': rp, 'verdict': FAIL, 'evidence_quote': visible(txt),
-            'reason': '기호 글꼴(사용자 정의 영역) 문자가 들어 있음 — 한글 화면에서는 가운뎃점 등으로 보이지만 다른 환경에서는 빈칸·네모로 깨짐',
-            'suggestion': PUA.sub('·', txt)}
 
 _FW = str.maketrans('０１２３４５６７８９－', '0123456789-')          # 전각 숫자·대시 → 반각
 _DASH = r'[-–—－‐]'
@@ -35,8 +29,10 @@ SENTENCE_END = re.compile(r'(다|요|라|오|죠|까)\s*[.。?]\s*$')
 JOSA_AFTER = re.compile(r'^(은|는|이|가|을|를|과|와|의|에|로|처럼|같이|에서|부터|까지|도|만)(\s|$)')
 
 
-def _flatten(sections):
-    return [(s, i, t) for s, sec in enumerate(sections) for i, t in enumerate(sec) if t]
+def _flatten(sections, exclude=None):
+    """(섹션, 문단, 텍스트) 평탄화. exclude: 뺄 (섹션, 문단) 집합 — 메모·머리말 등 본문 밖 문단."""
+    exclude = exclude or set()
+    return [(s, i, t) for s, sec in enumerate(sections) for i, t in enumerate(sec) if t and (s, i) not in exclude]
 
 
 def split_lessons(flat, caps=None):
@@ -85,11 +81,6 @@ def _fmt(kind, major, minor):
     return f'{o}{kind} {major}-{minor}{c}'
 
 
-def _f(item, rp, verdict, quote, reason, suggestion=None):
-    return {'item_id': item, 'region_path': rp, 'verdict': verdict,
-            'evidence_quote': visible(quote) if quote else quote, 'reason': reason, 'suggestion': suggestion}
-
-
 def collect_labels(flat):
     """캡션(문단 첫머리의 라벨)과 참조(문장 중간의 라벨)를 나눠 모음."""
     caps, refs, bare = [], [], []
@@ -113,7 +104,8 @@ def collect_labels(flat):
     return caps, refs, bare
 
 
-MIN_AGREEMENT = 0.5     # 캡션 앞 번호와 학습 경계가 이 비율 미만으로 맞으면 '-위치' 검사를 하지 않음
+MIN_AGREEMENT = 0.5     # 캡션 앞 번호와 학습 경계가 이 비율 미만으로 맞으면 '놓인 학습' 검사를 하지 않음
+SHOW = 3                # 비고에 적는 대표 라벨 수
 
 
 def _title(c):
@@ -122,130 +114,126 @@ def _title(c):
     return t[len(c['label']):].strip() if t.startswith(c['label']) else t.strip()
 
 
-def toc_lesson_count(sections):
-    """차례(section0)의 '학습 N. …' 줄 개수 — toc_check의 parse_manuscript 와 같은 규칙"""
-    n = 0
-    for s in sections[0] if sections else []:
-        m = re.match(r'학습\s*(\d+)\.\s*(.+)', s)
-        if m and int(m.group(1)) == n + 1: n += 1
-    return n
+def _row(no_suffix, region, where, source, checks, notes, suggestion, details):
+    from ncs_core import PASS, verdict
+    result = verdict(checks)
+    return {'item_id': ITEM, 'region_path': region, '위치': where, '원고': source, '체크': checks, '판정': result,
+            '비고': notes, '수정 제안': None if result == PASS else suggestion, '상세': details}
+
+
+def _few(labels):
+    return ', '.join(labels[:SHOW]) + (' …' if len(labels) > SHOW else '')
+
+
+def sequence_problems(group):
+    """한 학습·한 종류의 캡션 묶음(문서 순서) → {'재사용': [...], '중복 삽입': [...], '누락': [...], '역행': [...]} (라벨 목록).
+
+    번호 재사용: 같은 번호가 다른 그림명으로 다시 나옴. 중복 삽입: 같은 번호·같은 그림명(같은 그림을 두 번 넣음).
+    누락: 1..최대 사이에 없는 번호. 역행: 앞서 나온 가장 큰 번호보다 작은 번호가 뒤에 나옴(재사용·중복 제외).
+    """
+    out = {'재사용': [], '중복 삽입': [], '누락': [], '역행': []}
+    seen, high = {}, 0
+    for c in group:
+        m = c['minor']
+        if m in seen:
+            (out['중복 삽입'] if _title(seen[m]) == _title(c) else out['재사용']).append(c['label'])
+            continue
+        seen[m] = c
+        if m < high:
+            out['역행'].append(c['label'])
+        high = max(high, m)
+    kind, major = group[0]['kind'], group[0]['major']
+    out['누락'] = [_fmt(kind, major, m) for m in range(1, high + 1) if m not in seen]
+    return out
 
 
 def check_figtab(sections, lesson_spans=None, *, min_agreement=MIN_AGREEMENT, labels=None):
-    """lesson_spans: [(학습번호, flat_start, flat_end)] 를 밖(내비게이터 기반 학습 구간)에서 주면 그것을 씀.
-    1차: 캡션 번호 자체로 연속성 검사(확정적). 2차: 앞 번호 열이 차례 학습 개수와 맞는가.
-    3차: 학습 제목줄이 믿을 만하게 잡힐 때만, 캡션이 놓인 학습과 앞 번호가 같은가(-위치)."""
+    """⑦ 행 목록. 행 = (그림/표) × 학습 묶음 + 본문 참조 1~2행 + 괄호 없는 번호 1행.
+
+    학습 묶음은 캡션이 '놓인 학습'(lesson_spans)으로 나누고, 학습 경계를 믿을 수 없으면 캡션의 앞 번호로 나눈다.
+    앞 번호(학습 번호)는 연속일 필요가 없다 — 표가 없는 학습은 건너뛴다(〈표 1-1〉 다음 〈표 4-1〉 정상).
+    """
     if labels is None:
         flat = _flatten(sections)
         caps, refs, bare = collect_labels(flat)
     else:
         flat, caps, refs, bare = labels["flat"], labels["caps"], labels["refs"], labels["bare"]
-    F = []
-    n_toc = toc_lesson_count(sections)
+    rows = []
+    if not caps and not refs and not bare:
+        # 그림·표가 전혀 없는 원고: 검사할 것이 없음을 적합(해당 없음)으로 남긴다 — '규칙 미구현'과 구분
+        return [_row('', 'section1', '', {'개수': 0}, {'그림·표 캡션': NA}, {'그림·표 캡션': '원고에 그림·표 캡션이 없어 검사할 것이 없음'}, None, [])]
+    spans, agree = (lesson_spans, 1.0) if lesson_spans else split_lessons(flat, caps)
+    reliable = bool(spans) and agree >= min_agreement
+    lesson_of = (lambda k: next((no for no, a, b in spans if a <= k < b), None)) if reliable else (lambda k: None)
 
-    # ---------- 1차·2차: 종류별로 문서 순서대로 ----------
     for kind in ('그림', '표'):
         cs = [c for c in caps if c['kind'] == kind]
-        if not cs: continue
-        groups, g = [], []
+        if not cs:
+            continue
+        groups = {}
         for c in cs:
-            if g and c['major'] != g[-1]['major']: groups.append(g); g = []
-            g.append(c)
-        if g: groups.append(g)
+            groups.setdefault(lesson_of(c['k']) or c['major'], []).append(c)
+        for lesson, group in sorted(groups.items()):
+            checks, notes, details = {}, {}, []
+            own = [c for c in group if c['major'] == lesson]
+            misplaced = [c for c in group if c['major'] != lesson]
+            if reliable:
+                checks['놓인 학습 일치'] = X if misplaced else O
+                if misplaced:
+                    notes['놓인 학습 일치'] = f'{len(misplaced)}개가 학습 {lesson} 본문에 있는데 앞 번호가 다름: {_few([c["label"] for c in misplaced])}'
+                    details += [{'문단': c['para'], '라벨': c['label'], '캡션': visible(c['text']), '문제': f'학습 {lesson}에 놓였는데 앞 번호 {c["major"]}'} for c in misplaced]
+            problems = sequence_problems(own) if own else {}
+            bad = {k: v for k, v in problems.items() if v}
+            checks['번호 연속'] = X if bad else O
+            if bad:
+                notes['번호 연속'] = f'{kind} {lesson}-x {len(own)}개 중 ' + ' · '.join(f'{k} {len(v)}({_few(v)})' for k, v in bad.items())
+                for k, v in bad.items():
+                    for label in v:
+                        c = next((c for c in own if c['label'] == label), None)
+                        details.append({'문단': c['para'] if c else None, '라벨': label, '캡션': visible(c['text']) if c else None, '문제': k})
+            wrong = [c for c in group if (c['open'], c['close']) not in _OK_BRACKETS[kind]]
+            checks['괄호 표기'] = X if wrong else O
+            if wrong:
+                notes['괄호 표기'] = f'{len(wrong)}개가 {CORRECT[kind][0]} {CORRECT[kind][1]} 가 아님: {_few([c["label"] for c in wrong])}'
+                details += [{'문단': c['para'], '라벨': c['label'], '캡션': visible(c['text']), '문제': f'괄호 {c["open"]} {c["close"]}'} for c in wrong]
+            pua = [c for c in group if PUA.search(c['text'] or '')]
+            if pua:
+                checks['기호 글꼴 문자'] = X
+                notes['기호 글꼴 문자'] = f'{len(pua)}개 캡션에 사용자 정의 영역 문자(다른 환경에서 깨짐): {_few([c["label"] for c in pua])}'
+                details += [{'문단': c['para'], '라벨': c['label'], '캡션': visible(c['text']), '문제': '기호 글꼴 문자'} for c in pua]
+            advice = []
+            if misplaced or bad:
+                advice.append(f'{kind} 번호는 놓인 학습 번호-1 부터 나오는 순서대로 다시 매김' + (' (같은 그림은 하나만 남김)' if problems.get('중복 삽입') else ''))
+            if wrong:
+                advice.append(f'{kind} 번호는 {CORRECT[kind][0]} {CORRECT[kind][1]} 로 묶음')
+            if pua:
+                advice.append('캡션의 기호 글꼴 문자를 일반 문자(가운뎃점 등)로 바꿈')
+            rows.append(_row('', f'section1 > 학습 {lesson} > {kind}', f'학습 {lesson}',
+                             {'개수': len(group), '번호': [c['label'] for c in group]}, checks, notes, ' / '.join(advice) or None, details))
+    if caps and not reliable:
+        rows.append(_row('', 'section1', '', None, {'놓인 학습 일치': UNDECIDED_MARK}, {
+            '놓인 학습 일치': f'학습 경계를 믿을 만하게 잡지 못해(캡션-경계 일치율 {agree:.0%}) 캡션이 놓인 학습과 앞 번호를 대조하지 못함'}, None, []))
 
-        # 앞 번호 열: 1,2,3… 한 번씩 순서대로여야 함
-        majors = [g[0]['major'] for g in groups]
-        seen = []
-        for g in groups:
-            major = g[0]['major']; first = g[0]
-            rp0 = f"section{first['sec']} > {kind} {major}-x 묶음"
-            if major in seen:
-                F.append(_f(ITEM + '-번호', rp0, FAIL, ' / '.join(c['label'] for c in g[:4]),
-                            f'{kind} {major}-x 가 다른 번호 묶음 뒤에 다시 나옴(앞서 {kind} {max(seen)}-x 까지 나온 뒤). '
-                            f'학습 {major}의 {kind}은 한 곳에 이어져야 함 — 뒤에 나온 {first["label"]} 부터는 놓인 학습에 맞춰 번호를 바꿀 것'))
-            elif seen and major != seen[-1] + 1:
-                F.append(_f(ITEM + '-번호', rp0, FAIL, ' / '.join(c['label'] for c in g[:4]),
-                            f'{kind} 앞 번호가 {seen[-1]} 다음에 {major} 로 감 — 학습 순서대로 {seen[-1] + 1} 이어야 함'
-                            + ('' if major > seen[-1] else '(되돌아감)')))
-            elif not seen and major != 1:
-                F.append(_f(ITEM + '-번호', rp0, FAIL, ' / '.join(c['label'] for c in g[:4]),
-                            f'원고에서 처음 나오는 {kind}의 앞 번호가 {major} — 학습 1의 {kind}이면 {_fmt(kind, 1, 1)} 부터여야 함'))
-            seen.append(major)
-
-            # 뒷 번호: 묶음 안에서 1부터 연속
-            bad, expect = 0, 1
-            for nth, c in enumerate(g, 1):
-                rp = f"section{c['sec']} > {c['label']}"
-                if (pf := pua_finding(ITEM, rp, c['text'])): F.append(pf)
-                same = None
-                if c['minor'] == expect:
-                    expect += 1
-                else:
-                    bad += 1
-                    if c['minor'] < expect:
-                        prev = next((p for p in g[:nth - 1] if p['minor'] == c['minor']), None)
-                        if prev and _title(prev) == _title(c):
-                            same = prev
-                            F.append(_f(ITEM + '-번호', rp, FAIL, c['text'],
-                                        f'{c["label"]} 이(가) 두 번 나오고 그림명도 "{_title(c)}" 로 똑같음 — 같은 {kind}을 두 번 넣은 것. '
-                                        f'하나를 빼면 뒤 번호는 그대로 맞음', '(중복이면 삭제)'))
-                        elif prev:
-                            F.append(_f(ITEM + '-번호', rp, FAIL, c['text'],
-                                        f'{c["label"]} 이(가) 두 번 나오는데 그림명이 다름 — 앞: "{_title(prev)}", 뒤: "{_title(c)}". '
-                                        f'다른 {kind}이므로 뒤의 것은 {_fmt(kind, major, expect)} 이어야 함', _fmt(kind, major, expect)))
-                        else:
-                            F.append(_f(ITEM + '-번호', rp, FAIL, c['text'],
-                                        f'{c["label"]} 이(가) {_fmt(kind, major, expect - 1)} 뒤에 나옴 — 순서가 뒤바뀜. '
-                                        f'자리를 옮기거나, 이 자리라면 {_fmt(kind, major, expect)} 이어야 함', _fmt(kind, major, expect)))
-                    else:
-                        skipped = ', '.join(_fmt(kind, major, m) for m in range(expect, c['minor']))
-                        F.append(_f(ITEM + '-번호', rp, FAIL, c['text'],
-                                    f'{kind} {major}-x 묶음의 {nth}번째인데 {c["label"]} 로 매겨짐 — {skipped} 를 건너뜀. {_fmt(kind, major, expect)} 이어야 함',
-                                    _fmt(kind, major, expect)))
-                    if not same: expect = max(expect, c['minor']) + 1   # 한 번 어긋난 뒤 연쇄 보고 방지
-                if (c['open'], c['close']) not in _OK_BRACKETS[kind]:
-                    F.append(_f(ITEM + '-표기', rp, FAIL, c['text'],
-                                f"{kind} 번호는 {CORRECT[kind][0]} {CORRECT[kind][1]} 로 묶어야 하는데 {c['open']} {c['close']} 로 묶음",
-                                _fmt(kind, c['major'], c['minor'])))
-            if bad == 0:
-                seq = ', '.join(c['label'] for c in g) if len(g) <= 4 else f"{g[0]['label']} … {g[-1]['label']}"
-                F.append(_f(ITEM, f'{kind} {major}-x', PASS, ' / '.join(c['label'] for c in g),
-                            f'{kind} {major}-x {len(g)}개가 {seq} 순서로 빠짐없이 이어짐'))
-
-        # 차례의 학습 개수와 대조
-        if n_toc and majors and max(majors) > n_toc:
-            F.append(_f(ITEM + '-번호', f'{kind} 앞 번호', FAIL, ', '.join(f'{kind} {m}-x' for m in majors),
-                        f'{kind} 앞 번호가 {max(majors)} 까지 나오는데 차례의 학습은 {n_toc}개 — 학습 번호를 넘는 번호가 있음'))
-
-    # ---------- 3차: 학습 제목줄이 믿을 만할 때만 '놓인 학습' 과 대조 ----------
-    spans, agree = (lesson_spans, 1.0) if lesson_spans else split_lessons(flat, caps)
-    if spans and caps and agree >= min_agreement:
-        lesson_of = lambda k: next((no for no, a, b in spans if a <= k < b), None)
-        for c in caps:
-            no = lesson_of(c['k'])
-            if no is not None and c['major'] != no:
-                F.append(_f(ITEM + '-위치', f"section{c['sec']} > 학습 {no} > {c['label']}", FAIL, c['text'],
-                            f'{c["label"]} 이(가) 학습 {no} 본문(제목줄 "{flat[[a for n,a,b in spans if n==no][0]][2][:20]}" 아래)에 놓여 있음 — '
-                            f'앞 번호 {c["major"]} 와 다름. 학습 {no}에 두려면 {c["kind"]} {no}-x 로',
-                            None))
-    elif caps:
-        F.append(_f(ITEM + '-위치', '본문', UNDECIDED, None,
-                    '학습 제목줄을 믿을 만하게 잡지 못해(캡션-경계 일치율 '
-                    f'{agree:.0%}) "캡션이 놓인 학습 = 앞 번호" 검사는 못 함. 번호 연속성 검사(위)는 영향 없음'))
-
-    # ---------- 참조 · 괄호 없음 ----------
+    # 본문 참조: 가리키는 캡션이 있는가, 괄호가 맞는가 — 종류별 1행
     cap_keys = {(c['kind'], c['major'], c['minor']) for c in caps}
-    for r in refs:
-        rp = f"section{r['sec']} > 본문"
-        if (r['kind'], r['major'], r['minor']) not in cap_keys:
-            F.append(_f(ITEM + '-참조', rp, FAIL, r['text'],
-                        f'본문 문장이 {r["label"]} 을(를) 가리키지만 원고 어디에도 {r["label"]} 캡션이 없음 — 그림·표를 빼거나 번호를 바꾼 뒤 본문을 안 고쳤을 가능성'))
-        if (r['open'], r['close']) not in _OK_BRACKETS[r['kind']]:
-            F.append(_f(ITEM + '-표기', rp, FAIL, r['text'],
-                        f"본문에서 {r['kind']} 번호를 {r['open']} {r['close']} 로 묶음 — {CORRECT[r['kind']][0]} {CORRECT[r['kind']][1]} 로 묶어야 함",
-                        _fmt(r['kind'], r['major'], r['minor'])))
-    for x in bare:
-        F.append(_f(ITEM + '-표기', f"section{x['sec']} > 본문", UNDECIDED, x['text'],
-                    f'"{x["label"]}" 이 괄호 없이 나옴 — 괄호가 기호 글꼴(사용자 정의 문자)로 찍혔거나 빠진 것. 어느 쪽인지 원고에서 확인',
-                    _fmt(x['kind'], x['major'], x['minor'])))
-    return F
+    for kind in ('그림', '표'):
+        rs = [r for r in refs if r['kind'] == kind]
+        if not rs:
+            continue
+        missing = [r for r in rs if (r['kind'], r['major'], r['minor']) not in cap_keys]
+        wrong = [r for r in rs if (r['open'], r['close']) not in _OK_BRACKETS[kind]]
+        checks = {'참조 대상 캡션 존재': X if missing else O, '참조 괄호 표기': X if wrong else O}
+        notes = {}
+        if missing:
+            notes['참조 대상 캡션 존재'] = f'본문 참조 {len(rs)}개 중 {len(missing)}개는 캡션이 없음: {_few([r["label"] for r in missing])}'
+        if wrong:
+            notes['참조 괄호 표기'] = f'{len(wrong)}개가 {CORRECT[kind][0]} {CORRECT[kind][1]} 가 아님: {_few([r["label"] for r in wrong])}'
+        details = [{'문단': r['para'], '라벨': r['label'], '문장': visible(r['text']), '문제': '캡션 없음'} for r in missing] + \
+                  [{'문단': r['para'], '라벨': r['label'], '문장': visible(r['text']), '문제': f'괄호 {r["open"]} {r["close"]}'} for r in wrong]
+        rows.append(_row('', f'section1 > 본문 {kind} 참조', '', {'참조 수': len(rs)}, checks, notes,
+                         f'{kind} 번호를 바꾼 뒤 본문 참조도 함께 고치고 {CORRECT[kind][0]} {CORRECT[kind][1]} 로 묶음', details))
+    if bare:
+        rows.append(_row('', 'section1 > 본문', '', {'개수': len(bare)}, {'괄호 없는 번호': UNDECIDED_MARK},
+                         {'괄호 없는 번호': f'{len(bare)}개가 괄호 없이 나옴(기호 글꼴 괄호이거나 빠진 것, 원고 확인): {_few([x["label"] for x in bare])}'},
+                         '그림은 [ ], 표는 〈 〉 로 묶음', [{'문단': x['para'], '라벨': x['label'], '문장': visible(x['text'])} for x in bare]))
+    return rows

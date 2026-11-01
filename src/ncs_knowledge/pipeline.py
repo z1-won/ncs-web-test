@@ -49,7 +49,8 @@ def prepare_review(
     units = unit_regions(body, config)
     plan_goals = parse_plan_goals(plan, code) if plan else None
     table_paragraphs = manuscript.section_table_paragraphs(config.body_section)
-    flat = _flatten(sections)
+    aside = manuscript.section_aside_paragraphs(config.body_section) or frozenset()
+    flat = _flatten(sections, exclude={(1, i) for i in aside})  # 메모·머리말 안 캡션은 세지 않음
     caps, refs, bare = collect_labels(flat)
     position = {(s, i): k for k, (s, i, _) in enumerate(flat)}
     lesson_spans = [
