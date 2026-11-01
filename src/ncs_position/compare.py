@@ -1,10 +1,31 @@
 """목록 비교 도우미. 규칙 모듈이 함께 쓴다. 비교 정책은 v1.1을 유지한다."""
 
+import re
 from collections.abc import Sequence
 
 from ncs_core import NA, O, TRI, X, visible
+from ncs_core.goals import difference
 
 from .text import norm
+
+PUNCT = re.compile(r"[\s·ㆍ‧∙•\-–—/,.()\[\]〈〉<>]")
+
+
+def explain_pair(expected: str, actual: str) -> str:
+    """같은 자리의 두 이름을 문서 이름을 붙여 나란히: '원고 「…」 / 개발계획서 「…」 — 띄어쓰기만 다름'.
+
+    "A→B"만 보여 주면 어느 쪽이 어느 문서인지, 띄어쓰기 하나 차이가 어디인지 눈에 안 띈다
+    (AIoT 운영 플랫폼 요구사항 분석 ↔ AIoT 운영플랫폼요구사항분석). 두 문서의 문구를 각각 적고 차이의 종류를 덧붙인다.
+    글자가 다른 경우는 다른 어절만 「원고」↔「계획서」로 한 번 더 뽑아 준다.
+    """
+    e, a = visible(expected), visible(actual)
+    if re.sub(r"\s", "", e) == re.sub(r"\s", "", a):
+        why = "띄어쓰기만 다름"
+    elif PUNCT.sub("", e) == PUNCT.sub("", a):
+        why = "기호·띄어쓰기만 다름"
+    else:
+        why = "다른 곳 " + difference(e, a) + " (원고↔계획서)"
+    return f"원고 「{a}」 / 개발계획서 「{e}」 — {why}"
 
 
 def list_check(name: str, expected: Sequence[str], actual: Sequence[str]) -> tuple[str, str, list[str]]:
@@ -15,13 +36,13 @@ def list_check(name: str, expected: Sequence[str], actual: Sequence[str]) -> tup
 
 def summarize_diff(name: str, info: dict, show: int = 3) -> str:
     """list_diff의 info → 확인서 비고용 한 줄: '세분류 원고 8 / 개발계획서 18 · 누락 10(SW아키텍처, … 외 7) · 추가 1(…)'."""
-    def few(items):
-        return ", ".join(visible(x) for x in items[:show]) + (f" 외 {len(items) - show}" if len(items) > show else "")
+    def few(items, sep=", "):
+        return sep.join(visible(x) for x in items[:show]) + (f" 외 {len(items) - show}" if len(items) > show else "")
     parts = []
     if info["expected"] != info["actual"]:
         parts.append(f"원고 {info['actual']} / 개발계획서 {info['expected']}")
     if info["changed"]:
-        parts.append(f"다름 {len(info['changed'])}(" + few([f"{a}→{e}" for _, e, a in info["changed"]]) + ")")
+        parts.append(f"다름 {len(info['changed'])}: " + few([explain_pair(e, a) for _, e, a in info["changed"]], sep="; "))
     if info["missing"]:
         parts.append(f"누락 {len(info['missing'])}(" + few(info["missing"]) + ")")
     if info["extra"]:
@@ -54,12 +75,12 @@ def list_diff(name: str, expected: Sequence[str], actual: Sequence[str]) -> tupl
             if exp[i] != act[i] and exp[i] not in act and act[i] not in exp
         ]
         for i, e, a in pairs:
-            notes.append(f'{name} {i + 1}번째 다름: 원고 "{visible(a)}" / 개발계획서 "{e}"')
+            notes.append(f"{name} {i + 1}번째 다름: {explain_pair(e, a)}")
             missing.remove(e)
             extra.remove(a)
             info["changed"].append((i, e, a))
-    notes += [f'{name} 누락: "{x}"' for x in missing]
-    notes += [f'{name} 원고에 추가: "{visible(x)}"' for x in extra]
+    notes += [f"{name} 누락: 개발계획서에는 「{x}」가 있는데 원고에 없음" for x in missing]
+    notes += [f"{name} 원고에만 있음: 「{visible(x)}」 (개발계획서에 없음)" for x in extra]
     if len(expected) != len(actual):
         notes.insert(0, f"{name} 개수: 원고 {len(actual)} / 개발계획서 {len(expected)}")
     content = O if not notes else X
