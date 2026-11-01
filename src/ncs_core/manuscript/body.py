@@ -52,16 +52,20 @@ def parse_body(
     cutoff: int | None = None,
     config: ParseConfig = DEFAULT_PARSE_CONFIG,
     table_paragraphs: frozenset[int] | set[int] | None = None,
+    aside_paragraphs: frozenset[int] | set[int] | None = None,
 ) -> dict:
     """본문 → 내비게이터 묶음 / 학습 구간 / 필요지식 N-M. 제목 / 학습별 교수·평가 제목 위치와 평가 후보.
 
     cutoff: 참고 자료 시작 인덱스(raw) — 마지막 학습 구간을 여기서 끊는다.
+    aside_paragraphs: 본문 밖 문단(메모·머리말·꼬리말·각주) 인덱스(raw). 구조 읽기에서 제외한다 — 에디터 메모가
+        '학습 목표' 줄 바로 아래에 끼어 있으면 목표 문장을 못 읽는 식의 오류를 막는다.
     table_paragraphs: 본문 섹션에서 표 셀 안에 든 문단 인덱스(raw). 같은 N-M 번호가 여러 번 나오면
         표 밖 문단을 제목으로 우선하고, 없으면 처음 나온 것을 쓴다(평가·수행 내용 표의 "1-1. 명" 셀이
         본문 제목을 덮어쓰지 않게). None이면 처음 나온 것만 쓴다.
     """
     raw = sections[1] if len(sections) > 1 else []
-    lines = [(i, l) for i, l in enumerate(raw) if l]  # (원래 인덱스, 텍스트)
+    aside = aside_paragraphs or frozenset()
+    lines = [(i, l) for i, l in enumerate(raw) if l and i not in aside]  # (원래 인덱스, 텍스트)
     nav_runs = _navigator_runs(lines, n_lessons)
     starts = [run[0]["k"] for run in nav_runs]
     last = next((k for k, (i, _) in enumerate(lines) if cutoff is not None and i >= cutoff), len(lines))

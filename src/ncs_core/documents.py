@@ -124,58 +124,119 @@ def load_document(path) -> Document:
         raise ValueError(f"문단 텍스트를 추출하지 못했습니다: {path}")
     document = Document(path, fmt, sections, tables, images, table_paragraphs, figures, styles, aside, numbers,
                         page_breaks, pictures, binary_items)
-    return split_single_section(document)
+    return normalize_sections(document)
 
 
 BODY_START_STYLE = re.compile(r"^큰학습")                 # 내비게이터(학습 N 큰 제목)의 문단 스타일
 BODY_START_TEXT = re.compile(r"^학\s*습\s*1$")           # 스타일이 없을 때: 개요 뒤 첫 '학습 1' 줄
 FRONT_END_TEXT = re.compile(r"^(핵심\s*용어|학습\s*모듈의\s*내용\s*체계)")
+TOC_TITLE = re.compile(r"^차\s*례$")
 
 
-def body_start(document: "Document") -> int | None:
-    """구역이 하나뿐인 원고에서 본문이 시작하는 문단 인덱스 — 첫 내비게이터(큰학습 스타일), 없으면 개요 뒤 첫 '학습 1' 줄."""
-    paragraphs = document.sections[0]
-    styles = document.section_styles(0)
-    if styles:
-        for i, name in enumerate(styles):
-            if name and BODY_START_STYLE.match(name) and i > 0:
-                return i
+def body_start(document: "Document", section: int = 0) -> int | None:
+    """해당 구역에서 본문이 시작하는 문단 인덱스 — 첫 내비게이터(큰학습 스타일), 없으면 개요 뒤 첫 '학습 1' 줄. 없으면 None."""
+    paragraphs = document.sections[section]
+    styles = document.section_styles(section)
+    # 본문은 차례·개요(핵심 용어/내용 체계) 뒤에 온다. 표지에도 큰학습 스타일 문단이 있을 수 있어 그 앞은 보지 않는다.
+    toc = next((i for i, t in enumerate(paragraphs) if TOC_TITLE.match(t)), -1)
     front_end = next((i for i, t in enumerate(paragraphs) if FRONT_END_TEXT.match(t)), None)
+    after = max(toc, front_end if front_end is not None else -1, 0)
+    if styles:
+        for i in range(after + 1, len(styles)):
+            if styles[i] and BODY_START_STYLE.match(styles[i]):
+                return i
     if front_end is None:
         return None
     return next((i for i in range(front_end + 1, len(paragraphs)) if BODY_START_TEXT.match(paragraphs[i])), None)
 
 
-def split_single_section(document: "Document") -> "Document":
-    """구역이 하나뿐이면 앞부분(위치·차례·개요)과 본문을 두 구역으로 나눠 돌려준다 — 모든 엔진이 '구역 0 = 앞부분, 구역 1 = 본문'을 가정한다.
+def toc_section(document: "Document") -> int | None:
+    """'차례' 제목 줄이 있는 첫 구역."""
+    for index, paragraphs in enumerate(document.sections):
+        if any(TOC_TITLE.match(t) for t in paragraphs):
+            return index
+    return None
 
-    문단 인덱스는 본문 구역 기준으로 다시 매기고, 표·그림·스타일·번호·쪽 나누기·메모도 같이 옮긴다. 경계를 못 찾으면 그대로 둔다.
+
+def _looks_like_body(document: "Document", section: int, head: int = 80) -> bool:
+    """구역 머리에 내비게이터(큰학습 스타일) 또는 '학습 1' 줄이 있으면 본문 구역으로 본다."""
+    styles = document.section_styles(section)
+    if styles and any(name and BODY_START_STYLE.match(name) for name in styles[:head]):
+        return True
+    return any(BODY_START_TEXT.match(t) for t in document.sections[section][:head])
+
+
+def normalize_sections(document: "Document") -> "Document":
+    """모든 엔진이 가정하는 '구역 0 = 앞부분(위치·차례·개요), 구역 1 = 본문' 배치로 맞춘다.
+
+    실제 원고의 구역 나눔은 제각각이다:
+      (a) 구역 하나에 전부          → 본문 시작에서 둘로 나눈다
+      (b) 앞부분 / 본문              → 그대로
+      (c) 표지 / 차례+개요+본문      → 표지와 앞부분을 합치고 본문 시작에서 나눈다
+      (d) 표지 / 차례+개요 / 본문    → 표지와 앞부분을 합친다
+    본문 시작 = 첫 내비게이터(큰학습 스타일) 또는 개요 뒤 첫 '학습 1' 줄(body_start). 경계를 못 찾으면 그대로 둔다.
+    문단 인덱스는 새 구역 기준으로 다시 매기고, 표·그림·스타일·번호·쪽 나누기·메모도 같이 옮긴다.
     """
-    if len(document.sections) != 1:
-        return document
-    at = body_start(document)
-    if not at:
-        return document
-
-    def split_list(values):
-        return None if values is None else [values[0][:at], values[0][at:]]
-
-    def split_set(values):
-        return None if values is None else [frozenset(i for i in values[0] if i < at), frozenset(i - at for i in values[0] if i >= at)]
+    sections = document.sections
+    k = toc_section(document)
+    if k is None:
+        k = 0
+    if k + 1 < len(sections) and _looks_like_body(document, k + 1):
+        if k == 0:
+            return document  # (b)
+        at = len(sections[k])  # (d): 차례 구역 전체가 앞부분, 다음 구역이 본문
+    else:
+        at = body_start(document, k)  # (a)·(c)
+        if not at:
+            return document  # 경계를 못 찾음
+    offsets = [sum(len(sections[j]) for j in range(s)) for s in range(len(sections))]
+    split = at < len(sections[k])  # 차례 구역을 둘로 나누는가(a·c), 통째로 앞부분에 두는가(d)
+    new_count = 1 + int(split) + (len(sections) - k - 1)
 
     def move(section: int, paragraph: int) -> tuple[int, int]:
-        return (0, paragraph) if paragraph < at else (1, paragraph - at)
+        if section < k:
+            return 0, offsets[section] + paragraph
+        if section == k:
+            return (0, offsets[k] + paragraph) if paragraph < at else (1, paragraph - at)
+        return section - k + int(split), paragraph
+
+    def move_lists(values):
+        if values is None:
+            return None
+        out = [[] for _ in range(new_count)]
+        for s, items in enumerate(values):
+            for p, item in enumerate(items):
+                out[move(s, p)[0]].append(item)
+        return out
+
+    def move_sets(values):
+        if values is None:
+            return None
+        out = [set() for _ in range(new_count)]
+        for s, items in enumerate(values):
+            for p in items:
+                ns, np_ = move(s, p)
+                out[ns].add(np_)
+        return [frozenset(x) for x in out]
 
     tables = []
     for table in document.tables:
         section, paragraph = move(table["section"], table["paragraph"])
         tables.append({**table, "section": section, "paragraph": paragraph})
+    new_sections = move_lists(sections)
+    if not new_sections[1]:
+        return document  # 본문이 비면 원래 배치를 유지한다
     return Document(
-        document.path, document.format, split_list(document.sections), tables,
+        document.path, document.format, new_sections, tables,
         [(*move(s, p), name) for s, p, name in document.images],
-        split_set(document.table_paragraphs),
+        move_sets(document.table_paragraphs),
         [(*move(s, p), name, w, h) for s, p, name, w, h in document.figures],
-        split_list(document.styles), split_set(document.aside_paragraphs), split_list(document.numbers),
-        split_set(document.page_breaks),
+        move_lists(document.styles), move_sets(document.aside_paragraphs), move_lists(document.numbers),
+        move_sets(document.page_breaks),
         [(*move(s, p), b) for s, p, b in document.pictures], document.binaries,
     )
+
+
+def split_single_section(document: "Document") -> "Document":
+    """이전 이름. normalize_sections를 쓴다."""
+    return normalize_sections(document)

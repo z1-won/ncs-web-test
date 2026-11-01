@@ -38,13 +38,14 @@ def prepare_review(
         raise ValueError("차례 또는 차례 학습명을 읽지 못했습니다. 양식과 섹션 설정을 확인하세요")
     # 내용체계는 표 우선으로 읽는다(개요·필요지식 엔진과 같은 파서). 셀 안에서 '1-1.'과 명칭이 두 문단으로 갈려도 읽힌다.
     overview = parse_overview(manuscript, config.front_section).get("내용체계")
-    plan_toc = parse_plan_toc(plan.sections, code) if plan else None
+    plan_toc = parse_plan_toc(plan, code) if plan else None
     images = [(p, name) for s, p, name in manuscript.images if s == config.body_section]
     parse_config = config.parse_config()
     presence = section_presence(sections, images, parse_config, figures=manuscript.section_figures(config.body_section))
     body = parse_body(
         sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config,
         table_paragraphs=manuscript.section_table_paragraphs(config.body_section),
+        aside_paragraphs=manuscript.section_aside_paragraphs(config.body_section),
     )
     eval_tables = evaluation_tables(manuscript.section_tables(config.body_section))
     return ReviewContext(manuscript, plan, code, config, toc, overview, plan_toc, body, presence, eval_tables)

@@ -60,24 +60,46 @@ def read_cfb(data: bytes):
         return b"".join(sector(s) for s in chain(start, fat))[:size]
 
     directory = b"".join(sector(s) for s in chain(dir_start, fat))
-    entries = []
+    raw_entries = []
     for i in range(len(directory) // 128):
         entry = directory[i * 128 : (i + 1) * 128]
         name_length = struct.unpack_from("<H", entry, 0x40)[0]
-        entries.append(
+        raw_entries.append(
             (
                 entry[: max(name_length - 2, 0)].decode("utf-16le", "ignore"),
                 entry[0x42],
                 struct.unpack_from("<I", entry, 0x74)[0],
                 struct.unpack_from("<Q", entry, 0x78)[0],
+                struct.unpack_from("<III", entry, 0x44),  # 왼쪽 형제, 오른쪽 형제, 자식
             )
         )
+    # 스토리지 트리를 따라 "BodyText/Section0"처럼 경로가 붙은 이름을 만든다.
+    # 같은 이름의 스트림이 여러 스토리지에 있을 수 있다(본문 BodyText/Section0과 배포용 미리보기 ViewText/Section0).
+    entries: list[tuple[str, int, int, int]] = []
+
+    def walk(index: int, prefix: str, visited: set[int]) -> None:
+        if index >= len(raw_entries) or index in visited or index == 0xFFFFFFFF:
+            return
+        visited.add(index)
+        name, kind, start, size, (left, right, child) = raw_entries[index]
+        walk(left, prefix, visited)
+        path = prefix + name
+        if kind == 2:
+            entries.append((path, kind, start, size))
+        elif kind == 1:
+            walk(child, path + "/", visited)
+        walk(right, prefix, visited)
+
+    root_name, root_kind, root_start, root_size, (_, _, root_child) = raw_entries[0]
+    entries.append((root_name, root_kind, root_start, root_size))
+    walk(root_child, "", set())
     ministream = read_chain(entries[0][2], entries[0][3])
     minifat: list[int] = []
     for s in chain(minifat_start, fat):
         minifat += struct.unpack(f"<{entries_per_sector}I", sector(s))
 
     def read_stream(name: str) -> bytes | None:
+        """경로("BodyText/Section0") 또는 루트 바로 아래 이름("FileHeader")으로 스트림을 읽는다."""
         for entry_name, kind, start, size in entries:
             if entry_name == name and kind == 2:
                 if size < mini_cutoff:
@@ -149,9 +171,12 @@ def load_hwp(data: bytes) -> tuple[list[list[str]], list[dict]]:
     flags = struct.unpack_from("<I", file_header, 36)[0]
     if flags & 2:
         raise ValueError("암호화된 hwp는 읽을 수 없음")
+    # 본문은 BodyText 스토리지의 Section 스트림만. ViewText(배포용 미리보기)에 같은 이름의 사본이 있어도 읽지 않는다.
     section_names = sorted(
-        (n for n in names if n.startswith("Section")), key=lambda s: int(s[7:])
+        (n for n in names if n.startswith("BodyText/Section")), key=lambda s: int(s.rsplit("Section", 1)[1])
     )
+    if not section_names:
+        raise ValueError("HWP 본문(BodyText/Section) 스트림이 없음")
     sections, tables = [], []
     for section_index, name in enumerate(section_names):
         raw = read_stream(name)

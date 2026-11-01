@@ -45,6 +45,7 @@ def prepare_review(
     body = parse_body(
         sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config,
         table_paragraphs=manuscript.section_table_paragraphs(config.body_section),
+        aside_paragraphs=manuscript.section_aside_paragraphs(config.body_section),
     )
     units = unit_regions(body, config)
     plan_goals = parse_plan_goals(plan, code) if plan else None

@@ -17,12 +17,13 @@ def prepare_review(manuscript: Document, plan: Document | None = None, *, module
         raise ValueError("지정한 차례/본문 섹션이 없습니다")
     sections = [manuscript.sections[config.front_section], manuscript.sections[config.body_section]]
     toc = parse_toc(sections)
-    plan_toc = parse_plan_toc(plan.sections, code) if plan else None
+    plan_toc = parse_plan_toc(plan, code) if plan else None
     overview = parse_overview(manuscript, config.front_section).get("내용체계")
     presence = section_presence(sections, [])
     body = parse_body(sections, len((toc or {}).get("학습", [])),
                       cutoff=presence["참고 자료"]["k"],
-                      table_paragraphs=manuscript.section_table_paragraphs(config.body_section))
+                      table_paragraphs=manuscript.section_table_paragraphs(config.body_section),
+                      aside_paragraphs=manuscript.section_aside_paragraphs(config.body_section))
     regions = eval_regions(manuscript, body, config.body_section)
     plan_goals = parse_plan_goals(plan, code) if plan else None
     return ReviewContext(manuscript, plan, code, config, toc, overview, plan_toc, body, regions, plan_goals)

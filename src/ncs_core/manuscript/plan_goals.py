@@ -13,7 +13,14 @@ GOAL_SENTENCE = re.compile(r"^\d+\.\d+\s+\S")  # '1.1 호텔의 …할 수 있�
 
 
 def parse_plan_goals(document: Document, module_code: str) -> dict | None:
-    """→ {'학습명': [...], '요소명': [...], '내용': {(N, M): {'text', 'goals': [...]}}}. 블록을 못 찾으면 None."""
+    """→ {'학습명': [...], '요소명': [...], '내용': {(N, M): {'text', 'goals': [...]}}}. 블록을 못 찾으면 None.
+
+    표를 셀 단위로 읽을 수 있으면 그것을 쓴다(변경승인 계획서의 '비고' 열 배제). 못 읽으면 줄 단위로 읽는다.
+    """
+    from .plan_table import read_module_table
+
+    if (table := read_module_table(document, module_code)) is not None:
+        return {"학습명": [f"{i}. {name}" for i, name in enumerate(table["학습명"], 1)], "요소명": table["요소명"], "내용": table["내용"]}
     lines = [l for section in document.sections for l in section]
     code = module_code.replace("LM", "")
     start = next(

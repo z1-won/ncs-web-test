@@ -50,7 +50,17 @@ def parse_toc(sections) -> dict | None:
 
 
 def parse_plan_toc(sections, module_code: str) -> dict | None:
-    """개발계획서 → {'학습명': [...], '요소명': [...], '내용명': [{'no','sub','text'}]} (블록을 못 찾으면 None)"""
+    """개발계획서 → {'학습명': [...], '요소명': [...], '내용명': [{'no','sub','text'}]} (블록을 못 찾으면 None)
+
+    sections에 Document를 주면 표를 셀 단위로 읽는다(변경승인 계획서의 '비고' 열 배제). 문단 목록이면 줄 단위로 읽는다.
+    """
+    if hasattr(sections, "tables"):
+        from .plan_table import read_module_table
+
+        if (table := read_module_table(sections, module_code)) is not None:
+            return {"학습명": [f"{i}. {name}" for i, name in enumerate(table["학습명"], 1)],
+                    "요소명": table["요소명"], "내용명": table["내용명"]}
+        sections = sections.sections
     lines = [l for section in sections for l in section]
     code = module_code.replace("LM", "")
     start = next(

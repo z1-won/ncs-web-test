@@ -141,7 +141,12 @@ def parse_plan(document: Document, module_code: str) -> dict | None:
     """개발계획서 모듈 블록 → {'정의','목표','학습명':[...],'내용명':[{no,sub,text}],'요소':[{code,name}]}.
 
     블록은 '능력단위 코드번호' 다음 줄의 코드부터 'NCS (수정 금지)' 전까지 (toc.parse_plan_toc와 같은 기준).
+    표를 셀 단위로 읽을 수 있으면 그것을 쓴다(변경승인 계획서의 '비고' 열을 배제). 못 읽으면 줄 단위로 읽는다.
     """
+    from .plan_table import read_module_table
+
+    if (table := read_module_table(document, module_code)) is not None:
+        return {key: table[key] for key in ("정의", "목표", "학습명", "내용명", "요소")}
     lines = [l for section in document.sections for l in section]
     code = module_code.replace("LM", "")
     start = next(
