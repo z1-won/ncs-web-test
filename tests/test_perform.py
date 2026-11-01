@@ -37,7 +37,7 @@ def manuscript():
         ("안전‧유의 사항", "재료,기기,안전", False, False), ("• 유의한다.", "•불릿기호-내용", False, False),
         ("수행 순서", "재료,기기,안전", False, False),
         (BOX + " 상품 종류를 확인한다).", BOX + "제목", False, False),  # 괄호 뒤 마침표 → O + 비고
-        (BOX + " 요금 제도가 무엇인지 안다.", BOX + "제목", False, False),  # '~있다/이다' 아님, '안다.' → '는다'? 아니다 → X
+        (BOX + " 요금 제도를 정리하기", BOX + "제목", False, False),  # 명사형 종결 → X ('안다.' 같은 -ㄴ다 동사는 O)
         ("1-2.", "1-1-숫자", True, False), ("상품 판매", "작은학습-내용제목", True, False),
         ("수행 내용", "필요지식 수행내용-제목", True, False), ("/", "바탕글", True, False),
         ("패키지 상품 판매하기", "필요지식 수행내용-부제목", True, False),
@@ -130,6 +130,9 @@ class SentenceRuleTests(unittest.TestCase):
         self.assertEqual(judge_sentence(BOX + " 절차를 숙지한다.")[0], "O")
         self.assertEqual(judge_sentence(BOX + " 서비스가 제공된다.")[0], "O")
         self.assertEqual(judge_sentence(BOX + " 종류를 확인한다).")[0], "O")
+        self.assertEqual(judge_sentence(BOX + " 요금 제도가 무엇인지 안다.")[0], "O")  # -ㄴ다 현재형 동사
+        self.assertEqual(judge_sentence(BOX + " 사용법을 가르친다.")[0], "O")
+        self.assertEqual(judge_sentence(BOX + " 객실이 크다.")[0], "X")  # 형용사
         self.assertEqual(judge_sentence(BOX + " 참고 사항이다.")[0], "△")
         self.assertEqual(judge_sentence(BOX + " 기록한다")[0], "X")
         self.assertEqual(judge_sentence(BOX + " 응대한다,")[0], "X")

@@ -21,6 +21,7 @@ ENGINES = {
     "overview": Engine("ncs_overview"),
     "knowledge": Engine("ncs_knowledge"),
     "perform": Engine("ncs_perform"),
+    "teaching": Engine("ncs_teaching"),
     "evaluation": Engine("ncs_evaluation"),
 }
 

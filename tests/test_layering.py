@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent / "src"
-ENGINES = ("ncs_position", "ncs_toc", "ncs_overview", "ncs_knowledge", "ncs_perform", "ncs_evaluation")
+ENGINES = ("ncs_position", "ncs_toc", "ncs_overview", "ncs_knowledge", "ncs_perform", "ncs_teaching", "ncs_evaluation")
 IMPORT = re.compile(r"^\s*(?:from|import)\s+(ncs_\w+)", re.MULTILINE)
 
 

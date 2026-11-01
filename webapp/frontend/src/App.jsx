@@ -7,6 +7,7 @@ const CHECKS = [
   { value: "overview", label: "학습모듈의 개요 ①·②·⑤·⑥·⑧", files: "원고 (+ 개발계획서 선택)" },
   { value: "knowledge", label: "필요 지식 ①~⑧", files: "원고 (+ 개발계획서: ⑤에만 필요)" },
   { value: "perform", label: "수행 내용 ①·④", files: "원고 (hwpx 권장)" },
+  { value: "teaching", label: "교수·학습 방법 ①~④", files: "원고 (hwpx 권장)" },
   { value: "evaluation", label: "평가 ① 학습 내용명 일치", files: "원고 + 개발계획서 (없으면 판단불가)" },
 ];
 

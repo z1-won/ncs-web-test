@@ -12,6 +12,7 @@ from .models import ReviewResult, SavedReport
 from .module_code import resolve_module_code, validate_module_code
 from .reporting import report_summary, save_report
 from .rules import Rule, run_rules
+from .sentences import judge_action_sentence
 from .text import FAIL, NA, O, PASS, PUA, TRI, UNDECIDED, VERDICTS, X, flatten, make_normalizer, verdict, visible
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "save_report",
     "Rule",
     "run_rules",
+    "judge_action_sentence",
     "NA",
     "PASS",
     "FAIL",

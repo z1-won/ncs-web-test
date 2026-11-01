@@ -7,30 +7,15 @@
 표 안(수행 tip·스크립트 상자)·메모 문단은 blocks.py에서 이미 제외됐다.
 """
 
-import re
-
 from ncs_core import O, PASS, TRI, X, verdict, visible
+from ncs_core.sentences import judge_action_sentence
 
 ITEM_ID = "F02-수행-④"
-BOX_GLYPH = re.compile(r"^[\U000F02B0-\U000F02CF]\s*")
-ENDS_HANDA = re.compile(r"(한|된|킨|는)다\s*[)\"'”’]*\s*\.\s*$")
-ENDS_IDA = re.compile(r"(이|있|없)다\s*[)\"'”’]*\s*\.\s*$")
-CLOSING_AFTER_HANDA = re.compile(r"다\s*[)\"'”’]+\s*\.\s*$")
 
 
 def judge_sentence(text: str) -> tuple[str, str | None]:
-    body = BOX_GLYPH.sub("", text).strip()
-    if not body:
-        return X, "번호만 있고 문장이 없음"
-    if ENDS_HANDA.search(body):
-        return O, "마침표 앞에 괄호·따옴표가 있음" if CLOSING_AFTER_HANDA.search(body) else None
-    if ENDS_IDA.search(body):
-        return TRI, "'~이다/있다/없다.'로 끝남 — 수행 동작 문장인지 확인"
-    if re.search(r"다\s*$", body):
-        return X, "마침표 없음"
-    if re.search(r"[,，]\s*$", body):
-        return X, "쉼표로 끝남"
-    return X, "'~한다.'로 종결되지 않음(명사형·기타)"
+    """공통 판정(ncs_core.sentences)을 그대로 쓴다. 이름은 기존 테스트·문서와 맞추어 둔다."""
+    return judge_action_sentence(text)
 
 
 def check_perform_sentences(blocks: list[dict], *, has_styles: bool = True) -> list[dict]:
