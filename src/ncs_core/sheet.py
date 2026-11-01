@@ -7,7 +7,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from .text import FAIL, PASS, TRI, UNDECIDED, X
+from .text import FAIL, PASS, TRI, UNDECIDED, X, visible
 
 NOT_CHECKED = "미검사"
 
@@ -58,7 +58,7 @@ def build_sheet(checklist: list[dict], items: list[SheetItem], component: str) -
             {
                 "구성요소": component,
                 "번호": item.no,
-                "체크 항목": item.text,
+                "체크 항목": visible(item.text),  # 원문의 기호 글꼴 글자(네모 번호 󰊱 등)는 화면에서 깨지므로 읽을 수 있게
                 "검수결과": verdict,
                 "적합": verdict == PASS,
                 "부적합": verdict == FAIL,
