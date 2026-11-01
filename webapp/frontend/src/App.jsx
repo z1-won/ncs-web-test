@@ -144,7 +144,7 @@ export default function App() {
     <>
     <Header hasHistory={!!history} hasResult={!!(allRun || result)} />
     <main id="container" className="inner page">
-      <h1 className="page-title">F02 검수 로컬 테스트</h1>
+      <h1 className="page-title">NCS 학습모듈 검수 확인 (로컬 테스트)</h1>
       <p className="page-desc">
         원고와 개발계획서(.hwp/.hwpx)를 올리면 검수 패키지를 그대로 실행해 검수 확인서 형식과 결과 JSON을 보여줍니다. 파일 역할은 내용으로 자동 판별합니다.
       </p>
