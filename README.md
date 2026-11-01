@@ -1,128 +1,115 @@
 # F02 검수 웹앱·Python 패키지
 
-HWP/HWPX 원고와 개발계획서를 읽어 위치·차례·개요·필요 지식을 검수합니다.
-검수 엔진은 Python 3.10 이상과 표준 라이브러리만 사용합니다. 고정된 웹 의존성은 Python 3.11 이상이 필요하며 Python 3.14.5에서 검증했습니다. 웹 백엔드는 FastAPI·Uvicorn, 화면은 React·Vite 기반입니다.
-개발·수정 기준은 `src/`의 Python 소스입니다. 웹 서버와 CLI는 `ncs_service`를 통해 같은 검수·저장 경로를 사용합니다.
+NCS 학습모듈 원고(HWP/HWPX)와 개발계획서를 읽어 「2026년 NCS학습모듈 검수 확인서(F02)」의 10개 구성요소·54개 체크 항목 중 **47개**를 검수합니다. 검수 엔진은 Python 3.10 이상과 표준 라이브러리만 사용하고, 웹은 FastAPI·Uvicorn(Python 3.11 이상, 3.14에서 검증)과 React·Vite·KRDS입니다. 웹 서버·CLI·배치는 모두 `ncs_service`를 거쳐 같은 검수·저장 경로를 탑니다.
+
+자세한 흐름과 파일별 로직은 프로젝트 문서 `PoC2_설계_아키텍처_소개및분석_v1-3`, 항목별 구현 현황은 `PoC2_현황_F02_체크항목_구현여부_v1-1`, 개발 규칙은 `PoC2_운영_개발규칙_3인분업_v1-0`을 봅니다.
 
 ## 폴더 구조
 
-- `src/ncs_core/`: 공통 문서 읽기·입력 검증·규칙 실행·결과 저장
-- `src/ncs_core/manuscript/`: 차례·개요·본문·개발계획서 구조 파서와 명칭 비교 도우미. 네 검수 패키지가 공유합니다.
-- `src/ncs_position/`, `src/ncs_toc/`, `src/ncs_overview/`, `src/ncs_knowledge/`: 검수 패키지. 서로를 import하지 않고 `ncs_core` 위에 평행하게 섭니다(`tests/test_layering.py`가 검사).
-- `src/ncs_service/`: HTTP와 독립적인 검수 실행·저장 조정
-- `src/ncs_web/`: 설치형 FastAPI 서버와 웹 실행 명령
-- `pyproject.toml`: Python 패키지·선택 의존성·실행 명령 정의
-- `webapp/`: 호환 실행 파일과 React 화면. [실행 안내](webapp/README.md)
-- `webapp/frontend/dist/`: 웹 화면 빌드 결과
-- `tests/`: 합성 입력 생성, 기존 구현 비교, 서비스·웹 API 검증, 패키지 계층(`test_layering.py`)과 엔진 계약(`test_engines.py`) 검사
-- `tests/golden/`: 네 엔진 × 합성 원고의 기준 검수 결과(JSON). 리팩토링 전후 동일성 비교의 정답지
-- `docs/CONVENTIONS.md`: 공통 개발 규약
-- `docs/CONSISTENCY_REVIEW.md`: 통합 리팩토링 기록
+```
+src/ncs_core/            문서 읽기(hwp·hwpx), 구역 정규화, 공통 파서(manuscript/), 비교 도우미, 외부 데이터, 규칙 실행, 확인서 접기, 저장, LLM 호출
+src/ncs_core/data/       ncs_units.tsv(NCS 분류·능력단위) · ncs_levels.tsv(능력단위 수준) · action_nouns*.txt(행동명사)
+src/ncs_position …       엔진 10개: position(위치) toc(차례) overview(개요) knowledge(필요 지식) perform(수행 내용)
+   … src/ncs_misc/       teaching(교수·학습 방법) evaluation(평가) references(참고 자료) colophon(판권) misc(기타)
+src/ncs_service/         검수 종류↔엔진 연결(registry), 실행(service), 저장소(파일·PostgreSQL)
+src/ncs_web/             FastAPI 서버(업로드·결과·이력 API, 빌드된 화면 제공)
+webapp/frontend/         React 화면(KRDS). 빌드 결과는 webapp/frontend/dist
+scripts/                 데이터 갱신(build_ncs_catalog · build_ncs_levels · build_action_nouns), 다문서 배치(batch_review), API 점검(ncs_api_probe · llm_probe)
+tests/                   단위·골든(합성 원고 6종 × 10엔진)·계약(엔진 등록, 계층, 설치) 테스트
+db/                      PostgreSQL 초기화(compose.yaml과 함께)
+```
+
+엔진은 서로 import하지 않고 `ncs_core` 위에 평행하게 섭니다(`tests/test_layering.py`). 모든 엔진은 "구역 0 = 앞부분(위치·차례·개요), 구역 1 = 본문"을 가정하고, 원고의 실제 구역 나눔은 `ncs_core.documents.normalize_sections`가 그 모양으로 맞춥니다.
+
+## 설치와 환경 변수
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[web]"            # 엔진만 쓰면 pip install -e .
+pip install -e ".[test]"           # 테스트 의존성
+pip install openpyxl               # scripts/batch_review.py xlsx 출력용
+```
+
+`.env`(git 제외)에 두는 값. 서버·CLI를 띄우는 셸에서 `set -a; source .env; set +a`로 올립니다.
+
+| 변수 | 용도 |
+|---|---|
+| `STDICT_API_KEY` | 표준국어대사전 — 차례 ② 행동명사 조회(없으면 목록에 없는 단어는 △) |
+| `NCS_API_KEY` | 공공데이터포털 B490007/ncsInfo — 수준 표 갱신 스크립트만 사용(검수 서버는 호출하지 않음) |
+| `LLM_API_KEY`(또는 `OPENAI_API_KEY`), `LLM_MODEL`(기본 gpt-5.4-mini), `LLM_ALLOW_UPLOAD=1` | 수행 ② LLM 후보. 키와 반출 승인 스위치가 **둘 다** 있어야 원고 문장을 전송. `LLM_ALLOWED_TASKS`로 더 좁힐 수 있음 |
+| `NCS_DB_*` / DSN | PostgreSQL 검수 이력(선택). 없으면 파일 저장만 |
+
+키 값은 저장소·문서·채팅에 적지 않습니다.
 
 ## 웹 실행
 
-저장소 루트에서 API 서버를 실행합니다.
-
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -e ".[web]"
-.venv/bin/ncs-web --out webapp/결과
+set -a; source .env; set +a
+ncs-web --dist webapp/frontend/dist          # API + 빌드된 화면, http://127.0.0.1:8765
 ```
 
-별도 터미널에서 화면을 실행합니다.
-
-```bash
-cd webapp/frontend
-npm install
-npm run dev
-```
-
-화면은 기본 `http://localhost:5173`, API는 `http://127.0.0.1:8765`입니다.
-프런트엔드 폴더에서 `npm run build`를 실행한 뒤, 서버에 `--dist webapp/frontend/dist`를 지정하면 빌드된 화면도 제공합니다(저장소 루트에서 실행).
-API 문서는 `http://127.0.0.1:8765/docs`에서 확인합니다.
-위 명령은 검수 결과 JSON·ZIP을 기존 `webapp/결과/`에 저장합니다. `--out` 생략 시 실행 위치의 `결과/`를 사용하며, `--dist` 생략 시 API만 제공합니다. 두 경로는 서버 코드 위치와 독립적입니다.
+화면을 고칠 때는 `cd webapp/frontend && npm install && npm run dev`(개발 서버 5173) 또는 `npm run build` 후 위 명령. `--out 폴더`로 결과 저장 위치를 바꿉니다(기본 `결과/`). API 문서는 `/docs`. 포트가 잡혀 있으면 `lsof -ti :8765 | xargs kill`.
 
 ## CLI 실행
 
-엔진만 필요하면 `python -m pip install -e .`로 설치합니다(웹 의존성 제외).
-설치 후에는 `PYTHONPATH` 없이 어느 폴더에서든 가상환경의 명령을 실행할 수 있습니다.
-다음은 저장소 루트에서 실행하는 예시이며, 입력 파일 경로는 실제 위치로 바꿉니다.
-
 ```bash
-.venv/bin/ncs-toc 원고.hwpx 개발계획서.hwpx --out 결과
-.venv/bin/ncs-position 원고.hwpx 개발계획서.hwpx --out 결과
-.venv/bin/ncs-overview 원고.hwpx 개발계획서.hwpx --out 결과
-.venv/bin/ncs-knowledge 원고.hwpx 개발계획서.hwpx --out 결과
+ncs-position 원고.hwpx 개발계획서.hwp --out 결과      # 개발계획서 필수
+ncs-toc 원고.hwpx [개발계획서.hwp] --out 결과          # 나머지는 선택(있으면 대조 항목이 확정 판정)
+ncs-overview / ncs-knowledge / ncs-perform / ncs-teaching / ncs-evaluation / ncs-references / ncs-colophon / ncs-misc
 ```
 
-기존 `python -m ncs_toc` 등 모듈 실행도 설치 후 사용할 수 있습니다.
-`-e`는 수정한 Python 소스를 다음 실행에 반영하는 개발용 설치이며, 실행 중인 서버는 재시작해야 합니다.
-`--src`는 제거했습니다. 다른 소스를 사용할 때는 해당 가상환경에서 `pip install -e /프로젝트/경로`로 등록합니다.
-배포용 복사 설치는 `pip install ".[web]"` 또는 wheel 설치를 사용합니다.
-프런트엔드 빌드 파일은 Python 배포본에 포함하지 않으며 `--dist`로 별도 지정합니다.
+모듈 코드는 파일명(`LM##########_NNvN`)에서 읽고, 없으면 `--module-code`로 지정합니다. `python -m ncs_toc …` 꼴도 같습니다.
 
-## 검수 범위
+## 검수 범위 (47/54)
 
-| 검수 | 구현 항목 | 개발계획서 |
-|---|---|---|
-| 위치 | ①~⑤ | 필수 |
-| 차례 | ①~⑥ (②는 행동명사 목록 기반, 목록에 없는 단어는 판단불가) | 선택 |
-| 개요 | ①·②·⑤·⑥·⑧ | 선택 |
-| 필요 지식 | ①~⑧ | ⑤ 대조에 필요 |
+| 구성요소 | 구현 | 미구현 | 메모 |
+|---|---|---|---|
+| 위치 | ①~⑤ | — | 기준은 NCS 목록(없는 세분류는 개발계획서). 계획서가 목록과 다르면 △로 알림. ⑤는 hwpx 서식 |
+| 차례 | ①~⑥ | ⑦(쪽수, PDF 필요) | ②는 행동명사 목록 + 사전 API |
+| 개요 | ①~⑧ | — | ③④는 NCS 목록·수준 표로 선수학습 코드·수준 검사 |
+| 필요 지식 | ①~⑧ | — | ⑥ 자동 번호 복원(hwpx), ⑧ F14 출처 골격 |
+| 수행 내용 | ①②④ | ③(안전사항 추상성, LLM 예정) | ②는 LLM 후보(항상 △ + 근거) |
+| 교수·학습 방법 | ①~④ | — | |
+| 평가 | ①②③⑤ | ④(구체성, LLM 예정) | |
+| 참고 자료 | ①②③ | ④(이전 판본 자료 필요) | |
+| 개발 이력 및 판권 | ① | — | 개발기관은 F14대로 협회만 적어도 적합 |
+| 기타 | ①②⑥⑦ | ③④⑤⑧(이미지 분석) | |
 
-종합 판정은 실행된 규칙의 결과입니다. 미구현 항목은 확인서의 미검사 및 진단 정보로 확인합니다.
-HWP는 글꼴·음영을 읽지 않아 위치 ⑤가 판단불가입니다.
-차례·필요지식의 기본 양식은 section0=차례·개요, section1=본문이며 Python API와 CLI 설정으로 조정할 수 있습니다.
+판정: 적합 / 부적합 / 판단불가(사람 확인) / 미검사(규칙 없음). 비고는 `{자리} 「원고 문구」 / {기준 문서} 「기준 문구」 — 띄어쓰기만 다름 …` 꼴로 두 문서의 문구를 함께 적습니다.
+**hwp(바이너리)** 는 문단·표 텍스트만 읽히고 스타일·자동 번호·쪽 나눔·그림은 없어서 위치 ⑤, 필요 지식 ⑥, 기타 ①②⑥ 등이 △가 됩니다. 가능하면 hwpx로 변환해 넣습니다.
 
-## 행동명사 목록 (차례 ②)
-
-차례 ②는 학습 내용명의 머리어 W를 `src/ncs_core/data/action_nouns.txt`에서 찾고, 없으면 국립국어원 표준국어대사전 API로 ‘W하다’ 동사 표제어를 조회합니다. 있으면 목록에 추가하고 적합, 없으면 `action_nouns_rejected.txt`에 기록하고 부적합, 조회할 수 없으면(인증키 없음·오류) 판단불가입니다. 인증키는 `.env`의 `STDICT_API_KEY`이며 웹 서버·CLI가 실행되는 셸에 올라가 있어야 합니다(`set -a; source .env; set +a`).
-
-**운용 전에 목록을 채워 두세요.** 검수 중 조회는 예외여야 합니다.
+## 외부 데이터 갱신 (`src/ncs_core/data/`, git 관리)
 
 ```bash
+python scripts/build_ncs_catalog.py 분류보기폴더          # NCS 포털 '학습모듈 분류보기' 내려받기(.xls 24개) → ncs_units.tsv
+python scripts/build_ncs_levels.py --from-csv 능력단위목록.csv   # NCS 포털 능력단위 목록 CSV → ncs_levels.tsv (또는 --refresh 세분류코드… 로 API)
 set -a; source .env; set +a
-.venv/bin/python scripts/build_action_nouns.py --from-plans 개발계획서폴더        # 승인된 학습 내용명의 머리어
-.venv/bin/python scripts/build_action_nouns.py --from-manuscripts 원고폴더
-.venv/bin/python scripts/build_action_nouns.py --from-file scripts/action_noun_candidates.txt
+python scripts/build_action_nouns.py --from-manuscripts 원고.hwpx …   # 차례 ② 행동명사 — 운용 전에 채워 둔다
 ```
 
-사전에 ‘-하다’가 없는 외래어·전문용어는 `action_nouns_rejected.txt`에 남아 부적합이 됩니다. 행동명사가 맞으면 그 줄을 지우고 `action_nouns.txt`에 `단어 ⇥ manual ⇥ 날짜 ⇥ 근거`로 옮깁니다. 두 파일 모두 git으로 관리합니다.
+## 생성형 AI (수행 ②)
+
+`ncs_core.llm`이 OpenAI 호환 API를 표준 라이브러리로 호출합니다. 블록의 재료·기기 줄만 보내고, 결과는 항상 △(사람 확인) + 줄 번호·근거·일반 명칭 제안이며 자동 X는 없습니다. (모델, 프롬프트) 해시로 `.llm_cache/`(git 제외)에 캐시해 재검수는 과금되지 않고, `usage.jsonl`에 토큰이 기록됩니다. LLM을 부를 수 있는 작업은 `ncs_core.llm.ALLOWED_TASKS`에 명시된 것뿐입니다(지금은 수행 ② 하나).
+
+```bash
+python scripts/llm_probe.py           # 합성 문장으로 키·모델·캐시 점검(실제 원고 전송 없음)
+python scripts/llm_probe.py --usage   # 토큰 합계·비용 추정
+```
+
+## 다문서 배치 테스트
+
+```bash
+python scripts/batch_review.py scan --root 원고폴더 --work samples/batch_x
+python scripts/batch_review.py run  --root 원고폴더 --work samples/batch_x --budget 3600
+python scripts/batch_review.py xlsx --root 원고폴더 --work samples/batch_x --out 결과.xlsx
+```
+
+폴더의 원고 전부(hwp·hwpx, 초고본/수정본/에디팅완료 자동 분류, 세분류 계획서 자동 매칭) × 10엔진을 문서×엔진 단위로 체크포인트하며 돌리고, xlsx 9시트(문서목록·실행요약·판정매트릭스·항목별집계·상세비고(사람 판정 열)·버전변화·형식비교·실행오류·설정)로 모읍니다. `samples/`는 git 제외입니다.
 
 ## 변경 검증
 
-실행 조정 계층·CLI·웹 API 검증:
-
 ```bash
-.venv/bin/python -m pip install -e ".[test]"
-.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+pip install -e . -q && python -m unittest discover tests      # 단위 + 골든 + 계약
 ```
 
-수정 전후 검수 결과가 같은지는 골든 테스트가 확인합니다. `tests/golden/`에 네 엔진 × 합성 원고 6종 × 개발계획서 유/무 = 42건의 체크리스트·지적사항·확인서·진단 JSON이 저장되어 있고, `tests/test_golden.py`가 현재 결과와 비교합니다(위 `unittest discover`에 포함).
-
-판정 정책을 **의도적으로** 바꿨을 때만 정답지를 다시 만듭니다. 생기는 diff가 바뀐 내용의 기록이므로 `docs/CONSISTENCY_REVIEW.md`의 '의도적으로 바꾼 동작' 표와 함께 커밋합니다.
-
-```bash
-.venv/bin/python tests/make_fixtures.py tests/fixtures   # 합성 원고를 바꿨을 때
-.venv/bin/python tests/make_golden.py                    # 정책을 바꿨을 때
-```
-
-## 평가 ① 학습 내용명 일치
-
-웹 검수 종류에서 **평가 ① 학습 내용명 일치**를 선택하거나 다음 명령으로 실행합니다.
-
-```bash
-.venv/bin/ncs-evaluation 원고.hwpx 개발계획서.hwpx --out 결과
-```
-
-개발계획서를 기준으로 차례·개요·필요 지식·평가 준거·평가 방법의 학습 내용명을 검사합니다.
-번호가 있으면 학습/내용 번호로 연결하고, 평가표의 번호 없는 이름은 해당 학습 구간 안에서 정확한 명칭 목록으로 비교합니다.
-연속 공백·줄바꿈은 축약하지만 단어 사이 공백, 어휘, 문장부호는 바꾸지 않습니다. 유사도나 AI 판정은 사용하지 않습니다.
-평가 ②~⑤는 미검사입니다. 계획서가 없으면 차례로 대체하지 않고 판단불가로 표시합니다.
-
-초기 지원 범위는 차례·개요 섹션과 본문 섹션, 반복 내비게이터로 구분된 학습,
-평가 영역의 `학습 내용` + `학습 목표`(준거) 또는 `평가 항목`(방법) 머리글을 가진 표입니다.
-같은 학습에서 완전한 명칭 목록을 가진 평가표가 여러 개이면 각각 검사합니다. 동일 명칭의 반복과 번호 유무 혼용도 기준 번호에 유일하게 연결되면 검사합니다. 일부 목록만 있는 분할 표, 기준 번호 연결이 모호한 명칭, 분리된 본문 제목, 인식 불가 표는 판단불가로 남깁니다.
-HWP는 표 내부 문단을 구별하지 못하므로 본문 명칭의 완전한 적합 판정에는 HWPX가 필요합니다.
-섹션 위치는 `--front-section`, `--body-section`으로 지정합니다. 두 섹션 밖에 내용이 있으면 전체 검사 범위 확인이 필요합니다.
-실제 원고 양식에 대한 정확도는 추가 검증이 필요하며, 현재 자동 검증은 합성 원고와 오류 변형 사례를 대상으로 합니다.
+골든은 `tests/golden/`의 합성 원고 6종 × 10엔진 × 개발계획서 유/무 결과 스냅샷입니다. 판정 정책을 **의도적으로** 바꿨을 때만 `PYTHONPATH=src python tests/make_golden.py`로 다시 만들고, `git diff tests/golden`에서 판정 변동이 의도한 것인지 확인한 뒤 함께 커밋합니다(문구만 바뀐 경우 메시지에 적습니다). 골든은 NCS 목록을 끄고(개발계획서 기준), 외부 API 키를 비운 채(`tests/test_0_environment.py`) 실행됩니다.
