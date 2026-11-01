@@ -534,6 +534,30 @@ function TopButton({ showAfter = 300, target = "#container" }) {
   );
 }
 
+/* 헤더 — KRDS 헤더(#krds-header) 최소 구성: 건너뛰기 링크 + 로고(서비스 식별)만. 통합검색·로그인·메인메뉴·유틸리티 메뉴는 이 서비스에 없어 두지 않는다. */
+function Header() {
+  return (
+    <>
+      <div id="krds-skip-link">
+        <a href="#container">본문 바로가기</a>
+      </div>
+      <header id="krds-header">
+        <div className="header-in">
+          <div className="header-container">
+            <div className="inner">
+              <div className="header-branding">
+                <h2 className="logo logo-text">
+                  <a href="/">NCS 학습모듈 검수</a>
+                </h2>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+    </>
+  );
+}
+
 /* 푸터 — KRDS 푸터(#krds-footer) 구조: 서비스 로고 → 연락처 → 유틸리티 링크 → 정책 링크 → 저작권. 관련 사이트·SNS·운영기관 식별자는 쓰지 않는다. */
 function Footer() {
   return (
@@ -746,6 +770,7 @@ export default function App() {
 
   return (
     <>
+    <Header />
     <main id="container" className="inner page">
       <h1 className="page-title">F02 검수 로컬 테스트</h1>
       <p className="page-desc">
