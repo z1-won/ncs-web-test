@@ -41,7 +41,7 @@ def prepare_review(
     plan_toc = parse_plan_toc(plan.sections, code) if plan else None
     images = [(p, name) for s, p, name in manuscript.images if s == config.body_section]
     parse_config = config.parse_config()
-    presence = section_presence(sections, images, parse_config)
+    presence = section_presence(sections, images, parse_config, figures=manuscript.section_figures(config.body_section))
     body = parse_body(
         sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"], config=parse_config,
         table_paragraphs=manuscript.section_table_paragraphs(config.body_section),

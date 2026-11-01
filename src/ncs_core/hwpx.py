@@ -101,8 +101,9 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
 
     표: {'section', 'paragraph', 'rows', 'cols', 'cells': {(r,c): 텍스트},
          'styles': {(r,c): {'fill', 'runs': [{'text','font','bold'}]}} (styles 없으면 None)}
-    그림: (문단 인덱스, 원본 그림 이름)
+    그림: (문단 인덱스, 원본 그림 이름) — 설명(shapeComment)에 원본 이름이 있는 그림만.
     표 안 문단: 어떤 표(중첩 포함) 셀 안에든 든 문단의 인덱스. 문단 인덱스는 문단 텍스트 목록과 같은 순서다.
+    도형 그림(figures): 모든 <hp:pic>의 (문단 인덱스, 이름 또는 "", 가로, 세로) — 크기는 HWP 단위(1/7200 inch).
     """
     parents = {child: parent for parent in root.iter() for child in parent}
     paragraphs = list(root.iter(HP + "p"))
@@ -120,12 +121,20 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
             current = parents.get(current)
         return current
 
-    images = []
-    for comment in root.iter(HP + "shapeComment"):
-        match = IMAGE_NAME.search(comment.text or "")
-        paragraph = owner_paragraph(comment)
-        if match and paragraph in positions:
-            images.append((positions[paragraph], match.group(1).strip()))
+    images, figures = [], []
+    for picture in root.iter(HP + "pic"):
+        paragraph = owner_paragraph(picture)
+        if paragraph not in positions:
+            continue
+        comment = picture.find(HP + "shapeComment")
+        match = IMAGE_NAME.search((comment.text if comment is not None else "") or "")
+        name = match.group(1).strip() if match else ""
+        size = picture.find(HP + "sz")
+        width = int(size.get("width", 0) or 0) if size is not None else 0
+        height = int(size.get("height", 0) or 0) if size is not None else 0
+        figures.append((positions[paragraph], name, width, height))
+        if name:
+            images.append((positions[paragraph], name))
 
     tables, in_table = [], set()
     for table in root.iter(HP + "tbl"):
@@ -159,12 +168,12 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
                 "styles": cell_styles if styles is not None else None,
             }
         )
-    return [para_text(p) for p in paragraphs], tables, images, frozenset(in_table)
+    return [para_text(p) for p in paragraphs], tables, images, frozenset(in_table), figures
 
 
 def load_hwpx(path):
-    """(섹션별 문단, 표, 그림, 섹션별 표 안 문단 인덱스) — 그림은 (섹션, 문단, 이름)."""
-    sections, tables, images, table_paragraphs = [], [], [], []
+    """(섹션별 문단, 표, 그림, 섹션별 표 안 문단 인덱스, 모든 그림) — 그림은 (섹션, 문단, 이름[, 가로, 세로])."""
+    sections, tables, images, table_paragraphs, figures = [], [], [], [], []
     with zipfile.ZipFile(path) as archive:
         try:
             styles = header_styles(archive)
@@ -172,9 +181,10 @@ def load_hwpx(path):
             styles = None
         for index, name in enumerate(section_names(archive)):
             root = ET.fromstring(archive.read(name))
-            paragraphs, section_tables, section_images, in_table = parse_section(root, index, styles)
+            paragraphs, section_tables, section_images, in_table, section_figures = parse_section(root, index, styles)
             sections.append(paragraphs)
             tables.extend(section_tables)
             images.extend((index, paragraph, image) for paragraph, image in section_images)
             table_paragraphs.append(in_table)
-    return sections, tables, images, table_paragraphs
+            figures.extend((index, paragraph, name, w, h) for paragraph, name, w, h in section_figures)
+    return sections, tables, images, table_paragraphs, figures

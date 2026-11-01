@@ -111,5 +111,36 @@ class TailPresenceTests(unittest.TestCase):
         self.assertEqual(appendix["판정"], "판단불가", "차례에는 있는데 본문은 배너만이면 사람이 본다")
 
 
+class UnnamedBannerTests(unittest.TestCase):
+    """제목이 이름 없는 그림(가로로 긴 띠)인 원고. 실데이터: 참고 자료·활용 서식 배너는 이름 없음(45370x3763), 부록만 이름 있음."""
+
+    REFS = [f"• 저자{i}(2020). 제목{i}. 출판사." for i in range(4)]
+    BANNER = (45370, 3763)
+
+    def test_unnamed_banners_after_references_are_assigned_in_tail_order(self):
+        body = ["본문", "(참고자료 배너)"] + self.REFS + ["(활용서식 배너)"] + [f"서식 {i}" for i in range(12)] \
+               + ["(부록 배너)"] + [f"부록 내용 {i}" for i in range(5)] + ["NCS학습모듈 개발이력"]
+        figures = [(body.index(label), "", *self.BANNER) for label in ("(참고자료 배너)", "(활용서식 배너)", "(부록 배너)")]
+        figures.append((0, "", 1080, 1080))  # 글머리 아이콘은 배너가 아니다
+        presence = section_presence([["차례"], body], [], figures=figures)
+        self.assertTrue(presence["참고 자료"]["있음"])
+        self.assertIs(presence["활용 서식"]["있음"], True)
+        self.assertEqual(presence["활용 서식"]["k"], body.index("(활용서식 배너)"), "참고 자료 자신의 배너는 건너뛴다")
+        self.assertIs(presence["부록"]["있음"], True)
+        self.assertEqual(presence["부록"]["k"], body.index("(부록 배너)"))
+
+    def test_banner_only_forms_followed_by_appendix_banner_is_not_counted_as_content(self):
+        body = ["본문", "(참고자료 배너)"] + self.REFS + ["(활용서식 배너)", "(부록 배너)"] + [f"부록 내용 {i}" for i in range(5)] + ["NCS학습모듈 개발이력"]
+        figures = [(body.index(label), "", *self.BANNER) for label in ("(참고자료 배너)", "(활용서식 배너)", "(부록 배너)")]
+        presence = section_presence([["차례"], body], [], figures=figures)
+        self.assertIsNone(presence["활용 서식"]["있음"], "활용 서식 배너 뒤에 바로 부록 배너 → 활용 서식은 배너만")
+        self.assertTrue(presence["활용 서식"].get("배너만"))
+        self.assertIs(presence["부록"]["있음"], True)
+
+    def test_without_figures_behaviour_is_unchanged(self):
+        body = ["본문"] + self.REFS + [f"서식 {i}" for i in range(12)] + ["NCS학습모듈 개발이력"]
+        self.assertIsNone(section_presence([["차례"], body], []).get("활용 서식", {}).get("있음"))
+
+
 if __name__ == "__main__":
     unittest.main()
