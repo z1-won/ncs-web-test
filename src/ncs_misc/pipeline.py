@@ -26,7 +26,8 @@ def prepare_review(manuscript: Document, plan: Document | None = None, *, module
                                 tables=manuscript.section_tables(config.body_section), media_complete=manuscript.format == "hwpx")
     body = parse_body(sections, len(toc["학습"]), cutoff=presence["참고 자료"]["k"],
                       table_paragraphs=manuscript.section_table_paragraphs(config.body_section),
-                      aside_paragraphs=manuscript.section_aside_paragraphs(config.body_section))
+                      aside_paragraphs=manuscript.section_aside_paragraphs(config.body_section),
+                      styles=manuscript.section_styles(config.body_section))
     units = unit_regions(body)
     return ReviewContext(manuscript, plan, code, config, toc, body, units, presence)
 

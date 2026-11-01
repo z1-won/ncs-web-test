@@ -92,6 +92,39 @@ class PlanTableTests(unittest.TestCase):
         self.assertEqual(parse_plan(d, "LM2001021701_25v1")["학습명"], ["수집하기"])
 
 
+class NavigatorLessonTests(unittest.TestCase):
+    """학습 1 본문이 없는 원고(연회 행사 진행): 첫 내비게이터 묶음은 학습 2다. 순서로 매기면 전부 한 칸 어긋난다."""
+
+    NAV = ["학습 1", "청결도", "학습 2", "교육", "학습 3", "배치"]
+
+    def body(self, first_lesson, styles):
+        def block(current):
+            return self.NAV + [f"{current}-1.", "내용", "학습 목표", "• 할 수 있다.", "필요 지식", "평가"]
+        paragraphs = [p for current in range(first_lesson, 4) for p in block(current)]
+        names = None
+        if styles:
+            names = []
+            for current in range(first_lesson, 4):
+                for i, _ in enumerate(self.NAV):
+                    names.append(("큰학습-숫자" if i % 2 == 0 else "큰학습-제목") if i // 2 + 1 == current else "큰학습-네비게이터")
+                names += ["바탕글"] * 6
+        return paragraphs, names
+
+    def test_hwpx_reads_the_highlighted_item(self):
+        paragraphs, names = self.body(2, styles=True)
+        body = parse_body([FRONT, paragraphs], 3, styles=names)
+        self.assertEqual([no for no, _, _ in body["spans"]], [2, 3])
+        self.assertEqual([[s["no"] for s in L["subs"]] for L in body["lessons"]], [[2], [3]])
+
+    def test_hwp_falls_back_to_first_heading_number(self):
+        paragraphs, _ = self.body(2, styles=False)
+        self.assertEqual([no for no, _, _ in parse_body([FRONT, paragraphs], 3)["spans"]], [2, 3])
+
+    def test_complete_manuscript_is_ordinal(self):
+        paragraphs, names = self.body(1, styles=True)
+        self.assertEqual([no for no, _, _ in parse_body([FRONT, paragraphs], 3, styles=names)["spans"]], [1, 2, 3])
+
+
 class AsideTests(unittest.TestCase):
     def test_parse_body_skips_memo_paragraphs(self):
         body = ["학습 1", "가", "1-1.", "고객 문의 정보 전달", "학습 목표", "(개발계획서에 따라)", "학습 목표 수정 要", "• 응대할 수 있다.", "필요 지식"]

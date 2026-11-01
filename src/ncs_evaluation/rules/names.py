@@ -33,6 +33,22 @@ def display(mapping):
     return {f"{a}-{b}": text for (a, b), text in mapping.items()}
 
 
+def describe(missing, extra, changed, unresolved=()) -> str:
+    """비고 한 줄 — 비어 있는 항목은 적지 않고 번호는 'N-M'으로. 예: '명칭 불일치 2-2, 3-1 · 누락 4-1'"""
+    def keys(items):
+        return ", ".join(f"{a}-{b}" for a, b in items)
+    parts = []
+    if changed:
+        parts.append("명칭 불일치 " + keys(changed))
+    if missing:
+        parts.append("누락 " + keys(missing))
+    if extra:
+        parts.append("추가 " + keys(extra))
+    if unresolved:
+        parts.append("기준에 없는 명칭 " + ", ".join(f"「{t}」" for t in unresolved))
+    return " · ".join(parts) if parts else "일치"
+
+
 def compare_indexed(place, items, expected):
     actual = indexed(items)
     if actual is None:
@@ -41,7 +57,7 @@ def compare_indexed(place, items, expected):
     extra = sorted(set(actual) - set(expected))
     changed = sorted(k for k in expected.keys() & actual.keys() if expected[k] != actual[k])
     return row(place, X if missing or extra or changed else O, display(actual), display(expected),
-               f"누락 번호: {missing}, 추가 번호: {extra}, 명칭 불일치 번호: {changed}")
+               describe(missing, extra, changed))
 
 
 def table_names(table):
@@ -90,8 +106,7 @@ def compare_table(place, values, expected):
     extra = sorted(set(actual) - set(expected))
     changed = sorted(key for key in actual.keys() & expected.keys() if actual[key] != expected[key])
     return row(place, X if missing or extra or changed or unresolved else O, values, display(expected),
-               f"누락 번호: {missing}; 추가 번호: {extra}; 명칭 불일치 번호: {changed}; "
-               f"기준에 없는 명칭: {unresolved}")
+               describe(missing, extra, changed, unresolved))
 
 
 def check_names(context):

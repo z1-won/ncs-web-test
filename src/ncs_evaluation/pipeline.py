@@ -23,7 +23,8 @@ def prepare_review(manuscript: Document, plan: Document | None = None, *, module
     body = parse_body(sections, len((toc or {}).get("학습", [])),
                       cutoff=presence["참고 자료"]["k"],
                       table_paragraphs=manuscript.section_table_paragraphs(config.body_section),
-                      aside_paragraphs=manuscript.section_aside_paragraphs(config.body_section))
+                      aside_paragraphs=manuscript.section_aside_paragraphs(config.body_section),
+                      styles=manuscript.section_styles(config.body_section))
     regions = eval_regions(manuscript, body, config.body_section)
     plan_goals = parse_plan_goals(plan, code) if plan else None
     return ReviewContext(manuscript, plan, code, config, toc, overview, plan_toc, body, regions, plan_goals)

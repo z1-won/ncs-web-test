@@ -123,12 +123,17 @@ def check_toc3(plan, toc, overview, body, eval_tables=None) -> list[dict]:
     # 3 내비게이터 — 첫 묶음을 비교하고, 나머지 묶음의 차이는 추가 체크로
     if body["nav_runs"]:
         extra_checks, extra_notes = {}, {}
+        same_note: dict[str, list[int]] = {}  # 같은 차이를 보이는 묶음은 한 줄로 모은다(묶음마다 반복하지 않음)
         for r_i, run in enumerate(body["nav_runs"][1:], 2):
             value, found = diff_list("학습명", ref_names, [x["text"] for x in run])
             if value == X:
-                key = f"내비게이터 {r_i}번째(학습 {r_i}) 일치"
-                extra_checks[key] = X
-                extra_notes[key] = " / ".join(found)
+                same_note.setdefault(" / ".join(found), []).append(r_i)
+        for note, run_ids in same_note.items():
+            shown = f"{run_ids[0]}~{run_ids[-1]}번째" if len(run_ids) > 2 and run_ids == list(range(run_ids[0], run_ids[-1] + 1)) \
+                else "·".join(f"{r}" for r in run_ids) + "번째"
+            key = f"내비게이터 {shown} 묶음 일치"
+            extra_checks[key] = X
+            extra_notes[key] = note
         if len(body["nav_runs"]) != len(toc["학습"]):
             extra_checks["내비게이터 반복 횟수"] = TRI
             extra_notes["내비게이터 반복 횟수"] = (
