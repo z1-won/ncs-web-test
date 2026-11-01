@@ -127,7 +127,10 @@ class WebappTests(unittest.TestCase):
         self.assertEqual(preflight.headers["access-control-allow-origin"], "*")
 
     def test_static_files_and_api_routing(self):
-        self.assertEqual(self.client.get("/").status_code, 404)
+        root = self.client.get("/")
+        self.assertEqual(root.status_code, 404)
+        self.assertIn("charset=utf-8", root.headers["content-type"], "브라우저가 한국어 오류 메시지를 직접 표시할 때 깨지지 않도록")
+        self.assertIn("--dist", root.json()["error"])
         dist = Path(self.temp.name) / "dist"
         dist.mkdir()
         (dist / "index.html").write_text("<h1>F02</h1>")

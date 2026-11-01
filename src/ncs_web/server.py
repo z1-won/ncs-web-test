@@ -44,7 +44,9 @@ class ErrorResponse(BaseModel):
 
 
 def error_response(status: int, message: str, **extra: Any) -> JSONResponse:
-    return JSONResponse({"error": message, **extra}, status_code=status, headers=CORS_HEADERS)
+    # charset을 명시해 브라우저가 JSON을 직접 표시할 때 한국어 메시지가 깨지지 않게 한다.
+    return JSONResponse({"error": message, **extra}, status_code=status, headers=CORS_HEADERS,
+                        media_type="application/json; charset=utf-8")
 
 
 def create_app(
