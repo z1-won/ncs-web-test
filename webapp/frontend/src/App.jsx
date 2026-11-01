@@ -513,6 +513,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [allRun, setAllRun] = useState(null);   // 전체 실행 진행·결과: { group, roles, items: {check: {status, data, error}}, running, created_at }
   const [history, setHistory] = useState(null);
+  const resultsRef = useRef(null);   // 결과 영역 — 검사 실행·이력 열기 뒤 여기로 화면을 내린다(이력 표가 길면 결과가 화면 밖에 있다)
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
   const [deleting, setDeleting] = useState(false);
 
@@ -525,6 +526,12 @@ export default function App() {
     rows.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     setHistory(rows);
   }
+
+  // 단독 결과가 오거나 전체 실행이 시작(묶음 id가 바뀜)되면 결과 영역으로 스크롤. 전체 실행 중 구성요소가 채워질 때는 다시 움직이지 않는다.
+  const resultKey = result?.id ?? (result ? "result" : null) ?? allRun?.group ?? null;
+  useEffect(() => {
+    if (resultKey) resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [resultKey]);
 
   // 서버가 이력 저장(DB 모드)을 지원할 때만 이력을 가져온다. 파일 모드에서는 /api/reviews가 없다.
   useEffect(() => {
@@ -749,6 +756,8 @@ export default function App() {
           )}
         </section>
       )}
+
+      <div ref={resultsRef} className="results-anchor" />
 
       {allRun && <AllResults run={allRun} checks={checks} />}
 

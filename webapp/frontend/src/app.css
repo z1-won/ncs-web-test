@@ -125,3 +125,6 @@ details.raw pre {
 .all-results .component-foot details .krds-table-wrap { margin-top: var(--krds-gap-4); }
 /* KRDS 스피너는 기본이 가로·세로 100% 블록 — 머리글 안에서 글과 나란히 놓이게 크기를 글에 맞춘다 */
 .all-results .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); z-index: auto; }
+
+/* 결과 영역 스크롤 기준점: 내려왔을 때 제목이 화면 맨 위에 붙지 않게 여백을 둔다 */
+.results-anchor { scroll-margin-top: var(--krds-gap-7); }
