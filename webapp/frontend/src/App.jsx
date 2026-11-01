@@ -224,14 +224,19 @@ export default function App() {
             <button type="button" className="krds-btn medium tertiary" disabled={busy} onClick={() => fileInput.current?.click()}>파일 선택</button>
           </div>
           {/* 고른 즉시 서버가 내용으로 역할을 판별해 파일명 뒤에 적어 준다(원고/개발계획서). 실행 전에 '개발계획서 없음'을 알 수 있다 */}
-          <p className="form-hint" id="files-hint">
-            {!files.length ? "선택된 파일 없음"
-              : upload.status === "uploading" ? `${files.map((f) => f.name).join(", ")} — 역할 확인 중…`
-              : files.map((f) => {
-                const role = upload.status !== "ready" ? null
-                  : upload.roles?.manuscript === f.name ? "원고" : upload.roles?.plan === f.name ? "개발계획서" : "역할 미판별";
-                return role ? `${f.name} (${role})` : f.name;
-              }).join(", ")}
+          <p className="form-hint file-roles" id="files-hint">
+            {!files.length ? "선택된 파일 없음" : files.map((f) => {
+              const role = upload.status === "uploading" ? "확인 중…"
+                : upload.status !== "ready" ? null
+                : upload.roles?.manuscript === f.name ? "원고" : upload.roles?.plan === f.name ? "개발계획서" : "역할 미판별";
+              const tone = role === "원고" ? "bg-light-primary" : role === "개발계획서" ? "bg-light-secondary" : role === "역할 미판별" ? "bg-light-warning" : "bg-light-gray";
+              return (
+                <span key={f.name} className="file-role">
+                  {role && <span className={`krds-badge ${tone}`}>{role}</span>}
+                  {f.name}
+                </span>
+              );
+            })}
           </p>
           {upload.status === "error" && <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{upload.error}</p>}
           {upload.status === "ready" && !upload.roles?.plan && (selected.required || []).includes("plan") && (
