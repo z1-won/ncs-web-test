@@ -39,17 +39,14 @@ export function Header({ hasHistory, hasResult }) {
   const header = useRef(null);
   useCssHeightVar(header, "--header-height");   // app.css의 앵커 scroll-margin-top이 이 값을 읽는다
   // 화면이 하나라 메뉴는 영역 이동(앵커). 스크롤 위치에 따라 현재 영역을 활성 표시한다 — 렌더마다 계산(스크롤 값이 바뀔 때만 다시 그려진다).
-  const y = useScrollY();
-  const current = useMemo(() => {
-    const headerHeight = header.current?.offsetHeight || 0;
-    let active = items[0]?.id;
-    for (const item of items) {
-      const el = document.getElementById(item.id);
-      // 앵커는 scroll-margin-top(헤더 + gap-7)만큼 띄워 멈추므로 그 여유(약 4rem)까지는 "현재 영역"으로 본다
-      if (el && el.getBoundingClientRect().top <= headerHeight + 40) active = item.id;
-    }
-    return active;
-  }, [items, y]);
+  useScrollY();   // 스크롤 값이 바뀔 때마다 다시 그려지도록 구독만 한다 — 아래 현재 영역 계산은 렌더마다(싼 계산) 수행
+  const headerHeight = header.current?.offsetHeight || 0;
+  let current = items[0]?.id;
+  for (const item of items) {
+    const el = document.getElementById(item.id);
+    // 앵커는 scroll-margin-top(헤더 + gap-7)만큼 띄워 멈추므로 그 여유(약 4rem)까지는 "현재 영역"으로 본다
+    if (el && el.getBoundingClientRect().top <= headerHeight + 40) current = item.id;
+  }
   function go(e, id) {
     e.preventDefault();
     const el = document.getElementById(id);
