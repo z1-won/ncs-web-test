@@ -1,0 +1,53 @@
+// 서버 호출을 한 곳에 모은다. 모든 함수는 { ok, status, data, error }를 돌려주고 예외를 던지지 않는다.
+// error는 사용자에게 바로 보여 줄 문장: 서버가 준 error 메시지(+ 개발용 traceback) 또는 연결 실패 안내.
+
+const CONNECT_FAILED = "서버에 연결하지 못했습니다";
+const CONNECT_HINT = "(가상환경의 ncs-web 서버가 실행 중인지 확인)";
+
+export async function request(path, options = {}) {
+  let response;
+  try {
+    response = await fetch(path, options);
+  } catch (e) {
+    return { ok: false, status: 0, data: null, error: `${CONNECT_FAILED}: ${e.message}\n${CONNECT_HINT}` };
+  }
+  if (response.status === 204) return { ok: true, status: 204, data: null, error: null };
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  if (response.ok) return { ok: true, status: response.status, data, error: null };
+  const message = data?.error || `${response.status} ${response.statusText}`.trim();
+  return { ok: false, status: response.status, data, error: message + (data?.traceback ? "\n\n" + data.traceback : "") };
+}
+
+function multipart(fields, files = []) {
+  const form = new FormData();
+  Object.entries(fields).forEach(([key, value]) => { if (value != null) form.append(key, value); });
+  files.forEach((file) => form.append("files", file, file.name));
+  return form;
+}
+
+export const api = {
+  health: () => request("/api/health"),
+  // 검수 1건: files로 직접 올리거나 upload(토큰)+group으로 올려 둔 파일을 쓴다
+  review: ({ check, moduleCode, files = [], upload, group }) =>
+    request("/api/review", { method: "POST", body: multipart({ check, module_code: moduleCode, upload, group }, files) }),
+  uploads: {
+    create: (files) => request("/api/uploads", { method: "POST", body: multipart({}, files) }),
+    remove: (token) => request(`/api/uploads/${token}`, { method: "DELETE" }),
+  },
+  reviews: {
+    list: ({ standalone = true } = {}) => request(`/api/reviews${standalone ? "?standalone=true" : ""}`),
+    get: (id) => request(`/api/reviews/${id}`),
+    remove: (id) => request(`/api/reviews/${id}`, { method: "DELETE" }),
+    zipUrl: (id) => `/api/reviews/${id}/zip`,
+  },
+  groups: {
+    list: () => request("/api/groups"),
+    get: (id) => request(`/api/groups/${id}`),
+    remove: (id) => request(`/api/groups/${id}`, { method: "DELETE" }),
+  },
+};

@@ -202,3 +202,5 @@ details.raw pre {
 .history .krds-table-wrap { margin-top: var(--krds-gap-5); }
 /* 지금 화면에 열려 있는 이력 행 */
 .history tr.is-open > td { background: var(--krds-light-color-surface-secondary-subtler); }
+.history-table { table-layout: fixed; }
+.history-table td { overflow-wrap: anywhere; word-break: keep-all; }
