@@ -23,8 +23,11 @@ class SheetItem:
     check_prefix: str | None = None
 
 
-def _item_checks(rows: list[dict], item: SheetItem) -> list[tuple[str, str, str]]:
-    """(체크 이름, 값, 비고) — 이 항목에 속하는 체크만."""
+def _item_checks(rows: list[dict], item: SheetItem) -> list[tuple[str, str, str, str, str | None]]:
+    """(체크 이름, 값, 비고, 위치, 수정 제안) — 이 항목에 속하는 체크만.
+
+    위치는 행의 "위치"(엔진이 넣는 짧은 표기, 예 '1-1')이고 없으면 빈 문자열.
+    """
     out = []
     for row in rows:
         if row["item_id"] not in item.item_ids:
@@ -36,15 +39,60 @@ def _item_checks(rows: list[dict], item: SheetItem) -> list[tuple[str, str, str]
             if item.check_prefix and named and not name.startswith(item.check_prefix):
                 continue
             note = notes.get(name, "") if isinstance(notes, dict) else "; ".join(notes)
-            out.append((name, value, note))
+            suggestion = row.get("수정 제안")
+            out.append((name, value, note, row.get("위치") or "", suggestion if isinstance(suggestion, str) else None))
     return out
+
+
+MAX_LOCATIONS = 8      # 비고에 적는 위치 수. 넘으면 '…'
+MAX_NOTE_LENGTH = 120  # 한 건짜리 체크에 비고를 그대로 실을 때의 최대 길이
+
+
+def summarize_remarks(checks: list[tuple[str, str, str, str, str | None]]) -> list[str]:
+    """확인서 비고 줄 목록 — 체크 이름당 한 줄, 끝에 수정 제안 한 줄.
+
+    확인서는 판정과 근거 한 줄을 적는 곳이라 건수·위치·수정 방향만 싣는다.
+    - 여러 건을 검사한 체크: '이름: N건 중 부적합 n건·판단불가 m건 (위치, …)'
+    - 한 건만 검사한 체크(항목 하나에 행 하나인 규칙): 건수가 의미 없으므로 그 행의 비고(핵심 멘트)를 그대로 싣는다
+    어디가 어떻게 다른지의 상세는 지적사항 표에 있다.
+    """
+    stats: dict[str, dict] = {}
+    for name, value, note, where, suggestion in checks:
+        stat = stats.setdefault(name, {"total": 0, X: 0, TRI: 0, "where": [], "note": "", "suggest": None})
+        stat["total"] += 1
+        if value in (X, TRI):
+            stat[value] += 1
+            if where and where not in stat["where"]:
+                stat["where"].append(where)
+            if note and not stat["note"]:
+                stat["note"] = note
+            if suggestion and not stat["suggest"]:
+                stat["suggest"] = suggestion
+    lines, suggestions = [], []
+    for name, stat in stats.items():
+        if not stat[X] and not stat[TRI]:
+            continue
+        if stat["total"] == 1:
+            note = stat["note"]
+            body = note if len(note) <= MAX_NOTE_LENGTH else note[: MAX_NOTE_LENGTH - 1] + "…"
+            lines.append(f"{name}: {body}" if body else f"{name}: {'부적합' if stat[X] else '판단불가'}")
+        else:
+            counts = "·".join(f"{label} {stat[key]}건" for key, label in ((X, "부적합"), (TRI, "판단불가")) if stat[key])
+            where = stat["where"]
+            shown = ", ".join(where[:MAX_LOCATIONS]) + (" …" if len(where) > MAX_LOCATIONS else "")
+            lines.append(f"{name}: {stat['total']}건 중 {counts}" + (f" ({shown})" if shown else ""))
+        if stat["suggest"] and stat["suggest"] not in suggestions:
+            suggestions.append(stat["suggest"])
+    if lines and suggestions:
+        lines.append("— " + " / ".join(suggestions))
+    return lines
 
 
 def build_sheet(checklist: list[dict], items: list[SheetItem], component: str) -> list[dict[str, Any]]:
     sheet = []
     for item in items:
         checks = _item_checks(checklist, item)
-        values = [v for _, v, _ in checks]
+        values = [v for _, v, _, _, _ in checks]
         if not item.item_ids or not checks:
             verdict = NOT_CHECKED
         elif X in values:
@@ -53,7 +101,7 @@ def build_sheet(checklist: list[dict], items: list[SheetItem], component: str) -
             verdict = UNDECIDED
         else:
             verdict = PASS
-        remarks = [f"{name}: {note}" if note else name for name, value, note in checks if value in (X, TRI)]
+        remarks = summarize_remarks(checks)
         sheet.append(
             {
                 "구성요소": component,
@@ -62,7 +110,7 @@ def build_sheet(checklist: list[dict], items: list[SheetItem], component: str) -
                 "검수결과": verdict,
                 "적합": verdict == PASS,
                 "부적합": verdict == FAIL,
-                "비고": "; ".join(dict.fromkeys(remarks)) if remarks else ("규칙 미구현" if verdict == NOT_CHECKED else ""),
+                "비고": "\n".join(remarks) if remarks else ("규칙 미구현" if verdict == NOT_CHECKED else ""),
             }
         )
     return sheet

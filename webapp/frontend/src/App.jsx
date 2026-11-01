@@ -69,7 +69,7 @@ function SheetTable({ sheet }) {
               <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "적합" ? "✓" : ""}</td>
               <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "부적합" ? "✓" : ""}</td>
               <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "판단불가" ? "△" : ""}</td>
-              <td>{withBoxNumbers(row.비고)}</td>
+              <td style={{ whiteSpace: "pre-line" }}>{withBoxNumbers(row.비고)}</td>
             </tr>
           ))}
         </tbody>
