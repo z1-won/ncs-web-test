@@ -71,75 +71,116 @@ class TocSkippedLessonTests(unittest.TestCase):
 
 
 class TailPresenceTests(unittest.TestCase):
-    """꼬리 섹션(참고 자료·활용 서식·부록) 존재 판정. 제목이 이름 없는 이미지인 실제 원고 사례를 본뜬다."""
+    def presence(self, body, *, figures=(), tables=(), complete=True):
+        return section_presence([[], body], [], figures=figures, tables=tables, media_complete=complete)
 
-    REFS = [f"• 저자{i}(2020). 제목{i}. 출판사." for i in range(4)]
-    FORMS = [f"서식 내용 {i}" for i in range(12)]
+    def verdicts(self, presence, tail):
+        return {r["region_path"].split(" > ")[-1]: r for r in check_toc6(presence, {"꼬리": tail})}
 
-    def test_content_before_appendix_banner_is_identified_as_forms(self):
-        """참고 자료 → (제목 없는 내용) → 부록 배너 → 개발 이력: 그 내용은 꼬리 순서상 활용 서식이다."""
-        body = ["본문"] + self.REFS + self.FORMS + ["(부록 배너 자리)", "※ 부록은 KoPub돋움체로 작성", "NCS학습모듈 개발이력"]
-        banner_at = body.index("(부록 배너 자리)")
-        presence = section_presence([["차례"], body], [(banner_at, "부록.JPG")])
-        self.assertTrue(presence["참고 자료"]["있음"])
-        self.assertIs(presence["활용 서식"]["있음"], True)
-        self.assertIn("꼬리 순서상 활용 서식", presence["활용 서식"]["근거"])
-        self.assertIsNone(presence["부록"]["있음"])
-        self.assertTrue(presence["부록"].get("배너만"))
+    def test_short_real_content_is_not_empty(self):
+        p = self.presence(["참고 자료", "활용 서식", "예약 신청서", "성명: ___", "개발 이력"])
+        self.assertIs(p["활용 서식"]["있음"], True)
+        self.assertFalse(p["활용 서식"].get("배너만"))
+        self.assertEqual(self.verdicts(p, {})["활용 서식"]["판정"], "부적합")
 
-    def test_content_without_any_appendix_marker_stays_ambiguous(self):
-        body = ["본문"] + self.REFS + self.FORMS + ["NCS학습모듈 개발이력"]
-        presence = section_presence([["차례"], body], [])
-        self.assertIsNone(presence["활용 서식"]["있음"], "부록 위치를 모르면 활용 서식인지 부록인지 확정하지 않는다")
-        self.assertFalse(presence["활용 서식"].get("배너만"))
+    def test_empty_banner_checks_deletion(self):
+        p = self.presence(["참고 자료", "부록", "※ 안내", "개발 이력"])
+        self.assertIs(p["부록"]["있음"], False)
+        self.assertTrue(p["부록"]["배너만"])
+        self.assertEqual(self.verdicts(p, {})["부록"]["판정"], "적합")
+        row = self.verdicts(p, {"부록": "10"})["부록"]
+        self.assertEqual(row["판정"], "부적합")
+        self.assertEqual(row["수정 제안"], "차례에서 삭제")
 
-    def test_toc6_banner_remnant_absent_from_toc_passes_with_note(self):
-        body = ["본문"] + self.REFS + self.FORMS + ["(부록 배너 자리)", "※ 안내", "NCS학습모듈 개발이력"]
-        presence = section_presence([["차례"], body], [(body.index("(부록 배너 자리)"), "부록.JPG")])
-        toc = {"꼬리": {"참고 자료": "96", "활용 서식": "98"}}
-        rows = {r["region_path"].split(" > ")[-1]: r for r in check_toc6(presence, toc)}
-        self.assertEqual(rows["활용 서식"]["판정"], "적합")
-        self.assertEqual(rows["활용 서식"]["비고"], {})
-        self.assertEqual(rows["부록"]["판정"], "적합", "미작성 부록이 차례에도 없으면 ⑥은 적합")
-        self.assertIn("배너 삭제 권장", list(rows["부록"]["비고"].values())[0])
+    def test_image_only_content_and_blank_table_are_not_empty(self):
+        body = ["참고 자료", "부록", "", "개발 이력"]
+        for kwargs in ({"figures": [(2, "", 30000, 40000)]}, {"tables": [{"paragraph": 2, "cells": {}}]}):
+            with self.subTest(kwargs=kwargs):
+                p = self.presence(body, **kwargs)
+                self.assertIs(p["부록"]["있음"], True)
+                self.assertFalse(p["부록"].get("배너만"))
 
-    def test_toc6_banner_remnant_listed_in_toc_is_undecided(self):
-        body = ["본문"] + self.REFS + self.FORMS + ["(부록 배너 자리)", "※ 안내", "NCS학습모듈 개발이력"]
-        presence = section_presence([["차례"], body], [(body.index("(부록 배너 자리)"), "부록.JPG")])
-        toc = {"꼬리": {"참고 자료": "96", "활용 서식": "98", "부록": "101"}}
-        appendix = next(r for r in check_toc6(presence, toc) if r["region_path"].endswith("부록"))
-        self.assertEqual(appendix["판정"], "판단불가", "차례에는 있는데 본문은 배너만이면 사람이 본다")
+    def test_unknown_banner_never_assigns_a_name(self):
+        body = ["참고 자료", "", "내용1", "내용2", "내용3", "개발 이력"]
+        p = self.presence(body, figures=[(1, "", 45370, 3763)])
+        for name in ("활용 서식", "부록"):
+            self.assertIsNone(p[name]["있음"])
+            self.assertIsNone(p[name]["k"])
 
+    def test_unclassified_content_keeps_both_names_uncertain(self):
+        for count in (1, 12):
+            p = self.presence(["참고 자료"] + [f"내용{i}" for i in range(count)] + ["개발 이력"])
+            for row in self.verdicts(p, {"부록": "10"}).values():
+                self.assertEqual(row["판정"], "판단불가")
+                self.assertNotEqual(row["수정 제안"], "차례에서 삭제")
 
-class UnnamedBannerTests(unittest.TestCase):
-    """제목이 이름 없는 그림(가로로 긴 띠)인 원고. 실데이터: 참고 자료·활용 서식 배너는 이름 없음(45370x3763), 부록만 이름 있음."""
+    def test_content_before_appendix_is_identified_as_forms(self):
+        p = self.presence(["참고 자료"] + [f"내용{i}" for i in range(12)] + ["부록", "개발 이력"])
+        self.assertIs(p["활용 서식"]["있음"], True)
+        self.assertIs(p["부록"]["있음"], False)
 
-    REFS = [f"• 저자{i}(2020). 제목{i}. 출판사." for i in range(4)]
-    BANNER = (45370, 3763)
+    def test_missing_media_information_prevents_absence_confirmation(self):
+        p = self.presence(["참고 자료", "부록", "개발 이력"], complete=False)
+        self.assertIsNone(p["부록"]["있음"])
+        self.assertIsNone(p["활용 서식"]["있음"])
 
-    def test_unnamed_banners_after_references_are_assigned_in_tail_order(self):
-        body = ["본문", "(참고자료 배너)"] + self.REFS + ["(활용서식 배너)"] + [f"서식 {i}" for i in range(12)] \
-               + ["(부록 배너)"] + [f"부록 내용 {i}" for i in range(5)] + ["NCS학습모듈 개발이력"]
-        figures = [(body.index(label), "", *self.BANNER) for label in ("(참고자료 배너)", "(활용서식 배너)", "(부록 배너)")]
-        figures.append((0, "", 1080, 1080))  # 글머리 아이콘은 배너가 아니다
-        presence = section_presence([["차례"], body], [], figures=figures)
-        self.assertTrue(presence["참고 자료"]["있음"])
-        self.assertIs(presence["활용 서식"]["있음"], True)
-        self.assertEqual(presence["활용 서식"]["k"], body.index("(활용서식 배너)"), "참고 자료 자신의 배너는 건너뛴다")
-        self.assertIs(presence["부록"]["있음"], True)
-        self.assertEqual(presence["부록"]["k"], body.index("(부록 배너)"))
+    def test_missing_reference_prevents_absence_confirmation(self):
+        p = self.presence(["일반 본문"])
+        self.assertIsNone(p["부록"]["있음"])
 
-    def test_banner_only_forms_followed_by_appendix_banner_is_not_counted_as_content(self):
-        body = ["본문", "(참고자료 배너)"] + self.REFS + ["(활용서식 배너)", "(부록 배너)"] + [f"부록 내용 {i}" for i in range(5)] + ["NCS학습모듈 개발이력"]
-        figures = [(body.index(label), "", *self.BANNER) for label in ("(참고자료 배너)", "(활용서식 배너)", "(부록 배너)")]
-        presence = section_presence([["차례"], body], [], figures=figures)
-        self.assertIsNone(presence["활용 서식"]["있음"], "활용 서식 배너 뒤에 바로 부록 배너 → 활용 서식은 배너만")
-        self.assertTrue(presence["활용 서식"].get("배너만"))
-        self.assertIs(presence["부록"]["있음"], True)
+    def test_known_content_and_known_absence(self):
+        p = self.presence(["참고 자료", "활용 서식", "내용1", "내용2", "내용3", "개발 이력"])
+        self.assertIs(p["활용 서식"]["있음"], True)
+        self.assertIs(p["부록"]["있음"], False)
+        self.assertEqual(self.verdicts(p, {"활용 서식": "10"})["활용 서식"]["판정"], "적합")
+        self.assertEqual(self.verdicts(p, {})["활용 서식"]["판정"], "부적합")
 
-    def test_without_figures_behaviour_is_unchanged(self):
-        body = ["본문"] + self.REFS + [f"서식 {i}" for i in range(12)] + ["NCS학습모듈 개발이력"]
-        self.assertIsNone(section_presence([["차례"], body], []).get("활용 서식", {}).get("있음"))
+    def test_unknown_banner_after_known_forms_identifies_appendix(self):
+        p = self.presence(["참고 자료", "활용 서식", "내용1", "내용2", "내용3", "", "추가 내용", "개발 이력"],
+                          figures=[(5, "", 45370, 3763)])
+        self.assertIs(p["활용 서식"]["있음"], True)
+        self.assertIs(p["부록"]["있음"], True)
+
+    def test_adjacent_identified_banners_without_content_are_empty(self):
+        p = self.presence(["참고 자료", "활용 서식", "", "개발 이력"], figures=[(2, "", 45370, 3763)])
+        self.assertIs(p["활용 서식"]["있음"], False)
+        self.assertIs(p["부록"]["있음"], False)
+
+    def test_unnamed_forms_before_named_appendix(self):
+        p = self.presence(["참고 자료", "", "서식 한 문단", "부록", "부록 한 문단", "개발 이력"],
+                          figures=[(1, "", 45370, 3763)])
+        for name in ("활용 서식", "부록"):
+            self.assertIs(p[name]["있음"], True)
+            self.assertEqual(self.verdicts(p, {"활용 서식": "10", "부록": "11"})[name]["판정"], "적합")
+
+    def test_two_unnamed_banners_follow_tail_order(self):
+        p = self.presence(["참고 자료", "", "서식", "", "부록 내용", "개발 이력"],
+                          figures=[(1, "", 45370, 3763), (3, "", 45370, 3763)])
+        self.assertEqual(p["활용 서식"]["k"], 1)
+        self.assertEqual(p["부록"]["k"], 3)
+        self.assertIs(p["활용 서식"]["있음"], True)
+        self.assertIs(p["부록"]["있음"], True)
+
+    def test_extra_banner_does_not_force_assignment(self):
+        p = self.presence(["참고 자료", "", "", "", "내용", "개발 이력"],
+                          figures=[(i, "", 45370, 3763) for i in (1, 2, 3)])
+        self.assertIsNone(p["활용 서식"]["있음"])
+        self.assertIsNone(p["부록"]["있음"])
+
+    def test_development_template_marker_is_not_appendix_content(self):
+        p = self.presence(["참고 자료", "부록", "※ 안내", "<신규 개발 학습모듈 양식>", "개발 이력"])
+        self.assertIs(p["부록"]["있음"], False)
+
+    def test_development_table_is_not_appendix_content(self):
+        p = self.presence(["참고 자료", "부록", "", "NCS학습모듈 개발이력", "발행일"],
+                          tables=[{"paragraph": 2, "cells": {(0, 0): "NCS학습모듈 개발이력", (1, 0): "발행일"}}])
+        self.assertIs(p["부록"]["있음"], False)
+        self.assertEqual(self.verdicts(p, {})["부록"]["판정"], "적합")
+
+    def test_toc_leaders(self):
+        for leader in ("", "……", "···", ". . .", "⋯", "‥"):
+            toc = parse_toc([["차례", f"활용 서식 {leader} 98", f"부록 {leader} 100", "학습모듈의 개요"], []])
+            self.assertEqual(toc["꼬리"], {"활용 서식": "98", "부록": "100"})
 
 
 if __name__ == "__main__":

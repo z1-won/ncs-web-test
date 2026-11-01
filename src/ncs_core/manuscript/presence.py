@@ -1,12 +1,12 @@
 """참고 자료·활용 서식·부록이 본문에 있는지의 근거를 찾는다."""
 
 import re
+from itertools import combinations
 
 from .config import DEFAULT_PARSE_CONFIG, ParseConfig
 from .patterns import REF_LINE
 
 TAIL_PATTERNS = {"참고 자료": r"참\s*고\s*자\s*료", "활용 서식": r"활\s*용\s*서\s*식", "부록": r"부\s*록"}
-TAIL_ORDER = ("참고 자료", "활용 서식", "부록")  # 양식의 꼬리 순서 — 고정
 BANNER_MIN_RATIO = 5.0  # 제목 배너는 본문 폭의 가로로 긴 띠 그림(실데이터 12:1, 10:1)
 BANNER_MIN_WIDTH = 30000  # HWP 단위(1/7200 inch) ≈ 106 mm. 본문 폭 그림만 배너로 본다
 
@@ -19,12 +19,13 @@ def banner_figures(figures) -> list[int]:
     )
 
 
-def section_presence(sections, images, config: ParseConfig = DEFAULT_PARSE_CONFIG, figures=()) -> dict:
+def section_presence(sections, images, config: ParseConfig = DEFAULT_PARSE_CONFIG, figures=(), *, tables=(), media_complete=False) -> dict:
     """{이름: {'있음': bool|None, '근거': str, 'k': 위치, ['배너만': True], ['end': 끝]}}.
 
     images: 본문 섹션의 (문단 인덱스, 원본 그림 이름). figures: 본문 섹션의 모든 그림 (문단, 이름 또는 "", 가로, 세로).
-    있음=None은 판단 보류: '배너만'이 True면 제목은 있는데 내용이 없는 경우, 아니면 내용은 있는데 활용 서식/부록 중
-    무엇인지 확정하지 못한 경우다.
+    media_complete: 그림 추출을 지원하는 형식일 때만 True. tables는 본문 섹션의 표 목록.
+    있음=None은 영역 이름이나 작성 여부를 확정하지 못한 경우다.
+    배너만=True는 제목 뒤에 안내문 외 텍스트·표·그림이 없는 경우에만 설정한다.
     """
     raw = sections[1] if len(sections) > 1 else []
     lines = [(i, l) for i, l in enumerate(raw) if l]
@@ -61,74 +62,101 @@ def section_presence(sections, images, config: ParseConfig = DEFAULT_PARSE_CONFI
                 "end": best[-1],
             }
 
-    # 3) 이름 없는 배너 그림: 꼬리 구간(참고 자료 이후)의 가로로 긴 띠 그림은 제목 배너다.
-    #     양식의 꼬리 순서(참고 자료 → 활용 서식 → 부록)대로, 아직 제목을 못 찾은 이름에 차례로 배정한다.
-    #     참고 자료는 앞 단계(제목·배너·내용 패턴)에서 먼저 확정하고, 그 뒤의 배너만 다룬다.
-    unnamed = banner_figures(figures)
-    if unnamed and out["참고 자료"]["있음"]:
-        # 기준점: 참고 자료의 시작(제목·배너 위치 또는 참고문헌 첫 줄). 그 앞의 배너(참고 자료 자신의 배너)는 제외
-        anchor = out["참고 자료"]["k"]
-        after = [p for p in unnamed if p > anchor]
-        pending = [n for n in ("활용 서식", "부록") if not out[n]["있음"]]
-        for name, p in zip(pending, after):
-            out[name] = {"있음": True, "근거": f"이름 없는 제목 배너 그림 (section1 p{p}, 꼬리 순서상 {name})", "k": p}
+    development = next((i for i, l in lines if re.search(r"개발\s*이력", l)), len(raw))
+    # 개발 이력 제목이 표 첫 셀에 있으면 표를 담는 바깥 문단부터 제외한다.
+    development = min([development] + [t["paragraph"] for t in tables
+                      if re.fullmatch(r"(?:NCS\s*학습모듈\s*)?개발\s*이력", t.get("cells", {}).get((0, 0), ""))])
+    # 개발 이력 앞의 양식 표시는 실제 서식·부록 내용이 아니다.
+    def is_content(line):
+        return not line.startswith("※") and not re.fullmatch(r"<\s*신규\s*개발\s*학습모듈\s*양식\s*>", line)
 
-    # 제목·배너 뒤에 내용이 없으면(개발이력 전까지 문단이 적으면) '배너만' → △
+    reference = out["참고 자료"]
+    anchor = reference.get("end", reference["k"])
+    # 텍스트 제목으로 찾았더라도 바로 뒤 참고문헌 구간을 기준점에 포함한다.
+    if anchor is not None:
+        for i, line in lines:
+            if i <= anchor:
+                continue
+            if REF_LINE.match(line):
+                anchor = i
+            else:
+                break
+    unnamed = sorted(set(banner_figures(figures)))
+    candidates = [p for p in unnamed if anchor is not None and anchor < p < development
+                  and p not in {v["k"] for v in out.values()}]
+    names = ("활용 서식", "부록")
+    missing = [name for name in names if out[name]["k"] is None]
+    # 알려진 제목과 꼬리 순서를 함께 만족하는 배정이 하나일 때만 영역을 식별한다.
+    # 제목 없는 배너 하나만 있고 두 항목이 모두 미상인 경우에는 두 배정이 가능하다.
+    assignments = []
+    if candidates and len(candidates) <= len(missing):
+        for slots in combinations(missing, len(candidates)):
+            assigned = dict(zip(slots, candidates))
+            positions = [assigned.get(name, out[name]["k"]) for name in names]
+            known = [pos for pos in positions if pos is not None]
+            if known == sorted(set(known)) and all(anchor < pos < development for pos in known):
+                assignments.append(assigned)
+    if len(assignments) == 1:
+        for name, position in assignments[0].items():
+            out[name] = {"있음": True, "k": position,
+                         "근거": f"이름 없는 배너(section1 p{position}) — 참고 자료·주변 제목 위치와 꼬리 순서로 {name} 영역 식별"}
+
+    # 참고문헌 끝과 확인된 부록 사이의 내용도 활용 서식 영역으로 볼 수 있다.
+    # 배너 후보가 여러 개여서 구분되지 않는 경우에는 이 추정으로 덮어쓰지 않는다.
+    appendix = out["부록"]["k"]
+    if out["활용 서식"]["k"] is None and anchor is not None and appendix is not None and anchor < appendix and not candidates:
+        content_positions = [i for i, l in lines if anchor < i < appendix and is_content(l) and not REF_LINE.match(l)]
+        content_positions += [p for p, *_ in figures if anchor < p < appendix]
+        content_positions += [t["paragraph"] for t in tables if anchor < t["paragraph"] < appendix]
+        if content_positions:
+            out["활용 서식"] = {"있음": True, "k": min(content_positions), "내용부터": True,
+                                 "근거": f"참고 자료 뒤~부록 앞(section1 p{anchor + 1}~p{appendix - 1})의 내용 — 꼬리 구조상 활용 서식 영역"}
+    heading_positions = {v["k"] for v in out.values() if v["k"] is not None}
+    media_positions = {p for p, *_ in figures} | {p for p, _ in images}
+    table_positions = {t["paragraph"] for t in tables}
+
     for name in ("활용 서식", "부록"):
         found = out[name]
         if not found["있음"]:
             continue
-        others = [TAIL_PATTERNS[o] for o in TAIL_PATTERNS if o != name]
-        # 끝 지점: 다음 제목 텍스트, 개발 이력, 또는 다른 꼬리 이름의 확정 위치(배너 그림이면 텍스트가 없으므로)
-        next_heading = min((out[o]["k"] for o in TAIL_PATTERNS if o != name and out[o]["k"] is not None and out[o]["k"] > found["k"]), default=len(raw))
-        stop = next(
-            (
-                i
-                for i, l in lines
-                if i > found["k"] and (re.search(r"개발\s*이력", l) or any(re.fullmatch(p, l) for p in others))
-            ),
-            len(raw),
-        )
-        stop = min(stop, next_heading)
-        body_n = len([l for i, l in lines if found["k"] < i < stop and not re.match(r"^※", l)])
-        if body_n < config.tail_min_paragraphs:
-            out[name] = {
-                "있음": None,
-                "배너만": True,  # 제목(텍스트·배너)은 있는데 내용이 없음 → 양식 잔재일 가능성
-                "근거": f'{found["근거"]} 뒤에 내용이 없음(문단 {body_n}개) — 양식 배너만 남은 것인지 확인',
-                "k": found["k"],
-            }
+        start = found["k"]
+        stop = min([p for p in heading_positions | set(unnamed) | {development, len(raw)} if p > start], default=len(raw))
+        content_start = start if found.get("내용부터") else start + 1
+        content = [l for i, l in lines if content_start <= i < stop and is_content(l)]
+        media = any(content_start <= p < stop for p in media_positions)
+        table = any(start <= p < stop for p in table_positions)
+        found["end"] = stop - 1
+        if content or media or table:
+            found.update(있음=True, 근거=found["근거"] + f" — 내용 있음(문단 {len(content)}개, 표 {int(table)}, 그림 {int(media)})")
+        elif stop in unnamed and stop not in heading_positions:
+            found.update(있음=None, 근거=found["근거"] + " 뒤의 그림이 내용인지 다음 제목인지 확인 필요")
+        elif media_complete:
+            found.update(있음=False, 배너만=True, 근거=found["근거"] + " 뒤에 내용·표·그림이 없음(안내문 제외)")
+        else:
+            found.update(있음=None, 근거=found["근거"] + " 뒤에 텍스트가 없으나 그림 추출 정보가 없어 미작성 확정 불가")
 
-    # 활용 서식: 제목(텍스트·배너)이 없을 때 참고 자료 뒤의 내용으로 추정한다.
-    # 양식의 꼬리 순서는 참고 자료 → 활용 서식 → 부록 → 개발 이력으로 고정이므로, 부록 제목(배너) 위치를 알면
-    # 참고 자료 끝과 부록 사이의 내용은 활용 서식으로 확정할 수 있다. 부록 위치를 모르면 둘 중 무엇인지 알 수 없어 None.
-    if not out["활용 서식"]["있음"] and out["참고 자료"]["있음"]:
-        start = out["참고 자료"].get("end", out["참고 자료"]["k"])
-        appendix_k = out["부록"]["k"] if out["부록"]["있음"] is not False else None
-        stop = (
-            appendix_k
-            if appendix_k is not None and appendix_k > start
-            else next((i for i, l in lines if i > start and re.search(r"개발\s*이력", l)), len(raw))
-        )
-        middle = [l for i, l in lines if start < i < stop and not REF_LINE.match(l) and not re.match(r"^※", l)]
-        if len(middle) >= config.ambiguous_tail_min_paragraphs:
-            if appendix_k is not None and stop == appendix_k:
-                out["활용 서식"] = {
-                    "있음": True,
-                    "근거": (
-                        f'제목 텍스트·배너 이름은 없지만 참고 자료 뒤~부록 제목 앞(section1 p{start + 1}~p{stop - 1})에 '
-                        f'문단 {len(middle)}개 있음 (예: "{middle[0][:30]}") — 꼬리 순서상 활용 서식'
-                    ),
-                    "k": start + 1,
-                    "end": stop - 1,
-                }
-            else:
-                out["활용 서식"] = {
-                    "있음": None,
-                    "근거": (
-                        f'제목은 없지만 참고 자료 뒤~개발이력 앞에 문단 {len(middle)}개 있음 (예: "{middle[0][:30]}") '
-                        "— 활용 서식 또는 부록 내용으로 보임(제목이 이미지라 둘을 구분 못 함), 확인 필요"
-                    ),
-                    "k": start + 1,
-                }
+    # 확정 제목에 속하지 않는 꼬리 내용은 서식/부록 어느 쪽인지 알 수 없다.
+    if anchor is not None:
+        # 확정 제목부터 다음 경계까지는 해당 항목의 구간이다. 이름 없는 그림 이후는
+        # 그 항목의 연속인지 새 항목인지 알 수 없으므로 미분류 구간으로 남긴다.
+        known_ranges = [(v["k"], v["end"]) for n, v in out.items()
+                        if n != "참고 자료" and v["k"] is not None and "end" in v]
+        def unclassified(p):
+            return anchor < p < development and not any(start <= p <= end for start, end in known_ranges)
+        unknown_text = [l for i, l in lines if unclassified(i) and not REF_LINE.match(l) and is_content(l)]
+        unknown_media = any(unclassified(p) for p in media_positions | table_positions)
+    else:
+        unknown_text, unknown_media = [], False
+    for name in ("활용 서식", "부록"):
+        if out[name]["k"] is not None:
+            continue
+        if anchor is None or not media_complete or unknown_text or unknown_media:
+            out[name] = {
+                "있음": None, "k": None,
+                "근거": "제목을 찾지 못함 — " + (
+                    "참고 자료 뒤에 미분류 내용·표·그림이 있어 활용 서식/부록 구분 필요"
+                    if unknown_text or unknown_media else
+                    "꼬리 구간 또는 그림 추출 정보가 부족하여 미작성 확정 불가"
+                ),
+            }
     return out
