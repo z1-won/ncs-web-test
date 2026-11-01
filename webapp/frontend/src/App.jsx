@@ -503,6 +503,73 @@ function ComponentResult({ result }) {
   );
 }
 
+/* 맨 위로(TOP) 버튼 — KRDS 아이콘 버튼 규격(app.css .krds-btn-top). 300px 넘게 내려가면 나타나고, 누르면 맨 위로 올린 뒤 포커스를 본문(#container)으로 옮긴다. */
+function TopButton({ showAfter = 300, target = "#container" }) {
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => { setActive(window.scrollY > showAfter); ticking = false; });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [showAfter]);
+  function goTop() {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    const el = document.querySelector(target);
+    if (el) {
+      if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+      el.focus({ preventScroll: true });
+    }
+  }
+  return (
+    <button type="button" className={`krds-btn-top${active ? " active" : ""}`} aria-label="맨 위로 이동" onClick={goTop}>
+      <i className="svg-icon" aria-hidden="true"></i>
+      <span className="sr-only">맨 위로</span>
+    </button>
+  );
+}
+
+/* 푸터 — KRDS 푸터(#krds-footer) 구조: 서비스 로고 → 연락처 → 유틸리티 링크 → 정책 링크 → 저작권. 관련 사이트·SNS·운영기관 식별자는 쓰지 않는다. */
+function Footer() {
+  return (
+    <footer id="krds-footer">
+      <div className="inner">
+        <div className="f-logo f-logo-text">
+          <strong>동국대학교 종합설계1(김동우) · 프로토콜</strong>
+          <span>생성형 AI를 활용한 NCS 학습모듈 활용 및 사업운영 지원체계 구축</span>
+        </div>
+        <div className="f-cnt">
+          <div className="f-info">
+            <ul className="info-cs">
+              <li><strong className="strong">이메일</strong><span className="span"><a href="mailto:dgu2026protocol@gmail.com">dgu2026protocol@gmail.com</a></span></li>
+            </ul>
+          </div>
+          <div className="f-link">
+            <div className="link-go">
+              <a href="https://www.krivet.re.kr/kor/index.do" className="krds-btn medium text" target="_blank" rel="noopener noreferrer" title="새 창 열기">한국직업능력연구원 <i className="svg-icon ico-angle right"></i></a>
+              <a href="https://ai.dongguk.edu/main" className="krds-btn medium text" target="_blank" rel="noopener noreferrer" title="새 창 열기">동국대학교 첨단융합대학 <i className="svg-icon ico-angle right"></i></a>
+            </div>
+          </div>
+        </div>
+        <div className="f-btm">
+          <div className="f-btm-text">
+            <div className="f-menu">
+              {/* TODO: 개인정보처리방침 페이지가 생기면 <a href="..." className="point">로 교체 */}
+              <span className="point">개인정보처리방침</span>
+            </div>
+            <p className="f-copy">© 2026 동국대학교 종합설계1 프로토콜 팀. All rights reserved.</p>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
 export default function App() {
   const [check, setCheck] = useState("position");
   const [checks, setChecks] = useState(CHECKS);
@@ -678,7 +745,8 @@ export default function App() {
   }
 
   return (
-    <main className="inner page">
+    <>
+    <main id="container" className="inner page">
       <h1 className="page-title">F02 검수 로컬 테스트</h1>
       <p className="page-desc">
         원고와 개발계획서(.hwp/.hwpx)를 올리면 검수 패키지를 그대로 실행해 검수 확인서 형식과 결과 JSON을 보여줍니다. 파일 역할은 내용으로 자동 판별합니다.
@@ -794,6 +862,8 @@ export default function App() {
         </section>
       )}
 
+      <TopButton />
+
       {pendingDelete && (
         <ConfirmDialog title="검수 이력 삭제" confirmLabel="삭제" busy={deleting}
                        onConfirm={() => deleteHistory(pendingDelete)} onCancel={() => setPendingDelete(null)}>
@@ -806,5 +876,7 @@ export default function App() {
         </ConfirmDialog>
       )}
     </main>
+    <Footer />
+    </>
   );
 }
