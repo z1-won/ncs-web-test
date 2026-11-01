@@ -72,11 +72,22 @@ class ParaTextTrackedChangesTests(unittest.TestCase):
 class CheckNumberingWithAutoNumbersTests(unittest.TestCase):
     """본문 줄: (문단 인덱스, 텍스트). 자동 번호는 numbers[문단 인덱스]로 들어온다."""
 
-    def run_unit(self, lines, numbers):
+    def run_unit(self, lines, numbers, styles=None):
         body = {"lines": [(0, "학습 1"), (1, "1-1. 제목")] + lines, "spans": [(1, 0, len(lines) + 2)], "subs": []}
         unit = {"no": 1, "sub": 1, "text": "제목", "k0": 1, "k1": len(lines) + 2, "lesson": 1, "goal": [], "goal_k": None}
-        [row] = check_numbering(body, [unit], frozenset(), numbers)
+        [row] = check_numbering(body, [unit], frozenset(), numbers, styles)
         return row
+
+    def test_style_only_first_level_heading_restarts_numbering_and_is_flagged(self):
+        """연회관리 원고: 두 번째 󰊱 제목이 스타일만 있고 기호가 없다 → 아래 '1.'은 새 목록(연번 X 아님), 기호 누락만 지적."""
+        lines = [(2, "\U000F02B1 첫 제목"), (3, "1. 가"), (4, "2. 나"), (5, "둘째 제목"), (6, "1. 다"), (7, "2. 라")]
+        styles = ["바탕글"] * 5 + ["\U000F02B1제목", "1.제목", "1.제목"]
+        without = self.run_unit(lines, None)
+        self.assertEqual(without["체크"]["같은 수준 연번"], "X")  # 스타일을 모르면 '1. 다'가 3이어야 한다고 본다
+        row = self.run_unit(lines, None, styles)
+        self.assertEqual(row["체크"]["같은 수준 연번"], "O")
+        self.assertEqual(row["체크"]["\U000F02B1 기호 표시"], "X")
+        self.assertIn("둘째 제목", row["비고"]["\U000F02B1 기호 표시"])
 
     def test_mixed_auto_and_typed_numbers_pass_together(self):
         lines = [(2, "\U000F02B1 큰 제목"), (3, "자동 1."), (4, "자동 (1)"), (5, "(2) 타이핑"), (6, "자동 2.")]

@@ -4,6 +4,7 @@
   양식 표가 둘 다 남아 있거나 판권 표가 둘이면 X(양식 미정리).
 - 세분류 코드 8자리 = 모듈 코드 앞 8자리. 학습모듈명(LM코드)의 코드 = 모듈 코드. 자리표시(○○○, 20XX, (세분류 코드번호)) 남아 있으면 X.
 - 판권 표: 저작권자·연구사업기관·발행일 값, ISBN 행. 개선 양식의 '이전 이력' 블록은 구 기관명을 허용한다.
+- 개발 이력의 개발기관: 위탁 개발기관(협회)만 적는 것이 F14 지침 — 빈 칸·자리표시·구 명칭만 지적한다.
 """
 
 from ncs_core import NA, O, PASS, TRI, X, verdict, visible
@@ -86,10 +87,15 @@ def check_colophon(histories: list[dict], colophons: list[dict], module_code: st
                     checks["학습모듈명·코드"] = O if m and m.group() == (code_match.group() if code_match else None) else X
                     if checks["학습모듈명·코드"] == X:
                         notes["학습모듈명·코드"] = f'학습모듈명 칸 "{visible(value)[:40]}" — "학습모듈명({module_code})" 꼴이어야 함'
+                # F14 메모: "위탁 개발기관이 있는 경우 직능연을 병기하지 않습니다" → 협회명만 적힌 것이 정상.
+                # 지적 대상은 빈 칸, 자리표시(○○○협회), 구 명칭(한국직업능력개발원)만.
                 agency = current["개발기관"] or ""
-                if config.agency not in agency:
-                    checks["개발기관 명칭"] = X if "한국직업능력개발원" in agency else TRI
-                    notes["개발기관 명칭"] = f'개발기관 칸에 현재 명칭 "{config.agency}"이 없음: "{visible(agency)[:40]}"'
+                if not agency.strip():
+                    checks["개발기관 명칭"] = X
+                    notes["개발기관 명칭"] = "개발기관 칸이 비어 있음"
+                elif "한국직업능력개발원" in agency:
+                    checks["개발기관 명칭"] = X
+                    notes["개발기관 명칭"] = f'구 명칭 "한국직업능력개발원" — 현재 명칭은 "{config.agency}": "{visible(agency)[:40]}"'
                 if not current["집필진"] or not current["검토진"]:
                     checks["집필진·검토진"] = X
                     notes["집필진·검토진"] = "집필진 또는 검토진 칸이 비어 있음"

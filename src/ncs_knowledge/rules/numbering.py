@@ -40,9 +40,14 @@ def level_of(text: str):
     return None
 
 
+HEAD1_STYLE = re.compile(r"^[\U000F02B1-\U000F02C9]제목$")  # 첫 수준 제목의 문단 스타일(󰊱제목)
+
+
 def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | None,
-                    numbers: list[str | None] | None = None) -> list[dict]:
-    """numbers: 본문 섹션 문단별 자동 번호(Document.section_numbers). hwp면 None."""
+                    numbers: list[str | None] | None = None, styles: list[str] | None = None) -> list[dict]:
+    """numbers: 본문 섹션 문단별 자동 번호(Document.section_numbers). hwp면 None.
+    styles: 문단별 스타일 이름. 󰊱제목 스타일인데 텍스트에 󰊱 기호가 없는 제목(기호를 지운 원고)도 첫 수준으로 세어
+    아래 '1.'이 새로 시작하는 것을 알아보고, 기호 누락은 따로 지적한다. 없으면(hwp) 텍스트만 본다."""
     rows, lines = [], body["lines"]
 
     def shown(i: int, text: str) -> str:
@@ -53,7 +58,7 @@ def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | 
     for unit in units:
         key = f"{unit['no']}-{unit['sub']}"
         region = f"section1 > 학습 {unit['lesson']} > {key}. {visible(unit['text'])}"
-        segments, segment, name, empties = [], [], "제목 아래", []
+        segments, segment, name, empties, unmarked = [], [], "제목 아래", [], []
         for k in range(unit["k0"] + 1, unit["k1"]):
             i, text = lines[k]
             # 이 줄 앞에서 건너뛴 문단(본문 줄 목록은 빈 문단을 빼고 만든다) 중 자동 번호만 달린 빈 문단:
@@ -74,6 +79,9 @@ def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | 
                 continue
             if found := level_of(shown(i, text)):
                 segment.append((i, found[0], found[1], shown(i, text)))
+            elif styles and i < len(styles) and HEAD1_STYLE.match(styles[i] or ""):
+                segment.append((i, 1, None, text))  # 기호 없는 󰊱 제목: 번호는 모름(None) — 연번 검사에서 건너뜀
+                unmarked.append(f'[{name}] p{i} "{visible(text[:30])}" — 󰊱 제목 스타일인데 기호가 없음')
         segments.append((name, segment))
         checks = {"첫 수준이 󰊱": O, "수준 순서(건너뜀 없음)": O, "같은 수준 연번": O}
         if empties:
@@ -91,7 +99,9 @@ def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | 
                     skipped.append(f'[{name}] p{i} "{visible(text[:30])}" — {NAMES[current] if current else "시작"} 다음에 {NAMES[level]} (중간 {", ".join(NAMES[x] for x in range(current + 1, level))} 건너뜀)')
                     current = level - 1
                 expected = 1 if level > current else counters.get(level, 0) + 1  # 새 하위 목록이면 1부터
-                if n != expected:
+                if n is None:
+                    n = expected  # 기호 없는 󰊱 제목: 번호를 알 수 없어 기대값으로 두고 넘어간다
+                elif n != expected:
                     sequence.append(f'[{name}] p{i} "{visible(text[:30])}" — {NAMES[level]} {n}번째인데 {expected} 이어야 함')
                 counters[level] = n
                 for x in list(counters):
@@ -111,6 +121,8 @@ def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | 
                 checks["수준 순서(건너뜀 없음)"], notes["수준 순서(건너뜀 없음)"] = X, " / ".join(skipped[:6])
             if sequence:
                 checks["같은 수준 연번"], notes["같은 수준 연번"] = X, " / ".join(sequence[:6])
+            if unmarked:
+                checks["󰊱 기호 표시"], notes["󰊱 기호 표시"] = X, " / ".join(unmarked[:6])
             if table_paragraphs is None:
                 notes["표 안 문단"] = "hwp 라 표 안 번호도 함께 셈(표 안 번호가 지적되면 무시)"
             if numbers is None:

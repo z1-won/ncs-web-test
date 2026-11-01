@@ -70,6 +70,17 @@ class RuleTests(unittest.TestCase):
         rows = self.judge([history_table(10, template), colophon_table(50)], code="LM1203020201_26v1")
         self.assertIn("세분류명", rows[1]["비고"]["자리표시 제거"])
 
+    def test_agency_without_krivet_is_fine_but_old_name_or_blank_is_not(self):
+        """F14 메모: 위탁 개발기관이 있으면 직능연을 병기하지 않는다 → 협회명만 적힌 칸은 적합."""
+        only_agency = [("2021년 1월 1일", "세분류명", "숙박기획·개발(12030202)", "○○협회"),
+                       ("2026년 12월 31일", "학습모듈명", "객실 예약 관리(LM1203020201_24v3)", "한국호텔전문경영인협회(개발책임자: 홍길동)")]
+        rows = self.judge([history_table(10, only_agency), colophon_table(20)])
+        self.assertNotIn("개발기관 명칭", rows[1]["체크"])
+        for agency, word in (("한국호텔협회, 한국직업능력개발원", "구 명칭"), ("", "비어")):
+            rows = self.judge([history_table(10, [only_agency[0], (only_agency[1][0], only_agency[1][1], only_agency[1][2], agency)]), colophon_table(20)])
+            self.assertEqual(rows[1]["체크"]["개발기관 명칭"], "X")
+            self.assertIn(word, rows[1]["비고"]["개발기관 명칭"])
+
     def test_missing_tables(self):
         rows = self.judge([])
         self.assertEqual([r["판정"] for r in rows], ["부적합", "부적합"])
