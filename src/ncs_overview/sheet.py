@@ -11,7 +11,7 @@ ITEMS = [
     SheetItem('④', item_text(COMPONENT, '④')),
     SheetItem('⑤', item_text(COMPONENT, '⑤'), ("F02-개요-⑤",)),
     SheetItem('⑥', item_text(COMPONENT, '⑥'), ("F02-개요-⑥",)),
-    SheetItem('⑦', item_text(COMPONENT, '⑦')),
+    SheetItem('⑦', item_text(COMPONENT, '⑦'), ("F02-개요-⑦",)),
     SheetItem('⑧', item_text(COMPONENT, '⑧'), ("F02-개요-⑧",)),
 ]
 

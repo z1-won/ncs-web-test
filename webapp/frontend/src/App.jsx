@@ -8,7 +8,9 @@ const CHECKS = [
   { value: "knowledge", label: "필요 지식 ①~⑧", files: "원고 (+ 개발계획서: ⑤에만 필요)" },
   { value: "perform", label: "수행 내용 ①·④", files: "원고 (hwpx 권장)" },
   { value: "teaching", label: "교수·학습 방법 ①~④", files: "원고 (hwpx 권장)" },
-  { value: "evaluation", label: "평가 ①②③", files: "원고 + 개발계획서 (없으면 ② 판단불가)" },
+  { value: "evaluation", label: "평가 ①②③⑤", files: "원고 + 개발계획서 (없으면 ② 판단불가)" },
+  { value: "references", label: "참고 자료 ①②③", files: "원고" },
+  { value: "colophon", label: "개발 이력 및 판권 ①", files: "원고 (hwpx 권장)" },
   { value: "misc", label: "기타 ①②⑥⑦", files: "원고 (hwpx 권장)" },
 ];
 

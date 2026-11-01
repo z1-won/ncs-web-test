@@ -6,7 +6,7 @@
         [표] 학습 내용 | 학습 목표 | 성취수준(상·중·하)   ← 학습 내용 셀은 병합되어 첫 행에만, 목표는 행마다 "- …할 수 있다."
       평가 방법      • 서술형 시험 / • 평가자 질문 / • 역할 연기
         [표]×방법 수  학습 내용 | 평가 항목 | 성취수준
-      피드백         [표] 1. 서술형 시험 …
+      피드백         [표] 1. 서술형 시험 / - 보충… / - 심화…  2. 평가자 질문 …   ← 방법마다 'N. 방법명' 블록
 평가 구역의 시작은 parse_body의 lessons[*]["eval"](평가 머리), 끝은 raw_span 끝이다.
 """
 
@@ -19,6 +19,7 @@ HEAD_METHOD = re.compile(r"^평가\s*방법$")
 HEAD_FEEDBACK = re.compile(r"^피드백$")
 BULLET = re.compile(r"^[•·▪ㆍ‧◦○\-–]\s*")
 MEMO = re.compile(r"^[★▶※]|要")
+FEEDBACK_BLOCK = re.compile(r"(?:^|\s)(\d{1,2})\.\s*([^\d\-•·.]{1,30}?)\s*$")  # 'N. 방법명'(마침표 없는 짧은 이름; 앞에 변경추적 찌꺼기가 붙어도 찾음)
 
 
 def _squash(text: str) -> str:
@@ -60,7 +61,7 @@ def criteria_units(table: dict, header_row: int, name_col: int, value_col: int) 
 
 def eval_regions(manuscript: Document, body: dict, body_section: int) -> list[dict]:
     """학습마다 {'lesson', 'start', 'end', 'found': bool, 'criteria': [표별 units], 'criteria_tables': n,
-    'methods': [방법 이름…], 'method_tables': n, 'notes': [...]}."""
+    'methods': [방법 이름…], 'method_tables': n, 'feedback_found': bool, 'feedback': [{'no','name','idx','text'}], 'notes': [...]}."""
     paragraphs = manuscript.sections[body_section]
     table_paragraphs = manuscript.section_table_paragraphs(body_section) or frozenset()
     aside = manuscript.section_aside_paragraphs(body_section) or frozenset()
@@ -69,7 +70,7 @@ def eval_regions(manuscript: Document, body: dict, body_section: int) -> list[di
     out = []
     for lesson in body["lessons"]:
         info = {"lesson": lesson["no"], "found": False, "criteria": [], "criteria_tables": 0, "methods": [],
-                "method_tables": 0, "notes": []}
+                "method_tables": 0, "feedback_found": False, "feedback": [], "notes": []}
         if len(lesson["eval"]) != 1:
             info["notes"].append("평가 구역의 시작을 유일하게 식별하지 못함" if lesson["eval"] else "평가 머리를 찾지 못함")
             out.append(info)
@@ -88,7 +89,7 @@ def eval_regions(manuscript: Document, body: dict, body_section: int) -> list[di
                 info["criteria"].append(criteria_units(table, header_row, name_col, value_col))
             else:
                 info["method_tables"] += 1
-        part = None
+        part, block = None, None
         for i in range(start, end):
             text = (paragraphs[i] or "").strip()
             if not text or i in aside:
@@ -96,12 +97,21 @@ def eval_regions(manuscript: Document, body: dict, body_section: int) -> list[di
             if HEAD_METHOD.match(text):
                 part = "method"
                 continue
-            if HEAD_FEEDBACK.match(text) or HEAD_CRITERIA.match(text):
+            if HEAD_FEEDBACK.match(text):
+                part, info["feedback_found"] = "feedback", True
+                continue
+            if HEAD_CRITERIA.match(text):
                 part = None
                 continue
             if part == "method" and i not in table_paragraphs and not MEMO.search(text):
                 auto = numbers[i] if numbers is not None and i < len(numbers) else None
                 if BULLET.match(text) or auto:
                     info["methods"].append({"idx": i, "name": BULLET.sub("", text).strip()})
+            elif part == "feedback" and not MEMO.search(text):
+                if not BULLET.match(text) and (m := FEEDBACK_BLOCK.search(text)):
+                    block = {"no": int(m.group(1)), "name": m.group(2).strip(), "idx": i, "text": ""}
+                    info["feedback"].append(block)
+                elif block is not None:
+                    block["text"] = (block["text"] + " " + text).strip()
         out.append(info)
     return out

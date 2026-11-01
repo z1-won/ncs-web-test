@@ -29,7 +29,7 @@ def prepare_review(manuscript: Document, plan: Document | None = None, *, module
 
 
 def _warnings(context: ReviewContext) -> list[str]:
-    warnings = ["평가 ①②③을 검사합니다(④⑤ 미구현). 표 구조·학습 연결이 불명확하면 판단불가입니다."]
+    warnings = ["평가 ①②③⑤를 검사합니다(④ 미구현). 표 구조·학습 연결이 불명확하면 판단불가입니다."]
     if context.plan is None:
         warnings.append("개발계획서가 없어 ② 학습 목표 대조는 생략(-)입니다")
     elif context.plan_goals is None:

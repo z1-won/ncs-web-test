@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
-CheckName = Literal["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "misc"]
+CheckName = Literal["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "references", "colophon", "misc"]
 CORS_HEADERS = {"Access-Control-Allow-Origin": "*"}
 
 
@@ -73,7 +73,7 @@ def create_app(
             if field == "files" and detail["type"] == "missing":
                 messages.append("업로드된 파일이 없습니다")
             elif field == "check":
-                messages.append("check는 position / toc / overview / knowledge / perform / teaching / evaluation / misc 중 하나여야 합니다")
+                messages.append("check는 position / toc / overview / knowledge / perform / teaching / evaluation / references / colophon / misc 중 하나여야 합니다")
             else:
                 messages.append(f"{field}: {detail['msg']}")
         return error_response(400, "; ".join(messages))
@@ -86,7 +86,7 @@ def create_app(
     def health(response: Response) -> dict[str, Any]:
         response.headers.update(CORS_HEADERS)
         # history: 이력 API(/api/reviews)가 등록되어 있는가. 화면이 이력 영역을 켤지 결정하는 데 쓴다.
-        return {"ok": True, "checks": ["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "misc"], "history": store.supports_history}
+        return {"ok": True, "checks": ["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "references", "colophon", "misc"], "history": store.supports_history}
 
     @app.options("/{path:path}", include_in_schema=False)
     def options(path: str) -> Response:

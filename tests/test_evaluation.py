@@ -32,7 +32,7 @@ class EvaluationTests(unittest.TestCase):
         rows = self.item_one(result)
         self.assertEqual({r["판정"] for r in rows}, {"적합"})
         self.assertEqual(result.sheet[0]["검수결과"], "적합")
-        self.assertEqual([r["검수결과"] for r in result.sheet[3:]], ["미검사"] * 2)
+        self.assertEqual(result.sheet[3]["검수결과"], "미검사")  # ④만 미구현
         self.assertEqual(len([r for r in rows if "평가 준거 >" in r["region_path"]]), 2)
         self.assertEqual(len([r for r in rows if "평가 방법 >" in r["region_path"]]), 2)
 

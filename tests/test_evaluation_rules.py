@@ -3,6 +3,7 @@
 import unittest
 
 from ncs_evaluation.region import criteria_units, table_kind
+from ncs_evaluation.rules.feedback import check_feedback
 from ncs_evaluation.rules.goals import check_criteria_goals
 from ncs_evaluation.rules.methods import check_methods
 
@@ -26,6 +27,12 @@ def method_table():
 
 
 class RegionTests(unittest.TestCase):
+    def test_feedback_block_pattern_tolerates_leading_junk(self):
+        from ncs_evaluation.region import FEEDBACK_BLOCK
+        self.assertEqual(FEEDBACK_BLOCK.search("후, 성취 수준이 낮은 학습자에게는보충 1. 서술형 시험").groups(), ("1", "서술형 시험"))
+        self.assertEqual(FEEDBACK_BLOCK.search("2. 평가자 질문").groups(), ("2", "평가자 질문"))
+        self.assertIsNone(FEEDBACK_BLOCK.search("- 객실 요금을 평가한 후 1. 보충한다."))
+
     def test_table_kind_and_units(self):
         self.assertEqual(table_kind(criteria_table())[0], "평가 준거")
         self.assertEqual(table_kind(method_table())[0], "평가 방법")
@@ -37,7 +44,7 @@ class RegionTests(unittest.TestCase):
 
 def region(lesson=1, **override):
     base = {"lesson": lesson, "found": True, "start": 0, "end": 99, "criteria": [], "criteria_tables": 0,
-            "methods": [], "method_tables": 0, "notes": []}
+            "methods": [], "method_tables": 0, "feedback_found": False, "feedback": [], "notes": []}
     base.update(override)
     return base
 
@@ -86,6 +93,33 @@ class MethodsTests(unittest.TestCase):
     def test_tables_without_bullets_is_undecided(self):
         [row] = check_methods([region(method_tables=2)])
         self.assertEqual(row["판정"], "판단불가")
+
+
+class FeedbackTests(unittest.TestCase):
+    METHODS = [{"idx": 1, "name": "서술형 시험"}, {"idx": 2, "name": "역할 연기"}]
+
+    def block(self, no, name, text):
+        return {"no": no, "name": name, "idx": 10 + no, "text": text}
+
+    def test_matching_blocks_with_both_feedbacks_pass(self):
+        fb = [self.block(1, "서술형 시험", "- 미흡한 부분을 보충 설명해준다. - 정확히 이해한 경우 심화 학습을 유도한다."),
+              self.block(2, "역할 연기", "- 성취 수준이 낮은 학습자에게는 보충 지도하고, 높은 학습자에게는 심화 과제를 준다.")]
+        [row] = check_feedback([region(methods=self.METHODS, feedback_found=True, feedback=fb)])
+        self.assertEqual(row["판정"], "적합", row["비고"])
+        self.assertEqual(row["원고"]["피드백"], ["서술형 시험", "역할 연기"])
+
+    def test_count_mismatch_missing_head_and_keyword_gap(self):
+        one = [self.block(1, "서술형 시험", "- 보충 설명해준다. - 심화 학습을 유도한다.")]
+        [row] = check_feedback([region(methods=self.METHODS, feedback_found=True, feedback=one)])
+        self.assertEqual(row["판정"], "부적합")
+        self.assertIn("피드백 없는 방법: 역할 연기", row["비고"]["⑤ 방법별 피드백 개수·이름 일치"])
+        [row] = check_feedback([region(methods=self.METHODS)])
+        self.assertEqual(row["비고"]["⑤ 방법별 피드백 개수·이름 일치"], "'피드백' 소제목을 찾지 못함")
+        weak = [self.block(1, "서술형 시험", "- 보충 설명해준다."), self.block(2, "역할 연기", "- 심화 과제를 준다.")]
+        [row] = check_feedback([region(methods=self.METHODS, feedback_found=True, feedback=weak)])
+        self.assertEqual(row["판정"], "판단불가")
+        self.assertIn("서술형 시험(심화 문구 없음)", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
+        self.assertIn("역할 연기(보충 문구 없음)", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
 
 
 if __name__ == "__main__":
