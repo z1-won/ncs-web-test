@@ -551,7 +551,8 @@ function Header({ hasHistory, hasResult }) {
       let active = items[0]?.id;
       for (const item of items) {
         const el = document.getElementById(item.id);
-        if (el && el.getBoundingClientRect().top <= headerHeight + 8) active = item.id;
+        // 앵커는 scroll-margin-top(헤더 + gap-7)만큼 띄워 멈추므로 그 여유(약 4rem)까지는 "현재 영역"으로 본다
+        if (el && el.getBoundingClientRect().top <= headerHeight + 40) active = item.id;
       }
       setCurrent(active);
     };

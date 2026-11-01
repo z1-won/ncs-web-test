@@ -129,7 +129,8 @@ details.raw pre {
 /* 결과 영역 스크롤 기준점: 내려왔을 때 제목이 화면 맨 위에 붙지 않게 여백을 둔다 */
 /* KRDS 헤더(브랜딩 약 8.8rem + 메인 메뉴 5.6rem)가 sticky라 앵커 이동 시 그 높이만큼 더 띄운다 */
 .results-anchor, .nav-anchor { scroll-margin-top: calc(14.4rem + var(--krds-gap-7)); }
-.nav-anchor:focus { outline: none; }
+/* 메뉴로 이동할 때 영역에 포커스를 두는데, KRDS 전역 *:focus(box-shadow)가 영역 전체를 감싸지 않게 */
+.nav-anchor:focus { outline: none; box-shadow: none; }
 
 /* ── 맨 위로(TOP) 버튼 ── KRDS 아이콘 버튼(.krds-btn.icon.border) 규격을 따른다: medium 높이, 원형, 흰 배경 + gray 테두리, tertiary hover/pressed 색 */
 .krds-btn-top {
