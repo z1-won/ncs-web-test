@@ -44,19 +44,19 @@ class AskJsonTests(unittest.TestCase):
         payload = {"model": "m-2026", "choices": [{"message": {"content": json.dumps({"findings": [{"line": 1}]})}}],
                    "usage": {"prompt_tokens": 120, "completion_tokens": 30}}
         with mock.patch.object(llm, "_post", return_value=payload) as post:
-            first = llm.ask_json("t", "sys", "user")
-            second = llm.ask_json("t", "sys", "user")
+            first = llm.ask_json("perform2_brands", "sys", "user")
+            second = llm.ask_json("perform2_brands", "sys", "user")
             self.assertEqual(post.call_count, 1)  # 두 번째는 캐시
         self.assertEqual((first.data, first.cached, first.input_tokens, first.output_tokens), ({"findings": [{"line": 1}]}, False, 120, 30))
         self.assertTrue(second.cached)
         self.assertEqual(llm.usage_summary()["calls"], 1)
-        self.assertTrue(list((Path(self.tmp.name) / "t").glob("*.json")))
+        self.assertTrue(list((Path(self.tmp.name) / "perform2_brands").glob("*.json")))
 
     def test_bad_json_is_an_error(self):
         payload = {"choices": [{"message": {"content": "not json"}}]}
         with mock.patch.object(llm, "_post", return_value=payload):
             with self.assertRaises(llm.LlmError):
-                llm.ask_json("t", "sys", "user2")
+                llm.ask_json("perform2_brands", "sys", "user2")
 
     def test_only_allowlisted_tasks_can_call(self):
         with mock.patch.object(llm, "_post") as post:
@@ -73,7 +73,7 @@ class AskJsonTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"LLM_ALLOW_UPLOAD": ""}, clear=False):
             with mock.patch.object(llm, "_post") as post:
                 with self.assertRaises(llm.LlmError):
-                    llm.ask_json("t", "s", "u")
+                    llm.ask_json("perform2_brands", "s", "u")
                 post.assert_not_called()
 
 
