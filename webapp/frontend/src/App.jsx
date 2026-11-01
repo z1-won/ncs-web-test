@@ -22,7 +22,8 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [allRun, setAllRun] = useState(null);   // 전체 실행 진행·결과: { group, roles, items: {check: {status, data, error}}, running, created_at }
   const [history, setHistory] = useState(null);
-  const resultsRef = useRef(null);   // 결과 영역 — 검사 실행·이력 열기 뒤 여기로 화면을 내린다(이력 표가 길면 결과가 화면 밖에 있다)
+  const resultsRef = useRef(null);
+  const fileInput = useRef(null);    // 숨긴 <input type=file> — 진짜 <button>이 대신 열어 키보드(Enter/Space)로도 동작   // 결과 영역 — 검사 실행·이력 열기 뒤 여기로 화면을 내린다(이력 표가 길면 결과가 화면 밖에 있다)
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
   const [historyExpanded, setHistoryExpanded] = useState(false); // 이력은 기본 최근 5건만, '더 보기'로 전체
   const [deleting, setDeleting] = useState(false);
@@ -151,10 +152,10 @@ export default function App() {
 
       <form id="review-run" className="fieldset review-form nav-anchor" onSubmit={submit}>
         <div className="form-group">
-          <div className="form-tit"><label htmlFor="check">검수 항목</label></div>
+          <div className="form-tit"><label htmlFor="check">검수 구성요소</label></div>
           <div className="form-conts">
             {/* KRDS 셀렉트: 레이블(form-tit) + 선택완료 상태(completed) + 도움말(form-hint). 값이 바뀌어도 폼은 제출하지 않는다 */}
-            <KrdsSelect id="check" value={check} options={options} onChange={setCheck} title="검수 항목 선택" describedBy="check-hint" />
+            <KrdsSelect id="check" value={check} options={options} onChange={setCheck} title="검수 구성요소 선택" describedBy="check-hint" />
           </div>
           <p className="form-hint" id="check-hint">
             필요한 파일: {selected.files}
@@ -165,12 +166,12 @@ export default function App() {
         <div className="form-group">
           <div className="form-tit"><label htmlFor="files">파일</label></div>
           <div className="form-conts">
-            <input id="files" type="file" multiple accept=".hwp,.hwpx" hidden onChange={(e) => setFiles(Array.from(e.target.files || []))} />
-            <label htmlFor="files">
-              <span className="krds-btn medium tertiary" role="button" tabIndex={0}>파일 선택</span>
-            </label>
+            <input ref={fileInput} id="files" type="file" multiple accept=".hwp,.hwpx" className="sr-only" tabIndex={-1} aria-describedby="files-hint"
+                   onChange={(e) => setFiles(Array.from(e.target.files || []))} />
+            {/* 진짜 버튼이어야 Enter/Space·스크린리더 '버튼' 역할이 모두 된다. span[role=button]은 키보드로 열리지 않았다 */}
+            <button type="button" className="krds-btn medium tertiary" onClick={() => fileInput.current?.click()}>파일 선택</button>
           </div>
-          <p className="form-hint">{files.length ? files.map((f) => f.name).join(", ") : "선택된 파일 없음"}</p>
+          <p className="form-hint" id="files-hint">{files.length ? files.map((f) => f.name).join(", ") : "선택된 파일 없음"}</p>
         </div>
 
         <div className="form-group">
