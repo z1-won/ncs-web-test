@@ -57,6 +57,15 @@ def para_text(paragraph: ET.Element) -> str:
     return "".join(out)
 
 
+def style_names(archive: zipfile.ZipFile) -> dict[str, str]:
+    """header.xml → 문단 스타일 id → 이름('󰊱제목', '재료,기기,안전' …). 없으면 빈 dict."""
+    try:
+        root = ET.fromstring(archive.read("Contents/header.xml"))
+    except KeyError:
+        return {}
+    return {style.get("id"): style.get("name", "") for style in root.iter(HH + "style") if style.get("id")}
+
+
 def header_styles(archive: zipfile.ZipFile) -> tuple[dict, dict]:
     """header.xml → (charPr id→{bold, font}, borderFill id→면색 또는 None)."""
     root = ET.fromstring(archive.read("Contents/header.xml"))
@@ -96,14 +105,15 @@ def _cell_runs(cell: ET.Element, own_paragraphs: list[ET.Element], char_props: d
     return runs
 
 
-def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict] | None):
-    """(문단 텍스트 목록, 표 목록, 그림 목록, 표 안 문단 인덱스 집합)을 돌려준다.
+def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict] | None, names: dict[str, str] | None = None):
+    """(문단 텍스트 목록, 표 목록, 그림 목록, 표 안 문단 인덱스 집합, 모든 그림, 문단 스타일 이름, 본문 밖 문단 인덱스)를 돌려준다.
 
     표: {'section', 'paragraph', 'rows', 'cols', 'cells': {(r,c): 텍스트},
          'styles': {(r,c): {'fill', 'runs': [{'text','font','bold'}]}} (styles 없으면 None)}
     그림: (문단 인덱스, 원본 그림 이름) — 설명(shapeComment)에 원본 이름이 있는 그림만.
     표 안 문단: 어떤 표(중첩 포함) 셀 안에든 든 문단의 인덱스. 문단 인덱스는 문단 텍스트 목록과 같은 순서다.
     도형 그림(figures): 모든 <hp:pic>의 (문단 인덱스, 이름 또는 "", 가로, 세로) — 크기는 HWP 단위(1/7200 inch).
+    문단 스타일 이름: 문단마다 header.xml의 스타일 이름(없으면 ""). 본문 밖 문단: 메모(fieldBegin 아래 subList)·머리말·꼬리말·각주 안 문단.
     """
     parents = {child: parent for parent in root.iter() for child in parent}
     paragraphs = list(root.iter(HP + "p"))
@@ -135,6 +145,12 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
         figures.append((positions[paragraph], name, width, height))
         if name:
             images.append((positions[paragraph], name))
+
+    style_of = [(names or {}).get(p.get("styleIDRef"), "") for p in paragraphs]
+    aside = set()
+    for tag in ("fieldBegin", "header", "footer", "footNote", "endNote"):
+        for holder in root.iter(HP + tag):
+            aside.update(positions[p] for p in holder.iter(HP + "p") if p in positions)
 
     tables, in_table = [], set()
     for table in root.iter(HP + "tbl"):
@@ -168,23 +184,28 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
                 "styles": cell_styles if styles is not None else None,
             }
         )
-    return [para_text(p) for p in paragraphs], tables, images, frozenset(in_table), figures
+    return [para_text(p) for p in paragraphs], tables, images, frozenset(in_table), figures, style_of, frozenset(aside)
 
 
 def load_hwpx(path):
-    """(섹션별 문단, 표, 그림, 섹션별 표 안 문단 인덱스, 모든 그림) — 그림은 (섹션, 문단, 이름[, 가로, 세로])."""
-    sections, tables, images, table_paragraphs, figures = [], [], [], [], []
+    """(섹션별 문단, 표, 그림, 섹션별 표 안 문단, 모든 그림, 섹션별 문단 스타일 이름, 섹션별 본문 밖 문단)."""
+    sections, tables, images, table_paragraphs, figures, styles_by_section, aside_by_section = [], [], [], [], [], [], []
     with zipfile.ZipFile(path) as archive:
         try:
             styles = header_styles(archive)
         except KeyError:
             styles = None
+        names = style_names(archive)
         for index, name in enumerate(section_names(archive)):
             root = ET.fromstring(archive.read(name))
-            paragraphs, section_tables, section_images, in_table, section_figures = parse_section(root, index, styles)
+            paragraphs, section_tables, section_images, in_table, section_figures, style_of, aside = parse_section(
+                root, index, styles, names
+            )
             sections.append(paragraphs)
             tables.extend(section_tables)
             images.extend((index, paragraph, image) for paragraph, image in section_images)
             table_paragraphs.append(in_table)
             figures.extend((index, paragraph, name, w, h) for paragraph, name, w, h in section_figures)
-    return sections, tables, images, table_paragraphs, figures
+            styles_by_section.append(style_of)
+            aside_by_section.append(aside)
+    return sections, tables, images, table_paragraphs, figures, styles_by_section, aside_by_section

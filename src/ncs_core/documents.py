@@ -19,6 +19,8 @@ class Document:
     images:   (섹션, 문단 인덱스, 원본 그림 이름). hwpx만.
     table_paragraphs: 섹션별 표 셀 안에 든 문단 인덱스 집합. hwp는 표 안 문단을 구분하지 못하므로 None.
     figures:  모든 그림 (섹션, 문단 인덱스, 원본 이름 또는 "", 가로, 세로). 이름 없는 제목 배너를 찾는 데 쓴다. hwpx만.
+    styles:   섹션별 문단 스타일 이름('󰊱제목', '재료,기기,안전' …). hwp는 None.
+    aside_paragraphs: 섹션별 본문 밖 문단 인덱스(메모·머리말·꼬리말·각주). 본문 문장 검사에서 제외한다. hwp는 None.
     """
 
     path: Path
@@ -28,6 +30,8 @@ class Document:
     images: list[tuple[int, int, str]] = field(default_factory=list)
     table_paragraphs: list[frozenset[int]] | None = None
     figures: list[tuple[int, int, str, int, int]] = field(default_factory=list)
+    styles: list[list[str]] | None = None
+    aside_paragraphs: list[frozenset[int]] | None = None
 
     @property
     def has_styles(self) -> bool:
@@ -45,6 +49,18 @@ class Document:
     def section_figures(self, index: int) -> list[tuple[int, str, int, int]]:
         """해당 섹션의 모든 그림 (문단 인덱스, 이름 또는 "", 가로, 세로)."""
         return [(p, name, w, h) for s, p, name, w, h in self.figures if s == index]
+
+    def section_styles(self, index: int) -> list[str] | None:
+        """해당 섹션 문단별 스타일 이름. 형식이 지원하지 않으면(hwp) None."""
+        if self.styles is None:
+            return None
+        return self.styles[index] if index < len(self.styles) else []
+
+    def section_aside_paragraphs(self, index: int) -> frozenset[int] | None:
+        """해당 섹션에서 메모·머리말·꼬리말·각주 안 문단 인덱스. hwp는 None."""
+        if self.aside_paragraphs is None:
+            return None
+        return self.aside_paragraphs[index] if index < len(self.aside_paragraphs) else frozenset()
 
 
 def detect_format(path) -> str:
@@ -72,12 +88,12 @@ def load_document(path) -> Document:
     fmt = detect_format(path)
     if fmt == "hwp":
         sections, tables = hwp.load_hwp(path.read_bytes())
-        images, table_paragraphs, figures = [], None, []
+        images, table_paragraphs, figures, styles, aside = [], None, [], None, None
     else:
-        sections, tables, images, table_paragraphs, figures = hwpx.load_hwpx(path)
+        sections, tables, images, table_paragraphs, figures, styles, aside = hwpx.load_hwpx(path)
     sections = [[_clean(p) for p in section] for section in sections]
     for table in tables:
         table["cells"] = {key: _clean(value) for key, value in table["cells"].items()}
     if not any(line for section in sections for line in section):
         raise ValueError(f"문단 텍스트를 추출하지 못했습니다: {path}")
-    return Document(path, fmt, sections, tables, images, table_paragraphs, figures)
+    return Document(path, fmt, sections, tables, images, table_paragraphs, figures, styles, aside)
