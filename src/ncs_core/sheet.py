@@ -46,13 +46,14 @@ def _item_checks(rows: list[dict], item: SheetItem) -> list[tuple[str, str, str,
 
 MAX_LOCATIONS = 8      # 비고에 적는 위치 수. 넘으면 '…'
 MAX_NOTE_LENGTH = 120  # 한 건짜리 체크에 비고를 그대로 실을 때의 최대 길이
+MAX_EXAMPLE_LENGTH = 70  # 여러 건짜리 체크 뒤에 붙이는 대표 사례(첫 위반 행의 비고) 길이
 
 
 def summarize_remarks(checks: list[tuple[str, str, str, str, str | None]]) -> list[str]:
     """확인서 비고 줄 목록 — 체크 이름당 한 줄, 끝에 수정 제안 한 줄.
 
     확인서는 판정과 근거 한 줄을 적는 곳이라 건수·위치·수정 방향만 싣는다.
-    - 여러 건을 검사한 체크: '이름: N건 중 부적합 n건·판단불가 m건 (위치, …)'
+    - 여러 건을 검사한 체크: '이름: N건 중 부적합 n건·판단불가 m건 (위치, …) — 예: 첫 위반 행의 비고' (무슨 문제인지 한 사례)
     - 한 건만 검사한 체크(항목 하나에 행 하나인 규칙): 건수가 의미 없으므로 그 행의 비고(핵심 멘트)를 그대로 싣는다
     어디가 어떻게 다른지의 상세는 지적사항 표에 있다.
     """
@@ -80,7 +81,10 @@ def summarize_remarks(checks: list[tuple[str, str, str, str, str | None]]) -> li
             counts = "·".join(f"{label} {stat[key]}건" for key, label in ((X, "부적합"), (TRI, "판단불가")) if stat[key])
             where = stat["where"]
             shown = ", ".join(where[:MAX_LOCATIONS]) + (" …" if len(where) > MAX_LOCATIONS else "")
-            lines.append(f"{name}: {stat['total']}건 중 {counts}" + (f" ({shown})" if shown else ""))
+            example = stat["note"]
+            if len(example) > MAX_EXAMPLE_LENGTH:
+                example = example[: MAX_EXAMPLE_LENGTH - 1] + "…"
+            lines.append(f"{name}: {stat['total']}건 중 {counts}" + (f" ({shown})" if shown else "") + (f" — 예: {example}" if example else ""))
         if stat["suggest"] and stat["suggest"] not in suggestions:
             suggestions.append(stat["suggest"])
     if lines and suggestions:

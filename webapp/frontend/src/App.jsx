@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 // 순서 = F02 검수 확인서의 구성요소 순서(위치 → 차례 → 개요 → 필요 지식 → 수행 내용 → 교수·학습 방법 → 평가 → …)
 // 선택 목록의 기본값. 글(구성요소·항목 번호)은 서버 /api/health의 engines(실제 등록된 엔진·구현 항목)로 덮어쓴다.
@@ -90,8 +90,17 @@ function asText(value, depth = 0) {
 }
 
 /* F02 검수 확인서 모양: 구성요소 | 체크 항목 | 검수 결과(적합/부적합/판단불가) | 비고 */
-function SheetTable({ sheet }) {
+// 확인서 행에 속한 지적사항: item_id가 그 번호로 끝나거나(F02-필요지식-⑤), 체크 이름이 그 번호로 시작(위치 ②③④처럼 한 item_id를 나눠 쓰는 엔진)
+function findingsOfRow(findings, row) {
+  return (findings || []).filter((f) => f.item_id.endsWith(row.번호) || String(f.check).startsWith(row.번호));
+}
+
+function SheetTable({ sheet, findings }) {
+  const [expanded, setExpanded] = useState(() => new Set());
   if (!sheet.length) return null;
+  function toggle(no) {
+    setExpanded((prev) => { const next = new Set(prev); next.has(no) ? next.delete(no) : next.add(no); return next; });
+  }
   return (
     <div className="krds-table-wrap">
       <table className="tbl col data sheet">
@@ -118,23 +127,45 @@ function SheetTable({ sheet }) {
           </tr>
         </thead>
         <tbody>
-          {sheet.map((row, i) => (
-            <tr key={row.번호}>
-              {i === 0 && <th scope="rowgroup" className="component" rowSpan={sheet.length}>{row.구성요소}</th>}
-              <td style={{ whiteSpace: "pre-wrap" }}>{row.번호} {withBoxNumbers(row["체크 항목"])}</td>
-              <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "적합" ? "✓" : ""}</td>
-              <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "부적합" ? "✓" : ""}</td>
-              <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "판단불가" ? "△" : ""}</td>
-              <td style={{ whiteSpace: "pre-line" }}>{withBoxNumbers(row.비고)}</td>
-            </tr>
-          ))}
+          {sheet.map((row, i) => {
+            const own = findingsOfRow(findings, row);
+            const open = expanded.has(row.번호);
+            return (
+              <React.Fragment key={row.번호}>
+                <tr>
+                  {i === 0 && <th scope="rowgroup" className="component" rowSpan={sheet.length + expanded.size}>{row.구성요소}</th>}
+                  <td style={{ whiteSpace: "pre-wrap" }}>{row.번호} {withBoxNumbers(row["체크 항목"])}</td>
+                  <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "적합" ? "✓" : ""}</td>
+                  <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "부적합" ? "✓" : ""}</td>
+                  <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "판단불가" ? "△" : ""}</td>
+                  <td style={{ whiteSpace: "pre-line" }}>
+                    {withBoxNumbers(row.비고)}
+                    {own.length > 0 && (
+                      <div className="sheet-more">
+                        {/* 확인서 비고는 요약이므로, 어디가 어떻게 틀렸는지는 이 행의 지적사항을 펼쳐서 본다 */}
+                        <button type="button" className="krds-btn xsmall text" aria-expanded={open} aria-controls={`sheet-detail-${row.번호}`}
+                                onClick={() => toggle(row.번호)}>
+                          {open ? "지적사항 접기" : `지적사항 ${own.length}건 보기`}
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+                {open && (
+                  <tr className="sheet-detail" id={`sheet-detail-${row.번호}`}>
+                    <td colSpan={5}><FindingsTable findings={own} compact /></td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-function FindingsTable({ findings }) {
+function FindingsTable({ findings, compact = false }) {
   if (!findings.length) return <p className="empty">지적사항이 없습니다.</p>;
   return (
     <div className="krds-table-wrap">
@@ -142,7 +173,7 @@ function FindingsTable({ findings }) {
         <caption>검수에서 부적합 또는 판단불가로 나온 체크 목록</caption>
         <thead>
           <tr>
-            <th scope="col">항목</th>
+            {!compact && <th scope="col">항목</th>}
             <th scope="col">체크</th>
             <th scope="col">검수결과</th>
             <th scope="col">위치</th>
@@ -153,7 +184,7 @@ function FindingsTable({ findings }) {
         <tbody>
           {findings.map((f, i) => (
             <tr key={i}>
-              <td>{f.item_id}</td>
+              {!compact && <td>{f.item_id}</td>}
               <td>{f.check}</td>
               <td><Badge value={f.verdict} /></td>
               <td className="mono">{f.region_path}</td>
@@ -496,7 +527,7 @@ export default function App() {
           </div>
 
           <h2 className="section-title">검수 확인서</h2>
-          <SheetTable sheet={result.검수확인서 || []} />
+          <SheetTable sheet={result.검수확인서 || []} findings={result.지적사항 || []} />
 
           {result.진단.warnings?.length > 0 && (
             <>

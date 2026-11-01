@@ -89,3 +89,8 @@ details.raw pre {
 /* 키보드로 이동 중인 항목은 테두리 대신 KRDS 드롭다운의 hover 배경으로 표시한다 */
 .check-select .drop-list .item-link:focus { outline: 0; box-shadow: none; }
 .check-select .drop-list .item-link:focus:not(.active) { background-color: var(--krds-dropdown--list-item-color-action-hover); }
+
+/* 확인서 행 아래 펼쳐지는 지적사항 */
+.sheet-more { margin-top: var(--krds-gap-2); }
+.tbl tr.sheet-detail > td { padding: var(--krds-padding-3) var(--krds-padding-5); background: var(--krds-light-color-surface-secondary-subtler); }
+.tbl tr.sheet-detail .krds-table-wrap { margin: 0; }

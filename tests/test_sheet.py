@@ -10,7 +10,7 @@ class SummarizeRemarksTests(unittest.TestCase):
         checks = [("일치", "X", "상세", "1-1", "통일"), ("일치", "O", "", "1-2", None), ("일치", "X", "상세", "1-3", "통일"),
                   ("개수", "△", "", "1-3", "통일"), ("개수", "O", "", "1-1", None)]
         self.assertEqual(summarize_remarks(checks), [
-            "일치: 3건 중 부적합 2건 (1-1, 1-3)",
+            "일치: 3건 중 부적합 2건 (1-1, 1-3) — 예: 상세",
             "개수: 2건 중 판단불가 1건 (1-3)",
             "— 통일",
         ])
@@ -37,6 +37,11 @@ class SummarizeRemarksTests(unittest.TestCase):
         self.assertEqual(len(line), len("긴: ") + MAX_NOTE_LENGTH)
 
 
+    def test_example_is_truncated(self):
+        [line] = summarize_remarks([("일치", "X", "가" * 200, "1-1", None), ("일치", "O", "", "1-2", None)])
+        self.assertTrue(line.endswith("…") and len(line) < 120)
+
+
 class BuildSheetTests(unittest.TestCase):
     def test_sheet_verdict_and_remarks(self):
         rows = [
@@ -47,8 +52,7 @@ class BuildSheetTests(unittest.TestCase):
         items = [SheetItem("①", "하나", ("T-①",)), SheetItem("②", "둘", ("T-②",)), SheetItem("③", "셋", ())]
         sheet = build_sheet(rows, items, "시험")
         self.assertEqual([s["검수결과"] for s in sheet], ["부적합", "적합", "미검사"])
-        self.assertEqual(sheet[0]["비고"], "일치: 2건 중 부적합 2건 (1-1, 1-2)\n개수: 2건 중 판단불가 1건 (1-2)\n— 통일")
-        self.assertNotIn("상세는 여기", sheet[0]["비고"])
+        self.assertEqual(sheet[0]["비고"], "일치: 2건 중 부적합 2건 (1-1, 1-2) — 예: 상세는 여기\n개수: 2건 중 판단불가 1건 (1-2)\n— 통일")
         self.assertEqual(sheet[1]["비고"], "")
         self.assertEqual(sheet[2]["비고"], "규칙 미구현")
 

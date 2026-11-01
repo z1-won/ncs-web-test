@@ -150,12 +150,16 @@ class EngineContractTests(unittest.TestCase):
         server = (ROOT / "src" / "ncs_web" / "server.py").read_text(encoding="utf-8")
         literal = re.search(r"CheckName = Literal\[(.*?)\]", server).group(1)
         self.assertEqual(set(re.findall(r'"(\w+)"', literal)), registered, "server.py CheckName")
-        health = re.search(r'"checks":\s*\[(.*?)\]', server).group(1)
-        self.assertEqual(set(re.findall(r'"(\w+)"', health)), registered, "server.py /api/health")
+        # /api/health의 checks·engines는 registry.ENGINES에서 만들므로 손으로 적은 목록이 없어야 한다
+        self.assertIn('"checks": list(ENGINES)', server, "server.py /api/health는 ENGINES에서 생성")
+        self.assertNotRegex(server, r'"checks":\s*\[', "server.py /api/health에 손으로 적은 목록이 있음")
         message = re.search(r"check는 (.*?) 중 하나여야 합니다", server).group(1)
         self.assertEqual(set(message.split(" / ")), registered, "server.py 오류 메시지")
+        # 화면: 선택 목록 글은 서버 engines로 채우지만, 기본 목록(CHECKS)과 파일 안내(FILE_HINTS)는 모든 엔진을 알아야 한다
         app = (ROOT / "webapp" / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
         self.assertEqual(set(re.findall(r'value:\s*"(\w+)"', app)), registered, "App.jsx CHECKS")
+        hints = re.search(r"const FILE_HINTS = \{(.*?)\};", app, re.S).group(1)
+        self.assertEqual(set(re.findall(r"^\s*(\w+):", hints, re.M)), registered, "App.jsx FILE_HINTS")
 
 
 if __name__ == "__main__":
