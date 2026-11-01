@@ -59,6 +59,7 @@ ncs-web --dist webapp/frontend/dist          # API + 빌드된 화면, http://12
 | `GET /api/reviews[?standalone=true]`, `GET/DELETE /api/reviews/{id}`, `GET /api/reviews/{id}/zip` | 단독 실행 이력(`DATABASE_URL` 설정 시) |
 | `GET /api/groups`, `GET/DELETE /api/groups/{group_id}` | 전체 실행 묶음 이력 — 한 묶음의 모든 검수를 한 번에 열고 지운다 |
 | `POST /api/export/sheet?format=xlsx\|hwpx` (`{module_code, rows, created_at}`) | **F02 검수 확인서 파일**. hwpx는 원본 양식(`src/ncs_core/data/F02_검수확인서_양식.hwpx`)에 ✓·비고를 채운 제출본, xlsx는 열람·편집용. 실행하지 않은 구성요소는 '미검사'로 54개 항목을 모두 채운다 |
+| `POST /api/export/annotated` (`upload` 토큰, `rows` JSON) | **수정 메모 원고**: 원고 hwpx의 해당 문단에 지적사항을 한글 메모로 단 파일(본문 불변). 문단을 못 찾은 지적은 첫 문단의 총괄 메모에 목록으로. hwp 원고는 불가 |
 
 ## CLI 실행
 

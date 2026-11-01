@@ -19,6 +19,7 @@ export default function App() {
   const [moduleCode, setModuleCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);   // 성공 안내(메모 원고 요약 등)
   const [result, setResult] = useState(null);
   const [allRun, setAllRun] = useState(null);   // 전체 실행 진행·결과: { group, roles, items: {check: {status, data, error}}, running, created_at }
   const [history, setHistory] = useState(null);
@@ -96,6 +97,7 @@ export default function App() {
     if (check === ALL_CHECK) return runAll();
     setBusy(true);
     setError(null);
+    setNotice(null);
     setResult(null);
     setAllRun(null);
     const controller = new AbortController();
@@ -263,6 +265,7 @@ export default function App() {
           {error && (
             <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error}</p>
           )}
+          {notice && !error && <p className="form-hint-success" role="status">{notice}</p>}
         </div>
       </form>
 
@@ -274,7 +277,8 @@ export default function App() {
       {!allRun && !result && !busy && (
         <p className="empty result-placeholder">검사를 실행하면 결과가 여기에 표시됩니다{history?.length ? " — 아래 검수 이력에서 이전 결과를 열 수도 있습니다" : ""}.</p>
       )}
-      {allRun && <AllResults run={allRun} checks={checks} onError={setError} />}
+      {allRun && <AllResults run={allRun} checks={checks} onError={setError} onNotice={setNotice}
+                             uploadToken={upload.status === "ready" ? upload.token : null} />}
 
       {result && (
         <section>
@@ -283,7 +287,8 @@ export default function App() {
             <span className="meta">{result.module_code} · {checks.find((item) => item.value === result.check)?.label || result.check}</span>
             {result.id ? <a href={api.reviews.zipUrl(result.id)}>ZIP 다운로드</a> : <span className="meta">저장: {result.저장?.zip}</span>}
             {/* 단독 결과도 확인서 파일로 — 이 구성요소만 채워지고 나머지는 '미검사' */}
-            <ExportButtons moduleCode={result.module_code} createdAt={result.created_at} rows={result.검수확인서 || []} onError={setError} />
+            <ExportButtons moduleCode={result.module_code} createdAt={result.created_at} rows={result.검수확인서 || []} onError={setError} onNotice={setNotice}
+                           annotate={{ upload: upload.status === "ready" ? upload.token : null, rows: (result.전체 || []).filter((r) => r.판정 !== "적합") }} />
           </div>
 
           <h2 className="section-title">검수 확인서</h2>

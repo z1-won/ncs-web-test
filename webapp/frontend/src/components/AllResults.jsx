@@ -27,7 +27,7 @@ export function ItemStatus({ item }) {
   );
 }
 
-export function AllResults({ run, checks, onError }) {
+export function AllResults({ run, checks, onError, onNotice, uploadToken }) {
   const [expanded, setExpanded] = useState(() => new Set());
   const [view, setView] = useState("accordion");   // "accordion"(구성요소별) | "sheet"(확인서 한 표)
   const order = checks.filter((c) => !c.all).map((c) => c.value);
@@ -56,8 +56,9 @@ export function AllResults({ run, checks, onError }) {
         {run.roles && !run.roles.plan && <span className="krds-badge bg-light-warning">개발계획서 없음 — 위치 미실행</span>}
         {run.cancelled && <span className="krds-badge bg-light-gray">중간에 취소됨</span>}
         {!run.running && finished.length > 0 && (
-          <ExportButtons moduleCode={moduleCode} createdAt={run.created_at} onError={onError}
-                         rows={finished.flatMap((i) => i.data.검수확인서 || [])} />
+          <ExportButtons moduleCode={moduleCode} createdAt={run.created_at} onError={onError} onNotice={onNotice}
+                         rows={finished.flatMap((i) => i.data.검수확인서 || [])}
+                         annotate={{ upload: uploadToken, rows: finished.flatMap((i) => (i.data.전체 || []).filter((r) => r.판정 !== "적합")) }} />
         )}
         <span className="toolbar">
           {view === "accordion" && (

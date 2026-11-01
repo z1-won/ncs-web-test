@@ -35,7 +35,10 @@ function multipart(fields, files = []) {
 export async function download(path, body, filename) {
   let response;
   try {
-    response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const init = body instanceof FormData
+      ? { method: "POST", body }
+      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+    response = await fetch(path, init);
   } catch (e) {
     return { ok: false, error: `${CONNECT_FAILED}: ${e.message}` };
   }
@@ -52,7 +55,8 @@ export async function download(path, body, filename) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return { ok: true };
+  const summary = response.headers.get("x-memo-summary");
+  return { ok: true, summary: summary ? JSON.parse(summary) : null };
 }
 
 export const api = {
@@ -75,6 +79,10 @@ export const api = {
   exportSheet: ({ moduleCode, rows, createdAt, format }) =>
     download(`/api/export/sheet?format=${format}`, { module_code: moduleCode, rows, created_at: createdAt || null },
              `F02_검수확인서_${moduleCode || "모듈"}.${format}`),
+  // 원고 hwpx에 지적사항을 한글 메모로 단 파일. upload = 원고가 들어 있는 업로드 토큰, rows = 체크리스트 행(적합 제외)
+  exportAnnotated: ({ moduleCode, upload, rows }) =>
+    download("/api/export/annotated", multipart({ upload, rows: JSON.stringify(rows), module_code: moduleCode }),
+             `원고_검수메모_${moduleCode || "모듈"}.hwpx`),
   groups: {
     list: () => request("/api/groups"),
     get: (id) => request(`/api/groups/${id}`),

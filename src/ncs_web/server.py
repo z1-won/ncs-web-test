@@ -1,6 +1,7 @@
 """FastAPI 기반 로컬 검수 API. 업로드·HTTP 응답을 맡고 실행은 ncs_service에 위임한다."""
 
 import argparse
+import json
 import os
 import shutil
 import tempfile
@@ -168,6 +169,45 @@ def create_app(
                                   roles=upload.roles, expires_in=int(uploads_store.ttl))
         except ValueError as error:
             return error_response(400, str(error))
+
+    @app.post("/api/export/annotated", responses={400: {"model": ErrorResponse}})
+    def export_annotated(
+        upload: Annotated[str, Form()],
+        rows: Annotated[str, Form()],
+        module_code: Annotated[str, Form()] = "",
+    ) -> Response:
+        """원고 hwpx에 지적사항을 한글 메모로 단 파일. upload=업로드 토큰(원고가 그 안에 있어야 함), rows=체크리스트 행 JSON 배열."""
+        from ncs_core import detect_role, load_document
+        from ncs_service.annotate import annotate_hwpx
+
+        kept = uploads_store.get(upload)
+        if kept is None:
+            return error_response(400, "업로드 토큰이 없거나 만료되었습니다. 파일을 다시 올려 주세요")
+        try:
+            parsed = json.loads(rows)
+            if not isinstance(parsed, list):
+                raise ValueError
+        except ValueError:
+            return error_response(400, "rows는 체크리스트 행의 JSON 배열이어야 합니다")
+        manuscript = None
+        for name, path in kept.files:
+            if name.lower().endswith(".hwpx") and detect_role(load_document(path).sections) == "manuscript":
+                manuscript = (name, path)
+                break
+        if manuscript is None:
+            return error_response(400, "메모는 hwpx 원고에만 달 수 있습니다(hwp는 한글에서 hwpx로 저장 후 다시 올리세요)")
+        name, path = manuscript
+        try:
+            content, summary = annotate_hwpx(path.read_bytes(), parsed)
+        except ValueError as error:
+            return error_response(400, str(error))
+        stem = Path(name).stem
+        filename = f"{stem}_검수메모.hwpx"
+        return Response(content, media_type="application/hwp+zip", headers={
+            **CORS_HEADERS,
+            "Content-Disposition": f"attachment; filename=annotated_{quote(module_code or 'manuscript')}.hwpx; filename*=UTF-8''{quote(filename)}",
+            "X-Memo-Summary": json.dumps(summary),
+        })
 
     @app.delete("/api/uploads/{token}", status_code=204)
     def delete_upload(token: str) -> Response:

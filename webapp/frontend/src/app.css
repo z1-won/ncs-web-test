@@ -222,3 +222,4 @@ details.raw pre {
 /* 확인서 내려받기 버튼 묶음(결과 머리 오른쪽) */
 .export-buttons { display: inline-flex; align-items: center; gap: var(--krds-gap-2); margin-left: auto; }
 .result-head .export-buttons + .toolbar { margin-left: 0; }
+.export-buttons .sep { padding: 0 var(--krds-gap-1); }
