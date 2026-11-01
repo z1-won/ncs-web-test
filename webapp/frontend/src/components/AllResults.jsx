@@ -1,6 +1,7 @@
 // 전체 실행 결과 — 구성요소별 KRDS 아코디언. 실행 자체(업로드 토큰·순차 호출)는 App.runAll이 하고 여기는 run 상태를 그린다.
 import React, { useState } from "react";
 import { Badge, Spinner } from "./Badge.jsx";
+import { ExportButtons } from "./ExportButtons.jsx";
 import { ChecklistTable, FindingsTable, SheetTable } from "./Tables.jsx";
 import { api } from "../lib/api.js";
 import { countVerdicts, overallVerdict } from "../lib/checks.js";
@@ -26,7 +27,7 @@ export function ItemStatus({ item }) {
   );
 }
 
-export function AllResults({ run, checks }) {
+export function AllResults({ run, checks, onError }) {
   const [expanded, setExpanded] = useState(() => new Set());
   const [view, setView] = useState("accordion");   // "accordion"(구성요소별) | "sheet"(확인서 한 표)
   const order = checks.filter((c) => !c.all).map((c) => c.value);
@@ -54,6 +55,10 @@ export function AllResults({ run, checks }) {
         <span className="meta">적합 {total.적합} · 부적합 {total.부적합} · 판단불가 {total.판단불가} 항목</span>
         {run.roles && !run.roles.plan && <span className="krds-badge bg-light-warning">개발계획서 없음 — 위치 미실행</span>}
         {run.cancelled && <span className="krds-badge bg-light-gray">중간에 취소됨</span>}
+        {!run.running && finished.length > 0 && (
+          <ExportButtons moduleCode={moduleCode} createdAt={run.created_at} onError={onError}
+                         rows={finished.flatMap((i) => i.data.검수확인서 || [])} />
+        )}
         <span className="toolbar">
           {view === "accordion" && (
             <>

@@ -58,6 +58,7 @@ ncs-web --dist webapp/frontend/dist          # API + 빌드된 화면, http://12
 | `POST /api/uploads` → `{upload, group, roles, expires_in}` / `DELETE /api/uploads/{token}` | 전체 실행: 파일을 한 번 올려 토큰을 받고, `POST /api/review`에 `upload=토큰&group=묶음id`로 엔진마다 부른다. 토큰은 10분 뒤 자동 삭제 |
 | `GET /api/reviews[?standalone=true]`, `GET/DELETE /api/reviews/{id}`, `GET /api/reviews/{id}/zip` | 단독 실행 이력(`DATABASE_URL` 설정 시) |
 | `GET /api/groups`, `GET/DELETE /api/groups/{group_id}` | 전체 실행 묶음 이력 — 한 묶음의 모든 검수를 한 번에 열고 지운다 |
+| `POST /api/export/sheet?format=xlsx\|hwpx` (`{module_code, rows, created_at}`) | **F02 검수 확인서 파일**. hwpx는 원본 양식(`src/ncs_core/data/F02_검수확인서_양식.hwpx`)에 ✓·비고를 채운 제출본, xlsx는 열람·편집용. 실행하지 않은 구성요소는 '미검사'로 54개 항목을 모두 채운다 |
 
 ## CLI 실행
 

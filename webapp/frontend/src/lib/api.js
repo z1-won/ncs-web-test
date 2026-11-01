@@ -31,6 +31,30 @@ function multipart(fields, files = []) {
   return form;
 }
 
+// POST로 파일을 받아 브라우저 다운로드로 넘긴다. 실패하면 { ok:false, error } (성공은 { ok:true }).
+export async function download(path, body, filename) {
+  let response;
+  try {
+    response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) {
+    return { ok: false, error: `${CONNECT_FAILED}: ${e.message}` };
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    return { ok: false, error: data?.error || `${response.status} ${response.statusText}` };
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { ok: true };
+}
+
 export const api = {
   health: () => request("/api/health"),
   // 검수 1건: files로 직접 올리거나 upload(토큰)+group으로 올려 둔 파일을 쓴다
@@ -47,6 +71,10 @@ export const api = {
     remove: (id) => request(`/api/reviews/${id}`, { method: "DELETE" }),
     zipUrl: (id) => `/api/reviews/${id}/zip`,
   },
+  // F02 확인서 파일: rows = 여러 구성요소의 검수확인서 행을 이어 붙인 것
+  exportSheet: ({ moduleCode, rows, createdAt, format }) =>
+    download(`/api/export/sheet?format=${format}`, { module_code: moduleCode, rows, created_at: createdAt || null },
+             `F02_검수확인서_${moduleCode || "모듈"}.${format}`),
   groups: {
     list: () => request("/api/groups"),
     get: (id) => request(`/api/groups/${id}`),

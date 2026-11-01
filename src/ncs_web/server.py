@@ -46,6 +46,14 @@ class ErrorResponse(BaseModel):
     traceback: str | None = None
 
 
+class SheetExportRequest(BaseModel):
+    """확인서 내보내기 입력 — 화면이 가진 확인서 행을 그대로 보낸다(DB 모드든 파일 모드든, 저장 전 결과든 같은 길)."""
+
+    module_code: str
+    rows: list[dict[str, Any]]          # 여러 구성요소의 검수확인서 행을 이어 붙인 것
+    created_at: str | None = None
+
+
 class UploadResponse(BaseModel):
     """전체 실행용 업로드 토큰. upload를 /api/review에 files 대신 넘기면 같은 파일로 검수를 여러 번 돌릴 수 있다."""
 
@@ -81,6 +89,28 @@ def create_app(
     store.prepare()
     uploads_store = UploadStore()
     app.state.uploads = uploads_store
+
+    @app.post("/api/export/sheet", responses={400: {"model": ErrorResponse}})
+    def export_sheet(body: SheetExportRequest, format: Literal["xlsx", "hwpx"] = Query("xlsx")) -> Response:
+        """F02 검수 확인서 파일. xlsx(열람·편집) 또는 hwpx(원본 양식에 ✓·비고를 채운 제출본)."""
+        from ncs_service import export
+
+        code = body.module_code.strip() or "모듈"
+        meta = export.module_meta(code)
+        if body.created_at:
+            meta["실행시각"] = body.created_at
+        try:
+            if format == "hwpx":
+                content, media = export.build_hwpx(code, body.rows, meta=meta), "application/hwp+zip"
+            else:
+                content, media = export.build_xlsx(code, body.rows, meta=meta), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        except ValueError as error:
+            return error_response(400, str(error))
+        filename = f"F02_검수확인서_{code}.{format}"
+        return Response(content, media_type=media, headers={
+            **CORS_HEADERS,
+            "Content-Disposition": f"attachment; filename=F02_sheet_{quote(code)}.{format}; filename*=UTF-8''{quote(filename)}",
+        })
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError) -> JSONResponse:

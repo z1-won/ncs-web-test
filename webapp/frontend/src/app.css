@@ -218,3 +218,7 @@ details.raw pre {
 /* 도움말·오류 문구가 두 줄로 접힐 때 KRDS 아이콘(::before)이 세로 가운데로 가는 것을 첫 줄에 맞춘다 */
 .form-group [class^="form-hint"] { align-items: flex-start; }
 .form-group [class^="form-hint"]::before { flex: none; margin-top: calc((1em * 1.5 - var(--krds-icon--size-small)) / 2); }
+
+/* 확인서 내려받기 버튼 묶음(결과 머리 오른쪽) */
+.export-buttons { display: inline-flex; align-items: center; gap: var(--krds-gap-2); margin-left: auto; }
+.result-head .export-buttons + .toolbar { margin-left: 0; }

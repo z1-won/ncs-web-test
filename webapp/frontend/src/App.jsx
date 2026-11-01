@@ -6,6 +6,7 @@ import { formatDate } from "./lib/format.jsx";
 import { AllResults, ComponentResult } from "./components/AllResults.jsx";
 import { Badge, Spinner } from "./components/Badge.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
+import { ExportButtons } from "./components/ExportButtons.jsx";
 import { KrdsSelect } from "./components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
 
@@ -273,7 +274,7 @@ export default function App() {
       {!allRun && !result && !busy && (
         <p className="empty result-placeholder">검사를 실행하면 결과가 여기에 표시됩니다{history?.length ? " — 아래 검수 이력에서 이전 결과를 열 수도 있습니다" : ""}.</p>
       )}
-      {allRun && <AllResults run={allRun} checks={checks} />}
+      {allRun && <AllResults run={allRun} checks={checks} onError={setError} />}
 
       {result && (
         <section>
@@ -281,6 +282,8 @@ export default function App() {
             <Badge value={result.요약.검수결과} large />
             <span className="meta">{result.module_code} · {checks.find((item) => item.value === result.check)?.label || result.check}</span>
             {result.id ? <a href={api.reviews.zipUrl(result.id)}>ZIP 다운로드</a> : <span className="meta">저장: {result.저장?.zip}</span>}
+            {/* 단독 결과도 확인서 파일로 — 이 구성요소만 채워지고 나머지는 '미검사' */}
+            <ExportButtons moduleCode={result.module_code} createdAt={result.created_at} rows={result.검수확인서 || []} onError={setError} />
           </div>
 
           <h2 className="section-title">검수 확인서</h2>
