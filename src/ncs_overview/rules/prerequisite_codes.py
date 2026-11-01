@@ -142,10 +142,8 @@ def check_prerequisite_levels(overview: dict, module_code: str) -> list[dict]:
             higher.append(f"「{visible(item)}」 수준 {row['level']} > 이 모듈 수준 {own}")
     checks = {label: X if higher else (TRI if unknown else (O if compared else NA))}
     notes = {}
-    if higher:
-        notes[label] = " / ".join(higher)
-    if unknown:
-        notes[label + " (확인)"] = " / ".join(unknown)
+    if higher or unknown:
+        notes[label] = " / ".join(higher + [f"확인 필요: {u}" for u in unknown])
     if not compared and not unknown:
         notes[label] = "NCS 학습모듈을 제시하지 않음(과목명만) — 해당 없음"
     return [_level_row(shown, checks, notes, f"이 학습모듈(수준 {own})보다 수준이 높은 능력단위는 선수학습에서 제외", own)]
