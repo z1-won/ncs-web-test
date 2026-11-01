@@ -87,6 +87,14 @@ class BrandRuleTests(unittest.TestCase):
         self.assertIn("「코카콜라」(상표, high) → 일반 명칭 「탄산음료」", row["비고"][CHECK])
         self.assertEqual(len(row["상세"]), 2)
 
+    def test_low_confidence_is_reference_only(self):
+        answer = {"data": {"findings": [{"line": 1, "text": "BEO", "kind": "상품명", "generic": "", "confidence": "low", "reason": "약어"}]}, "model": "m"}
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": "k", "LLM_ALLOW_UPLOAD": "1"}, clear=False):
+            [row] = check_brands([block(["연회 행사 지시서(BEO)"], [])], asker=lambda lines: answer)
+        self.assertEqual(row["판정"], "적합")
+        self.assertIn("확신 낮은 표현 1건", row["비고"]["참고"])
+        self.assertIn("후보에서 제외", row["상세"][0])
+
     def test_no_findings_is_pass_with_model_note(self):
         with mock.patch.dict(os.environ, {"LLM_API_KEY": "k", "LLM_ALLOW_UPLOAD": "1"}, clear=False):
             [row] = check_brands([block(["생수"], ["노트북"])], asker=lambda lines: {"data": {"findings": []}, "model": "m"})
