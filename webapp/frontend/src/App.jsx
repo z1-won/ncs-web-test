@@ -535,21 +535,42 @@ function TopButton({ showAfter = 300, target = "#container" }) {
 }
 
 /* 헤더 — KRDS 헤더(#krds-header) 최소 구성: 건너뛰기 링크 + 로고(서비스 식별)만. 통합검색·로그인·메인메뉴·유틸리티 메뉴는 이 서비스에 없어 두지 않는다. */
-function Header() {
+const NAV_ITEMS = [
+  { id: "review-run", label: "검수 실행" },
+  { id: "review-history", label: "검수 이력" },
+  { id: "review-result", label: "검수 결과" },
+];
+
+function Header({ hasHistory, hasResult }) {
+  const items = NAV_ITEMS.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" ? hasResult : true));
+  const [current, setCurrent] = useState(items[0]?.id);
+  // 화면이 하나라 메뉴는 영역 이동(앵커). 스크롤 위치에 따라 현재 영역을 활성 표시한다.
+  useEffect(() => {
+    const onScroll = () => {
+      const headerHeight = document.getElementById("krds-header")?.offsetHeight || 0;
+      let active = items[0]?.id;
+      for (const item of items) {
+        const el = document.getElementById(item.id);
+        if (el && el.getBoundingClientRect().top <= headerHeight + 8) active = item.id;
+      }
+      setCurrent(active);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [items.map((item) => item.id).join(",")]);
+  function go(e, id) {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
+    el.focus({ preventScroll: true });
+  }
   return (
     <>
       <div id="krds-skip-link">
         <a href="#container">본문 바로가기</a>
-      </div>
-      {/* 공식 배너(#krds-masthead) 변주 — 정부 누리집 식별 배너 자리에 '공식 서비스가 아닌 테스트 페이지'임을 알린다. 태극기 아이콘은 쓰지 않는다. */}
-      <div id="krds-masthead" className="masthead-test">
-        <div className="toggle-wrap">
-          <div className="toggle-head">
-            <div className="inner">
-              <span className="nuri-txt">이 누리집은 공식 서비스가 아닌 테스트 페이지입니다. (동국대학교 종합설계1 프로토콜 팀)</span>
-            </div>
-          </div>
-        </div>
       </div>
       <header id="krds-header">
         <div className="header-in">
@@ -562,6 +583,19 @@ function Header() {
               </div>
             </div>
           </div>
+          {/* 메인 메뉴 — KRDS .krds-main-menu. 하위 메뉴가 없어 1Depth 링크형(.is-link)만 */}
+          <nav className="krds-main-menu" aria-label="주요 영역">
+            <div className="inner">
+              <ul className="gnb-menu">
+                {items.map((item) => (
+                  <li key={item.id}>
+                    <a href={`#${item.id}`} className={`gnb-main-trigger is-link${current === item.id ? " active" : ""}`}
+                       aria-current={current === item.id ? "location" : undefined} onClick={(e) => go(e, item.id)}>{item.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </nav>
         </div>
       </header>
     </>
@@ -786,14 +820,14 @@ export default function App() {
 
   return (
     <>
-    <Header />
+    <Header hasHistory={!!history} hasResult={!!(allRun || result)} />
     <main id="container" className="inner page">
       <h1 className="page-title">F02 검수 로컬 테스트</h1>
       <p className="page-desc">
         원고와 개발계획서(.hwp/.hwpx)를 올리면 검수 패키지를 그대로 실행해 검수 확인서 형식과 결과 JSON을 보여줍니다. 파일 역할은 내용으로 자동 판별합니다.
       </p>
 
-      <form className="fieldset review-form" onSubmit={submit}>
+      <form id="review-run" className="fieldset review-form nav-anchor" onSubmit={submit}>
         <div className="form-group">
           <div className="form-tit"><label htmlFor="check">검수 항목</label></div>
           <div className="form-conts">
@@ -837,7 +871,7 @@ export default function App() {
       </form>
 
       {history && (
-        <section>
+        <section id="review-history" className="nav-anchor">
           <h2 className="section-title">검수 이력</h2>
           {history.length === 0 ? <p className="empty">저장된 검수 이력이 없습니다.</p> : (
             <div className="krds-table-wrap">
@@ -866,7 +900,7 @@ export default function App() {
         </section>
       )}
 
-      <div ref={resultsRef} className="results-anchor" />
+      <div id="review-result" ref={resultsRef} className="results-anchor nav-anchor" />
 
       {allRun && <AllResults run={allRun} checks={checks} />}
 

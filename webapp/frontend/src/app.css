@@ -127,8 +127,9 @@ details.raw pre {
 .all-results .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); z-index: auto; }
 
 /* 결과 영역 스크롤 기준점: 내려왔을 때 제목이 화면 맨 위에 붙지 않게 여백을 둔다 */
-/* KRDS 헤더가 sticky(약 8.8rem)라 그 높이만큼 더 띄운다 */
-.results-anchor { scroll-margin-top: calc(8.8rem + var(--krds-gap-7)); }
+/* KRDS 헤더(브랜딩 약 8.8rem + 메인 메뉴 5.6rem)가 sticky라 앵커 이동 시 그 높이만큼 더 띄운다 */
+.results-anchor, .nav-anchor { scroll-margin-top: calc(14.4rem + var(--krds-gap-7)); }
+.nav-anchor:focus { outline: none; }
 
 /* ── 맨 위로(TOP) 버튼 ── KRDS 아이콘 버튼(.krds-btn.icon.border) 규격을 따른다: medium 높이, 원형, 흰 배경 + gray 테두리, tertiary hover/pressed 색 */
 .krds-btn-top {
@@ -173,15 +174,6 @@ details.raw pre {
 /* TOP 버튼이 포커스를 본문(#container)으로 옮길 때 KRDS 전역 *:focus 테두리가 본문 전체를 감싸지 않게 — 포커스 자체는 유지(스크린리더용) */
 #container:focus { outline: none; box-shadow: none; }
 
-/* ── 공식 배너 변주(테스트 페이지 안내) ── KRDS 기본은 태극기 아이콘 + 회색 바탕. 공식 누리집이 아니므로 아이콘을 안내(i) 아이콘으로 바꾸고 경고 톤 바탕을 쓴다 */
-#krds-masthead.masthead-test { --krds-masthead--color-surface: var(--krds-light-color-surface-warning-subtler); }
-#krds-masthead.masthead-test .toggle-head .nuri-txt { color: var(--krds-light-color-text-basic); font-weight: var(--krds-font-weight-bold); }
-#krds-masthead.masthead-test .toggle-head .nuri-txt::before {
-  background-image: none;
-  background-color: var(--krds-light-color-text-warning) !important;
-  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2v6h-2zm0-3h2v2h-2z'/></svg>") no-repeat center / contain;
-          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2v6h-2zm0-3h2v2h-2z'/></svg>") no-repeat center / contain;
-}
 
 /* ── 헤더·푸터 로고 ── KRDS 표준 치수(.logo/.f-logo 13.7×4.8rem, 모바일 9.4×3.2rem)는 그대로 두고 배경 이미지만 KRDS 로고 → 동국대 로고로 교체 */
 #krds-header .header-branding .logo a,
@@ -192,3 +184,10 @@ details.raw pre {
 
 /* 개인정보처리방침 — 연결할 페이지가 아직 없어 링크 없이 표시(가이드: 빈 링크 금지) */
 #krds-footer .f-menu span.point { cursor: default; }
+
+/* ── 메인 메뉴 ── KRDS는 1023px 이하에서 PC 메뉴를 숨기고 전체메뉴 레이어(#mobile-nav)를 쓴다. 이 서비스는 메뉴가 3개뿐이라 레이어 대신 같은 메뉴를 가로 스크롤로 유지한다 */
+@media (max-width: 1023px) {
+  #krds-header .krds-main-menu { display: block; }
+  #krds-header .krds-main-menu .gnb-menu { overflow-x: auto; flex-wrap: nowrap; }
+  #krds-header .krds-main-menu .gnb-menu .gnb-main-trigger { height: var(--krds-size-height-7); white-space: nowrap; }
+}
