@@ -21,6 +21,8 @@ class Document:
     figures:  모든 그림 (섹션, 문단 인덱스, 원본 이름 또는 "", 가로, 세로). 이름 없는 제목 배너를 찾는 데 쓴다. hwpx만.
     styles:   섹션별 문단 스타일 이름('󰊱제목', '재료,기기,안전' …). hwp는 None.
     aside_paragraphs: 섹션별 본문 밖 문단 인덱스(메모·머리말·꼬리말·각주). 본문 문장 검사에서 제외한다. hwp는 None.
+    numbers:  섹션별 문단 번호 — 한글 자동 번호(문단 번호·글머리표)를 복원한 글자('1.', '(가)', '•' …) 또는 None.
+              텍스트에 번호가 없는 문단의 "보이는 번호"다. hwp는 None.
     """
 
     path: Path
@@ -32,6 +34,7 @@ class Document:
     figures: list[tuple[int, int, str, int, int]] = field(default_factory=list)
     styles: list[list[str]] | None = None
     aside_paragraphs: list[frozenset[int]] | None = None
+    numbers: list[list[str | None]] | None = None
 
     @property
     def has_styles(self) -> bool:
@@ -62,6 +65,12 @@ class Document:
             return None
         return self.aside_paragraphs[index] if index < len(self.aside_paragraphs) else frozenset()
 
+    def section_numbers(self, index: int) -> list[str | None] | None:
+        """섹션의 문단별 자동 번호. hwp는 None(복원 불가)."""
+        if self.numbers is None:
+            return None
+        return self.numbers[index] if index < len(self.numbers) else []
+
 
 def detect_format(path) -> str:
     """파일 내용으로 hwp/hwpx를 판별한다. 둘 다 아니면 ValueError."""
@@ -88,12 +97,12 @@ def load_document(path) -> Document:
     fmt = detect_format(path)
     if fmt == "hwp":
         sections, tables = hwp.load_hwp(path.read_bytes())
-        images, table_paragraphs, figures, styles, aside = [], None, [], None, None
+        images, table_paragraphs, figures, styles, aside, numbers = [], None, [], None, None, None
     else:
-        sections, tables, images, table_paragraphs, figures, styles, aside = hwpx.load_hwpx(path)
+        sections, tables, images, table_paragraphs, figures, styles, aside, numbers = hwpx.load_hwpx(path)
     sections = [[_clean(p) for p in section] for section in sections]
     for table in tables:
         table["cells"] = {key: _clean(value) for key, value in table["cells"].items()}
     if not any(line for section in sections for line in section):
         raise ValueError(f"문단 텍스트를 추출하지 못했습니다: {path}")
-    return Document(path, fmt, sections, tables, images, table_paragraphs, figures, styles, aside)
+    return Document(path, fmt, sections, tables, images, table_paragraphs, figures, styles, aside, numbers)

@@ -7,6 +7,8 @@ import re
 import zipfile
 from xml.etree import ElementTree as ET
 
+from .numbering import read_definitions, render_numbers
+
 HP = "{http://www.hancom.co.kr/hwpml/2011/paragraph}"
 HH = "{http://www.hancom.co.kr/hwpml/2011/head}"
 HC = "{http://www.hancom.co.kr/hwpml/2011/core}"
@@ -32,25 +34,30 @@ def para_text(paragraph: ET.Element) -> str:
     표 셀·캡션 안에 중첩된 <hp:p>는 내려가지 않는다. 그 문단들은 섹션 순회에서
     따로 나오므로, 내려가면 바깥 문단에 셀 텍스트가 전부 합쳐진다.
     <hp:t> 안 인라인 요소 뒤의 tail 텍스트는 포함한다.
+    삭제 구간 안에 삽입 구간이 겹쳐 들어가는 경우(삭제한 자리에 다시 쓴 글)가 있어 상태는 스택으로 둔다:
+    삽입 안 글은 보이고, 삽입이 끝나면 다시 바깥 삭제 상태로 돌아간다.
     """
-    out, state = [], None
+    out, stack = [], []
+
+    def visible() -> bool:
+        return not stack or stack[-1] != "del"
 
     def walk(element: ET.Element) -> None:
-        nonlocal state
         for child in element:
             tag = child.tag.replace(HP, "")
             if tag == "p":
                 continue
             if tag == "deleteBegin":
-                state = "del"
-            elif tag in ("deleteEnd", "insertEnd"):
-                state = None
+                stack.append("del")
             elif tag == "insertBegin":
-                state = "ins"
-            if state != "del" and tag == "t":
+                stack.append("ins")
+            elif tag in ("deleteEnd", "insertEnd"):
+                if stack:
+                    stack.pop()
+            if visible() and tag == "t":
                 out.append(child.text or "")
             walk(child)
-            if state != "del" and child.tail and element.tag == HP + "t":
+            if visible() and child.tail and element.tag == HP + "t":
                 out.append(child.tail)
 
     walk(paragraph)
@@ -105,8 +112,9 @@ def _cell_runs(cell: ET.Element, own_paragraphs: list[ET.Element], char_props: d
     return runs
 
 
-def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict] | None, names: dict[str, str] | None = None):
-    """(문단 텍스트 목록, 표 목록, 그림 목록, 표 안 문단 인덱스 집합, 모든 그림, 문단 스타일 이름, 본문 밖 문단 인덱스)를 돌려준다.
+def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict] | None, names: dict[str, str] | None = None,
+                  numbering_definitions: dict | None = None):
+    """(문단 텍스트 목록, 표 목록, 그림 목록, 표 안 문단 인덱스 집합, 모든 그림, 문단 스타일 이름, 본문 밖 문단 인덱스, 문단 번호)를 돌려준다.
 
     표: {'section', 'paragraph', 'rows', 'cols', 'cells': {(r,c): 텍스트},
          'styles': {(r,c): {'fill', 'runs': [{'text','font','bold'}]}} (styles 없으면 None)}
@@ -114,6 +122,7 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
     표 안 문단: 어떤 표(중첩 포함) 셀 안에든 든 문단의 인덱스. 문단 인덱스는 문단 텍스트 목록과 같은 순서다.
     도형 그림(figures): 모든 <hp:pic>의 (문단 인덱스, 이름 또는 "", 가로, 세로) — 크기는 HWP 단위(1/7200 inch).
     문단 스타일 이름: 문단마다 header.xml의 스타일 이름(없으면 ""). 본문 밖 문단: 메모(fieldBegin 아래 subList)·머리말·꼬리말·각주 안 문단.
+    문단 번호: 한글 자동 번호(문단 번호·글머리표)를 복원한 글자('1.', '(가)', '•' …) 또는 None (ncs_core.numbering).
     """
     parents = {child: parent for parent in root.iter() for child in parent}
     paragraphs = list(root.iter(HP + "p"))
@@ -184,22 +193,31 @@ def parse_section(root: ET.Element, section_index: int, styles: tuple[dict, dict
                 "styles": cell_styles if styles is not None else None,
             }
         )
-    return [para_text(p) for p in paragraphs], tables, images, frozenset(in_table), figures, style_of, frozenset(aside)
+    texts = [para_text(p) for p in paragraphs]
+    # 변경추적으로 내용이 전부 지워진 문단은 반영본에서 문단 자체가 사라지므로 자동 번호 카운터에서도 뺀다
+    deleted = [not text and p.find(f".//{HP}deleteBegin") is not None for p, text in zip(paragraphs, texts)]
+    numbers = (render_numbers([None if gone else p.get("paraPrIDRef") for p, gone in zip(paragraphs, deleted)], numbering_definitions)
+               if numbering_definitions else [None] * len(paragraphs))
+    return texts, tables, images, frozenset(in_table), figures, style_of, frozenset(aside), numbers
 
 
 def load_hwpx(path):
-    """(섹션별 문단, 표, 그림, 섹션별 표 안 문단, 모든 그림, 섹션별 문단 스타일 이름, 섹션별 본문 밖 문단)."""
-    sections, tables, images, table_paragraphs, figures, styles_by_section, aside_by_section = [], [], [], [], [], [], []
+    """(섹션별 문단, 표, 그림, 섹션별 표 안 문단, 모든 그림, 섹션별 문단 스타일 이름, 섹션별 본문 밖 문단, 섹션별 문단 번호)."""
+    sections, tables, images, table_paragraphs, figures, styles_by_section, aside_by_section, numbers_by_section = [], [], [], [], [], [], [], []
     with zipfile.ZipFile(path) as archive:
         try:
             styles = header_styles(archive)
         except KeyError:
             styles = None
         names = style_names(archive)
+        try:
+            numbering_definitions = read_definitions(ET.fromstring(archive.read("Contents/header.xml")))
+        except KeyError:
+            numbering_definitions = None
         for index, name in enumerate(section_names(archive)):
             root = ET.fromstring(archive.read(name))
-            paragraphs, section_tables, section_images, in_table, section_figures, style_of, aside = parse_section(
-                root, index, styles, names
+            paragraphs, section_tables, section_images, in_table, section_figures, style_of, aside, numbers = parse_section(
+                root, index, styles, names, numbering_definitions
             )
             sections.append(paragraphs)
             tables.extend(section_tables)
@@ -208,4 +226,5 @@ def load_hwpx(path):
             figures.extend((index, paragraph, name, w, h) for paragraph, name, w, h in section_figures)
             styles_by_section.append(style_of)
             aside_by_section.append(aside)
-    return sections, tables, images, table_paragraphs, figures, styles_by_section, aside_by_section
+            numbers_by_section.append(numbers)
+    return sections, tables, images, table_paragraphs, figures, styles_by_section, aside_by_section, numbers_by_section

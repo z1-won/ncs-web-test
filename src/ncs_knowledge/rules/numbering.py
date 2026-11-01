@@ -2,7 +2,9 @@
 
 학습 내용(N-M)당 1행. 안에서 '필요 지식 / 수행 내용 / 수행 순서 / 재료 / 안전…' 머리말마다 번호가 새로 시작한다고 본다.
 규칙 3개: 첫 수준이 󰊱 / 수준은 +1만(건너뜀 X) / 같은 수준은 연번.
-텍스트 첫 글자로 수준을 판정하므로 한글 자동 번호(문단 번호 속성)는 보이지 않는다 → 번호 문단 0개면 △.
+수준은 "보이는 번호"로 판정한다: hwpx는 한글 자동 번호(문단 번호 속성)를 Document.numbers로 복원해 텍스트 앞에 붙여 보고,
+타이핑한 번호는 텍스트 첫 글자로 본다(둘이 섞인 원고가 흔하다). hwp는 자동 번호를 복원할 수 없어 텍스트만 본다 → 비고에 명시.
+번호 문단 0개면 △.
 """
 
 import re
@@ -38,14 +40,30 @@ def level_of(text: str):
     return None
 
 
-def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | None) -> list[dict]:
+def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | None,
+                    numbers: list[str | None] | None = None) -> list[dict]:
+    """numbers: 본문 섹션 문단별 자동 번호(Document.section_numbers). hwp면 None."""
     rows, lines = [], body["lines"]
+
+    def shown(i: int, text: str) -> str:
+        """화면에 보이는 문단 — 자동 번호가 있으면 그 번호를 앞에 붙인다."""
+        label = numbers[i] if numbers is not None and i < len(numbers) else None
+        return f"{label} {text}" if label else text
+
     for unit in units:
         key = f"{unit['no']}-{unit['sub']}"
         region = f"section1 > 학습 {unit['lesson']} > {key}. {visible(unit['text'])}"
-        segments, segment, name = [], [], "제목 아래"
+        segments, segment, name, empties = [], [], "제목 아래", []
         for k in range(unit["k0"] + 1, unit["k1"]):
             i, text = lines[k]
+            # 이 줄 앞에서 건너뛴 문단(본문 줄 목록은 빈 문단을 빼고 만든다) 중 자동 번호만 달린 빈 문단:
+            # 화면에는 번호가 찍히므로 연번에 넣고, 빈 번호 문단 자체를 지적한다.
+            if numbers is not None:
+                for j in range(lines[k - 1][0] + 1, i):
+                    label = numbers[j] if j < len(numbers) else None
+                    if label and (table_paragraphs is None or j not in table_paragraphs) and (found := level_of(label)):
+                        segment.append((j, found[0], found[1], f"{label} (빈 문단)"))
+                        empties.append(f"[{name}] p{j} {label} — 번호만 있고 내용이 없는 문단")
             if head := mark(text):
                 segments.append((name, segment))
                 segment, name = [], head
@@ -54,10 +72,12 @@ def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | 
                 continue
             if MEMO_LINE.match(text):
                 continue
-            if found := level_of(text):
-                segment.append((i, found[0], found[1], text))
+            if found := level_of(shown(i, text)):
+                segment.append((i, found[0], found[1], shown(i, text)))
         segments.append((name, segment))
         checks = {"첫 수준이 󰊱": O, "수준 순서(건너뜀 없음)": O, "같은 수준 연번": O}
+        if empties:
+            checks["빈 번호 문단"], notes_empty = X, " / ".join(empties[:6])
         notes, n_numbered, first_bad, skipped, sequence = {}, 0, [], [], []
         for name, items in segments:
             if not items:
@@ -78,9 +98,12 @@ def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | 
                     if x > level:
                         del counters[x]
                 current = level
+        if empties:
+            notes["빈 번호 문단"] = notes_empty
         if n_numbered == 0:
             checks = {"번호 찾기": TRI}
-            notes["번호 찾기"] = "번호가 붙은 문단을 텍스트에서 찾지 못함 — 자동 번호(문단 번호 속성)일 수 있음, 원고 확인"
+            notes["번호 찾기"] = ("번호가 붙은 문단을 찾지 못함 — 원고 확인" if numbers is not None
+                              else "번호가 붙은 문단을 텍스트에서 찾지 못함 — hwp는 자동 번호(문단 번호 속성)가 보이지 않음, hwpx로 변환 권장")
         else:
             if first_bad:
                 checks["첫 수준이 󰊱"], notes["첫 수준이 󰊱"] = X, " / ".join(first_bad[:4])
@@ -90,5 +113,7 @@ def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | 
                 checks["같은 수준 연번"], notes["같은 수준 연번"] = X, " / ".join(sequence[:6])
             if table_paragraphs is None:
                 notes["표 안 문단"] = "hwp 라 표 안 번호도 함께 셈(표 안 번호가 지적되면 무시)"
+            if numbers is None:
+                notes["자동 번호"] = "hwp 라 자동 번호(문단 번호 속성)는 보이지 않음 — 건너뜀·연번 지적이 가짜일 수 있음, hwpx로 변환 권장"
         rows.append(row("⑥", region, f"번호 문단 {n_numbered}개", checks, notes, "󰊱 〉 1. 〉 (1) 〉 (가) 〉 1) 〉 가) 〉 ① 〉 ㉠ 순서로 수정"))
     return rows
