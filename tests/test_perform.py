@@ -2,6 +2,7 @@
 
 import unittest
 
+from ncs_core import visible
 from ncs_perform.blocks import split_perform_blocks
 from ncs_perform.rules.sentences import check_perform_sentences, judge_sentence
 from ncs_perform.rules.title import check_perform_title
@@ -99,6 +100,22 @@ class TitleRuleTests(unittest.TestCase):
 
     def test_no_blocks_gives_undecided(self):
         self.assertEqual([r["판정"] for r in check_perform_title([])], ["판단불가"])
+
+
+class VisibleGlyphTests(unittest.TestCase):
+    def test_box_numbers_and_other_supplementary_pua_are_readable(self):
+        """한컴 기호 글꼴의 보조 평면 글자는 글꼴 없는 화면에서 □로 깨지므로 결과에는 읽을 수 있는 표기로 적는다."""
+        self.assertEqual(visible(BOX + " 절차를 숙지한다."), "[1] 절차를 숙지한다.")
+        self.assertEqual(visible("\U000F02B5"), "[5]")
+        self.assertEqual(visible("\U000F0400"), "⟨U+F0400⟩")
+        self.assertEqual(visible("객실\uf09e부대시설"), "객실⟨U+F09E⟩부대시설", "기본 평면 PUA 표기는 그대로")
+
+    def test_rule_output_contains_no_raw_box_glyph(self):
+        texts, styles, tables, aside = manuscript()
+        rows = check_perform_sentences(split_perform_blocks(texts, styles=styles, table_paragraphs=tables, aside_paragraphs=aside))
+        dumped = str(rows)
+        self.assertNotIn(BOX, dumped)
+        self.assertIn("[1]", dumped)
 
 
 class SentenceRuleTests(unittest.TestCase):

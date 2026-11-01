@@ -37,9 +37,25 @@ def make_normalizer(prefix: str | None = None) -> tuple[Normalizer, Callable[...
     return norm, same
 
 
+# 보조 평면 사용자 영역(한컴 기호 글꼴의 번호 글자 등). U+F02B1~은 수행 순서의 네모 번호 󰊱󰊲…
+PUA_SUPPLEMENTARY = re.compile(r"[\U000F0000-\U000FFFFD\U00100000-\U0010FFFD]")
+BOX_NUMBER_BASE = 0xF02B0
+
+
+def _show_supplementary(match: re.Match) -> str:
+    code = ord(match.group())
+    if BOX_NUMBER_BASE < code <= BOX_NUMBER_BASE + 20:  # 󰊱 → [1]
+        return f"[{code - BOX_NUMBER_BASE}]"
+    return f"⟨U+{code:05X}⟩"
+
+
 def visible(text: str | None) -> str:
-    """PUA 문자를 ⟨U+XXXX⟩로 드러내 결과에 적는다."""
-    return PUA.sub(lambda m: f"⟨U+{ord(m.group()):04X}⟩", text or "")
+    """기호 글꼴 문자를 읽을 수 있게 바꿔 결과에 적는다: 기본 평면 PUA → ⟨U+XXXX⟩, 네모 번호 → [n], 그 밖의 보조 평면 → ⟨U+XXXXX⟩.
+
+    한글 글꼴이 없는 화면(브라우저·JSON 뷰어)에서 □로 깨지지 않게 하기 위한 표시 변환이며 판정에는 쓰지 않는다.
+    """
+    shown = PUA.sub(lambda m: f"⟨U+{ord(m.group()):04X}⟩", text or "")
+    return PUA_SUPPLEMENTARY.sub(_show_supplementary, shown)
 
 
 def verdict(checks: dict[str, str]) -> str:
