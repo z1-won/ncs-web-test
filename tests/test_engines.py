@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from ncs_core import Rule, ReviewResult, SavedReport, VERDICTS, flatten
+from ncs_core import Rule, ReviewResult, SavedReport, VERDICTS, flatten, visible
 from ncs_core.f02_items import F02_ITEMS
 from ncs_core.sheet import NOT_CHECKED
 from ncs_service import ReviewRequest, execute_review, persist_review
@@ -99,7 +99,8 @@ class EngineContractTests(unittest.TestCase):
                                  "확인서 행은 해당 구성요소의 모든 항목 번호를 원문 순서로 가져야 합니다")
                 for row in result.sheet:
                     self.assertLessEqual(SHEET_KEYS, row.keys())
-                    self.assertEqual(row["체크 항목"], F02_ITEMS[component][row["번호"]])
+                    # 확인서 문구는 원문을 visible()로 표시 변환한 것(기호 글꼴의 네모 번호 → [1])
+                    self.assertEqual(row["체크 항목"], visible(F02_ITEMS[component][row["번호"]]))
                     self.assertIn(row["검수결과"], set(VERDICTS) | {NOT_CHECKED})
                 for key in ("module_code", "implemented", "not_implemented", "warnings"):
                     self.assertIn(key, result.diagnostics)
