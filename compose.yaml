@@ -1,0 +1,24 @@
+name: ncs-review
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ncs_review
+      POSTGRES_USER: ncs_admin
+      POSTGRES_PASSWORD: ${NCS_DB_ADMIN_PASSWORD:?Set NCS_DB_ADMIN_PASSWORD in .env}
+      NCS_DB_PASSWORD: ${NCS_DB_PASSWORD:?Set NCS_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./db/init/01-create-app-user.sh:/docker-entrypoint-initdb.d/01-create-app-user.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  postgres_data:

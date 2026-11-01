@@ -31,6 +31,24 @@ def overall_verdict(verdicts) -> str:
     return PASS
 
 
+def report_summary(result: ReviewResult, *, name: str, item_files: Sequence[tuple[str, str]], other_tail: str) -> dict:
+    """파일을 만들지 않고 기존 보고서와 동일한 요약을 계산한다."""
+    buckets: dict[str, list] = {tail: [] for _, tail in item_files}
+    by_length = sorted(item_files, key=lambda pair: -len(pair[0]))
+    for row in result.checklist:
+        tail = next((t for prefix, t in by_length if row["item_id"].startswith(prefix)), other_tail)
+        buckets.setdefault(tail, []).append(row)
+    items = {}
+    for tail, rows in buckets.items():
+        verdicts = [row["판정"] for row in rows]
+        items[tail] = {
+            "검수결과": overall_verdict(verdicts),
+            "행 수": {v: verdicts.count(v) for v in VERDICTS},
+            "파일": f"{result.module_code}_{tail}.json",
+        }
+    return {"검수결과": overall_verdict(row["판정"] for row in result.checklist), "항목": items}
+
+
 def save_report(
     result: ReviewResult,
     out_dir,

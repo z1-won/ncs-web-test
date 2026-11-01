@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const CHECKS = [
   { value: "position", label: "NCS-학습모듈의 위치 ①~⑤", files: "원고 + 개발계획서 (2개 필수)" },
@@ -136,6 +136,14 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [history, setHistory] = useState(null);
+
+  async function refreshHistory() {
+    const response = await fetch("/api/reviews");
+    if (response.ok) setHistory(await response.json());
+  }
+
+  useEffect(() => { refreshHistory().catch(() => {}); }, []);
 
   const selected = CHECKS.find((c) => c.value === check);
 
@@ -152,11 +160,26 @@ export default function App() {
       const response = await fetch("/api/review", { method: "POST", body: form });
       const data = await response.json();
       if (!response.ok) setError(data.error + (data.traceback ? "\n\n" + data.traceback : ""));
-      else setResult(data);
+      else {
+        setResult(data);
+        if (data.id) refreshHistory().catch(() => {});
+      }
     } catch (e) {
       setError(`서버에 연결하지 못했습니다: ${e.message}\n(가상환경의 ncs-web 서버가 실행 중인지 확인)`);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function openHistory(id) {
+    setError(null);
+    try {
+      const response = await fetch(`/api/reviews/${id}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "이력을 열 수 없습니다");
+      setResult(data);
+    } catch (e) {
+      setError(e.message);
     }
   }
 
@@ -204,6 +227,29 @@ export default function App() {
         </div>
       </form>
 
+      {history && (
+        <section>
+          <h2 className="section-title">검수 이력</h2>
+          {history.length === 0 ? <p className="empty">저장된 검수 이력이 없습니다.</p> : (
+            <div className="krds-table-wrap">
+              <table className="tbl col data">
+                <caption>최근 검수 실행</caption>
+                <thead><tr><th scope="col">실행 시각</th><th scope="col">모듈</th><th scope="col">검수</th><th scope="col">판정</th><th scope="col">열기</th></tr></thead>
+                <tbody>{history.map((row) => (
+                  <tr key={row.id}>
+                    <td>{new Date(row.created_at).toLocaleString("ko-KR")}</td>
+                    <td>{row.module_code}</td>
+                    <td>{CHECKS.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
+                    <td><Badge value={row.verdict} /></td>
+                    <td><button className="krds-btn small tertiary" type="button" onClick={() => openHistory(row.id)}>결과 보기</button></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
       {error && (
         <div className="form-group selected-files" role="alert">
           <p className="form-hint-invalid" style={{ whiteSpace: "pre-wrap" }}>{error}</p>
@@ -214,8 +260,8 @@ export default function App() {
         <section>
           <div className="result-head">
             <Badge value={result.요약.검수결과} large />
-            <span className="meta">{result.module_code} · {selected.label}</span>
-            <span className="meta">저장: {result.저장.zip}</span>
+            <span className="meta">{result.module_code} · {CHECKS.find((item) => item.value === result.check)?.label || result.check}</span>
+            {result.id ? <a href={`/api/reviews/${result.id}/zip`}>ZIP 다운로드</a> : <span className="meta">저장: {result.저장?.zip}</span>}
           </div>
 
           <h2 className="section-title">검수 확인서</h2>

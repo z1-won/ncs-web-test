@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+.env
 
 # Generated review reports
 /webapp/결과/

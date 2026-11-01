@@ -46,7 +46,38 @@ npm run dev
 결과 폴더는 첫 저장 때 생성하며, 화면 폴더는 빌드된 파일을 읽는 용도입니다.
 화면 경로가 없거나 지정되지 않으면 `/`는 안내와 함께 404를 반환하고 API·`/docs`는 계속 사용할 수 있습니다.
 기존 결과 파일은 이동하거나 삭제하지 않습니다. 기존 위치를 쓰려면 위 예시처럼 `--out webapp/결과`를 명시하세요.
-데이터베이스 없이 기존 JSON·ZIP 파일 저장 방식을 유지합니다.
+`DATABASE_URL`을 설정하지 않으면 기존 JSON·ZIP 파일 저장 방식을 유지합니다.
+
+## PostgreSQL 검수 이력
+
+웹 서버에 `DATABASE_URL`을 설정하면 PostgreSQL에 검수 이력을 저장합니다. 이 모드에서 실행별 JSON·ZIP 폴더는 새로 만들지 않으며, ZIP은 이력 화면의 다운로드 링크를 누를 때 임시로 생성합니다. `DATABASE_URL`이 없으면 기존 파일 저장 방식으로 실행됩니다. 네 CLI의 `--out` 파일 출력은 계속 사용할 수 있습니다.
+
+저장소 루트의 `compose.yaml`은 로컬 PostgreSQL 18을 `127.0.0.1:55432`에서 실행합니다. 데이터는 `ncs-review_postgres_data` Docker 볼륨에 저장되어 컨테이너를 다시 만들어도 유지됩니다. Docker Desktop을 켜고 저장소 루트에서 실행하세요. 새로 복제한 작업 공간이라면 `.env.example`을 `.env`로 복사해 `NCS_DB_PASSWORD`와 `NCS_DB_ADMIN_PASSWORD`를 서로 다른 강한 값으로 바꾸고, `DATABASE_URL`의 비밀번호는 `NCS_DB_PASSWORD`와 같게 입력합니다. 이 작업 공간의 `.env`는 이미 생성되어 있습니다.
+
+```bash
+docker compose up -d --wait db
+docker compose ps
+```
+
+앱에서 접속할 때는 같은 터미널에 `.env`를 읽어들입니다. 아래의 스키마 준비와 이관 명령은 다음 단계에서 실행합니다.
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python -m ncs_service.postgres_cli migrate
+.venv/bin/ncs-web --dist webapp/frontend/dist
+```
+
+앱 전용 데이터베이스와 관리자 권한이 없는 `ncs_app` 계정은 PostgreSQL 볼륨을 처음 만들 때 생성됩니다. `.env`는 저장소에서 제외됩니다. `docker compose stop db`로 중지하고 `docker compose start db`로 다시 시작할 수 있습니다. `docker compose down`은 컨테이너만 제거하고 데이터 볼륨은 유지하지만, `docker compose down -v`는 데이터 볼륨도 삭제합니다. 앱 시작 시에도 필요한 테이블이 없으면 생성합니다. 운영 중 스키마를 바꿀 때는 별도 마이그레이션 절차가 필요합니다.
+
+기존 결과를 가져올 때는 다음 명령을 실행합니다. 재실행하면 이미 가져온 폴더를 건너뛰며 원본 파일은 삭제하지 않습니다. 이관 시각은 요약 JSON의 수정 시각을 사용하고, 과거 입력 원본의 해시·엔진 버전은 복원할 수 없습니다.
+
+```bash
+.venv/bin/python -m ncs_service.postgres_cli import webapp/결과
+```
+
+DB 모드에서는 `GET /api/reviews`(최근 50건, 최대 100건; `module_code`, `check`, `verdict`, `limit`, `offset` 필터), `GET /api/reviews/{id}`(상세), `GET /api/reviews/{id}/zip`(ZIP 다운로드)을 제공합니다. 화면에 최근 검수 이력 목록과 상세 보기·ZIP 다운로드가 표시됩니다. DB 모드의 `POST /api/review` 응답에는 `id`가 들어가고 `저장`은 `null`입니다.
 
 Uvicorn으로 직접 실행할 수도 있습니다. 다음 명령은 저장소 루트에서 실행하며, 기본 설정(API 전용·실행 위치의 `결과/` 저장)을 사용합니다. 경로를 지정할 때는 위의 서버 실행 명령을 사용하세요.
 
@@ -76,13 +107,14 @@ Uvicorn으로 직접 실행할 수도 있습니다. 다음 명령은 저장소 �
 성공 응답은 기존 화면과 같은 구조입니다.
 
 ```text
-{check, module_code, 요약, 검수확인서, 진단, 지적사항, 전체, 저장: {folder, zip}}
+{id, check, module_code, 요약, 검수확인서, 진단, 지적사항, 전체, 저장}
 ```
 
 - 입력·양식 오류(요청 타입 검증 포함): 400 `{error}`
 - 저장 중 I/O 오류 등 예상하지 못한 오류: 500 `{error, traceback}`
 - 저장 실패 시 검사 결과를 부분 반환하지 않습니다.
-- ZIP은 로컬 파일로 저장합니다. 별도 다운로드 API는 없습니다.
+- 파일 모드에서는 ZIP을 로컬 파일로 저장하며 다운로드 API는 제공하지 않습니다.
+- PostgreSQL 모드에서 `id`는 실행 ID, `저장`은 `null`이며 `/api/reviews/{id}/zip`으로 다운로드합니다. 파일 모드에서 `id`는 `null`, `저장`은 `{folder, zip}`입니다.
 - 로컬 테스트 동작을 유지하여 CORS는 `*`, 예외 추적 정보는 오류 응답에 포함합니다.
 
 ## 실행 조정 계층

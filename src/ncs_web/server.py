@@ -1,14 +1,16 @@
 """FastAPI 기반 로컬 검수 API. 업로드·HTTP 응답을 맡고 실행은 ncs_service에 위임한다."""
 
 import argparse
+import os
 import shutil
 import tempfile
 import traceback
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import quote
 
 import uvicorn
-from fastapi import FastAPI, File, Form, Request, Response, UploadFile
+from fastapi import FastAPI, File, Form, Query, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,6 +27,7 @@ class SavedPaths(BaseModel):
 
 
 class ReviewResponse(BaseModel):
+    id: str | None = None
     check: CheckName
     module_code: str
     요약: dict[str, Any]
@@ -32,7 +35,7 @@ class ReviewResponse(BaseModel):
     진단: dict[str, Any]
     지적사항: list[dict[str, Any]]
     전체: list[dict[str, Any]]
-    저장: SavedPaths
+    저장: SavedPaths | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -47,6 +50,7 @@ def error_response(status: int, message: str, **extra: Any) -> JSONResponse:
 def create_app(
     *, out_dir: str | Path = "결과",
     dist_dir: str | Path | None = None,
+    database_url: str | None = None,
 ) -> FastAPI:
     """경로는 앱 생성 시 실행 위치를 기준으로 확정한다. dist_dir 생략 시 API만 제공한다."""
     from ncs_service import ReviewRequest, execute_review, persist_review
@@ -54,6 +58,9 @@ def create_app(
     app = FastAPI(title="F02 검수 API")
     output = Path(out_dir).expanduser().resolve()
     dist = Path(dist_dir).expanduser().resolve() if dist_dir is not None else None
+    if database_url:
+        from ncs_service.postgres import migrate
+        migrate(database_url)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError) -> JSONResponse:
@@ -99,6 +106,7 @@ def create_app(
         try:
             with tempfile.TemporaryDirectory(prefix="ncs_upload_") as folder:
                 paths = []
+                uploads = []
                 for index, upload in enumerate(files):
                     if not upload.filename:
                         continue
@@ -113,15 +121,23 @@ def create_app(
                         shutil.copyfileobj(upload.file, target)
                     if path.stat().st_size:
                         paths.append(path)
+                        uploads.append((name, path))
                 if not paths:
                     raise ValueError("업로드된 파일이 없습니다")
                 execution = execute_review(ReviewRequest(tuple(paths), check, module_code.strip()))
-                saved = persist_review(execution, output)
                 result = execution.result
+                if database_url:
+                    from ncs_service.postgres import input_metadata, save_review
+                    run_id, summary = save_review(database_url, execution, input_metadata(result.diagnostics, uploads))
+                    saved_paths = None
+                else:
+                    saved = persist_review(execution, output)
+                    run_id, summary = None, saved.summary
+                    saved_paths = SavedPaths(folder=str(saved.directory), zip=str(saved.zip_path))
                 payload = ReviewResponse(
-                    check=execution.check, module_code=result.module_code, 요약=saved.summary,
+                    id=run_id, check=execution.check, module_code=result.module_code, 요약=summary,
                     검수확인서=result.sheet, 진단=result.diagnostics, 지적사항=result.findings,
-                    전체=result.checklist, 저장=SavedPaths(folder=str(saved.directory), zip=str(saved.zip_path)),
+                    전체=result.checklist, 저장=saved_paths,
                 )
         except ValueError as error:
             return error_response(400, str(error))
@@ -129,6 +145,41 @@ def create_app(
             return error_response(500, f"{type(error).__name__}: {error}", traceback=traceback.format_exc())
         response.headers.update(CORS_HEADERS)
         return payload
+
+    if database_url:
+        from ncs_service.postgres import get_review, list_reviews
+
+        @app.get("/api/reviews")
+        def reviews(module_code: str | None = None, check: CheckName | None = None,
+                    verdict: str | None = None, limit: int = Query(50, ge=1, le=100),
+                    offset: int = Query(0, ge=0)) -> list[dict]:
+            return list_reviews(database_url, module_code=module_code, check=check,
+                                verdict=verdict, limit=limit, offset=offset)
+
+        @app.get("/api/reviews/{run_id}")
+        def review_detail(run_id: str) -> dict:
+            found = get_review(database_url, run_id)
+            if found is None:
+                raise HTTPException(404, "검수 이력을 찾을 수 없습니다")
+            return found
+
+        @app.get("/api/reviews/{run_id}/zip")
+        def review_zip(run_id: str) -> Response:
+            from ncs_core.models import ReviewResult
+            from ncs_service.registry import get_engine
+
+            found = get_review(database_url, run_id)
+            if found is None:
+                raise HTTPException(404, "검수 이력을 찾을 수 없습니다")
+            result = ReviewResult(found["module_code"], found["전체"], found["지적사항"],
+                                  found["진단"], sheet=found["검수확인서"])
+            with tempfile.TemporaryDirectory(prefix="ncs_export_") as folder:
+                saved = get_engine(found["check"]).load().save_results(result, folder)
+                content = saved.zip_path.read_bytes()
+                filename = saved.zip_path.name
+            return Response(content, media_type="application/zip", headers={
+                "Content-Disposition": f"attachment; filename=review-{run_id}.zip; filename*=UTF-8''{quote(filename)}",
+            })
 
     # FastAPI가 자동 추가하는 422 대신 기존 프런트엔드와 호환되는 400을 문서화한다.
     default_openapi = app.openapi
@@ -160,7 +211,7 @@ def main() -> None:
     parser.add_argument("--dist", help="React 빌드 폴더. 생략하면 API만 제공")
     args = parser.parse_args()
     try:
-        app = create_app(out_dir=args.out, dist_dir=args.dist)
+        app = create_app(out_dir=args.out, dist_dir=args.dist, database_url=os.getenv("DATABASE_URL"))
     except ValueError as error:
         parser.exit(2, f"서버 실행 실패: {error}\n")
     uvicorn.run(app, host="127.0.0.1", port=args.port)
