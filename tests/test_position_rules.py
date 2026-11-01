@@ -15,7 +15,7 @@ class DiffTests(unittest.TestCase):
         self.assertEqual((content, order, len(info["missing"])), ("X", "O", 10))
         self.assertEqual(summarize_diff("세분류", info), "세분류 원고 8 / 개발계획서 18 · 누락 10(세분류9, 세분류10, 세분류11 외 7)")
         content, order, notes, info = list_diff("능력단위", ["가", "나", "다"], ["가", "라", "다"])
-        self.assertEqual(summarize_diff("능력단위", info), "능력단위 다름 1: 원고 「라」 / 개발계획서 「나」 — 다른 곳 「라」↔「나」 (원고↔계획서)")
+        self.assertEqual(summarize_diff("능력단위", info), "능력단위 다름 1: 원고 「라」 / 개발계획서 「나」 — 글자가 다름")
         # 띄어쓰기 하나 차이도 어느 문서의 어떤 문구인지 각각 보인다
         _, _, notes, info = list_diff("능력단위", ["AIoT 운영플랫폼요구사항분석"], ["AIoT 운영 플랫폼 요구사항 분석"])
         self.assertEqual(summarize_diff("능력단위", info), "능력단위 다름 1: 원고 「AIoT 운영 플랫폼 요구사항 분석」 / 개발계획서 「AIoT 운영플랫폼요구사항분석」 — 띄어쓰기만 다름")

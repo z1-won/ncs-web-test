@@ -63,7 +63,7 @@ class CriteriaGoalsTests(unittest.TestCase):
         rows = check_criteria_goals([region(criteria=[self.units()], criteria_tables=1)], PLAN)
         self.assertEqual([(r["위치"], r["region_path"].split(" > ")[-1], r["판정"]) for r in rows],
                          [("학습 1", "호텔정보 구분", "적합"), ("학습 1", "상품 설명", "부적합")])
-        self.assertEqual(rows[1]["비고"]["② 평가 준거 학습 목표 계획서 일치"], "1-2 1번째 「판매촉진」↔「판매 촉진」")
+        self.assertEqual(rows[1]["비고"]["② 평가 준거 학습 목표 계획서 일치"], "1-2 1번째 평가 준거 「판매촉진」 / 개발계획서 「판매 촉진」 (띄어쓰기만 다름)")
         self.assertEqual(rows[1]["개발계획서"], ["2.1 " + C])
 
     def test_unknown_name_missing_table_no_plan_and_no_region(self):

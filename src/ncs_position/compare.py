@@ -1,32 +1,11 @@
 """목록 비교 도우미. 규칙 모듈이 함께 쓴다. 비교 정책은 v1.1을 유지한다."""
 
-import re
 from collections.abc import Sequence
 
 from ncs_core import NA, O, TRI, X, visible
-from ncs_core.goals import difference
+from ncs_core.goals import explain_pair
 
 from .text import norm
-
-PUNCT = re.compile(r"[\s·ㆍ‧∙•\-–—/,.()\[\]〈〉<>]")
-
-
-def explain_pair(expected: str, actual: str) -> str:
-    """같은 자리의 두 이름을 문서 이름을 붙여 나란히: '원고 「…」 / 개발계획서 「…」 — 띄어쓰기만 다름'.
-
-    "A→B"만 보여 주면 어느 쪽이 어느 문서인지, 띄어쓰기 하나 차이가 어디인지 눈에 안 띈다
-    (AIoT 운영 플랫폼 요구사항 분석 ↔ AIoT 운영플랫폼요구사항분석). 두 문서의 문구를 각각 적고 차이의 종류를 덧붙인다.
-    글자가 다른 경우는 다른 어절만 「원고」↔「계획서」로 한 번 더 뽑아 준다.
-    """
-    e, a = visible(expected), visible(actual)
-    if re.sub(r"\s", "", e) == re.sub(r"\s", "", a):
-        why = "띄어쓰기만 다름"
-    elif PUNCT.sub("", e) == PUNCT.sub("", a):
-        why = "기호·띄어쓰기만 다름"
-    else:
-        why = "다른 곳 " + difference(e, a) + " (원고↔계획서)"
-    return f"원고 「{a}」 / 개발계획서 「{e}」 — {why}"
-
 
 def list_check(name: str, expected: Sequence[str], actual: Sequence[str]) -> tuple[str, str, list[str]]:
     """목록 비교 → (내용 체크값, 순서 체크값, 비고 목록). 자세한 구조는 list_diff."""

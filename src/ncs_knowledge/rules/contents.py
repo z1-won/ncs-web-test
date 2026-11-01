@@ -13,14 +13,14 @@ def check_contents(toc: dict, overview: dict | None, body: dict, units: list[dic
         region = f"section1 > 학습 {no} > N-M. 제목"
         actual = [u["text"] for u in own]
         checks, notes = {}, {}
-        for name, ref in (
-            ("차례 학습 내용명과 일치", [s["text"] for s in toc["내용"] if s["no"] == no]),
-            ("내용체계 학습 내용명과 일치", [s["text"] for s in overview["내용"] if s["no"] == no] if overview else None),
+        for name, basis, ref in (
+            ("차례 학습 내용명과 일치", "차례", [s["text"] for s in toc["내용"] if s["no"] == no]),
+            ("내용체계 학습 내용명과 일치", "내용체계 표", [s["text"] for s in overview["내용"] if s["no"] == no] if overview else None),
         ):
             if ref is None:
                 checks[name], notes[name] = TRI, "'학습모듈의 내용체계' 표를 찾지 못함"
                 continue
-            value, diff = diff_list("학습 내용명", ref, actual)
+            value, diff = diff_list("학습 내용명", ref, actual, where="본문 제목", basis=basis)
             checks[name] = value
             if diff:
                 notes[name] = " / ".join(diff)

@@ -2,6 +2,7 @@
 
 import re
 
+from ncs_core.goals import explain_pair
 from ncs_core import O, PUA, TRI, X, visible
 
 from ncs_core.manuscript import norm, same
@@ -43,14 +44,14 @@ def check_navigator(toc: dict, overview: dict | None, body: dict) -> list[dict]:
         checks, notes = {}, {}
         toc_text = toc["학습"][index]["text"] if index < n_toc else None
         ov_text = overview["학습"][index]["text"] if overview and index < len(overview["학습"]) else None
-        for name, ref in (("차례 학습명과 일치", toc_text), ("내용체계 학습명과 일치", ov_text)):
+        for name, basis, ref in (("차례 학습명과 일치", "차례", toc_text), ("내용체계 학습명과 일치", "내용체계 표", ov_text)):
             if ref is None:
-                checks[name], notes[name] = TRI, "기준 쪽에 이 번호의 학습이 없음"
+                checks[name], notes[name] = TRI, f"{basis}에 이 번호의 학습이 없음"
                 continue
             diff = [(ri, t) for ri, t in texts if not same(ref, t)]
             checks[name] = O if not diff else X
             if diff:
-                notes[name] = f'기준 "{visible(ref)}" / ' + " / ".join(f'묶음{ri} "{visible(t)}"' for ri, t in diff[:3])
+                notes[name] = " / ".join(explain_pair(ref, visible(t), f"내비게이터 {ri}번째 묶음", basis) for ri, t in diff[:3])
         unique = {norm(t) for _, t in texts}
         checks["묶음 간 일치"] = O if len(unique) == 1 else X
         if len(unique) > 1:

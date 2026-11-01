@@ -2,6 +2,7 @@
 import re
 
 from ncs_core import O, X, TRI, verdict
+from ncs_core.goals import explain_pair
 
 ITEM_ID = "F02-평가-①"
 NUMBERED = re.compile(r"^(\d+)\s*-\s*(\d+)\s*\.\s*(.+)$")
@@ -33,19 +34,25 @@ def display(mapping):
     return {f"{a}-{b}": text for (a, b), text in mapping.items()}
 
 
-def describe(missing, extra, changed, unresolved=()) -> str:
-    """비고 한 줄 — 비어 있는 항목은 적지 않고 번호는 'N-M'으로. 예: '명칭 불일치 2-2, 3-1 · 누락 4-1'"""
+def describe(missing, extra, changed, unresolved=(), expected=None, actual=None, where="평가 표") -> str:
+    """비고 한 줄 — 비어 있는 항목은 적지 않고 번호는 'N-M'으로. 불일치는 두 문서의 문구를 나란히(앞 3개).
+    예: '명칭 불일치 2-2: 평가 표 「고객 정보 확인 및 관리」 / 개발계획서 「고객 정보 확인과 사후관리 계획 수립」 — 글자가 다름 · 누락 4-1'"""
     def keys(items):
         return ", ".join(f"{a}-{b}" for a, b in items)
     parts = []
     if changed:
-        parts.append("명칭 불일치 " + keys(changed))
+        if expected is not None and actual is not None:
+            shown = [f"{a}-{b}: " + explain_pair(expected[(a, b)], actual[(a, b)], where, "개발계획서") for a, b in changed[:3]]
+            more = f" 외 {len(changed) - 3}" if len(changed) > 3 else ""
+            parts.append("명칭 불일치 " + "; ".join(shown) + more)
+        else:
+            parts.append("명칭 불일치 " + keys(changed))
     if missing:
-        parts.append("누락 " + keys(missing))
+        parts.append("누락(개발계획서에만) " + keys(missing))
     if extra:
-        parts.append("추가 " + keys(extra))
+        parts.append(f"추가({where}에만) " + keys(extra))
     if unresolved:
-        parts.append("기준에 없는 명칭 " + ", ".join(f"「{t}」" for t in unresolved))
+        parts.append("개발계획서에 없는 명칭 " + ", ".join(f"「{t}」" for t in unresolved))
     return " · ".join(parts) if parts else "일치"
 
 
@@ -57,7 +64,7 @@ def compare_indexed(place, items, expected):
     extra = sorted(set(actual) - set(expected))
     changed = sorted(k for k in expected.keys() & actual.keys() if expected[k] != actual[k])
     return row(place, X if missing or extra or changed else O, display(actual), display(expected),
-               describe(missing, extra, changed))
+               describe(missing, extra, changed, expected=expected, actual=actual))
 
 
 def table_names(table):
@@ -106,7 +113,7 @@ def compare_table(place, values, expected):
     extra = sorted(set(actual) - set(expected))
     changed = sorted(key for key in actual.keys() & expected.keys() if actual[key] != expected[key])
     return row(place, X if missing or extra or changed or unresolved else O, values, display(expected),
-               describe(missing, extra, changed, unresolved))
+               describe(missing, extra, changed, unresolved, expected=expected, actual=actual))
 
 
 def check_names(context):

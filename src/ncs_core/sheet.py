@@ -45,8 +45,8 @@ def _item_checks(rows: list[dict], item: SheetItem) -> list[tuple[str, str, str,
 
 
 MAX_LOCATIONS = 8      # 비고에 적는 위치 수. 넘으면 '…'
-MAX_NOTE_LENGTH = 120  # 한 건짜리 체크에 비고를 그대로 실을 때의 최대 길이
-MAX_EXAMPLE_LENGTH = 70  # 여러 건짜리 체크 뒤에 붙이는 대표 사례(첫 위반 행의 비고) 길이
+MAX_NOTE_LENGTH = 160  # 한 건짜리 체크에 비고를 그대로 실을 때의 최대 길이
+MAX_EXAMPLE_LENGTH = 140  # 여러 건짜리 체크 뒤에 붙이는 대표 사례(첫 위반 행의 비고) 길이 — 두 문서의 문구가 다 보이게
 
 
 def summarize_remarks(checks: list[tuple[str, str, str, str, str | None]]) -> list[str]:

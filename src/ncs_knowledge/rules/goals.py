@@ -35,7 +35,7 @@ def check_goals(plan: dict | None, units: list[dict]) -> list[dict]:
             rows.append(row("⑤", region, shown, checks, notes))
             continue
         expected = expected_unit["goals"]
-        problems = compare_lists([normalize(e) for e in expected], [visible(normalize(a)) for a in actual])
+        problems = compare_lists([normalize(e) for e in expected], [visible(normalize(a)) for a in actual], where="본문 학습 목표", basis="개발계획서")
         checks["개발계획서 학습 목표 일치"] = X if problems else O
         if problems:
             notes["개발계획서 학습 목표 일치"] = f"{key} " + " · ".join(problems)

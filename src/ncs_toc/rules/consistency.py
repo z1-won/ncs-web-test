@@ -64,7 +64,7 @@ def check_toc3(plan, toc, overview, body, eval_tables=None) -> list[dict]:
     def item(place, act_names, act_subs, region_path, extra_checks=None, extra_notes=None):
         checks, notes = {}, dict(base_note)
         if act_names is not None:
-            value, found = diff_list("학습명", ref_names, act_names)
+            value, found = diff_list("학습명", ref_names, act_names, where=place, basis=reference["학습명 출처"])
             checks["학습명 일치"] = value
             if found:
                 notes["학습명 일치"] = " / ".join(found)
@@ -72,7 +72,7 @@ def check_toc3(plan, toc, overview, body, eval_tables=None) -> list[dict]:
                 checks["학습명 일치"] = TRI
                 notes["학습명 일치"] = "차례와 일치 (개발계획서 미확인)"
         if act_subs is not None:
-            value, found = diff_list("학습 내용명", ref_sub_texts, act_subs)
+            value, found = diff_list("학습 내용명", ref_sub_texts, act_subs, where=place, basis=reference["학습 내용명 출처"])
             checks["학습 내용명 일치"] = value
             if found:
                 notes["학습 내용명 일치"] = " / ".join(found)
@@ -113,7 +113,7 @@ def check_toc3(plan, toc, overview, body, eval_tables=None) -> list[dict]:
     # 2 개요 내용체계
     if overview:
         item(
-            "학습모듈의 개요 > 내용체계",
+            "내용체계 표",
             [L["text"] for L in overview["학습"]],
             [s["text"] for s in overview["내용"]],
             "section0 > 학습모듈의 개요 > 내용체계 표",
@@ -125,7 +125,7 @@ def check_toc3(plan, toc, overview, body, eval_tables=None) -> list[dict]:
         extra_checks, extra_notes = {}, {}
         same_note: dict[str, list[int]] = {}  # 같은 차이를 보이는 묶음은 한 줄로 모은다(묶음마다 반복하지 않음)
         for r_i, run in enumerate(body["nav_runs"][1:], 2):
-            value, found = diff_list("학습명", ref_names, [x["text"] for x in run])
+            value, found = diff_list("학습명", ref_names, [x["text"] for x in run], where=f"내비게이터 {r_i}번째 묶음", basis=reference["학습명 출처"])
             if value == X:
                 same_note.setdefault(" / ".join(found), []).append(r_i)
         for note, run_ids in same_note.items():
@@ -151,7 +151,7 @@ def check_toc3(plan, toc, overview, body, eval_tables=None) -> list[dict]:
         rows.append(_unreadable("내비게이터", "section1 > 내비게이터", "내비게이터 찾기", "'학습 1'…'학습 N' 제목 묶음을 찾지 못함"))
     # 4 필요지식 N-M. 제목 — 학습 구간 안의 것만, (no, sub) 순서로
     body_subs = sorted({(s["no"], s["sub"]): s["text"] for L in body["lessons"] for s in L["subs"]}.items())
-    item("필요지식(본문) 학습 내용명", None, [t for _, t in body_subs], "section1 > 본문 N-M. 제목")
+    item("본문 N-M. 제목", None, [t for _, t in body_subs], "section1 > 본문 N-M. 제목")
     # 5 평가 — 학습마다. 1순위: 표의 '학습 내용' 열(확정). 2순위: 블록 안 짧은 줄 휴리스틱(△)
     rows.append(_evaluation_row(body, ref_subs, ref_sub_texts, eval_tables, use_plan_subs, toc_pua, base_note))
     return rows
@@ -173,7 +173,7 @@ def _evaluation_row(body, ref_subs, ref_sub_texts, eval_tables, use_plan_subs, t
             problems = []
             for kind, values in tables:
                 seen += values
-                value, found = diff_list(f"{kind} 학습 내용", expected, values)
+                value, found = diff_list(f"{kind} 학습 내용", expected, values, where=f"{kind} 표", basis="개발계획서" if use_plan_subs else "차례")
                 if value == X:
                     problems += found
             checks[key] = O if not problems else X

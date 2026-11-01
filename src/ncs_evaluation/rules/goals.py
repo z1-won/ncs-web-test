@@ -58,7 +58,7 @@ def check_criteria_goals(regions: list[dict], plan_goals: dict | None) -> list[d
                                      "학습 내용명을 개발계획서와 같게 한 뒤 학습 목표 대조"))
                     continue
                 expected = own[keys[0]]["goals"]
-                problems = compare_lists([normalize(e) for e in expected], [visible(normalize(a)) for a in unit["goals"]])
+                problems = compare_lists([normalize(e) for e in expected], [visible(normalize(a)) for a in unit["goals"]], where="평가 준거", basis="개발계획서")
                 checks = {CHECK: X if problems else O}
                 notes = {CHECK: f"{keys[0][0]}-{keys[0][1]} " + " · ".join(problems)} if problems else {}
                 rows.append(_row(lesson, region_path, shown, checks, notes, "개발계획서 학습 목표 문장으로 통일", 개발계획서=expected))

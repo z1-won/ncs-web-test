@@ -2,7 +2,7 @@
 
 import unittest
 
-from ncs_core.sheet import MAX_LOCATIONS, MAX_NOTE_LENGTH, SheetItem, build_sheet, summarize_remarks
+from ncs_core.sheet import MAX_LOCATIONS, MAX_EXAMPLE_LENGTH, MAX_NOTE_LENGTH, SheetItem, build_sheet, summarize_remarks
 
 
 class SummarizeRemarksTests(unittest.TestCase):
@@ -39,7 +39,7 @@ class SummarizeRemarksTests(unittest.TestCase):
 
     def test_example_is_truncated(self):
         [line] = summarize_remarks([("일치", "X", "가" * 200, "1-1", None), ("일치", "O", "", "1-2", None)])
-        self.assertTrue(line.endswith("…") and len(line) < 120)
+        self.assertTrue(line.endswith("…") and len(line) < MAX_EXAMPLE_LENGTH + 60)
 
 
 class BuildSheetTests(unittest.TestCase):

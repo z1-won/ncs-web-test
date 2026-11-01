@@ -42,7 +42,7 @@ def check_structure_names(overview: dict, plan: dict | None) -> list[dict]:
         exp_l = plan["학습명"]
         exp_c = [f"{s['no']}-{s['sub']}. {s['text']}" for s in plan["내용명"]]
         if exp_l:
-            value, diff = diff_list("학습명", exp_l, [L["text"] for L in structure["학습"]])
+            value, diff = diff_list("학습명", exp_l, [L["text"] for L in structure["학습"]], where="내용체계 표", basis="개발계획서")
             checks = {label_l: value}
             if diff:
                 notes[label_l] = "; ".join(diff)
@@ -50,7 +50,7 @@ def check_structure_names(overview: dict, plan: dict | None) -> list[dict]:
             checks = {label_l: TRI}
             notes[label_l] = "개발계획서 학습명을 읽지 못함"
         if exp_c:
-            value, diff = diff_list("학습 내용명", exp_c, contents)
+            value, diff = diff_list("학습 내용명", exp_c, contents, where="내용체계 표", basis="개발계획서")
             checks[label_c] = value
             if diff:
                 notes[label_c] = "; ".join(diff)
