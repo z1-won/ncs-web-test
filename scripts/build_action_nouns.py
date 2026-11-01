@@ -9,6 +9,7 @@
   python scripts/build_action_nouns.py --from-file scripts/action_noun_candidates.txt
   python scripts/build_action_nouns.py --from-plans 개발계획서폴더   # 개발계획서들의 학습 내용명 머리어(이 사업의 어휘)
   python scripts/build_action_nouns.py --from-manuscripts 원고폴더  # 원고 차례의 학습 내용명 머리어
+  python scripts/build_action_nouns.py --from-manuscripts a.hwpx b.hwpx  # 파일을 직접 골라서(폴더·파일 섞어도 됨)
 결과: 행동명사 → action_nouns.txt(stdict), 아님 → action_nouns_rejected.txt(stdict, X). 둘 다 git으로 관리한다.
 """
 
@@ -45,9 +46,18 @@ def heads_from_plans(folder: Path) -> set[str]:
     return words
 
 
-def heads_from_manuscripts(folder: Path) -> set[str]:
+def _hwp_files(paths: list[Path]) -> list[Path]:
+    """폴더면 바로 아래 .hwp/.hwpx, 파일이면 그대로."""
+    out: list[Path] = []
+    for path in paths:
+        out += sorted(list(path.glob("*.hwp")) + list(path.glob("*.hwpx"))) if path.is_dir() else [path]
+    return out
+
+
+def heads_from_manuscripts(paths: list[Path]) -> set[str]:
     words = set()
-    for path in sorted(list(folder.glob("*.hwp")) + list(folder.glob("*.hwpx"))):
+    for path in _hwp_files(paths):
+        print(f"  읽음 {path.name}", file=sys.stderr)
         try:
             document = load_document(path)
         except ValueError as error:
@@ -64,7 +74,7 @@ def main() -> None:
     parser.add_argument("words", nargs="*")
     parser.add_argument("--from-file", type=Path, help="한 줄 한 단어")
     parser.add_argument("--from-plans", type=Path, help="개발계획서(.hwp/.hwpx) 폴더")
-    parser.add_argument("--from-manuscripts", type=Path, help="원고(.hwp/.hwpx) 폴더")
+    parser.add_argument("--from-manuscripts", type=Path, nargs="+", help="원고(.hwp/.hwpx) 폴더 또는 파일들")
     parser.add_argument("--lexicon-dir", type=Path, help="목록 파일 위치(기본: src/ncs_core/data)")
     args = parser.parse_args()
 
