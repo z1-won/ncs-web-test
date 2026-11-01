@@ -3,12 +3,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "./lib/api.js";
 import { ALL_CHECK, ALL_OPTION, CHECKS, checksFromEngines } from "./lib/checks.js";
 import { formatDate } from "./lib/format.jsx";
-import { AllResults } from "./components/AllResults.jsx";
+import { AllResults, ComponentResult } from "./components/AllResults.jsx";
 import { Badge } from "./components/Badge.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
 import { KrdsSelect } from "./components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
-import { ChecklistTable, FindingsTable, SheetTable } from "./components/Tables.jsx";
 
 const HISTORY_PREVIEW = 5;
 
@@ -209,22 +208,8 @@ export default function App() {
           </div>
 
           <h2 className="section-title">검수 확인서</h2>
-          <SheetTable sheet={result.검수확인서 || []} findings={result.지적사항 || []} />
-
-          {result.진단.warnings?.length > 0 && (
-            <>
-              <h2 className="section-title">진단 경고</h2>
-              <ul className="krds-info-list dash">
-                {result.진단.warnings.map((w, i) => <li key={i}>{w}</li>)}
-              </ul>
-            </>
-          )}
-
-          <h2 className="section-title">지적사항 ({result.지적사항.length}건)</h2>
-          <FindingsTable findings={result.지적사항} />
-
-          <h2 className="section-title">전체 체크리스트 ({result.전체.length}행)</h2>
-          <ChecklistTable rows={result.전체} />
+          {/* 전체 실행의 아코디언 몸통과 같은 구성: 확인서(행마다 지적사항 펼치기) + 진단 경고 + 접힌 지적사항·전체 체크리스트 */}
+          <ComponentResult result={result} showSave={false} />
 
           <details className="raw">
             <summary>원본 JSON (요약·진단·검수확인서·지적사항·전체)</summary>

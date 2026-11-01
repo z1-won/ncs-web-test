@@ -5,16 +5,28 @@ import { asText, withBoxNumbers } from "../lib/format.jsx";
 
 /* F02 검수 확인서 모양: 구성요소 | 체크 항목 | 검수 결과(적합/부적합/판단불가) | 비고 */
 // 확인서 행에 속한 지적사항: item_id가 그 번호로 끝나거나(F02-필요지식-⑤), 체크 이름이 그 번호로 시작(위치 ②③④처럼 한 item_id를 나눠 쓰는 엔진)
+// 여러 구성요소를 한 표에 모을 때는 행·지적사항에 _check(엔진 이름)를 붙여 같은 번호(차례 ①·개요 ①)가 섞이지 않게 한다.
 export function findingsOfRow(findings, row) {
-  return (findings || []).filter((f) => f.item_id.endsWith(row.번호) || String(f.check).startsWith(row.번호));
+  return (findings || []).filter((f) => (!row._check || !f._check || f._check === row._check)
+    && (f.item_id.endsWith(row.번호) || String(f.check).startsWith(row.번호)));
 }
 
+const rowKey = (row) => `${row._check || ""}-${row.번호}`;
+
+// sheet: 확인서 행 목록. 한 구성요소만, 또는 여러 구성요소를 이어 붙인 것(구성요소 머리칸은 연속 묶음마다 rowSpan).
 export function SheetTable({ sheet, findings }) {
   const [expanded, setExpanded] = useState(() => new Set());
   if (!sheet.length) return null;
-  function toggle(no) {
-    setExpanded((prev) => { const next = new Set(prev); next.has(no) ? next.delete(no) : next.add(no); return next; });
+  function toggle(key) {
+    setExpanded((prev) => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   }
+  // 구성요소 묶음: 첫 행 인덱스 → 묶음 길이(펼친 지적사항 행 포함)
+  const groups = new Map();
+  let start = 0;
+  sheet.forEach((row, i) => {
+    if (i === 0 || row.구성요소 !== sheet[i - 1].구성요소 || row._check !== sheet[i - 1]._check) start = i;
+    groups.set(start, (groups.get(start) || 0) + 1 + (expanded.has(rowKey(row)) ? 1 : 0));
+  });
   return (
     <div className="krds-table-wrap">
       <table className="tbl col data sheet">
@@ -43,11 +55,12 @@ export function SheetTable({ sheet, findings }) {
         <tbody>
           {sheet.map((row, i) => {
             const own = findingsOfRow(findings, row);
-            const open = expanded.has(row.번호);
+            const key = rowKey(row);
+            const open = expanded.has(key);
             return (
-              <React.Fragment key={row.번호}>
+              <React.Fragment key={key}>
                 <tr>
-                  {i === 0 && <th scope="rowgroup" className="component" rowSpan={sheet.length + expanded.size}>{row.구성요소}</th>}
+                  {groups.has(i) && <th scope="rowgroup" className="component" rowSpan={groups.get(i)}>{row.구성요소}</th>}
                   <td style={{ whiteSpace: "pre-wrap" }}>{row.번호} {withBoxNumbers(row["체크 항목"])}</td>
                   <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "적합" ? "✓" : ""}</td>
                   <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "부적합" ? "✓" : ""}</td>
@@ -57,8 +70,8 @@ export function SheetTable({ sheet, findings }) {
                     {own.length > 0 && (
                       <div className="sheet-more">
                         {/* 확인서 비고는 요약이므로, 어디가 어떻게 틀렸는지는 이 행의 지적사항을 펼쳐서 본다 */}
-                        <button type="button" className="krds-btn xsmall text" aria-expanded={open} aria-controls={`sheet-detail-${row.번호}`}
-                                onClick={() => toggle(row.번호)}>
+                        <button type="button" className="krds-btn xsmall text" aria-expanded={open} aria-controls={`sheet-detail-${key}`}
+                                onClick={() => toggle(key)}>
                           {open ? "지적사항 접기" : `지적사항 ${own.length}건 보기`}
                         </button>
                       </div>
@@ -66,7 +79,7 @@ export function SheetTable({ sheet, findings }) {
                   </td>
                 </tr>
                 {open && (
-                  <tr className="sheet-detail" id={`sheet-detail-${row.번호}`}>
+                  <tr className="sheet-detail" id={`sheet-detail-${key}`}>
                     <td colSpan={5}><FindingsTable findings={own} compact /></td>
                   </tr>
                 )}

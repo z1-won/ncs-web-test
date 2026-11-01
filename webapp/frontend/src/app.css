@@ -205,3 +205,8 @@ details.raw pre {
 .history tr.is-open > td { background: var(--krds-light-color-surface-secondary-subtler); }
 .history-table { table-layout: fixed; }
 .history-table td { overflow-wrap: anywhere; word-break: keep-all; }
+
+/* 전체 실행 보기 전환 탭(KRDS 탭 line형). 탭 아래 영역 제목과의 간격만 조정 */
+.view-switch { margin-top: var(--krds-gap-7); }
+.view-switch + .tab-conts > .section-title { margin-top: var(--krds-gap-7); }
+.full-sheet-missing { margin: calc(-1 * var(--krds-gap-3)) 0 var(--krds-gap-5); }

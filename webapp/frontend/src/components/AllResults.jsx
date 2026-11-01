@@ -27,6 +27,7 @@ export function ItemStatus({ item }) {
 
 export function AllResults({ run, checks }) {
   const [expanded, setExpanded] = useState(() => new Set());
+  const [view, setView] = useState("accordion");   // "accordion"(구성요소별) | "sheet"(확인서 한 표)
   const order = checks.filter((c) => !c.all).map((c) => c.value);
   const items = order.map((check) => ({ check, option: checks.find((c) => c.value === check), ...(run.items[check] || { status: "pending" }) }));
   const finished = items.filter((i) => i.status === "done");
@@ -52,11 +53,38 @@ export function AllResults({ run, checks }) {
         <span className="meta">적합 {total.적합} · 부적합 {total.부적합} · 판단불가 {total.판단불가} 항목</span>
         {run.roles && !run.roles.plan && <span className="krds-badge bg-light-warning">개발계획서 없음 — 위치 미실행</span>}
         <span className="toolbar">
-          <button type="button" className="krds-btn xsmall text" onClick={() => setExpanded(new Set(openable))} disabled={!openable.length}>모두 펼치기</button>
-          <button type="button" className="krds-btn xsmall text" onClick={() => setExpanded(new Set())} disabled={!expanded.size}>모두 접기</button>
+          {view === "accordion" && (
+            <>
+              <button type="button" className="krds-btn xsmall text" onClick={() => setExpanded(new Set(openable))} disabled={!openable.length}>모두 펼치기</button>
+              <button type="button" className="krds-btn xsmall text" onClick={() => setExpanded(new Set())} disabled={!expanded.size}>모두 접기</button>
+            </>
+          )}
         </span>
       </div>
 
+      {/* 보기 전환 — KRDS 탭(krds-tab-area.layer › .tab.line › ul[role=tablist] › li[role=tab].active › button.btn-tab) 마크업 그대로.
+          아코디언은 구성요소별로 파고들 때, 한 표는 확인서 전체(F02 양식 한 장)를 훑을 때 */}
+      <div className="krds-tab-area layer view-switch">
+        <div className="tab line">
+          <ul role="tablist" aria-label="결과 보기 방식">
+            {[["accordion", "구성요소별 보기"], ["sheet", "확인서 한 표로 보기"]].map(([key, label]) => (
+              <li key={key} id={`view-tab-${key}`} role="tab" aria-selected={view === key} aria-controls={`view-panel-${key}`} className={view === key ? "active" : ""}>
+                <button type="button" className="btn-tab" onClick={() => setView(key)}>
+                  {label}{view === key && <i className="sr-only created"> 선택됨</i>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {view === "sheet" && (
+        <section id="view-panel-sheet" role="tabpanel" aria-labelledby="view-tab-sheet" className="tab-conts active">
+          <FullSheet items={items} />
+        </section>
+      )}
+
+      {view === "accordion" && <section id="view-panel-accordion" role="tabpanel" aria-labelledby="view-tab-accordion" className="tab-conts active">
       <h2 className="section-title">구성요소별 검수 결과</h2>
       {/* KRDS 아코디언: accordion-item(.active) › h5.accordion-header › button.btn-accordion(.active, aria-controls) + .accordion-collapse(aria-labelledby) › .accordion-body */}
       <div className="krds-accordion">
@@ -91,12 +119,34 @@ export function AllResults({ run, checks }) {
           );
         })}
       </div>
+      </section>}
     </section>
   );
 }
 
+// 확인서 한 표: 끝난 구성요소의 확인서 행을 순서대로 이어 붙인다(F02 양식 한 장). 실행되지 않은 구성요소는 표 위에 적는다.
+function FullSheet({ items }) {
+  const done = items.filter((i) => i.status === "done");
+  const sheet = done.flatMap((i) => (i.data.검수확인서 || []).map((row) => ({ ...row, _check: i.check })));
+  const findings = done.flatMap((i) => (i.data.지적사항 || []).map((f) => ({ ...f, _check: i.check })));
+  const missing = items.filter((i) => i.status !== "done");
+  const label = { skipped: "미실행(개발계획서 없음)", error: "오류", pending: "대기", running: "검사 중" };
+  return (
+    <>
+      <h2 className="section-title">검수 확인서 (구성요소 {done.length}/{items.length})</h2>
+      {missing.length > 0 && (
+        <p className="meta full-sheet-missing">
+          표에 없는 구성요소: {missing.map((i) => `${i.option?.label || i.check} — ${label[i.status] || i.status}`).join(" / ")}
+        </p>
+      )}
+      {sheet.length ? <SheetTable sheet={sheet} findings={findings} /> : <p className="empty">아직 끝난 구성요소가 없습니다.</p>}
+    </>
+  );
+}
+
 // 아코디언 몸통: 그 구성요소의 확인서(행마다 지적사항 펼치기) + 진단 경고 + ZIP. 지적사항·전체 체크리스트는 접힌 상세로.
-export function ComponentResult({ result }) {
+// showSave: ZIP 링크·저장 경로를 표시할지(단독 결과 화면은 머리에 따로 있어 끈다)
+export function ComponentResult({ result, showSave = true }) {
   return (
     <div className="component-result">
       <SheetTable sheet={result.검수확인서 || []} findings={result.지적사항 || []} />
@@ -106,7 +156,7 @@ export function ComponentResult({ result }) {
         </ul>
       )}
       <div className="component-foot">
-        {result.id ? <a href={api.reviews.zipUrl(result.id)}>ZIP 다운로드</a> : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null}
+        {showSave && (result.id ? <a href={api.reviews.zipUrl(result.id)}>ZIP 다운로드</a> : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null)}
         <details>
           <summary>지적사항 {result.지적사항?.length || 0}건 · 전체 체크리스트 {result.전체?.length || 0}행</summary>
           <FindingsTable findings={result.지적사항 || []} />
