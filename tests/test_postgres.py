@@ -33,6 +33,12 @@ class PostgresModeTests(unittest.TestCase):
         items = input_metadata(review.result.diagnostics, [(MANUSCRIPT.name, MANUSCRIPT), (PLAN.name, PLAN)])
         self.assertEqual({item["role"] for item in items}, {"manuscript", "plan"})
         self.assertTrue(all(len(item["sha256"]) == 64 and item["byte_size"] > 0 for item in items))
+        # 원고 hwpx는 보관용 내용(content)도 싣는다. 개발계획서는 싣지 않는다. keep_manuscript=False면 둘 다 없다
+        by_role = {item["role"]: item for item in items}
+        self.assertEqual(by_role["manuscript"]["content"], MANUSCRIPT.read_bytes())
+        self.assertNotIn("content", by_role["plan"])
+        slim = input_metadata(review.result.diagnostics, [(MANUSCRIPT.name, MANUSCRIPT), (PLAN.name, PLAN)], keep_manuscript=False)
+        self.assertTrue(all("content" not in item for item in slim))
 
     def test_database_web_response_history_and_zip(self):
         with tempfile.TemporaryDirectory() as folder:

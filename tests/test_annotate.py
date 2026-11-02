@@ -66,7 +66,7 @@ class AnnotateTests(unittest.TestCase):
         row = {"item_id": "F02-차례-①", "판정": "부적합", "체크": {"'~하기' 종결": "X", "기호 글꼴 문자 없음": "O"},
                "비고": {"'~하기' 종결": "'~하기'로 종결되지 않음", "개발계획서": "읽지 못함"}, "수정 제안": "예약 현황 확인하기"}
         lines = Annotator.memo_lines(row)
-        self.assertEqual(lines[0], "F02 차례 ① 항목이 부적합입니다.")
+        self.assertEqual(lines[0], "[차례-①] 부적합")
         self.assertIn("• '~하기' 종결: '~하기'로 종결되지 않음", lines)
         self.assertIn("• 개발계획서: 읽지 못함", lines)
         self.assertTrue(lines[-1].startswith("→ 수정 제안: 예약 현황 확인하기"))
@@ -93,34 +93,59 @@ class AnnotateTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(content)) as z:
             sections = "".join(z.read(n).decode("utf-8") for n in z.namelist() if n.startswith("Contents/section"))
         memos = [re.findall(r"<hp:t>([^<]*)</hp:t>", m) for m in re.findall(r'type="MEMO".*?</hp:subList>', sections, re.S)]
-        bodies = [m for m in memos if not m[0].startswith("F02 자동검수 결과")]
+        bodies = [m for m in memos if not m[0].startswith("[F02 자동검수 총괄]")]
         self.assertEqual(len(bodies), 2, memos)                      # 문구 a 자리, 문구 b 자리 (누락 사례는 행 자리 = a 문단에 합쳐짐)
-        # 에디터 문체: 근거(기준 문서 문구) → 요청(원고 문구를 …와 동일하게) → 수정 제안 → (F02 항목)
-        memo_b = next(m for m in bodies if f"“{b}”" in m[1])
-        self.assertRegex(memo_b[0], rf"^개발계획서에는 “{re.escape(b)}Y”(으로|로) 되어 있습니다\.$")
-        self.assertRegex(memo_b[1], rf"^원고의 “{re.escape(b)}”\(글자가 다름\)(을|를) 개발계획서와 동일하게 수정해 주세요\.$")
-        self.assertEqual(memo_b[2:], ["개발계획서대로 고쳐 주세요.", "(F02 시험 ①)"])
-        memo_a = next(m for m in bodies if f"“{a}”" in m[1])
-        self.assertIn("개발계획서에는 “없는 문구”가 있는데 원고에 없습니다.", memo_a)
-        self.assertEqual(memo_a.count("개발계획서대로 고쳐 주세요."), 1)
-        self.assertEqual(memo_a[-1], "(F02 시험 ①)")
-        self.assertLess(memo_a.index("개발계획서에는 “없는 문구”가 있는데 원고에 없습니다."), memo_a.index("개발계획서대로 고쳐 주세요."))
+        by_first = {m[1]: m for m in bodies}
+        self.assertIn(f"왜: 원고 「{b}」, 개발계획서 「{b}Y」 (글자가 다름)", by_first)
+        memo_a = next(m for m in bodies if f"원고 「{a}」" in m[1])
+        self.assertEqual(memo_a[0], "[시험-①] ① 대조: 부적합")
+        self.assertIn("왜: 누락: 개발계획서에는 「없는 문구」가 있는데 원고에 없음", memo_a)
+        self.assertEqual(memo_a.count("어떻게: 개발계획서대로 고침"), 1)
 
-    def test_memo_text_uses_kopub_batang_11pt(self):
-        # 메모 글자는 KoPub바탕체 Medium 11pt: header.xml에 글꼴(언어별)·글자 모양을 추가하고 메모 문단만 그것을 가리킨다. 원고 run은 그대로
+    def test_same_case_from_several_lessons_is_written_once(self):
+        # 학습 1·2·3이 글자까지 같은 비고를 내고 한 문단에 모이면(평가 ⑤처럼 원고 문구가 없어 행 자리로 떨어지는 경우)
+        # 같은 '[항목] 체크: 판정 / 왜' 블록을 세 번 적지 않고 한 번만, 어느 학습들에서 왔는지 덧붙인다.
+        rows = [{"item_id": "F02-평가-⑤", "판정": "판단불가", "region_path": "section9 > 없는 자리", "위치": f"학습 {n}", "원고": None,
+                 "체크": {"⑤ 심화·보충 학습 각각 제시": "△"}, "비고": {"⑤ 심화·보충 학습 각각 제시": "낱말로 찾지 못함"},
+                 "수정 제안": "평가 방법마다 피드백 블록을 둘 것"} for n in (1, 2, 3)]
+        lines = Annotator.case_lines([type("C", (), {"row": r, "check": "⑤ 심화·보충 학습 각각 제시", "line": "낱말로 찾지 못함"})() for r in rows])
+        self.assertEqual(lines, ["[평가-⑤] ⑤ 심화·보충 학습 각각 제시: 판단불가", "왜: 낱말로 찾지 못함 (학습 1·학습 2·학습 3)",
+                                 "어떻게: 평가 방법마다 피드백 블록을 둘 것"])
+
+    def test_memo_date_is_the_review_time(self):
+        # 한글은 Command의 4·5번째 수(UTC FILETIME)로 날짜를 보여 준다. CreateDateTime은 한국 시각 + Z
+        from ncs_service.annotate import FILETIME_EPOCH
+        from datetime import timedelta
+        row = {"item_id": "F02-판권-①", "판정": "부적합", "region_path": "section9 > 없는 자리", "원고": None, "체크": {"x": "X"}, "비고": {"x": "없음"}}
+        content, _ = annotate_hwpx(MANUSCRIPT.read_bytes(), [row], created_at="2026-11-02T05:11:46.000Z")
+        with zipfile.ZipFile(io.BytesIO(content)) as z:
+            sections = "".join(z.read(n).decode("utf-8") for n in z.namelist() if n.startswith("Contents/section"))
+        low, high = re.search(r'name="Command">MEMO/65535/\d+/(\d+)/(\d+)/', sections).groups()
+        when = FILETIME_EPOCH + timedelta(microseconds=((int(high) << 32) | int(low)) / 10)
+        self.assertEqual(when.isoformat(), "2026-11-02T05:11:46+00:00")
+        self.assertIn('name="CreateDateTime">2026-11-02T14:11:46Z<', sections)
+
+    def test_memo_text_uses_editor_char_shape(self):
+        # 메모 글자는 에디터 메모와 같게 함초롬돋움 9pt·장평 97%·자간 -2%: header.xml에 글꼴(언어별)·글자 모양을 추가하고 메모 문단만 그것을 가리킨다. 원고 run은 그대로
         row = {"item_id": "F02-판권-①", "판정": "부적합", "region_path": "section9 > 없는 자리", "원고": None, "체크": {"x": "X"}, "비고": {"x": "없음"}}
         content, _ = annotate_hwpx(MANUSCRIPT.read_bytes(), [row])
         with zipfile.ZipFile(io.BytesIO(content)) as z:
             header = z.read("Contents/header.xml").decode("utf-8")
             sections = "".join(z.read(n).decode("utf-8") for n in z.namelist() if n.startswith("Contents/section"))
-        self.assertIn('face="KoPub바탕체 Medium"', header)
-        new_ids = re.findall(r'<hh:charPr id="(\d+)" height="1100"', header)
+        self.assertIn('face="함초롬돋움"', header)
+        new_ids = re.findall(r'<hh:charPr id="(\d+)" height="900"', header)
         self.assertEqual(len(new_ids), 1, header)
+        added = re.search(rf'<hh:charPr id="{new_ids[0]}".*?</hh:charPr>', header, re.S).group(0)
+        self.assertIn('<hh:ratio hangul="97" latin="97"', added)
+        self.assertIn('<hh:spacing hangul="-2" latin="-2"', added)
+        # 행간 160%: 메모 문단만 새 문단 모양을 가리킨다
         memo = re.search(r'type="MEMO".*?</hp:subList>', sections, re.S).group(0)
+        para_ids = re.findall(r'<hp:p [^>]*paraPrIDRef="(\d+)"', memo)
+        self.assertEqual(len(set(para_ids)), 1, memo)
+        added_para = re.search(rf'<hh:paraPr [^>]*id="{para_ids[0]}".*?</hh:paraPr>', header, re.S).group(0)
+        self.assertIn('snapToGrid="0"', added_para)
+        self.assertTrue(all('type="PERCENT" value="160"' in ls for ls in re.findall(r"<hh:lineSpacing[^>]*/>", added_para)) and "lineSpacing" in added_para, added_para)
         self.assertEqual(set(re.findall(r'<hp:run charPrIDRef="(\d+)"><hp:t>', memo)), {new_ids[0]})
-        original = MANUSCRIPT.read_bytes()
-        with zipfile.ZipFile(io.BytesIO(original)) as z:
-            self.assertNotIn("KoPub바탕체 Medium", z.read("Contents/header.xml").decode("utf-8"))
 
 
 class WebAnnotateTests(unittest.TestCase):

@@ -118,8 +118,8 @@ class FeedbackTests(unittest.TestCase):
         weak = [self.block(1, "서술형 시험", "- 보충 설명해준다."), self.block(2, "역할 연기", "- 심화 과제를 준다.")]
         [row] = check_feedback([region(methods=self.METHODS, feedback_found=True, feedback=weak)])
         self.assertEqual(row["판정"], "판단불가")
-        self.assertIn("서술형 시험(심화 문구 없음)", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
-        self.assertIn("역할 연기(보충 문구 없음)", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
+        self.assertIn("피드백 「서술형 시험」에 '심화' 문구 없음", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
+        self.assertIn("피드백 「역할 연기」에 '보충' 문구 없음", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
 
 
 if __name__ == "__main__":

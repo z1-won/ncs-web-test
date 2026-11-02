@@ -7,6 +7,7 @@
 import re
 
 from ncs_core import O, TRI, X, verdict
+from ncs_core.notes import lines
 
 ITEM_ID = "F02-평가-⑤"
 COUNT = "⑤ 방법별 피드백 개수·이름 일치"
@@ -57,10 +58,10 @@ def check_feedback(regions: list[dict]) -> list[dict]:
                 text = b["text"]
                 need = [n for n, p in (("보충", REMEDIAL), ("심화", ENRICHMENT)) if not p.search(text)]
                 if need:
-                    lacking.append(f"{b['name']}({'·'.join(need)} 문구 없음)")
+                    lacking.append(f"학습 {lesson} 피드백 「{b['name']}」에 '{'·'.join(need)}' 문구 없음 (낱말로 찾음, 사람 확인)")
             checks[BOTH] = TRI if lacking else O
             if lacking:
-                notes[BOTH] = "낱말로 찾지 못함 — 확인: " + ", ".join(lacking[:4])
+                notes[BOTH] = lines(lacking)
         result = verdict(checks)
         rows.append({"item_id": ITEM_ID, "region_path": f"section1 > 학습 {lesson} > 평가 > 피드백", "위치": f"학습 {lesson}",
                      "원고": {"평가 방법": methods, "피드백": [b["name"] for b in blocks]}, "체크": checks, "판정": result, "비고": notes,

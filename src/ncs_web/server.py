@@ -172,35 +172,45 @@ def create_app(
 
     @app.post("/api/export/annotated", responses={400: {"model": ErrorResponse}})
     def export_annotated(
-        upload: Annotated[str, Form()],
         rows: Annotated[str, Form()],
+        upload: Annotated[str, Form()] = "",
+        run_id: Annotated[str, Form()] = "",
         module_code: Annotated[str, Form()] = "",
         created_at: Annotated[str, Form()] = "",
     ) -> Response:
-        """원고 hwpx에 지적사항을 한글 메모로 단 파일. upload=업로드 토큰(원고가 그 안에 있어야 함), rows=체크리스트 행 JSON 배열,
+        """원고 hwpx에 지적사항을 한글 메모로 단 파일. 원고는 둘 중 하나로 찾는다 — upload=업로드 토큰(방금 올린 원고),
+        run_id=이력 실행 id(실행과 함께 보관된 원고; PostgreSQL 이력에서만). rows=체크리스트 행 JSON 배열,
         created_at=검사 실행 시각(ISO, 메모 날짜로 쓴다. 없으면 내보내는 시각)."""
         from ncs_core import detect_role, load_document
         from ncs_service.annotate import annotate_hwpx
 
-        kept = uploads_store.get(upload)
-        if kept is None:
-            return error_response(400, "업로드 토큰이 없거나 만료되었습니다. 파일을 다시 올려 주세요")
         try:
             parsed = json.loads(rows)
             if not isinstance(parsed, list):
                 raise ValueError
         except ValueError:
             return error_response(400, "rows는 체크리스트 행의 JSON 배열이어야 합니다")
-        manuscript = None
-        for name, path in kept.files:
-            if name.lower().endswith(".hwpx") and detect_role(load_document(path).sections) == "manuscript":
-                manuscript = (name, path)
-                break
-        if manuscript is None:
-            return error_response(400, "메모는 hwpx 원고에만 달 수 있습니다(hwp는 한글에서 hwpx로 저장 후 다시 올리세요)")
-        name, path = manuscript
+        # 원고 찾기: 업로드 토큰(아직 살아 있으면) → 이력에 보관된 원고(run_id). 토큰이 만료돼도 run_id가 있으면 이어서 쓴다.
+        name, source = None, None
+        kept = uploads_store.get(upload) if upload else None
+        if kept is not None:
+            for file_name, path in kept.files:
+                if file_name.lower().endswith(".hwpx") and detect_role(load_document(path).sections) == "manuscript":
+                    name, source = file_name, path.read_bytes()
+                    break
+            if source is None:
+                return error_response(400, "메모는 hwpx 원고에만 달 수 있습니다(hwp는 한글에서 hwpx로 저장 후 다시 올리세요)")
+        elif run_id:
+            found = store.get_manuscript(run_id)
+            if found is None:
+                return error_response(404, "이 실행에는 보관된 원고 hwpx가 없습니다(원고 보관 기능 이전의 실행이거나 hwp 원고, 또는 파일 저장소 모드)")
+            name, source = found
+        elif upload:
+            return error_response(400, "업로드 토큰이 없거나 만료되었습니다. 파일을 다시 올려 주세요")
+        else:
+            return error_response(400, "upload 토큰 또는 run_id가 필요합니다")
         try:
-            content, summary = annotate_hwpx(path.read_bytes(), parsed, created_at=created_at or None)
+            content, summary = annotate_hwpx(source, parsed, created_at=created_at or None)
         except ValueError as error:
             return error_response(400, str(error))
         stem = Path(name).stem

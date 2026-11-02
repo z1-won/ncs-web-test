@@ -80,8 +80,9 @@ export const api = {
     download(`/api/export/sheet?format=${format}`, { module_code: moduleCode, rows, created_at: createdAt || null },
              `F02_검수확인서_${moduleCode || "모듈"}.${format}`),
   // 원고 hwpx에 지적사항을 한글 메모로 단 파일. upload = 원고가 들어 있는 업로드 토큰, rows = 체크리스트 행(적합 제외)
-  exportAnnotated: ({ moduleCode, upload, rows, createdAt }) =>
-    download("/api/export/annotated", multipart({ upload, rows: JSON.stringify(rows), module_code: moduleCode, created_at: createdAt || "" }),
+  // upload(방금 올린 원고 토큰) 또는 runId(이력 실행 id — 실행과 함께 보관된 원고) 중 하나
+  exportAnnotated: ({ moduleCode, upload, runId, rows, createdAt }) =>
+    download("/api/export/annotated", multipart({ upload: upload || "", run_id: runId || "", rows: JSON.stringify(rows), module_code: moduleCode, created_at: createdAt || "" }),
              `원고_검수메모_${moduleCode || "모듈"}.hwpx`),
   groups: {
     list: () => request("/api/groups"),

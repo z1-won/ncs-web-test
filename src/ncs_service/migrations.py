@@ -48,4 +48,14 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("003_group_id",
      "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS group_id uuid;\n"
      "CREATE INDEX IF NOT EXISTS review_runs_group_idx ON review_runs (group_id, created_at)"),
+    # 004: 원고 hwpx 보관 — 이력에서 '수정 메모 원고'를 다시 내려받기 위해. sha256으로 중복 제거(전체 실행 10건이 같은 원고를 가리킨다).
+    # review_inputs.sha256으로 잇는다. 실행을 지울 때 더 이상 참조되지 않는 파일은 postgres.delete_*가 함께 지운다(보관 기간 = 이력 보관 기간).
+    ("004_review_files",
+     "CREATE TABLE IF NOT EXISTS review_files (\n"
+     "    sha256 text PRIMARY KEY,\n"
+     "    filename text NOT NULL,\n"
+     "    content bytea NOT NULL,\n"
+     "    byte_size bigint NOT NULL,\n"
+     "    created_at timestamptz NOT NULL DEFAULT now()\n"
+     ")"),
 )

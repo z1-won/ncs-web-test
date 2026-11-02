@@ -294,7 +294,8 @@ export default function App() {
               <>
                 {/* 단독 결과도 확인서 파일로 — 이 구성요소만 채워지고 나머지는 '미검사' */}
                 <ExportButtons moduleCode={result.module_code} createdAt={result.created_at} rows={result.검수확인서 || []} onError={setError} onNotice={setNotice}
-                               annotate={{ upload: upload.status === "ready" ? upload.token : null, rows: (result.전체 || []).filter((r) => r.판정 !== "적합") }} />
+                               annotate={{ upload: upload.status === "ready" ? upload.token : null, runId: result.id,
+                                           rows: (result.전체 || []).filter((r) => r.판정 !== "적합") }} />
                 {result.id
                   ? <a href={api.reviews.zipUrl(result.id)} className="krds-btn small tertiary" title="결과 JSON 묶음">ZIP</a>
                   : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null}

@@ -44,8 +44,8 @@ def summary_for(review: ExecutedReview) -> dict:
     return reporting_for(review.check).summary(review.result)
 
 
-def input_metadata(diagnostics: dict, uploads: list[tuple[str, Path]]) -> list[dict]:
-    """진단의 역할별 임시 경로를 업로드 파일명·해시와 연결한다."""
+def input_metadata(diagnostics: dict, uploads: list[tuple[str, Path]], *, keep_manuscript: bool = True) -> list[dict]:
+    """진단의 역할별 임시 경로를 업로드 파일명·해시와 연결한다. keep_manuscript면 원고 hwpx 내용(content)도 싣는다(보관용)."""
     by_path = {str(path): (filename, path) for filename, path in uploads}
     result = []
     for role, path_string in diagnostics.get("inputs", {}).items():
@@ -56,9 +56,10 @@ def input_metadata(diagnostics: dict, uploads: list[tuple[str, Path]]) -> list[d
         with path.open("rb") as source:
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
                 digest.update(chunk)
-        result.append({"role": role, "filename": filename,
-                       "sha256": digest.hexdigest(),
-                       "byte_size": path.stat().st_size})
+        item = {"role": role, "filename": filename, "sha256": digest.hexdigest(), "byte_size": path.stat().st_size}
+        if keep_manuscript and role == "manuscript" and filename.lower().endswith(".hwpx"):
+            item["content"] = path.read_bytes()
+        result.append(item)
     return result
 
 
@@ -90,7 +91,36 @@ def save_review(dsn: str, review: ExecutedReview, inputs: list[dict], group_id: 
                 "VALUES (%s, %s, %s, %s, %s)",
                 (run_id, item["role"], item["filename"], item.get("sha256"), item.get("byte_size")),
             )
+            # 원고 hwpx는 내용도 보관한다(메모 달기용). 같은 파일(sha256)은 한 번만.
+            if item["role"] == "manuscript" and item.get("content") is not None and item["filename"].lower().endswith(".hwpx"):
+                connection.execute(
+                    "INSERT INTO review_files (sha256, filename, content, byte_size) VALUES (%s, %s, %s, %s) "
+                    "ON CONFLICT (sha256) DO NOTHING",
+                    (item["sha256"], item["filename"], item["content"], item["byte_size"]),
+                )
     return run_id, summary
+
+
+def get_manuscript(dsn: str, run_id: str) -> tuple[str, bytes] | None:
+    """실행에 보관된 원고 hwpx → (파일 이름, 바이트). 없으면 None."""
+    try:
+        UUID(run_id)
+    except ValueError:
+        return None
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        row = connection.execute(
+            "SELECT i.filename, f.content FROM review_inputs i JOIN review_files f ON f.sha256 = i.sha256 "
+            "WHERE i.run_id = %s AND i.role = 'manuscript'",
+            (run_id,),
+        ).fetchone()
+    return (row["filename"], bytes(row["content"])) if row else None
+
+
+def _sweep_files(connection) -> int:
+    """어느 실행에서도 참조하지 않는 보관 파일을 지운다(실행 삭제 뒤에 부른다)."""
+    return connection.execute(
+        "DELETE FROM review_files f WHERE NOT EXISTS (SELECT 1 FROM review_inputs i WHERE i.sha256 = f.sha256)"
+    ).rowcount
 
 
 def list_reviews(dsn: str, *, module_code: str | None = None, check: str | None = None,
@@ -167,6 +197,8 @@ def delete_group(dsn: str, group_id: str) -> bool:
         return False
     with psycopg.connect(dsn) as connection:
         deleted = connection.execute("DELETE FROM review_runs WHERE group_id = %s", (group_id,)).rowcount
+        if deleted:
+            _sweep_files(connection)
     return deleted > 0
 
 
@@ -206,6 +238,8 @@ def delete_review(dsn: str, run_id: str) -> bool:
         return False
     with psycopg.connect(dsn) as connection:
         deleted = connection.execute("DELETE FROM review_runs WHERE id = %s", (run_id,)).rowcount
+        if deleted:
+            _sweep_files(connection)
     return deleted > 0
 
 

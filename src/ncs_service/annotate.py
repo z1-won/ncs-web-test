@@ -14,7 +14,8 @@
 메모 XML은 한글이 저장한 실제 파일의 구조를 그대로 따른다(ctrl/fieldBegin[parameters, subList] … ctrl/fieldEnd). 메모 모양은 기본(65535).
 메모 날짜는 검사 실행 시각(created_at, 없으면 지금): 한글은 Command의 4·5번째 수(UTC FILETIME 하위·상위 32비트)로 날짜를 보여 주고,
 CreateDateTime에는 한국 시각을 끝에 Z를 붙여 적는다(한글이 저장하는 꼴 그대로).
-메모 글자는 KoPub바탕체 11pt(MEMO_FONT·MEMO_SIZE_PT): header.xml의 글꼴 목록(언어별)과 글자 모양(charPr)에 하나씩 추가해 메모 문단만 가리키게 한다. 원고 글자 모양은 바꾸지 않는다.
+메모 글자는 에디팅기관 에디터 메모와 같게 함초롬돋움 9pt, 장평 97%, 자간 -2%, 행간 160%(MEMO_FONT·MEMO_SIZE_PT·MEMO_RATIO·MEMO_SPACING·MEMO_LINE_SPACING):
+header.xml의 글꼴 목록(언어별)·글자 모양(charPr)·문단 모양(paraPr)에 하나씩 추가해 메모 문단만 가리키게 한다. 원고 글자·문단 모양은 바꾸지 않는다.
 """
 
 from __future__ import annotations
@@ -37,9 +38,12 @@ AUTHOR = "F02 자동검수"
 MAX_MEMO_LINES = 12          # 한 메모에 싣는 최대 줄 수(행이 많이 겹친 문단)
 MAX_LINE = 220               # 메모 한 줄 최대 길이
 MAX_UNPLACED_LISTED = 40     # 총괄 메모에 나열하는 미배치 행 수
-MEMO_FONT = "KoPub바탕체 Medium"  # 메모 글꼴. 원고에 이 이름이 없으면 글꼴 목록에 추가한다(미설치면 한글이 대체 글꼴로 보여 준다)
-MEMO_FONT_FALLBACKS = ("KoPub바탕체",)  # 원고에 MEMO_FONT는 없고 이 이름이 있으면 그것을 쓴다(Light·Bold는 메모용이 아니라 쓰지 않는다)
-MEMO_SIZE_PT = 11            # 메모 글자 크기(pt). hwpx height 단위는 1/100pt
+MEMO_FONT = "함초롬돋움"      # 메모 글꼴(에디터 메모 기준). 원고에 이 이름이 없으면 글꼴 목록에 추가한다(한글 기본 글꼴이라 보통 있다)
+MEMO_FONT_FALLBACKS = ()     # 대신 쓸 글꼴 이름들(없음)
+MEMO_SIZE_PT = 9             # 메모 글자 크기(pt). hwpx height 단위는 1/100pt
+MEMO_RATIO = 97              # 장평(%)
+MEMO_SPACING = -2            # 자간(%)
+MEMO_LINE_SPACING = 160      # 행간(%, 글자에 따라)
 HEADER = "Contents/header.xml"
 KST = timezone(timedelta(hours=9))
 FILETIME_EPOCH = datetime(1601, 1, 1, tzinfo=timezone.utc)
@@ -108,99 +112,6 @@ CASE_SPLIT = re.compile(r"\n|;\s+")           # 엔진이 사례를 나누는 �
 CASE_NUMBER = re.compile(r"^\s*\d+\.\s+")    # ncs_core.notes.lines가 붙인 '1. '
 QUOTED_MANUSCRIPT = re.compile(r"원고\s*「(.+?)」")
 QUOTED_ANY = re.compile(r"「(.+?)」")
-PAIR = re.compile(r"^(?:[^「」:]*?:\s*)?(?P<where>[^「」,]+?)\s*「(?P<actual>.+?)」,\s*(?P<basis>[^「」,]+?)\s*「(?P<expected>.+?)」(?:\s*\((?P<why>[^()]*(?:\([^()]*\)[^()]*)*)\))?\s*$")
-ONE = re.compile(r"^(?:[^「」:]*?:\s*)?「(?P<actual>.+?)」\s*\((?P<why>.+)\)\s*$")
-# 수정 제안은 '…을 순서대로 모두 나열'처럼 명사형으로 끝난다 → 요청문으로. 끝말에 따라 붙이는 말
-REQUEST_TAILS = (("고침", "고쳐 주세요."), ("같게", "같게 해 주세요."), ("맞춤", "맞춰 주세요."), ("남김", "남겨 주세요."))
-REQUEST_NOUNS = ("나열", "수정", "교체", "삭제", "작성", "추가", "병기", "통일", "확인", "변경", "기재", "제시", "삽입", "정리", "종결", "적용", "배치", "재배열", "표기", "조정", "분리", "제외", "보완", "갱신", "검토")
-
-
-def particle(text: str, with_batchim: str, without: str) -> str:
-    """마지막 글자(따옴표·괄호 뒤는 무시)의 받침 유무로 조사 선택."""
-    for ch in reversed(text):
-        if "가" <= ch <= "힣":
-            return with_batchim if (ord(ch) - 0xAC00) % 28 else without
-        if ch.isalnum():
-            return with_batchim  # 숫자·영문으로 끝나면 '을/이' 쪽(관례)
-    return with_batchim
-
-
-ENDINGS = (("없음", "없습니다"), ("다름", "다릅니다"), ("아님", "아닙니다"), ("못함", "못했습니다"), ("않음", "않습니다"), ("있음", "있습니다"), ("비어 있음", "비어 있습니다"))
-LABEL = re.compile(r"^[가-힣·\s]{1,8}:\s+")   # '누락: ', '세분류 다름 1: ' 같은 머리 라벨
-
-
-TRAILING_PAREN = re.compile(r"\s*\([^()]*\)$")
-
-
-def polite(text: str) -> str:
-    """'…코드가 없음' 같은 명사형 종결 → '…코드가 없습니다.' 꼬리 괄호 '(필수)'는 문장 뒤에 그대로. '핵심 용어 12개' → '…12개입니다.'"""
-    text = text.strip().rstrip(".")
-    tail = TRAILING_PAREN.search(text)
-    paren = tail.group(0).strip() if tail else ""
-    head = text[: tail.start()] if tail else text
-    head = head.rstrip()
-    for ending, replacement in ENDINGS:
-        if head.endswith(ending):
-            head = head[: -len(ending)] + replacement
-            break
-    else:
-        if head and (head[-1].isdigit() or head.endswith(("개", "건", "줄", "자", "곳", "회"))):
-            head += "입니다"
-        elif not head.endswith(("다", "요")):
-            head += "입니다" if head.endswith(("임", "함")) and False else ""
-    return (head + (" " + paren if paren else "") + ".") if paren else head + "."
-
-
-def request_sentence(suggestion: str) -> str:
-    """수정 제안(명사형 한 줄) → '…해 주세요.' 요청문. 이미 문장이면 그대로. '병기: 「…」' 꼴은 '병기해 주세요: “…”'."""
-    text = QUOTED_ANY.sub(lambda q: f"“{q.group(1)}”", suggestion.strip().rstrip("."))
-    if text.endswith(("주세요", "드립니다", "합니다", "됩니다")):
-        return text + "."
-    if ": " in text:
-        head, rest = text.split(": ", 1)
-        if head.endswith(REQUEST_NOUNS):
-            return f"{head}해 주세요: {rest}"
-    for tail, replacement in REQUEST_TAILS:
-        if text.endswith(tail):
-            return text[: -len(tail)] + replacement
-    if text.endswith(REQUEST_NOUNS):
-        return text + "해 주세요."
-    return text + " — 수정 부탁드립니다."
-
-
-def prose(line: str, suggestion: str | None, component: str, no: str) -> tuple[list[str], list[str], str]:
-    """사례 줄 + 수정 제안 → (근거 문장들, 요청 문장들, F02 항목 표시) — 에디터 메모 문체. ' / '로 이은 제안은 요청문 하나씩.
-
-    '원고 「a」, 개발계획서 「e」 (why)' 꼴 → '개발계획서에는 “e”로 되어 있습니다.' + '원고의 “a”(why)을 개발계획서와 동일하게 수정해 주세요.'
-    '「a」 (why)' 꼴 → '“a”은 why입니다.' / 그 밖은 줄을 문장으로(머리 라벨 제거, 「」→“”). 요청문은 수정 제안에서(대조 꼴은 이미 요청이 있으면 생략)."""
-    quoted = lambda t: f"“{t}”"
-    m = PAIR.match(line)
-    requests = [request_sentence(one) for one in (suggestion or "").split(" / ") if one.strip()]
-    if m:
-        where, actual, basis, expected, why = (m.group(k) for k in ("where", "actual", "basis", "expected", "why"))
-        where, basis = where.strip(), basis.strip()
-        first = f"{basis}에는 {quoted(expected)}{particle(expected, '으로', '로')} 되어 있습니다."
-        target = f"{where}의 {quoted(actual)}" if where != "원고" else f"원고의 {quoted(actual)}"
-        second = f"{target}{f'({why})' if why else ''}{particle(actual, '을', '를')} {basis}와 동일하게 수정해 주세요."
-        facts = [first, second]
-        requests = [r for r in requests if not ("동일하게" in r or "같게" in r or "같은" in r)]  # 둘째 문장이 이미 그 요청이다
-    else:
-        m = ONE.match(line)
-        if m:
-            actual = m.group("actual")
-            facts = [f"{quoted(actual)}{particle(actual, '은', '는')} {polite(m.group('why'))}"]
-        else:
-            facts = [polite(LABEL.sub("", line))]
-    fix = lambda x: QUOTED_ANY.sub(lambda q: quoted(q.group(1)), x)
-    return [fix(x) for x in facts], [fix(r) for r in requests], f"{component} {no}".strip()
-
-
-def f02_ref(row: dict, check: str | None) -> tuple[str, str]:
-    """행의 item_id 'F02-위치-②③④'와 체크 이름 '② …' → ('위치', '②')."""
-    parts = row.get("item_id", "").replace("F02-", "").split("-")
-    component = parts[0] if parts else ""
-    no = check[:1] if check and check[:1] in "①②③④⑤⑥⑦⑧⑨" else (parts[1] if len(parts) > 1 else "")
-    return component, no
 
 
 def split_cases(row: dict) -> list[tuple[str, str]]:
@@ -249,6 +160,7 @@ class Annotator:
         self.unplaced: list[dict] = []
         self.header = ET.fromstring(self.archive.read(HEADER))
         self.memo_char_pr = self._register_memo_char_pr()
+        self.memo_para_pr = self._register_memo_para_pr()
 
     # ───────── 메모 글자 모양 ─────────
 
@@ -289,9 +201,42 @@ class Annotator:
                 ref.set(lang, font_ids[lang])
             elif ref.get(lang) is None and "hangul" in font_ids:
                 ref.set(lang, font_ids["hangul"])
+        for tag, value in (("ratio", MEMO_RATIO), ("spacing", MEMO_SPACING)):   # 장평·자간: 언어 모두 같은 값
+            node = char_pr.find(HH + tag)
+            if node is None:
+                node = ET.SubElement(char_pr, HH + tag)
+            for lang in ("hangul", "latin", "hanja", "japanese", "other", "symbol", "user"):
+                node.set(lang, str(value))
         props.append(char_pr)
         if props.get("itemCnt") is not None:
             props.set("itemCnt", str(len(props.findall(HH + "charPr"))))
+        return new_id
+
+    def _register_memo_para_pr(self) -> str:
+        """header.xml에 메모용 문단 모양(paraPr) 하나를 추가하고 그 id를 돌려준다.
+
+        기본 문단 모양(id 0)을 복사해 행간만 바꾼다(hp:switch 안의 case·default 양쪽 lineSpacing 모두). 줄 격자(snapToGrid)는 끄지 않으면
+        행간이 격자에 맞춰져 160%가 안 먹으므로 끈다 — 에디터 메모 문단과 같다."""
+        props = self.header.find(".//" + HH + "paraProperties")
+        if props is None:  # 합성 원고(테스트 픽스처)처럼 문단 모양 목록이 없으면 글자 모양 목록 옆에 만든다
+            parent = next((el for el in self.header.iter() if el.find(HH + "charProperties") is not None), self.header)
+            props = ET.SubElement(parent, HH + "paraProperties", {"itemCnt": "0"})
+        base = props.find(HH + "paraPr")
+        existing = props.findall(HH + "paraPr")
+        para_pr = copy.deepcopy(base) if base is not None else ET.Element(HH + "paraPr", {"id": "0", "tabPrIDRef": "0", "condense": "0", "fontLineHeight": "0", "suppressLineNumbers": "0", "checked": "0"})
+        new_id = str(max((int(c.get("id", "0")) for c in existing), default=-1) + 1)
+        para_pr.set("id", new_id)
+        para_pr.set("snapToGrid", "0")
+        spacings = list(para_pr.iter(HH + "lineSpacing"))
+        if not spacings:
+            spacings = [ET.SubElement(para_pr, HH + "lineSpacing")]
+        for node in spacings:
+            node.set("type", "PERCENT")
+            node.set("value", str(MEMO_LINE_SPACING))
+            node.set("unit", "HWPUNIT")
+        props.append(para_pr)
+        if props.get("itemCnt") is not None:
+            props.set("itemCnt", str(len(props.findall(HH + "paraPr"))))
         return new_id
 
     # ───────── 문단 찾기 ─────────
@@ -355,8 +300,9 @@ class Annotator:
             if re.match(r"^\d+-\d+", base):                      # '1-3. 이용정보 제공' / '1-1' → 그 소제목 문단
                 code = re.match(r"^\d+-\d+", base).group(0)
                 hit = next((p for p in body[start:] if re.match(rf"^{re.escape(code)}(\.|\s|$)", p.text.strip())), None)
-            elif re.match(r"^학습\s*\d+$", base):                 # '학습 1' → 본문의 '학습 1' 머리(내비게이터)
-                hit = next((p for p in body[start:] if p.key == head_key), None)
+            elif re.match(r"^학습\s*\d+$", base):                 # '학습 1' → 본문의 '학습 1' 머리(내비게이터). '학습 1.' '학습 1 ○○하기'도 받는다
+                hit = next((p for p in body[start:] if p.key == head_key), None) \
+                    or next((p for p in body[start:] if re.match(rf"^{re.escape(head_key)}(\D|$)", p.key)), None)
             elif m_nth and _norm(m_nth.group(1)) in ("수행내용", "학습내용", "평가", "교수학습방법"):
                 n = int(m_nth.group(2))
                 hits = [p for p in body[start:] if p.key.startswith(_norm(m_nth.group(1)))]
@@ -387,7 +333,7 @@ class Annotator:
 
     def place(self, row: dict) -> None:
         """사례 줄마다 원고 문구가 있는 문단에 하나씩 단다. 문구를 못 찾는 사례와 사례로 쪼개지지 않는 행은 행 단위 자리에 한데 단다."""
-        head = self._find_region(row.get("region_path", ""))
+        head = self._find_region(row.get("region_path", "")) or self._find_region(str(row.get("위치") or ""))
         leftovers: list[Case] = []
         for name, line in split_cases(row):
             phrase = case_phrase(line)
@@ -409,7 +355,7 @@ class Annotator:
 
     @staticmethod
     def case_lines(cases: list[Case]) -> list[str]:
-        """한 문단에 모인 사례들 → 메모 줄(에디터 문체). 행마다: 사례들의 근거·요청 문장 → 수정 제안 요청문 한 번 → '(F02 항목)' 한 줄.
+        """한 문단에 모인 사례들 → 메모 줄. 사례마다 '[항목] 체크: 판정' + '왜: 사례', 같은 행의 사례들 뒤에 '어떻게: 수정 제안' 한 번.
         행 전체 사례(check None)는 memo_lines 그대로."""
         lines: list[str] = []
         groups: list[tuple[dict, list[Case]]] = []
@@ -418,26 +364,45 @@ class Annotator:
                 groups[-1][1].append(case)
             else:
                 groups.append((case.row, [case]))
+        # 같은 문단에 같은 글의 사례가 여러 행(예: 학습 1·2·3이 같은 비고)에서 오면 한 번만 적고 어느 위치들인지 모아 적는다.
+        seen: dict[tuple[str, str], int] = {}       # (머리, 왜) → lines 안의 '왜' 줄 index
+        places: dict[tuple[str, str], list[str]] = {}
         for row, group in groups:
-            if any(c.check is None for c in group):
-                lines.extend(Annotator.memo_lines(row))
+            label = row["item_id"].replace("F02-", "")
+            whole = [c for c in group if c.check is None]
+            if whole:
+                block = Annotator.memo_lines(row)
+                if block not in [lines[i:i + len(block)] for i in range(len(lines))]:
+                    lines.extend(block)
                 continue
-            facts, requests, refs = [], [], []
+            added = False
             for case in group:
-                component, no = f02_ref(row, case.check)
-                got_facts, got_requests, ref = prose(case.line, row.get("수정 제안"), component, no)
-                facts += [f for f in got_facts if f not in facts]
-                requests += [r for r in got_requests if r not in requests]
-                if ref not in refs:
-                    refs.append(ref)
-            block = facts + requests + [f"(F02 {', '.join(refs)})"]
-            lines.extend(b[:MAX_LINE] for b in block)
+                value = (row.get("체크") or {}).get(case.check, row["판정"])
+                head = f"[{label}] {case.check}: {'판단불가' if value == '△' else '부적합'}"
+                why = f"왜: {case.line}"[:MAX_LINE]
+                key = (head, why)
+                where = str(row.get("위치") or "")
+                if key in seen:
+                    if where and where not in places[key]:
+                        places[key].append(where)
+                    continue
+                lines.append(head)
+                lines.append(why)
+                seen[key] = len(lines) - 1
+                places[key] = [where] if where else []
+                added = True
+            suggestion = f"어떻게: {row['수정 제안']}"[:MAX_LINE] if row.get("수정 제안") else None
+            if added and suggestion and suggestion not in lines:
+                lines.append(suggestion)
+        for key, where in places.items():
+            if len(where) > 1:  # 여러 위치에서 온 같은 사례: '왜: … (학습 1·2·3)'
+                lines[seen[key]] = (lines[seen[key]] + f" ({'·'.join(where)})")[:MAX_LINE]
         return lines
 
     @staticmethod
     def memo_lines(row: dict) -> list[str]:
-        label = row["item_id"].replace("F02-", "").replace("-", " ")
-        lines = [f"F02 {label} 항목이 {row['판정']}입니다."]
+        label = row["item_id"].replace("F02-", "")
+        lines = [f"[{label}] {row['판정']}"]
         notes = row.get("비고") or {}
         checks = row.get("체크") or {}
         if isinstance(notes, dict):
@@ -456,8 +421,8 @@ class Annotator:
     def summary_lines(self, rows: list[dict]) -> list[str]:
         fail = sum(1 for r in rows if r["판정"] == "부적합")
         undecided = sum(1 for r in rows if r["판정"] == "판단불가")
-        lines = [f"F02 자동검수 결과 부적합 {fail}건, 판단불가 {undecided}건입니다.",
-                 f"본문의 메모 {len(self.placed)}곳을 따라가며 확인해 주세요. 판단불가는 사람이 확정하는 항목입니다."]
+        lines = [f"[F02 자동검수 총괄] 부적합 {fail}건 · 판단불가 {undecided}건 — 본문의 메모({len(self.placed)}곳)를 따라가며 확인하세요."
+                 " 판단불가는 사람이 확정하는 항목입니다."]
         if self.unplaced:
             lines.append(f"문단을 특정하지 못한 지적 {len(self.unplaced)}건(검수 화면·확인서에서 확인):")
             for r in self.unplaced[:MAX_UNPLACED_LISTED]:
@@ -495,7 +460,7 @@ class Annotator:
                                                     "linkListIDRef": "0", "linkListNextIDRef": "0", "textWidth": "0", "textHeight": "0",
                                                     "hasTextRef": "0", "hasNumRef": "0"})
         for line in lines[:MAX_MEMO_LINES] + ([f"… 외 {len(lines) - MAX_MEMO_LINES}줄"] if len(lines) > MAX_MEMO_LINES else []):
-            mp = ET.SubElement(sub, HP + "p", {"id": "0", "paraPrIDRef": "0", "styleIDRef": "0", "pageBreak": "0", "columnBreak": "0", "merged": "0"})
+            mp = ET.SubElement(sub, HP + "p", {"id": "0", "paraPrIDRef": self.memo_para_pr, "styleIDRef": "0", "pageBreak": "0", "columnBreak": "0", "merged": "0"})
             run = ET.SubElement(mp, HP + "run", {"charPrIDRef": self.memo_char_pr})
             ET.SubElement(run, HP + "t").text = line
         first.insert(0, ctrl)

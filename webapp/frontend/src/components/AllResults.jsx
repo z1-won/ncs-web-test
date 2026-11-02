@@ -62,7 +62,8 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken }) {
         downloads={!run.running && finished.length > 0 && (
           <ExportButtons moduleCode={moduleCode} createdAt={run.created_at} onError={onError} onNotice={onNotice}
                          rows={finished.flatMap((i) => i.data.검수확인서 || [])}
-                         annotate={{ upload: uploadToken, rows: finished.flatMap((i) => (i.data.전체 || []).filter((r) => r.판정 !== "적합")) }} />
+                         annotate={{ upload: uploadToken, runId: finished.find((i) => i.data.id)?.data.id,
+                                     rows: finished.flatMap((i) => (i.data.전체 || []).filter((r) => r.판정 !== "적합")) }} />
         )}
         tools={view === "accordion" && (
           <>

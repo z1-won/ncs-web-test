@@ -27,9 +27,12 @@ class StoredReview:
 
 
 class FileStore:
-    """실행별 폴더에 JSON·ZIP을 쓴다. 이력 조회는 없다."""
+    """실행별 폴더에 JSON·ZIP을 쓴다. 이력 조회는 없다(원고 보관도 없다)."""
 
     supports_history = False
+
+    def get_manuscript(self, run_id: str) -> tuple[str, bytes] | None:
+        return None
 
     def __init__(self, out_dir: str | Path = "결과"):
         self.out_dir = Path(out_dir).expanduser().resolve()
@@ -94,6 +97,12 @@ class PostgresStore:
         from . import postgres
 
         return postgres.delete_group(self.dsn, group_id)
+
+    def get_manuscript(self, run_id: str) -> tuple[str, bytes] | None:
+        """실행과 함께 보관된 원고 hwpx (파일 이름, 바이트). 이력에서 '수정 메모 원고'를 다시 만들 때 쓴다."""
+        from . import postgres
+
+        return postgres.get_manuscript(self.dsn, run_id)
 
     def export_zip(self, run_id: str) -> tuple[bytes, str] | None:
         """저장된 이력을 해당 엔진의 save_results로 다시 만들어 (ZIP 바이트, 파일 이름)을 돌려준다."""

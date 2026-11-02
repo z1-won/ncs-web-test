@@ -15,7 +15,7 @@ export function annotateNotice({ placed = 0, memos = 0, unplaced = 0 }) {
   return parts.join(" ");
 }
 
-// annotate: { upload(토큰), rows(체크리스트 행, 적합 제외) } — 있으면 '수정 메모 원고' 버튼도 보인다(원고가 아직 서버에 있을 때만)
+// annotate: { upload(토큰) 또는 runId(이력 실행 id), rows(체크리스트 행, 적합 제외) } — 둘 중 하나가 있으면 '수정 메모 원고' 버튼이 보인다
 export function ExportButtons({ moduleCode, rows, createdAt, disabled, onError, onNotice, annotate }) {
   const [busy, setBusy] = useState(null);   // 진행 중인 형식
   async function run(format) {
@@ -26,7 +26,7 @@ export function ExportButtons({ moduleCode, rows, createdAt, disabled, onError, 
   }
   async function runAnnotate() {
     setBusy("memo");
-    const { ok, error, summary } = await api.exportAnnotated({ moduleCode, upload: annotate.upload, rows: annotate.rows, createdAt });
+    const { ok, error, summary } = await api.exportAnnotated({ moduleCode, upload: annotate.upload, runId: annotate.runId, rows: annotate.rows, createdAt });
     if (!ok) onError?.(error);
     else if (summary) onNotice?.(annotateNotice(summary));
     setBusy(null);
@@ -38,7 +38,7 @@ export function ExportButtons({ moduleCode, rows, createdAt, disabled, onError, 
               title="원본 F02 양식(hwpx)에 ✓와 비고를 채운 제출본">{busy === "hwpx" ? "만드는 중…" : "hwpx (제출 양식)"}</button>
       <button type="button" className="krds-btn small tertiary" disabled={disabled || busy} onClick={() => run("xlsx")}
               title="열람·편집용 엑셀">{busy === "xlsx" ? "만드는 중…" : "xlsx"}</button>
-      {annotate?.upload && (
+      {(annotate?.upload || annotate?.runId) && (
         <>
           <span className="meta sep">·</span>
           <button type="button" className="krds-btn small tertiary" disabled={disabled || busy || !annotate.rows?.length} onClick={runAnnotate}
