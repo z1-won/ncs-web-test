@@ -14,8 +14,11 @@ def parse_toc(sections) -> dict | None:
     """차례 블록 → {'학습': [{'no','text'}], '내용': [{'no','sub','text','page'}],
     '줄': [{'lesson','kind','page','after'}], '꼬리': {참고 자료: 쪽, ...}, 'span': (s, e),
     '건너뜀': [{'no','text','기대'}] — 번호가 이어지지 않아 학습으로 받지 않은 '학습 N.' 줄}"""
+    from ncs_core.documents import toc_title_index
+
     lines = [l for l in sections[0] if l] if sections else []
-    start = next((i for i, l in enumerate(lines) if re.fullmatch(r"차\s*례", l)), None)
+    # '차례' 제목이 둘일 때(앞에 깨진 자동 차례가 남은 원고) 학습 줄이 따르는 쪽을 고른다
+    start = toc_title_index(lines)
     if start is None:
         return None
     end = next(

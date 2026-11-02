@@ -131,6 +131,22 @@ BODY_START_STYLE = re.compile(r"^큰학습")                 # 내비게이터(�
 BODY_START_TEXT = re.compile(r"^학\s*습\s*1$")           # 스타일이 없을 때: 개요 뒤 첫 '학습 1' 줄
 FRONT_END_TEXT = re.compile(r"^(핵심\s*용어|학습\s*모듈의\s*내용\s*체계)")
 TOC_TITLE = re.compile(r"^차\s*례$")
+TOC_LESSON_LINE = re.compile(r"^학습\s*\d+\.\s*\S")   # 차례 안의 '학습 1. 명' 줄
+TOC_LOOKAHEAD = 60                                      # 차례 제목 뒤 이 범위 안에 '학습 N.' 줄이 있어야 진짜 차례
+
+
+def toc_title_index(paragraphs: list[str]) -> int | None:
+    """진짜 차례 제목 줄의 인덱스 — '차례' 뒤 TOC_LOOKAHEAD 문단 안에 '학습 N.' 줄이 따르는 것.
+
+    원고에 따라 '차례' 제목이 두 번 나온다(앞 구역에 자동 차례 필드가 깨진 채 남은 경우: '차 례' 뒤에 쪽수 숫자만 있음).
+    그런 가짜 차례를 고르면 학습명을 읽지 못해 차례·개요·필요 지식·기타 엔진이 모두 실패하므로, 학습 줄이 따르는 차례를 우선한다.
+    그런 것이 없으면 첫 '차례'(없으면 None).
+    """
+    titles = [i for i, t in enumerate(paragraphs) if TOC_TITLE.match(t)]
+    for i in titles:
+        if any(TOC_LESSON_LINE.match(t) for t in paragraphs[i + 1:i + 1 + TOC_LOOKAHEAD]):
+            return i
+    return titles[0] if titles else None
 
 
 def body_start(document: "Document", section: int = 0) -> int | None:
@@ -138,7 +154,8 @@ def body_start(document: "Document", section: int = 0) -> int | None:
     paragraphs = document.sections[section]
     styles = document.section_styles(section)
     # 본문은 차례·개요(핵심 용어/내용 체계) 뒤에 온다. 표지에도 큰학습 스타일 문단이 있을 수 있어 그 앞은 보지 않는다.
-    toc = next((i for i, t in enumerate(paragraphs) if TOC_TITLE.match(t)), -1)
+    toc = toc_title_index(paragraphs)
+    toc = -1 if toc is None else toc
     front_end = next((i for i, t in enumerate(paragraphs) if FRONT_END_TEXT.match(t)), None)
     after = max(toc, front_end if front_end is not None else -1, 0)
     if styles:
@@ -151,11 +168,18 @@ def body_start(document: "Document", section: int = 0) -> int | None:
 
 
 def toc_section(document: "Document") -> int | None:
-    """'차례' 제목 줄이 있는 첫 구역."""
+    """진짜 차례('학습 N.' 줄이 따르는 차례 제목)가 있는 첫 구역. 그런 구역이 없으면 '차례' 제목이 있는 첫 구역."""
+    fallback = None
     for index, paragraphs in enumerate(document.sections):
-        if any(TOC_TITLE.match(t) for t in paragraphs):
+        found = toc_title_index(paragraphs)
+        if found is None:
+            continue
+        following = paragraphs[found + 1:found + 1 + TOC_LOOKAHEAD]
+        if any(TOC_LESSON_LINE.match(t) for t in following):
             return index
-    return None
+        if fallback is None:
+            fallback = index
+    return fallback
 
 
 def _looks_like_body(document: "Document", section: int, head: int = 80) -> bool:

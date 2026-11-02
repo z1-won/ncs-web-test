@@ -136,3 +136,25 @@ class AsideTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeTocTests(unittest.TestCase):
+    """'차례' 제목이 두 번 나오는 원고(앞에 깨진 자동 차례가 남아 '차 례' 뒤에 쪽수 숫자만 있음) — 학습 줄이 따르는 차례를 골라야 한다."""
+
+    def test_toc_title_index_prefers_the_one_followed_by_lessons(self):
+        from ncs_core.documents import toc_title_index
+
+        paragraphs = ["[NCS-학습모듈의 위치]", "차 례", "ㆍ222222", "232323", "", "차 례", "학습모듈의 개요 1",
+                      "학습 1. 요구사항 수집하기", "1-1. 수집 3"]
+        self.assertEqual(toc_title_index(paragraphs), 5)
+        self.assertEqual(toc_title_index(["차례", "학습 1. 가"]), 0)
+        self.assertEqual(toc_title_index(["차례", "숫자만"]), 0, "학습 줄이 따르는 차례가 없으면 첫 차례")
+        self.assertIsNone(toc_title_index(["본문"]))
+
+    def test_parse_toc_skips_the_broken_first_toc(self):
+        from ncs_core.manuscript.toc import parse_toc
+
+        front = ["차 례", "ㆍ222222", "232323", "차 례", "학습 1. 요구사항 수집하기", "1-1. 요구사항 수집 3", "• 평가 5",
+                 "참고 자료 46", "AIoT 학습모듈의 개요"]
+        toc = parse_toc([front, []])
+        self.assertEqual([l["text"] for l in toc["학습"]], ["요구사항 수집하기"])
