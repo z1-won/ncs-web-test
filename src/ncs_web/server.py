@@ -175,8 +175,10 @@ def create_app(
         upload: Annotated[str, Form()],
         rows: Annotated[str, Form()],
         module_code: Annotated[str, Form()] = "",
+        created_at: Annotated[str, Form()] = "",
     ) -> Response:
-        """원고 hwpx에 지적사항을 한글 메모로 단 파일. upload=업로드 토큰(원고가 그 안에 있어야 함), rows=체크리스트 행 JSON 배열."""
+        """원고 hwpx에 지적사항을 한글 메모로 단 파일. upload=업로드 토큰(원고가 그 안에 있어야 함), rows=체크리스트 행 JSON 배열,
+        created_at=검사 실행 시각(ISO, 메모 날짜로 쓴다. 없으면 내보내는 시각)."""
         from ncs_core import detect_role, load_document
         from ncs_service.annotate import annotate_hwpx
 
@@ -198,7 +200,7 @@ def create_app(
             return error_response(400, "메모는 hwpx 원고에만 달 수 있습니다(hwp는 한글에서 hwpx로 저장 후 다시 올리세요)")
         name, path = manuscript
         try:
-            content, summary = annotate_hwpx(path.read_bytes(), parsed)
+            content, summary = annotate_hwpx(path.read_bytes(), parsed, created_at=created_at or None)
         except ValueError as error:
             return error_response(400, str(error))
         stem = Path(name).stem

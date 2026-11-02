@@ -66,7 +66,7 @@ class AnnotateTests(unittest.TestCase):
         row = {"item_id": "F02-차례-①", "판정": "부적합", "체크": {"'~하기' 종결": "X", "기호 글꼴 문자 없음": "O"},
                "비고": {"'~하기' 종결": "'~하기'로 종결되지 않음", "개발계획서": "읽지 못함"}, "수정 제안": "예약 현황 확인하기"}
         lines = Annotator.memo_lines(row)
-        self.assertEqual(lines[0], "[차례-①] 부적합")
+        self.assertEqual(lines[0], "F02 차례 ① 항목이 부적합입니다.")
         self.assertIn("• '~하기' 종결: '~하기'로 종결되지 않음", lines)
         self.assertIn("• 개발계획서: 읽지 못함", lines)
         self.assertTrue(lines[-1].startswith("→ 수정 제안: 예약 현황 확인하기"))
@@ -93,14 +93,18 @@ class AnnotateTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(content)) as z:
             sections = "".join(z.read(n).decode("utf-8") for n in z.namelist() if n.startswith("Contents/section"))
         memos = [re.findall(r"<hp:t>([^<]*)</hp:t>", m) for m in re.findall(r'type="MEMO".*?</hp:subList>', sections, re.S)]
-        bodies = [m for m in memos if not m[0].startswith("[F02 자동검수 총괄]")]
+        bodies = [m for m in memos if not m[0].startswith("F02 자동검수 결과")]
         self.assertEqual(len(bodies), 2, memos)                      # 문구 a 자리, 문구 b 자리 (누락 사례는 행 자리 = a 문단에 합쳐짐)
-        by_first = {m[1]: m for m in bodies}
-        self.assertIn(f"왜: 원고 「{b}」, 개발계획서 「{b}Y」 (글자가 다름)", by_first)
-        memo_a = next(m for m in bodies if f"원고 「{a}」" in m[1])
-        self.assertEqual(memo_a[0], "[시험-①] ① 대조: 부적합")
-        self.assertIn("왜: 누락: 개발계획서에는 「없는 문구」가 있는데 원고에 없음", memo_a)
-        self.assertEqual(memo_a.count("어떻게: 개발계획서대로 고침"), 1)
+        # 에디터 문체: 근거(기준 문서 문구) → 요청(원고 문구를 …와 동일하게) → 수정 제안 → (F02 항목)
+        memo_b = next(m for m in bodies if f"“{b}”" in m[1])
+        self.assertRegex(memo_b[0], rf"^개발계획서에는 “{re.escape(b)}Y”(으로|로) 되어 있습니다\.$")
+        self.assertRegex(memo_b[1], rf"^원고의 “{re.escape(b)}”\(글자가 다름\)(을|를) 개발계획서와 동일하게 수정해 주세요\.$")
+        self.assertEqual(memo_b[2:], ["개발계획서대로 고쳐 주세요.", "(F02 시험 ①)"])
+        memo_a = next(m for m in bodies if f"“{a}”" in m[1])
+        self.assertIn("개발계획서에는 “없는 문구”가 있는데 원고에 없습니다.", memo_a)
+        self.assertEqual(memo_a.count("개발계획서대로 고쳐 주세요."), 1)
+        self.assertEqual(memo_a[-1], "(F02 시험 ①)")
+        self.assertLess(memo_a.index("개발계획서에는 “없는 문구”가 있는데 원고에 없습니다."), memo_a.index("개발계획서대로 고쳐 주세요."))
 
     def test_memo_text_uses_kopub_batang_11pt(self):
         # 메모 글자는 KoPub바탕체 Medium 11pt: header.xml에 글꼴(언어별)·글자 모양을 추가하고 메모 문단만 그것을 가리킨다. 원고 run은 그대로

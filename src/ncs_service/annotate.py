@@ -12,6 +12,8 @@
   2. region_path의 마지막 조각부터: '1-3. 이용정보 제공' 같은 소제목, '학습 1' 같은 머리, '수행 내용 2'(N번째), '참고 자료 > 1번'(N번째 항목)
   3. 못 찾으면 총괄 메모로
 메모 XML은 한글이 저장한 실제 파일의 구조를 그대로 따른다(ctrl/fieldBegin[parameters, subList] … ctrl/fieldEnd). 메모 모양은 기본(65535).
+메모 날짜는 검사 실행 시각(created_at, 없으면 지금): 한글은 Command의 4·5번째 수(UTC FILETIME 하위·상위 32비트)로 날짜를 보여 주고,
+CreateDateTime에는 한국 시각을 끝에 Z를 붙여 적는다(한글이 저장하는 꼴 그대로).
 메모 글자는 KoPub바탕체 11pt(MEMO_FONT·MEMO_SIZE_PT): header.xml의 글꼴 목록(언어별)과 글자 모양(charPr)에 하나씩 추가해 메모 문단만 가리키게 한다. 원고 글자 모양은 바꾸지 않는다.
 """
 
@@ -21,9 +23,9 @@ import copy
 import io
 import random
 import re
-import time
 import zipfile
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from xml.etree import ElementTree as ET
 
 from ncs_core.hwpx import HH, HP, para_text, section_names
@@ -39,6 +41,28 @@ MEMO_FONT = "KoPub바탕체 Medium"  # 메모 글꼴. 원고에 이 이름이 �
 MEMO_FONT_FALLBACKS = ("KoPub바탕체",)  # 원고에 MEMO_FONT는 없고 이 이름이 있으면 그것을 쓴다(Light·Bold는 메모용이 아니라 쓰지 않는다)
 MEMO_SIZE_PT = 11            # 메모 글자 크기(pt). hwpx height 단위는 1/100pt
 HEADER = "Contents/header.xml"
+KST = timezone(timedelta(hours=9))
+FILETIME_EPOCH = datetime(1601, 1, 1, tzinfo=timezone.utc)
+
+
+def parse_when(value: str | datetime | None) -> datetime:
+    """검사 실행 시각(ISO 문자열 또는 datetime) → 시간대 있는 datetime. 없거나 못 읽으면 지금. 시간대 없는 값은 한국 시각으로 본다."""
+    if isinstance(value, datetime):
+        when = value
+    elif value:
+        try:
+            when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            when = datetime.now(KST)
+    else:
+        when = datetime.now(KST)
+    return when if when.tzinfo else when.replace(tzinfo=KST)
+
+
+def filetime_words(when: datetime) -> tuple[int, int]:
+    """UTC 시각 → Windows FILETIME(1601-01-01부터 100ns)의 (하위 32비트, 상위 32비트) — 한글 메모 Command의 4·5번째 수."""
+    ticks = int((when.astimezone(timezone.utc) - FILETIME_EPOCH).total_seconds() * 10_000_000)
+    return ticks & 0xFFFFFFFF, ticks >> 32
 
 
 def _norm(text: str) -> str:
@@ -84,6 +108,99 @@ CASE_SPLIT = re.compile(r"\n|;\s+")           # 엔진이 사례를 나누는 �
 CASE_NUMBER = re.compile(r"^\s*\d+\.\s+")    # ncs_core.notes.lines가 붙인 '1. '
 QUOTED_MANUSCRIPT = re.compile(r"원고\s*「(.+?)」")
 QUOTED_ANY = re.compile(r"「(.+?)」")
+PAIR = re.compile(r"^(?:[^「」:]*?:\s*)?(?P<where>[^「」,]+?)\s*「(?P<actual>.+?)」,\s*(?P<basis>[^「」,]+?)\s*「(?P<expected>.+?)」(?:\s*\((?P<why>[^()]*(?:\([^()]*\)[^()]*)*)\))?\s*$")
+ONE = re.compile(r"^(?:[^「」:]*?:\s*)?「(?P<actual>.+?)」\s*\((?P<why>.+)\)\s*$")
+# 수정 제안은 '…을 순서대로 모두 나열'처럼 명사형으로 끝난다 → 요청문으로. 끝말에 따라 붙이는 말
+REQUEST_TAILS = (("고침", "고쳐 주세요."), ("같게", "같게 해 주세요."), ("맞춤", "맞춰 주세요."), ("남김", "남겨 주세요."))
+REQUEST_NOUNS = ("나열", "수정", "교체", "삭제", "작성", "추가", "병기", "통일", "확인", "변경", "기재", "제시", "삽입", "정리", "종결", "적용", "배치", "재배열", "표기", "조정", "분리", "제외", "보완", "갱신", "검토")
+
+
+def particle(text: str, with_batchim: str, without: str) -> str:
+    """마지막 글자(따옴표·괄호 뒤는 무시)의 받침 유무로 조사 선택."""
+    for ch in reversed(text):
+        if "가" <= ch <= "힣":
+            return with_batchim if (ord(ch) - 0xAC00) % 28 else without
+        if ch.isalnum():
+            return with_batchim  # 숫자·영문으로 끝나면 '을/이' 쪽(관례)
+    return with_batchim
+
+
+ENDINGS = (("없음", "없습니다"), ("다름", "다릅니다"), ("아님", "아닙니다"), ("못함", "못했습니다"), ("않음", "않습니다"), ("있음", "있습니다"), ("비어 있음", "비어 있습니다"))
+LABEL = re.compile(r"^[가-힣·\s]{1,8}:\s+")   # '누락: ', '세분류 다름 1: ' 같은 머리 라벨
+
+
+TRAILING_PAREN = re.compile(r"\s*\([^()]*\)$")
+
+
+def polite(text: str) -> str:
+    """'…코드가 없음' 같은 명사형 종결 → '…코드가 없습니다.' 꼬리 괄호 '(필수)'는 문장 뒤에 그대로. '핵심 용어 12개' → '…12개입니다.'"""
+    text = text.strip().rstrip(".")
+    tail = TRAILING_PAREN.search(text)
+    paren = tail.group(0).strip() if tail else ""
+    head = text[: tail.start()] if tail else text
+    head = head.rstrip()
+    for ending, replacement in ENDINGS:
+        if head.endswith(ending):
+            head = head[: -len(ending)] + replacement
+            break
+    else:
+        if head and (head[-1].isdigit() or head.endswith(("개", "건", "줄", "자", "곳", "회"))):
+            head += "입니다"
+        elif not head.endswith(("다", "요")):
+            head += "입니다" if head.endswith(("임", "함")) and False else ""
+    return (head + (" " + paren if paren else "") + ".") if paren else head + "."
+
+
+def request_sentence(suggestion: str) -> str:
+    """수정 제안(명사형 한 줄) → '…해 주세요.' 요청문. 이미 문장이면 그대로. '병기: 「…」' 꼴은 '병기해 주세요: “…”'."""
+    text = QUOTED_ANY.sub(lambda q: f"“{q.group(1)}”", suggestion.strip().rstrip("."))
+    if text.endswith(("주세요", "드립니다", "합니다", "됩니다")):
+        return text + "."
+    if ": " in text:
+        head, rest = text.split(": ", 1)
+        if head.endswith(REQUEST_NOUNS):
+            return f"{head}해 주세요: {rest}"
+    for tail, replacement in REQUEST_TAILS:
+        if text.endswith(tail):
+            return text[: -len(tail)] + replacement
+    if text.endswith(REQUEST_NOUNS):
+        return text + "해 주세요."
+    return text + " — 수정 부탁드립니다."
+
+
+def prose(line: str, suggestion: str | None, component: str, no: str) -> tuple[list[str], list[str], str]:
+    """사례 줄 + 수정 제안 → (근거 문장들, 요청 문장들, F02 항목 표시) — 에디터 메모 문체. ' / '로 이은 제안은 요청문 하나씩.
+
+    '원고 「a」, 개발계획서 「e」 (why)' 꼴 → '개발계획서에는 “e”로 되어 있습니다.' + '원고의 “a”(why)을 개발계획서와 동일하게 수정해 주세요.'
+    '「a」 (why)' 꼴 → '“a”은 why입니다.' / 그 밖은 줄을 문장으로(머리 라벨 제거, 「」→“”). 요청문은 수정 제안에서(대조 꼴은 이미 요청이 있으면 생략)."""
+    quoted = lambda t: f"“{t}”"
+    m = PAIR.match(line)
+    requests = [request_sentence(one) for one in (suggestion or "").split(" / ") if one.strip()]
+    if m:
+        where, actual, basis, expected, why = (m.group(k) for k in ("where", "actual", "basis", "expected", "why"))
+        where, basis = where.strip(), basis.strip()
+        first = f"{basis}에는 {quoted(expected)}{particle(expected, '으로', '로')} 되어 있습니다."
+        target = f"{where}의 {quoted(actual)}" if where != "원고" else f"원고의 {quoted(actual)}"
+        second = f"{target}{f'({why})' if why else ''}{particle(actual, '을', '를')} {basis}와 동일하게 수정해 주세요."
+        facts = [first, second]
+        requests = [r for r in requests if not ("동일하게" in r or "같게" in r or "같은" in r)]  # 둘째 문장이 이미 그 요청이다
+    else:
+        m = ONE.match(line)
+        if m:
+            actual = m.group("actual")
+            facts = [f"{quoted(actual)}{particle(actual, '은', '는')} {polite(m.group('why'))}"]
+        else:
+            facts = [polite(LABEL.sub("", line))]
+    fix = lambda x: QUOTED_ANY.sub(lambda q: quoted(q.group(1)), x)
+    return [fix(x) for x in facts], [fix(r) for r in requests], f"{component} {no}".strip()
+
+
+def f02_ref(row: dict, check: str | None) -> tuple[str, str]:
+    """행의 item_id 'F02-위치-②③④'와 체크 이름 '② …' → ('위치', '②')."""
+    parts = row.get("item_id", "").replace("F02-", "").split("-")
+    component = parts[0] if parts else ""
+    no = check[:1] if check and check[:1] in "①②③④⑤⑥⑦⑧⑨" else (parts[1] if len(parts) > 1 else "")
+    return component, no
 
 
 def split_cases(row: dict) -> list[tuple[str, str]]:
@@ -114,8 +231,9 @@ def case_phrase(line: str) -> str | None:
 
 
 class Annotator:
-    def __init__(self, source: bytes, *, author: str = AUTHOR):
+    def __init__(self, source: bytes, *, author: str = AUTHOR, created_at: str | datetime | None = None):
         self.author = author
+        self.when = parse_when(created_at)
         self.archive = zipfile.ZipFile(io.BytesIO(source))
         self.sections: list[tuple[str, ET.Element]] = []
         self.paras: list[Para] = []
@@ -291,7 +409,7 @@ class Annotator:
 
     @staticmethod
     def case_lines(cases: list[Case]) -> list[str]:
-        """한 문단에 모인 사례들 → 메모 줄. 사례마다 '[항목] 체크: 판정' + '왜: 사례', 같은 행의 사례들 뒤에 '어떻게: 수정 제안' 한 번.
+        """한 문단에 모인 사례들 → 메모 줄(에디터 문체). 행마다: 사례들의 근거·요청 문장 → 수정 제안 요청문 한 번 → '(F02 항목)' 한 줄.
         행 전체 사례(check None)는 memo_lines 그대로."""
         lines: list[str] = []
         groups: list[tuple[dict, list[Case]]] = []
@@ -301,23 +419,25 @@ class Annotator:
             else:
                 groups.append((case.row, [case]))
         for row, group in groups:
-            label = row["item_id"].replace("F02-", "")
-            whole = [c for c in group if c.check is None]
-            if whole:
+            if any(c.check is None for c in group):
                 lines.extend(Annotator.memo_lines(row))
                 continue
+            facts, requests, refs = [], [], []
             for case in group:
-                value = (row.get("체크") or {}).get(case.check, row["판정"])
-                lines.append(f"[{label}] {case.check}: {'판단불가' if value == '△' else '부적합'}")
-                lines.append(f"왜: {case.line}"[:MAX_LINE])
-            if row.get("수정 제안"):
-                lines.append(f"어떻게: {row['수정 제안']}"[:MAX_LINE])
+                component, no = f02_ref(row, case.check)
+                got_facts, got_requests, ref = prose(case.line, row.get("수정 제안"), component, no)
+                facts += [f for f in got_facts if f not in facts]
+                requests += [r for r in got_requests if r not in requests]
+                if ref not in refs:
+                    refs.append(ref)
+            block = facts + requests + [f"(F02 {', '.join(refs)})"]
+            lines.extend(b[:MAX_LINE] for b in block)
         return lines
 
     @staticmethod
     def memo_lines(row: dict) -> list[str]:
-        label = row["item_id"].replace("F02-", "")
-        lines = [f"[{label}] {row['판정']}"]
+        label = row["item_id"].replace("F02-", "").replace("-", " ")
+        lines = [f"F02 {label} 항목이 {row['판정']}입니다."]
         notes = row.get("비고") or {}
         checks = row.get("체크") or {}
         if isinstance(notes, dict):
@@ -336,8 +456,8 @@ class Annotator:
     def summary_lines(self, rows: list[dict]) -> list[str]:
         fail = sum(1 for r in rows if r["판정"] == "부적합")
         undecided = sum(1 for r in rows if r["판정"] == "판단불가")
-        lines = [f"[F02 자동검수 총괄] 부적합 {fail}건 · 판단불가 {undecided}건 — 본문의 메모({len(self.placed)}곳)를 따라가며 확인하세요."
-                 " 판단불가는 사람이 확정하는 항목입니다."]
+        lines = [f"F02 자동검수 결과 부적합 {fail}건, 판단불가 {undecided}건입니다.",
+                 f"본문의 메모 {len(self.placed)}곳을 따라가며 확인해 주세요. 판단불가는 사람이 확정하는 항목입니다."]
         if self.unplaced:
             lines.append(f"문단을 특정하지 못한 지적 {len(self.unplaced)}건(검수 화면·확인서에서 확인):")
             for r in self.unplaced[:MAX_UNPLACED_LISTED]:
@@ -364,12 +484,13 @@ class Annotator:
                                                         "zorder": str(number), "fieldid": field_id, "metaTag": ""})
         params = ET.SubElement(begin, HP + "parameters", {"cnt": "7", "name": ""})
         ET.SubElement(params, HP + "integerParam", {"name": "Prop"}).text = "0"
-        ET.SubElement(params, HP + "stringParam", {"name": "Command"}).text = f"MEMO/65535/{number}/{random.randint(10**9, 4 * 10**9)}/{random.randint(10**7, 10**8)}/{self.author}/\\;;"
+        low, high = filetime_words(self.when)
+        ET.SubElement(params, HP + "stringParam", {"name": "Command"}).text = f"MEMO/65535/{number}/{low}/{high}/{self.author}/\\;;"
         ET.SubElement(params, HP + "stringParam", {"name": "ID"}).text = f"memo{number}"
         ET.SubElement(params, HP + "integerParam", {"name": "Number"}).text = str(number)
         ET.SubElement(params, HP + "stringParam", {"name": "Author"}).text = self.author
         ET.SubElement(params, HP + "stringParam", {"name": "MemoShapeIDRef"}).text = "65535"
-        ET.SubElement(params, HP + "stringParam", {"name": "CreateDateTime"}).text = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        ET.SubElement(params, HP + "stringParam", {"name": "CreateDateTime"}).text = self.when.astimezone(KST).strftime("%Y-%m-%dT%H:%M:%SZ")
         sub = ET.SubElement(begin, HP + "subList", {"id": "", "textDirection": "HORIZONTAL", "lineWrap": "BREAK", "vertAlign": "TOP",
                                                     "linkListIDRef": "0", "linkListNextIDRef": "0", "textWidth": "0", "textHeight": "0",
                                                     "hasTextRef": "0", "hasNumRef": "0"})
@@ -403,9 +524,9 @@ class Annotator:
         return out.getvalue()
 
 
-def annotate_hwpx(source: bytes, rows: list[dict], *, author: str = AUTHOR) -> tuple[bytes, dict]:
-    """메모를 단 hwpx 바이트와 요약 {'placed', 'memos', 'unplaced'}."""
-    worker = Annotator(source, author=author)
+def annotate_hwpx(source: bytes, rows: list[dict], *, author: str = AUTHOR, created_at: str | datetime | None = None) -> tuple[bytes, dict]:
+    """메모를 단 hwpx 바이트와 요약 {'placed', 'memos', 'unplaced'}. created_at = 검사 실행 시각(메모 날짜로 쓴다)."""
+    worker = Annotator(source, author=author, created_at=created_at)
     content = worker.build(rows)
     return content, {"placed": sum(len(p.rows) for p in worker.placed.values()), "memos": len(worker.placed) + 1,
                      "unplaced": len(worker.unplaced)}
