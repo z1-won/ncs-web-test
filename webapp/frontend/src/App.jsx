@@ -8,6 +8,7 @@ import { Badge, Spinner } from "./components/Badge.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
 import { ExportButtons } from "./components/ExportButtons.jsx";
 import { KrdsSelect } from "./components/KrdsSelect.jsx";
+import { RawJson } from "./components/RawJson.jsx";
 import { ResultHead } from "./components/ResultHead.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
 
@@ -305,10 +306,7 @@ export default function App() {
           {/* 전체 실행의 아코디언 몸통과 같은 구성: 확인서(행마다 지적사항 펼치기) + 진단 경고 + 접힌 지적사항·전체 체크리스트 */}
           <ComponentResult result={result} showSave={false} />
 
-          <details className="raw">
-            <summary>원본 JSON (요약·진단·검수확인서·지적사항·전체)</summary>
-            <pre>{JSON.stringify(result, null, 1)}</pre>
-          </details>
+          <RawJson data={result} title="원본 JSON (요약·진단·검수확인서·지적사항·전체)" />
         </section>
       )}
 
