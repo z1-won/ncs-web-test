@@ -19,6 +19,26 @@ tests/                   단위·골든(합성 원고 6종 × 10엔진)·계약(
 db/                      PostgreSQL 초기화(compose.yaml과 함께)
 ```
 
+### `src/` 패키지별 역할
+
+호출 흐름은 `webapp(React) → ncs_web → ncs_service → 엔진 10개 → ncs_core`입니다.
+
+| 패키지 | 역할 | F02 항목 |
+|---|---|---|
+| `ncs_core` | 공통 코어: hwp/hwpx 읽기, 구역 정규화, 원고·개발계획서 파서(`manuscript/`), 비교 도우미(`goals`), NCS 목록·수준 표(`ncs_catalog`), 행동명사 사전(`lexicon`), 규칙 실행(`rules`), 확인서 접기(`sheet`), LLM 호출(`llm`) | — |
+| `ncs_service` | 검수 종류↔엔진 연결(`registry`), 실행(`service`), 저장(파일·PostgreSQL), F02 확인서 xlsx/hwpx 내보내기(`export`), 수정 메모 원고(`annotate`) | — |
+| `ncs_web` | FastAPI 서버: 업로드·검수·이력·내보내기 API, 빌드된 화면 제공 | — |
+| `ncs_position` | 위치: 분류 대조, NCS 목록 기준 위치, 강조 서식 | 위치 ①~⑤ (전부 구현) |
+| `ncs_toc` | 차례: 계획서 대조, 행동명사, 본문·내비게이터 일관성, 그림 배치, 참고자료·부록 | 차례 ①~⑥ (⑦ 쪽수 미구현) |
+| `ncs_overview` | 개요: 학습 목표, 선수학습 개수·코드·수준, 내용체계 구조, 용어 | 개요 ①~⑧ (전부) |
+| `ncs_knowledge` | 필요 지식: 내비게이터 ①②③, 내용체계 대조, 목표, 자동 번호, 그림·표, 출처 | 필요 지식 ①~⑧ (전부) |
+| `ncs_perform` | 수행 내용: 제목, 상품명(LLM △), 문장형 | 수행 ①②④ (③ 안전사항 미구현) |
+| `ncs_teaching` | 교수·학습 방법: 개수, 문장형 | 교수학습 ①~④ (전부) |
+| `ncs_evaluation` | 평가: 학습 내용명, 준거↔목표, 방법 수, 피드백 | 평가 ①②③⑤ (④ 구체성 미구현) |
+| `ncs_references` | 참고 자료: 인용 누락, 표기 형식, 정렬 | 참고자료 ①②③ (④ 미구현) |
+| `ncs_colophon` | 판권: 개발 이력·개발기관 | 판권 ① |
+| `ncs_misc` | 기타: 쪽 시작, 그림, 비율, 참고 표기 | 기타 ①②⑥⑦ (③④⑤⑧ 이미지 분석 미구현) |
+
 엔진은 서로 import하지 않고 `ncs_core` 위에 평행하게 섭니다(`tests/test_layering.py`). 모든 엔진은 "구역 0 = 앞부분(위치·차례·개요), 구역 1 = 본문"을 가정하고, 원고의 실제 구역 나눔은 `ncs_core.documents.normalize_sections`가 그 모양으로 맞춥니다.
 
 ## 설치와 환경 변수
