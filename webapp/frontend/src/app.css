@@ -48,7 +48,8 @@ html { scrollbar-gutter: stable; }
 .result-head .downloads { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--krds-gap-2); }
 .result-head .downloads .sep { padding: 0 var(--krds-gap-1); }
 .krds-table-wrap { width: 100%; }
-.tbl.sheet th.component { background: var(--krds-light-color-element-success-lighter); text-align: center; vertical-align: middle; }
+/* 구성요소 머리칸(rowSpan)은 위 정렬 — 가운데 정렬이면 행에서 지적사항을 펼쳐 묶음이 길어질 때마다 이름이 아래로 움직인다 */
+.tbl.sheet th.component { background: var(--krds-light-color-element-success-lighter); text-align: center; vertical-align: top; padding-top: var(--krds-table--data-tbody-padding); }
 .tbl.sheet td.mark { text-align: center; font-weight: var(--krds-font-weight-bold); }
 .tbl.sheet td.mark.pass { color: var(--krds-light-color-text-success); }
 .tbl.sheet td.mark.fail { color: var(--krds-light-color-text-danger); }
