@@ -130,6 +130,14 @@ python scripts/batch_review.py xlsx --root 원고폴더 --work samples/batch_x -
 
 폴더의 원고 전부(hwp·hwpx, 초고본/수정본/에디팅완료 자동 분류, 세분류 계획서 자동 매칭) × 10엔진을 문서×엔진 단위로 체크포인트하며 돌리고, xlsx 9시트(문서목록·실행요약·판정매트릭스·항목별집계·상세비고(사람 판정 열)·버전변화·형식비교·실행오류·설정)로 모읍니다. `samples/`는 git 제외입니다.
 
+파일명에 모듈 코드가 없는 테스트 원고 묶음(폴더 = 망가뜨린 항목, 파일 = `1.hwp`…)은 `--module-code LM…`으로 코드를, 파일명에 `(세분류 8자리)`가 없는 개발계획서는 `--plan 경로`로 지정합니다(세 명령 모두). 그런 원고의 문서ID는 상대 경로(`2. 차례__혼합__1`)가 됩니다.
+
+```bash
+python scripts/batch_compare.py --work samples/batch_x --expected scripts/batch_expected_테스트데이터.tsv     --baseline "LM2001021701_기타_hwp" --engines position toc overview knowledge colophon --out 결과/대조.md
+```
+
+`batch_compare.py`는 체크포인트를 기대 판정 표(TSV: 경로 글로브·구성요소·번호·기대·수정사항·비고)와 대조해 **미탐**(기대 부적합인데 못 잡음)·**오탐 후보**(조작하지 않은 항목이 부적합이고 원본은 아님)·**원본 자체 부적합**을 마크다운으로 냅니다. `scripts/batch_expected_테스트데이터.tsv`는 드라이브 테스트 원고의 `수정사항.md`를 옮긴 것(위치·차례·개요·필요지식)입니다.
+
 ## 변경 검증
 
 ```bash
