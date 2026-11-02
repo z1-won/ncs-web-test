@@ -1,23 +1,16 @@
 # F02 검수 웹앱·Python 패키지
 
-NCS 학습모듈 원고(HWP/HWPX)와 개발계획서를 읽어 「2026년 NCS학습모듈 검수 확인서(F02)」의 10개 구성요소·54개 체크 항목 중 **47개**를 검수합니다. 검수 엔진은 Python 3.10 이상과 표준 라이브러리만 사용하고, 웹은 FastAPI·Uvicorn(Python 3.11 이상, 3.14에서 검증)과 React·Vite·KRDS입니다. 웹 서버·CLI·배치는 모두 `ncs_service`를 거쳐 같은 검수·저장 경로를 탑니다.
+- NCS 학습모듈 원고(HWP/HWPX)와 개발계획서를 읽어 「2026년 NCS학습모듈 검수 확인서(F02)」 검수
+- 10개 구성요소 중 47/54 체크항목 검수 완료 (약 87%)
+
+
+ - 검수 엔진: Python 3.10 이상과 표준 라이브러리만 사용
+ - 웹:
+ FastAPI·Uvicorn(Python 3.11 이상, 3.14에서 검증)
+ React·Vite·KRDS
+ 웹 서버·CLI·배치는 모두 `ncs_service`를 거쳐 같은 검수·저장 경로를 탑니다.
 
 자세한 흐름과 파일별 로직은 프로젝트 문서 `PoC2_설계_아키텍처_소개및분석_v1-3`, 항목별 구현 현황은 `PoC2_현황_F02_체크항목_구현여부_v1-1`, 개발 규칙은 `PoC2_운영_개발규칙_3인분업_v1-0`을 봅니다.
-
-## 폴더 구조
-
-```
-src/ncs_core/            문서 읽기(hwp·hwpx), 구역 정규화, 공통 파서(manuscript/), 비교 도우미, 외부 데이터, 규칙 실행, 확인서 접기, 저장, LLM 호출
-src/ncs_core/data/       ncs_units.tsv(NCS 분류·능력단위) · ncs_levels.tsv(능력단위 수준) · action_nouns*.txt(행동명사)
-src/ncs_position …       엔진 10개: position(위치) toc(차례) overview(개요) knowledge(필요 지식) perform(수행 내용)
-   … src/ncs_misc/       teaching(교수·학습 방법) evaluation(평가) references(참고 자료) colophon(판권) misc(기타)
-src/ncs_service/         검수 종류↔엔진 연결(registry), 실행(service), 저장소(파일·PostgreSQL)
-src/ncs_web/             FastAPI 서버(업로드·결과·이력 API, 빌드된 화면 제공)
-webapp/frontend/         React 화면(KRDS). 빌드 결과는 webapp/frontend/dist
-scripts/                 데이터 갱신(build_ncs_catalog · build_ncs_levels · build_action_nouns), 다문서 배치(batch_review), API 점검(ncs_api_probe · llm_probe)
-tests/                   단위·골든(합성 원고 6종 × 10엔진)·계약(엔진 등록, 계층, 설치) 테스트
-db/                      PostgreSQL 초기화(compose.yaml과 함께)
-```
 
 ### `src/` 패키지별 역할
 
@@ -39,7 +32,7 @@ db/                      PostgreSQL 초기화(compose.yaml과 함께)
 | `ncs_colophon` | 판권: 개발 이력·개발기관 | 판권 ① |
 | `ncs_misc` | 기타: 쪽 시작, 그림, 비율, 참고 표기 | 기타 ①②⑥⑦ (③④⑤⑧ 이미지 분석 미구현) |
 
-엔진은 서로 import하지 않고 `ncs_core` 위에 평행하게 섭니다(`tests/test_layering.py`). 모든 엔진은 "구역 0 = 앞부분(위치·차례·개요), 구역 1 = 본문"을 가정하고, 원고의 실제 구역 나눔은 `ncs_core.documents.normalize_sections`가 그 모양으로 맞춥니다.
+엔진은 서로 import하지 않고 `ncs_core` 위에 평행하게 선다. (`tests/test_layering.py`). 모든 엔진은 "구역 0 = 앞부분(위치·차례·개요), 구역 1 = 본문"을 가정하고, 원고의 실제 구역 나눔은 `ncs_core.documents.normalize_sections`가 그 모양으로 맞춥니다.
 
 ## 설치와 환경 변수
 
