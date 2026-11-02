@@ -1,4 +1,6 @@
 /* 이 페이지에만 필요한 배치. 색·간격·글자 크기는 모두 KRDS 토큰(--krds-*)을 쓴다. */
+/* 세로 스크롤바 자리를 항상 확보 — 이력 '더 보기/최근 5건만 보기'로 페이지 길이가 바뀌며 스크롤바가 생기고 사라질 때 화면 폭(≈15px)이 변해 표 칸이 들썩이던 것 */
+html { scrollbar-gutter: stable; }
 .page {
   padding-top: var(--krds-padding-10);
   padding-bottom: var(--krds-padding-10);
