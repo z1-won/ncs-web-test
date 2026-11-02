@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { api } from "./lib/api.js";
 import { ALL_CHECK, ALL_OPTION, CHECKS, checksFromEngines } from "./lib/checks.js";
-import { formatDate } from "./lib/format.jsx";
+import { formatDate, formatDateLines } from "./lib/format.jsx";
 import { AllResults, ComponentResult } from "./components/AllResults.jsx";
 import { Badge, Spinner } from "./components/Badge.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
@@ -338,7 +338,7 @@ export default function App() {
                 <thead><tr><th scope="col">실행 시각</th><th scope="col">모듈</th><th scope="col">검수</th><th scope="col">판정</th><th scope="col">열기</th><th scope="col">삭제</th></tr></thead>
                 <tbody>{(historyExpanded ? history : history.slice(0, HISTORY_PREVIEW)).map((row) => (
                   <tr key={row.id} className={row.id === result?.id || row.id === allRun?.group ? "is-open" : undefined}>
-                    <td>{formatDate(row.created_at)}</td>
+                    <td className="when">{formatDateLines(row.created_at).map((line, i) => <span key={i}>{line}</span>)}</td>
                     <td>{row.module_code}</td>
                     <td>{row.kind === "group"
                       ? `전체 실행 — 구성요소 ${row.checks.length}/${checks.length}`

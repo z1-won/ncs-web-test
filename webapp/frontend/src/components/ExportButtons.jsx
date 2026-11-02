@@ -14,7 +14,7 @@ export function ExportButtons({ moduleCode, rows, createdAt, disabled, onError, 
   }
   async function runAnnotate() {
     setBusy("memo");
-    const { ok, error, summary } = await api.exportAnnotated({ moduleCode, upload: annotate.upload, rows: annotate.rows });
+    const { ok, error, summary } = await api.exportAnnotated({ moduleCode, upload: annotate.upload, rows: annotate.rows, createdAt });
     if (!ok) onError?.(error);
     else if (summary) onNotice?.(`메모 ${summary.memos}개 — 지적 ${summary.placed}건을 문단에 달았고 ${summary.unplaced}건은 총괄 메모에 적었습니다.`);
     setBusy(null);

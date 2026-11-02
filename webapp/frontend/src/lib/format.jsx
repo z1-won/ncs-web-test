@@ -6,6 +6,12 @@ export function formatDate(iso) {
   return new Date(iso).toLocaleString("ko-KR");
 }
 
+// 좁은 칸용: 날짜와 시각(오전/오후 포함)을 두 줄로. "2026. 11. 2. 오후 3:35:43" → ["2026. 11. 2.", "오후 3:35:43"]
+export function formatDateLines(iso) {
+  const d = new Date(iso);
+  return [d.toLocaleDateString("ko-KR"), d.toLocaleTimeString("ko-KR")];
+}
+
 // 결과 텍스트의 네모 번호 표기 [1]~[20]을 한컴 원고처럼 네모 안 숫자로 그린다(유니코드에 대응 글자가 없어 CSS로 그림).
 export function withBoxNumbers(text) {
   if (typeof text !== "string" || !/\[\d{1,2}\]/.test(text)) return text;
