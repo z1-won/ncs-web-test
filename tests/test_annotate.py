@@ -1,6 +1,7 @@
 """원고 hwpx에 검수 메모 달기(ncs_service.annotate) — 문단 찾기, 메모 XML 구조, 본문 불변, 웹 엔드포인트."""
 
 import io
+import re
 import json
 import unittest
 import zipfile
@@ -78,6 +79,22 @@ class AnnotateTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(content)) as z:
             text = "".join(z.read(n).decode("utf-8") for n in z.namelist() if n.startswith("Contents/section"))
         self.assertIn("문단을 특정하지 못한 지적 1건", text)
+
+    def test_memo_text_uses_kopub_batang_11pt(self):
+        # 메모 글자는 KoPub바탕체 Medium 11pt: header.xml에 글꼴(언어별)·글자 모양을 추가하고 메모 문단만 그것을 가리킨다. 원고 run은 그대로
+        row = {"item_id": "F02-판권-①", "판정": "부적합", "region_path": "section9 > 없는 자리", "원고": None, "체크": {"x": "X"}, "비고": {"x": "없음"}}
+        content, _ = annotate_hwpx(MANUSCRIPT.read_bytes(), [row])
+        with zipfile.ZipFile(io.BytesIO(content)) as z:
+            header = z.read("Contents/header.xml").decode("utf-8")
+            sections = "".join(z.read(n).decode("utf-8") for n in z.namelist() if n.startswith("Contents/section"))
+        self.assertIn('face="KoPub바탕체 Medium"', header)
+        new_ids = re.findall(r'<hh:charPr id="(\d+)" height="1100"', header)
+        self.assertEqual(len(new_ids), 1, header)
+        memo = re.search(r'type="MEMO".*?</hp:subList>', sections, re.S).group(0)
+        self.assertEqual(set(re.findall(r'<hp:run charPrIDRef="(\d+)"><hp:t>', memo)), {new_ids[0]})
+        original = MANUSCRIPT.read_bytes()
+        with zipfile.ZipFile(io.BytesIO(original)) as z:
+            self.assertNotIn("KoPub바탕체 Medium", z.read("Contents/header.xml").decode("utf-8"))
 
 
 class WebAnnotateTests(unittest.TestCase):
