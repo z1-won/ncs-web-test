@@ -14,7 +14,8 @@ DEFAULT_RULES = (
     Rule(
         "emphasis",
         "F02-위치-⑤",
-        lambda c: check_emphasis(c.styled_table, c.module_code, c.plan_module_name, has_styles=c.manuscript.has_styles),
+        lambda c: check_emphasis(c.styled_table, c.module_code, c.plan_module_name, has_styles=c.manuscript.has_styles,
+                                 name_source=c.module_name_source),
     ),
 )
 

@@ -27,3 +27,6 @@ class ReviewContext:
     reference_source: str = "개발계획서"
     plan_only_classification: dict[str, str] | None = None
     plan_only_position: dict[str, Any] | None = None
+    # ⑤의 '해당 행'을 고르는 데 쓴 학습모듈명(plan_module_name)의 출처: '개발계획서'(학습 모듈명 칸) /
+    # 'NCS 목록'(능력단위 코드로 찾은 능력단위명) / '… 위치 표'(기준 표의 능력단위 번호째 행). 못 찾으면 코드 번호 순번으로 돌아간다.
+    module_name_source: str = "개발계획서"
