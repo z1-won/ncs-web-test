@@ -3,6 +3,18 @@ import React, { useState } from "react";
 
 import { api } from "../lib/api.js";
 
+// 메모 원고 결과 안내문. 서버 요약 {placed: 문단에 단 지적 수, memos: 메모 수(문단 메모 + 총괄 메모 1), unplaced: 문단을 못 찾은 지적 수}.
+// 총괄 메모는 항상 하나 들어가므로 "0건은 총괄 메모에"처럼 말하지 않는다.
+export function annotateNotice({ placed = 0, memos = 0, unplaced = 0 }) {
+  const spots = Math.max(0, memos - 1);
+  const parts = [];
+  if (placed > 0) parts.push(`지적 ${placed}건을 원고 문단 ${spots}곳에 메모로 달았습니다.`);
+  else parts.push("원고 문단에 단 메모는 없습니다.");
+  if (unplaced > 0) parts.push(`문단을 특정하지 못한 ${unplaced}건은 맨 앞 총괄 메모에 적었습니다.`);
+  else parts.push("맨 앞에 총괄 메모 1개를 더했습니다.");
+  return parts.join(" ");
+}
+
 // annotate: { upload(토큰), rows(체크리스트 행, 적합 제외) } — 있으면 '수정 메모 원고' 버튼도 보인다(원고가 아직 서버에 있을 때만)
 export function ExportButtons({ moduleCode, rows, createdAt, disabled, onError, onNotice, annotate }) {
   const [busy, setBusy] = useState(null);   // 진행 중인 형식
@@ -16,7 +28,7 @@ export function ExportButtons({ moduleCode, rows, createdAt, disabled, onError, 
     setBusy("memo");
     const { ok, error, summary } = await api.exportAnnotated({ moduleCode, upload: annotate.upload, rows: annotate.rows, createdAt });
     if (!ok) onError?.(error);
-    else if (summary) onNotice?.(`메모 ${summary.memos}개 — 지적 ${summary.placed}건을 문단에 달았고 ${summary.unplaced}건은 총괄 메모에 적었습니다.`);
+    else if (summary) onNotice?.(annotateNotice(summary));
     setBusy(null);
   }
   return (
