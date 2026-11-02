@@ -102,7 +102,7 @@ export function Footer() {
           <div className="f-info">
             <p className="info-addr">동국대학교 종합설계1(김동우) · 프로토콜 팀 — 생성형 AI를 활용한 NCS 학습모듈 활용 및 사업운영 지원체계 구축</p>
             <ul className="info-cs">
-              <li>이메일 dgu2026protocol@gmail.com</li>
+              <li><span className="key-info"><strong className="strong">이메일</strong><span className="span">dgu2026protocol@gmail.com</span></span></li>
             </ul>
           </div>
           <div className="f-link">
