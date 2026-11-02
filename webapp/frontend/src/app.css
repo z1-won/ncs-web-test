@@ -119,8 +119,25 @@ details.raw pre {
 
 /* 확인서 행 아래 펼쳐지는 지적사항 */
 .sheet-more { margin-top: var(--krds-gap-2); }
-.tbl tr.sheet-detail > td { padding: var(--krds-padding-3) var(--krds-padding-5); background: var(--krds-light-color-surface-secondary-subtler); }
-.tbl tr.sheet-detail .krds-table-wrap { margin: 0; }
+/* 확인서 행에 딸린 지적사항 상세: 체크 항목 열 시작선에 맞춰 들여쓰고, 왼쪽 보조색 강조선 + 옅은 배경으로 "하위"임을 드러낸다 */
+.tbl tr.sheet-detail > td { padding: var(--krds-padding-5) var(--krds-padding-6) var(--krds-padding-6); background: var(--krds-light-color-surface-secondary-subtler); }
+.findings-list { display: flex; flex-direction: column; gap: var(--krds-gap-5); margin: 0; padding: 0; list-style: none; }
+.findings-list .finding {
+  padding: var(--krds-padding-4) var(--krds-padding-6);
+  border-left: 0.3rem solid var(--krds-light-color-border-secondary);
+  background: var(--krds-light-color-surface-white);
+  border-radius: 0 var(--krds-radius-medium1) var(--krds-radius-medium1) 0;
+}
+.findings-list .finding-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--krds-gap-3); }
+.findings-list .finding-check { font-size: var(--krds-pc-font-size-label-medium); font-weight: var(--krds-font-weight-bold); color: var(--krds-light-color-text-basic); }
+.findings-list .finding-body {
+  display: grid; grid-template-columns: max-content 1fr; column-gap: var(--krds-gap-5); row-gap: var(--krds-gap-2);
+  margin: var(--krds-gap-3) 0 0; font-size: var(--krds-pc-font-size-label-medium);
+}
+.findings-list .finding-body dt { color: var(--krds-light-color-text-subtle); white-space: nowrap; }
+.findings-list .finding-body dd { margin: 0; color: var(--krds-light-color-text-basic); overflow-wrap: anywhere; }
+.findings-list .finding-body dd.path { color: var(--krds-light-color-text-subtle); }
+@media (max-width: 767px) { .findings-list .finding-body { grid-template-columns: 1fr; row-gap: var(--krds-gap-1); } .findings-list .finding-body dd { margin-bottom: var(--krds-gap-2); } }
 
 /* 지적사항 표: 열 너비 고정. 위치 경로는 '>' 단위로, 긴 사유·수정 제안은 단어 단위로 줄바꿈하고 너무 길면 칸 안에서 스크롤 */
 .tbl.findings { table-layout: fixed; }

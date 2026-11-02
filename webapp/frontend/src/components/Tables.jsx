@@ -61,15 +61,11 @@ export function SheetTable({ sheet, findings }) {
               <React.Fragment key={key}>
                 <tr>
                   {groups.has(i) && <th scope="rowgroup" className="component" rowSpan={groups.get(i)}>{row.구성요소}</th>}
-                  <td style={{ whiteSpace: "pre-wrap" }}>{row.번호} {withBoxNumbers(row["체크 항목"])}</td>
-                  <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "적합" ? "✓" : ""}</td>
-                  <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "부적합" ? "✓" : ""}</td>
-                  <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "판단불가" ? "△" : ""}</td>
-                  <td style={{ whiteSpace: "pre-line" }}>
-                    {withBoxNumbers(row.비고)}
+                  <td style={{ whiteSpace: "pre-wrap" }}>
+                    {row.번호} {withBoxNumbers(row["체크 항목"])}
                     {own.length > 0 && (
                       <div className="sheet-more">
-                        {/* 확인서 비고는 요약이므로, 어디가 어떻게 틀렸는지는 이 행의 지적사항을 펼쳐서 본다 */}
+                        {/* 확인서 비고는 요약이므로, 어디가 어떻게 틀렸는지는 이 행의 지적사항을 펼쳐서 본다. 펼쳐지는 자리(이 열 시작선)와 맞춰 여기에 둔다 */}
                         <button type="button" className="krds-btn xsmall text" aria-expanded={open} aria-controls={`sheet-detail-${key}`}
                                 onClick={() => toggle(key)}>
                           {open ? "지적사항 접기" : `지적사항 ${own.length}건 보기`}
@@ -77,10 +73,14 @@ export function SheetTable({ sheet, findings }) {
                       </div>
                     )}
                   </td>
+                  <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "적합" ? "✓" : ""}</td>
+                  <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "부적합" ? "✓" : ""}</td>
+                  <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "판단불가" ? "△" : ""}</td>
+                  <td style={{ whiteSpace: "pre-line" }}>{withBoxNumbers(row.비고)}</td>
                 </tr>
                 {open && (
                   <tr className="sheet-detail" id={`sheet-detail-${key}`}>
-                    <td colSpan={5}><FindingsTable findings={own} compact /></td>
+                    <td colSpan={5}><FindingsList findings={own} /></td>
                   </tr>
                 )}
               </React.Fragment>
@@ -89,6 +89,28 @@ export function SheetTable({ sheet, findings }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+// 확인서 행 아래에 펼쳐지는 지적사항 — 표 안의 표 대신 "행에 딸린 상세 목록". 지적사항마다 판정 배지 + 체크명, 그 아래 위치/사유/수정 제안을 레이블-값으로
+export function FindingsList({ findings }) {
+  if (!findings.length) return <p className="empty">지적사항이 없습니다.</p>;
+  return (
+    <ul className="findings-list">
+      {findings.map((f, i) => (
+        <li key={`${f.item_id}|${f.check}|${f.region_path}|${i}`} className="finding">
+          <div className="finding-head">
+            <Badge value={f.verdict} />
+            <strong className="finding-check">{f.check}</strong>
+          </div>
+          <dl className="finding-body">
+            {f.region_path && <><dt>위치</dt><dd className="path">{f.region_path}</dd></>}
+            {f.reason && <><dt>사유</dt><dd>{withBoxNumbers(f.reason)}</dd></>}
+            {f.suggestion && <><dt>수정 제안</dt><dd>{asText(f.suggestion)}</dd></>}
+          </dl>
+        </li>
+      ))}
+    </ul>
   );
 }
 
