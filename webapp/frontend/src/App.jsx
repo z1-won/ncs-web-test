@@ -295,7 +295,7 @@ export default function App() {
                 <ExportButtons moduleCode={result.module_code} createdAt={result.created_at} rows={result.검수확인서 || []} onError={setError} onNotice={setNotice}
                                annotate={{ upload: upload.status === "ready" ? upload.token : null, rows: (result.전체 || []).filter((r) => r.판정 !== "적합") }} />
                 {result.id
-                  ? <><span className="meta sep">·</span><a href={api.reviews.zipUrl(result.id)} className="krds-btn small tertiary" title="결과 JSON 묶음">ZIP</a></>
+                  ? <a href={api.reviews.zipUrl(result.id)} className="krds-btn small tertiary" title="결과 JSON 묶음">ZIP</a>
                   : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null}
               </>
             }

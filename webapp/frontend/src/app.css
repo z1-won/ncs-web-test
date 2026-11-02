@@ -132,8 +132,13 @@ details.raw pre {
 .all-results .accordion-body > .component-result { padding-top: var(--krds-padding-3); }
 .all-results .component-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-5); margin-top: var(--krds-gap-5); }
 .all-results .component-foot details { flex: 1 1 100%; }
+.all-results .component-foot details { padding-top: var(--krds-gap-5); border-top: var(--krds-light-border-width-static-regular) solid var(--krds-light-color-divider-gray-light); }   /* 확인서 표와 접힌 목록 사이 */
 .all-results .component-foot summary { cursor: pointer; font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); }
-.all-results .component-foot details .krds-table-wrap { margin-top: var(--krds-gap-4); }
+.all-results .component-foot details .krds-table-wrap { margin-top: var(--krds-gap-5); }   /* 펼친 제목과 표 사이 */
+.all-results .component-foot details .krds-table-wrap + .krds-table-wrap { margin-top: var(--krds-gap-7); }   /* 지적사항 표와 전체 체크리스트 표 사이 */
+/* 접기/펼치기 제목은 클릭·키보드 모두로 열리는데, 클릭으로 열 때 KRDS 전역 *:focus 테두리가 제목 줄 전체를 감싼다 — 키보드 포커스(focus-visible)만 남긴다 */
+.all-results .component-foot summary:focus, details.raw summary:focus { outline: none; box-shadow: none; }
+.all-results .component-foot summary:focus-visible, details.raw summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-primary); outline-offset: 0.2rem; }
 /* KRDS 스피너는 기본이 가로·세로 100% 블록 — 머리글 안에서 글과 나란히 놓이게 크기를 글에 맞춘다 */
 .all-results .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); z-index: auto; }
 
@@ -237,4 +242,5 @@ details.raw pre {
 
 /* 확인서 내려받기 버튼 묶음(결과 머리 오른쪽) */
 .export-buttons { display: inline-flex; align-items: center; gap: var(--krds-gap-2); }
+.export-buttons > .meta:first-child { margin-right: var(--krds-gap-3); }   /* "확인서 내려받기" 글자와 첫 버튼 사이 */
 .export-buttons .sep { padding: 0 var(--krds-gap-1); }
