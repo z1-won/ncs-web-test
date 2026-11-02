@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 // 펼친 목록은 KRDS 드롭다운(krds-drop-wrap › drop-menu › drop-list › item-link)으로 그린다.
 // 동작은 KRDS 셀렉트 가이드대로: 클릭·Enter·Space로 열고 닫기, Esc로 닫고 초점은 컨테이너로, 닫힌 상태에서 ↑↓로 바로 이전·다음 값,
 // 열린 상태에서 ↑↓·Home·End로 이동 후 Enter로 선택, Tab·바깥 클릭이면 닫힘. 값이 바뀌어도 폼은 제출하지 않는다.
+// option.dividerAfter가 참이면 그 항목 아래에 구분선을 긋는다(성격이 다른 항목 묶음 분리용).
 export function KrdsSelect({ id, value, options, onChange, title, describedBy }) {
   const [open, setOpen] = useState(false);
   const [focusIndex, setFocusIndex] = useState(0);
@@ -74,7 +75,7 @@ export function KrdsSelect({ id, value, options, onChange, title, describedBy })
         <div className="drop-in">
           <ul className="drop-list" role="listbox" aria-labelledby={id}>
             {options.map((option, index) => (
-              <li key={option.value} role="none">
+              <li key={option.value} role="none" className={option.dividerAfter ? "has-divider" : undefined}>
                 <button type="button" role="option" id={`${id}-opt-${index}`} tabIndex={index === focusIndex ? 0 : -1}
                         className={`item-link${option.value === value ? " active" : ""}`} aria-selected={option.value === value}
                         onClick={() => choose(index)} onKeyDown={(event) => onOptionKey(event, index)}>

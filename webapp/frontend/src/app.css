@@ -91,6 +91,8 @@ details.raw pre {
 .check-select .drop-list .item-link { height: var(--krds-dropdown--list-item-height); border: 0; background: none; text-align: left; cursor: pointer; }
 /* 키보드로 이동 중인 항목은 테두리 대신 KRDS 드롭다운의 hover 배경으로 표시한다 */
 .check-select .drop-list .item-link:focus { outline: 0; box-shadow: none; }
+/* "전체" 아래 구분선 — 실행 모드(전체)와 개별 구성요소를 시각적으로 나눈다 */
+.check-select .drop-list li.has-divider { padding-bottom: var(--krds-gap-2); margin-bottom: var(--krds-gap-1); border-bottom: var(--krds-light-border-width-static-regular) solid var(--krds-light-color-divider-gray-light); }
 .check-select .drop-list .item-link:focus:not(.active) { background-color: var(--krds-dropdown--list-item-color-action-hover); }
 
 /* 확인서 행 아래 펼쳐지는 지적사항 */

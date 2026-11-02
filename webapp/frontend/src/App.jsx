@@ -13,7 +13,7 @@ import { Footer, Header, TopButton } from "./components/Layout.jsx";
 const HISTORY_PREVIEW = 5;
 
 export default function App() {
-  const [check, setCheck] = useState("position");
+  const [check, setCheck] = useState(ALL_CHECK); // 기본은 전체 검수
   const [checks, setChecks] = useState(CHECKS);
   const [files, setFiles] = useState([]);
   const [moduleCode, setModuleCode] = useState("");
@@ -89,7 +89,8 @@ export default function App() {
     });
   }, []);
 
-  const options = [...checks, ALL_OPTION];
+  // "전체"는 개별 구성요소와 성격이 다른 실행 모드라 맨 위에 두고(가장 많이 쓰는 선택), 그 아래 구분선 뒤에 확인서 순서대로 10개
+  const options = [ALL_OPTION, ...checks];
   const selected = options.find((c) => c.value === check) || options[0];
 
   async function submit(event) {

@@ -58,7 +58,7 @@ export function checksFromEngines(engines) {
 }
 
 // ───────────────────────── 전체 실행(구성요소 10개를 차례로) ─────────────────────────
-// 선택 목록의 마지막 항목. 서버의 check 값이 아니라 화면이 처리한다: 파일을 /api/uploads에 한 번 올려 토큰을 받고,
+// 선택 목록의 첫 항목(기본값). 서버의 check 값이 아니라 화면이 처리한다: 파일을 /api/uploads에 한 번 올려 토큰을 받고,
 // 엔진 순서대로 /api/review를 upload=토큰으로 부른다. 결과는 구성요소별 아코디언(KRDS krds-accordion)에 하나씩 채워진다.
 export const ALL_CHECK = "all";
 
@@ -67,6 +67,7 @@ export const ALL_OPTION = {
   label: "전체 — 구성요소 10개를 차례로 검수",
   files: "원고 + 개발계획서 (개발계획서가 없으면 '위치'만 건너뛰고 나머지를 실행)",
   all: true,
+  dividerAfter: true, // 선택 목록 맨 위에 두고, 아래 개별 구성요소와 구분선으로 나눈다
 };
 
 // 확인서 행의 검수결과 집계 → { 적합, 부적합, 판단불가, 미검사 }
