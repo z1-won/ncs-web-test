@@ -37,7 +37,7 @@ class FileStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             store = FileStore(Path(folder) / "결과")
             stored = store.save(review, [], group_id="11111111-2222-3333-4444-555555555555")
-            self.assertEqual(stored.directory.parent, Path(folder) / "결과" / "11111111-2222-3333-4444-555555555555")
+            self.assertEqual(stored.directory.parent, (Path(folder) / "결과" / "11111111-2222-3333-4444-555555555555").resolve())   # ← 이 줄
             self.assertTrue(stored.zip_path.is_file())
 
     def test_save_writes_run_folder_and_reports_paths(self):
