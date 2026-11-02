@@ -257,6 +257,8 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .history-table td { overflow-wrap: anywhere; word-break: keep-all; }
 /* 실행 시각: 날짜 / 오전·오후 시각을 항상 두 줄로(칸이 넓어도 같은 모양) */
 .history-table td.when span { display: block; white-space: nowrap; }
+.history-table td.when span:first-child { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }   /* 날짜는 흐리게, 시각이 먼저 읽히게 */
+.history-table td.when span:last-child { color: var(--krds-light-color-text-basic); }
 .history-table .col-verdict { width: 9.6rem; }
 .history-table .col-action { width: 11rem; }
 /* 배지·버튼은 한 덩어리 — 칸이 좁아져도 글자가 줄바꿈되지 않게 */
