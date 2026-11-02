@@ -31,23 +31,23 @@ class CompareListsTests(unittest.TestCase):
 
     def test_spacing_difference_is_reported_by_word(self):
         actual = B.replace("공표요금", "공표 요금")
-        self.assertEqual(compare_lists([A, B], [A, actual]), ["2번째 본문 「종류(공표 요금,」 / 계획서 「종류(공표요금,」 (띄어쓰기만 다름)"])
+        self.assertEqual(compare_lists([A, B], [A, actual]), ["2번째 본문 「종류(공표 요금,」, 계획서 「종류(공표요금,」 (띄어쓰기만 다름)"])
 
     def test_case_difference(self):
-        self.assertEqual(compare_lists(["Early Check-In 가능"], ["Early Check-in 가능"]), ["1번째 본문 「Check-in」 / 계획서 「Check-In」"])
+        self.assertEqual(compare_lists(["Early Check-In 가능"], ["Early Check-in 가능"]), ["1번째 본문 「Check-in」, 계획서 「Check-In」"])
 
     def test_missing_and_count(self):
-        self.assertEqual(compare_lists([A, B], [A]), ["개수 본문 1 / 계획서 2", f"2번째 누락 — 계획서에는 「{B}」가 있는데 본문에 없음"])
+        self.assertEqual(compare_lists([A, B], [A]), ["개수: 본문 1개, 계획서 2개", f"2번째 누락: 계획서에는 「{B}」가 있는데 본문에 없음"])
 
     def test_extra_sentence_in_manuscript(self):
-        self.assertEqual(compare_lists([A], [A, C]), ["개수 본문 2 / 계획서 1", f"본문에만 있음 「{C}」 (계획서에 없음)"])
+        self.assertEqual(compare_lists([A], [A, C]), ["개수: 본문 2개, 계획서 1개", f"본문에만 있음 「{C}」 (계획서에 없음)"])
 
     def test_word_change_pairs_with_closest_sentence(self):
         actual = A.replace("구분할", "설명할")
-        self.assertEqual(compare_lists([A, B], [B, actual]), ["1번째 본문 「설명할」 / 계획서 「구분할」"])
+        self.assertEqual(compare_lists([A, B], [B, actual]), ["1번째 본문 「설명할」, 계획서 「구분할」"])
 
     def test_difference_marks_omitted_words(self):
-        self.assertEqual(difference("SNS, 모바일 등으로", "SNS 등으로"), "본문 「SNS」 / 계획서 「SNS, 모바일」")
+        self.assertEqual(difference("SNS, 모바일 등으로", "SNS 등으로"), "본문 「SNS」, 계획서 「SNS, 모바일」")
 
 
 class CheckGoalsTests(unittest.TestCase):
@@ -65,7 +65,7 @@ class CheckGoalsTests(unittest.TestCase):
         self.assertEqual(ok["비고"], {})
         [bad] = check_goals(plan, [self.unit(["•" + A, "•" + B.replace("공표요금", "공표 요금")])])
         self.assertEqual(bad["판정"], "부적합")
-        self.assertTrue(bad["비고"]["개발계획서 학습 목표 일치"].startswith("1-1 2번째 본문 학습 목표 「종류(공표 요금,」 / 개발계획서 「종류(공표요금,」"))
+        self.assertTrue(bad["비고"]["개발계획서 학습 목표 일치"].startswith("1-1 2번째 본문 학습 목표 「종류(공표 요금,」, 개발계획서 「종류(공표요금,」"))
         self.assertEqual(bad["개발계획서"], ["1.1 " + A, "1.2 " + B])
 
     def test_missing_goal_block_and_unknown_unit(self):

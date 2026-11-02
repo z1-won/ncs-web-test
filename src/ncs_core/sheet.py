@@ -38,23 +38,37 @@ def _item_checks(rows: list[dict], item: SheetItem) -> list[tuple[str, str, str,
             # 접두가 있는 항목은 자기 접두의 체크만, 단 번호 없는 체크뿐인 행(표를 못 읽은 경우)은 모두 포함
             if item.check_prefix and named and not name.startswith(item.check_prefix):
                 continue
-            note = notes.get(name, "") if isinstance(notes, dict) else "; ".join(notes)
+            note = notes.get(name, "") if isinstance(notes, dict) else "\n".join(notes)
             suggestion = row.get("수정 제안")
             out.append((name, value, note, row.get("위치") or "", suggestion if isinstance(suggestion, str) else None))
     return out
 
 
-MAX_LOCATIONS = 8      # 비고에 적는 위치 수. 넘으면 '…'
-MAX_NOTE_LENGTH = 160  # 한 건짜리 체크에 비고를 그대로 실을 때의 최대 길이
-MAX_EXAMPLE_LENGTH = 140  # 여러 건짜리 체크 뒤에 붙이는 대표 사례(첫 위반 행의 비고) 길이 — 두 문서의 문구가 다 보이게
+MAX_LOCATIONS = 8       # 머리 줄에 적는 위치 수. 넘으면 '…'
+MAX_NOTE_LENGTH = 160   # 사례 한 줄의 최대 길이(한 건짜리 체크). 줄 단위로 자르므로 줄 중간이 끊기지 않는다
+MAX_EXAMPLE_LENGTH = 140  # 사례 한 줄의 최대 길이(여러 건짜리 체크) — 두 문서의 문구가 다 보이게
+MAX_EXAMPLE_LINES = 6   # 사례 줄 수. 넘으면 '외 n줄'
+
+
+def _clip(line: str, limit: int) -> str:
+    return line if len(line) <= limit else line[: limit - 1] + "…"
+
+
+def _example_lines(note: str, limit: int) -> list[str]:
+    """엔진이 준 비고를 줄 단위로. 엔진이 이미 줄을 나눴으면(여러 사례) 그대로 두고, 각 줄만 길이를 자른다."""
+    lines = [_clip(x.strip(), limit) for x in note.splitlines() if x.strip()]
+    if len(lines) > MAX_EXAMPLE_LINES:
+        lines = lines[:MAX_EXAMPLE_LINES] + [f"외 {len(lines) - MAX_EXAMPLE_LINES}줄"]
+    return lines
 
 
 def summarize_remarks(checks: list[tuple[str, str, str, str, str | None]]) -> list[str]:
-    """확인서 비고 줄 목록 — 체크 이름당 한 줄, 끝에 수정 제안 한 줄.
+    """확인서 비고 줄 목록 — 체크마다 머리 줄 + 사례 줄, 마지막에 '→ 수정 제안' 줄.
 
-    확인서는 판정과 근거 한 줄을 적는 곳이라 건수·위치·수정 방향만 싣는다.
-    - 여러 건을 검사한 체크: '이름: N건 중 부적합 n건·판단불가 m건 (위치, …) — 예: 첫 위반 행의 비고' (무슨 문제인지 한 사례)
-    - 한 건만 검사한 체크(항목 하나에 행 하나인 규칙): 건수가 의미 없으므로 그 행의 비고(핵심 멘트)를 그대로 싣는다
+    확인서는 판정과 근거를 적는 곳이라 세 가지 역할을 줄로 나눈다(읽는 사람이 구분자를 해석하지 않게).
+    - 머리 줄: '이름: N건 중 부적합 n건·판단불가 m건 (위치, …)'. 한 건만 검사한 체크는 건수가 의미 없으므로 '이름:'만.
+    - 사례 줄: 첫 위반 행의 비고. 엔진이 여러 줄(번호 매긴 사례)로 줬으면 줄마다 한 줄, 줄 단위로만 자른다.
+    - 조치 줄: '→ 수정 제안'. 엔진이 ' / '로 여러 제안을 이어 준 것은 제안마다 한 줄.
     어디가 어떻게 다른지의 상세는 지적사항 표에 있다.
     """
     stats: dict[str, dict] = {}
@@ -74,21 +88,20 @@ def summarize_remarks(checks: list[tuple[str, str, str, str, str | None]]) -> li
         if not stat[X] and not stat[TRI]:
             continue
         if stat["total"] == 1:
-            note = stat["note"]
-            body = note if len(note) <= MAX_NOTE_LENGTH else note[: MAX_NOTE_LENGTH - 1] + "…"
-            lines.append(f"{name}: {body}" if body else f"{name}: {'부적합' if stat[X] else '판단불가'}")
+            example = _example_lines(stat["note"], MAX_NOTE_LENGTH)
+            lines.append(f"{name}:" if example else f"{name}: {'부적합' if stat[X] else '판단불가'}")
         else:
+            example = _example_lines(stat["note"], MAX_EXAMPLE_LENGTH)
             counts = "·".join(f"{label} {stat[key]}건" for key, label in ((X, "부적합"), (TRI, "판단불가")) if stat[key])
             where = stat["where"]
             shown = ", ".join(where[:MAX_LOCATIONS]) + (" …" if len(where) > MAX_LOCATIONS else "")
-            example = stat["note"]
-            if len(example) > MAX_EXAMPLE_LENGTH:
-                example = example[: MAX_EXAMPLE_LENGTH - 1] + "…"
-            lines.append(f"{name}: {stat['total']}건 중 {counts}" + (f" ({shown})" if shown else "") + (f" — 예: {example}" if example else ""))
-        if stat["suggest"] and stat["suggest"] not in suggestions:
-            suggestions.append(stat["suggest"])
-    if lines and suggestions:
-        lines.append("— " + " / ".join(suggestions))
+            lines.append(f"{name}: {stat['total']}건 중 {counts}" + (f" ({shown})" if shown else ""))
+        lines += example
+        for one in (stat["suggest"] or "").split(" / "):
+            one = one.strip()
+            if one and one not in suggestions:
+                suggestions.append(one)
+    lines += [f"→ {one}" for one in suggestions]
     return lines
 
 

@@ -71,13 +71,13 @@ class PositionWithCatalogTests(unittest.TestCase):
         [row] = check_position(self.REF, self.REF, basis="NCS 목록", plan_only=plan)
         self.assertEqual(row["체크"]["③ 능력단위명 목록 일치"], "O")
         self.assertEqual(row["체크"]["개발계획서↔NCS 목록"], "△")
-        self.assertIn("개발계획서 「연회 예약상담」 / NCS 목록 「연회 예약 상담」", row["비고"]["개발계획서↔NCS 목록"])
+        self.assertIn("개발계획서 「연회 예약상담」, NCS 목록 「연회 예약 상담」", row["비고"]["개발계획서↔NCS 목록"])
 
     def test_manuscript_differs_from_catalog(self):
         manuscript = {**self.REF, "능력단위": ["연회 판촉", "연회 기획"], "학습모듈명": ["연회 판촉", "연회 기획"], "행쌍": [("연회 판촉", "연회 판촉"), ("연회 기획", "연회 기획")]}
         [row] = check_position(self.REF, manuscript, basis="NCS 목록", plan_only=self.REF)
         self.assertEqual(row["판정"], "부적합")
-        self.assertIn("원고 「연회 기획」 / NCS 목록 「연회 예약 상담」", row["비고"]["③ 능력단위명 목록 일치"])
+        self.assertIn("원고 「연회 기획」, NCS 목록 「연회 예약 상담」", row["비고"]["③ 능력단위명 목록 일치"])
         self.assertNotIn("개발계획서↔NCS 목록", row["체크"])
         self.assertTrue(row["수정 제안"].startswith("NCS 목록의 능력단위명"))
 
@@ -85,7 +85,7 @@ class PositionWithCatalogTests(unittest.TestCase):
         ref = {"대분류": "이용", "중분류": "관광", "소분류": "숙박서비스"}
         rows = check_classification(ref, {"대분류": "이용", "중분류": "관광", "소분류": "숙박 서비스"}, basis="NCS 목록",
                                     plan={"대분류": "이용", "중분류": "관광", "소분류": "숙박서비스"})
-        self.assertIn("원고 「숙박 서비스」 / NCS 목록 「숙박서비스」 — 띄어쓰기만 다름", rows[2]["비고"]["① 개발계획서와 명칭 일치"])
+        self.assertIn("원고 「숙박 서비스」, NCS 목록 「숙박서비스」 (띄어쓰기만 다름)", rows[2]["비고"]["① 개발계획서와 명칭 일치"])
         self.assertEqual(rows[2]["수정 제안"], 'NCS 목록대로 "숙박서비스"로 수정')
         rows = check_classification(ref, ref, basis="NCS 목록", plan={"대분류": "이용", "중분류": "관광", "소분류": "숙박 서비스"})
         self.assertEqual(rows[2]["체크"]["개발계획서↔NCS 목록"], "△")
