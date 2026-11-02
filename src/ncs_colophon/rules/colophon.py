@@ -23,6 +23,24 @@ def _row(region: str, where: str, source, checks: dict, notes: dict, suggestion=
     return out
 
 
+def _kind(block: dict) -> str:
+    """블록 꼴: 세분류명만 있으면 신규, 학습모듈명만 있으면 개선, 그 밖은 미상."""
+    if block["세분류명"] is not None and block["학습모듈명"] is None:
+        return "신규"
+    if block["학습모듈명"] is not None and block["세분류명"] is None:
+        return "개선"
+    return "미상"
+
+
+def both_forms_left(blocks: list[dict]) -> bool:
+    """신규 블록과 개선 블록이 같은 발행일로 함께 있는가 — 양식의 두 벌이 그대로 남은 흔적.
+
+    (개선 양식의 정상 모양은 '이전 이력(세분류명, 옛 발행일)' + '이번(학습모듈명, 새 발행일)'이라 발행일이 다르다.)
+    """
+    kinds = {_kind(b) for b in blocks}
+    return {"신규", "개선"} <= kinds and len({(b["발행일"] or "").replace(" ", "") for b in blocks}) == 1
+
+
 def expected_form(module_code: str) -> str | None:
     m = LM_CODE.search(module_code)
     if not m:
@@ -50,9 +68,15 @@ def check_colophon(histories: list[dict], colophons: list[dict], module_code: st
     else:
         blocks = histories[0]["blocks"]
         actual = "신규" if len(blocks) == 1 else "개선" if len(blocks) >= 2 else "미상"
-        checks["양식"] = O if actual == form else X
-        if actual != form:
-            notes["양식"] = f"코드 판 번호상 {form} 양식이어야 하는데 이력 블록 {len(blocks)}개({actual} 양식 꼴)"
+        if both_forms_left(blocks):
+            # 한 표 안에 신규 블록(세분류명)과 개선 블록(학습모듈명)이 같은 발행일로 나란히 남아 있다 — 양식 두 벌을 정리하지 않은 원고
+            checks["양식"] = X
+            notes["양식"] = (f"신규(세분류명)·개선(학습모듈명) 양식 블록이 같은 발행일로 모두 남아 있음 — "
+                           f"코드 판 번호상 {form} 양식 하나만 남길 것")
+        else:
+            checks["양식"] = O if actual == form else X
+            if actual != form:
+                notes["양식"] = f"코드 판 번호상 {form} 양식이어야 하는데 이력 블록 {len(blocks)}개({actual} 양식 꼴)"
     rows.append(_row(REGION + " > 양식", "", {"기대 양식": form, "이력 표": len(histories), "판권 표": len(colophons)}, checks, notes,
                      "모듈 코드 판 번호에 맞는 개발 이력 양식 하나만 남기고 나머지는 삭제"))
 
@@ -62,6 +86,8 @@ def check_colophon(histories: list[dict], colophons: list[dict], module_code: st
         for h in (chosen,):
             blocks = h["blocks"]
             current = blocks[-1] if blocks else None
+            if form == "신규" and both_forms_left(blocks):
+                current = next(b for b in blocks if _kind(b) == "신규")  # 신규 모듈이면 세분류명 블록이 이번 블록
             checks, notes = {}, {}
             if current is None:
                 checks["이력 내용"] = X
