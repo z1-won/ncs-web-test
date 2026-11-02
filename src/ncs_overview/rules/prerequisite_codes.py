@@ -8,7 +8,9 @@ NCS 목록이 없으면 코드 형식만 보고 나머지는 △. ④(수준)는
 
 import re
 
+
 from ncs_core import NA, O, PASS, TRI, X, make_normalizer, verdict, visible
+from ncs_core.notes import lines
 from ncs_core.ncs_catalog import catalog
 
 ITEM_ID = "F02-개요-③"
@@ -35,7 +37,7 @@ def check_prerequisite_codes(overview: dict, module_code: str) -> list[dict]:
                 names.setdefault(_norm_key(unit.name), []).append(unit)
     checks = {"③ 코드 병기": O, "③ 코드 유효(NCS 목록)": O if cat else TRI, "③ 명칭 일치(NCS 목록)": O if cat else TRI}
     notes: dict[str, list[str]] = {k: [] for k in checks}
-    shown = []
+    shown, with_code = [], []  # with_code: 코드를 붙여 적어야 할 항목의 예시(수정 제안)
     for item in block["items"]:
         m = CODE_IN_ITEM.match(item)
         if not m:
@@ -43,40 +45,47 @@ def check_prerequisite_codes(overview: dict, module_code: str) -> list[dict]:
             if hits:
                 checks["③ 코드 병기"] = X
                 codes = ", ".join(f"LM{u.code}" for u in hits[:2])
-                notes["③ 코드 병기"].append(f"「{visible(item)}」 — NCS 학습모듈명인데 코드가 없음 (예: {visible(item)}({codes}))")
+                notes["③ 코드 병기"].append(f"「{visible(item)}」 (NCS 학습모듈명인데 코드가 없음)")
+                with_code.append(f"「{visible(item)}({codes})」")
                 shown.append({"항목": item, "판단": "NCS 학습모듈 · 코드 없음"})
             else:
                 shown.append({"항목": item, "판단": "과목명으로 봄" if cat else "코드 없음(목록 없어 판단 못 함)"})
                 if not cat:
                     checks["③ 코드 병기"] = TRI if checks["③ 코드 병기"] == O else checks["③ 코드 병기"]
-                    notes["③ 코드 병기"].append(f"「{visible(item)}」 — NCS 목록이 없어 학습모듈명인지 판단 못 함")
+                    notes["③ 코드 병기"].append(f"「{visible(item)}」 (NCS 목록이 없어 학습모듈명인지 판단하지 못함)")
             continue
         name, code = m.group("name").strip(), m.group("code")
         entry = {"항목": item, "코드": code}
         if not FULL_CODE.match(code):
             checks["③ 코드 병기"] = X
-            notes["③ 코드 병기"].append(f"「{visible(item)}」 — 코드 꼴은 LM + 10자리 + _NNvN (예: LM1201010411_23v5)")
+            notes["③ 코드 병기"].append(f"「{visible(item)}」 (코드 꼴이 'LM + 10자리 + _NNvN'이 아님, 예 LM1201010411_23v5)")
         if code.replace("LM", "")[:10] == module_code.replace("LM", "")[:10]:
             checks["③ 코드 유효(NCS 목록)"] = X
-            notes["③ 코드 유효(NCS 목록)"].append(f"「{visible(item)}」 — 이 학습모듈 자신의 코드")
+            notes["③ 코드 유효(NCS 목록)"].append(f"「{visible(item)}」 (이 학습모듈 자신의 코드)")
         if cat:
             unit = cat.unit(code)
             if unit is None:
                 checks["③ 코드 유효(NCS 목록)"] = X
-                notes["③ 코드 유효(NCS 목록)"].append(f"「{visible(item)}」 — NCS 목록에 없는 코드 {code}")
+                notes["③ 코드 유효(NCS 목록)"].append(f"「{visible(item)}」 (NCS 목록에 없는 코드 {code})")
             else:
                 entry["NCS"] = f"{unit.name}(LM{unit.code})"
                 if f"LM{unit.code}" != (code if code.startswith("LM") else "LM" + code) and "_" in code:
-                    notes["③ 코드 유효(NCS 목록)"].append(f"「{visible(item)}」 — 버전이 목록과 다름: 적힌 {code} / 목록 LM{unit.code}")
+                    notes["③ 코드 유효(NCS 목록)"].append(f"「{visible(item)}」 (버전이 목록과 다름: 적힌 {code}, 목록 LM{unit.code})")
                     checks["③ 코드 유효(NCS 목록)"] = X
                 if not same_name(unit.name, name):
                     checks["③ 명칭 일치(NCS 목록)"] = X
-                    notes["③ 명칭 일치(NCS 목록)"].append(f"원고 「{visible(name)}」 / NCS 목록 「{unit.name}」 (코드 {code})")
+                    notes["③ 명칭 일치(NCS 목록)"].append(f"원고 「{visible(name)}」, NCS 목록 「{unit.name}」 (코드 {code})")
         shown.append(entry)
-    flat = {k: " / ".join(v) for k, v in notes.items() if v}
+    flat = {k: lines(v) for k, v in notes.items() if v}
     if not cat:
-        flat.setdefault("③ 코드 유효(NCS 목록)", "NCS 목록(ncs_units.tsv)이 없어 코드·명칭 대조 생략 — scripts/build_ncs_catalog.py")
-    return [_row(shown, checks, flat, "NCS 능력단위·학습모듈은 '명칭(LM코드)' 꼴로, 명칭·코드를 NCS 목록과 같게")]
+        flat.setdefault("③ 코드 유효(NCS 목록)", "NCS 목록(ncs_units.tsv)이 없어 코드·명칭 대조를 확인하지 못함 (scripts/build_ncs_catalog.py로 생성)")
+    # 수정 제안: 코드가 빠진 항목은 붙여 적을 꼴을 그대로 보여 주고, 나머지는 일반 문장. " / "로 이으면 확인서가 "→" 줄로 나눈다
+    advice = []
+    if with_code:
+        advice.append("명칭 뒤에 코드 병기: " + ", ".join(with_code))
+    if any(v == X for v in checks.values()) and len(with_code) < sum(len(v) for v in notes.values()):
+        advice.append("NCS 능력단위·학습모듈은 '명칭(LM코드)' 꼴로, 명칭·코드를 NCS 목록과 같게")
+    return [_row(shown, checks, flat, " / ".join(advice) or "NCS 능력단위·학습모듈은 '명칭(LM코드)' 꼴로, 명칭·코드를 NCS 목록과 같게")]
 
 
 def _row(evidence, checks, notes, suggestion):
@@ -110,7 +119,7 @@ def check_prerequisite_levels(overview: dict, module_code: str) -> list[dict]:
     cat = catalog()
     if cat is None or not cat.levels:
         return [_level_row(block["items"], {label: TRI},
-                           {label: "NCS 능력단위 수준 표(ncs_levels.tsv)가 없어 대조 생략 — scripts/build_ncs_levels.py"}, None)]
+                           {label: "NCS 능력단위 수준 표(ncs_levels.tsv)가 없어 수준 대조를 확인하지 못함 (scripts/build_ncs_levels.py로 생성)"}, None)]
     own = cat.level(module_code)
     if own is None:
         return [_level_row(block["items"], {label: TRI}, {label: f"이 학습모듈({module_code})의 수준을 수준 표에서 찾지 못함"}, None)]
@@ -123,7 +132,7 @@ def check_prerequisite_levels(overview: dict, module_code: str) -> list[dict]:
         if m:
             row = cat.level_row(m.group("code"))
             if row is None:
-                unknown.append(f"「{visible(item)}」 — 수준 표에 없는 코드")
+                unknown.append(f"「{visible(item)}」 (수준 표에 없는 코드)")
                 shown.append({"항목": item, "수준": "?"})
                 continue
         else:
@@ -132,20 +141,20 @@ def check_prerequisite_levels(overview: dict, module_code: str) -> list[dict]:
                 shown.append({"항목": item, "수준": "해당 없음(과목명)"})
                 continue
             if len({h["level"] for h in hits}) > 1:
-                unknown.append(f"「{visible(item)}」 — 같은 이름의 능력단위가 여러 개라 수준을 정하지 못함")
+                unknown.append(f"「{visible(item)}」 (같은 이름의 능력단위가 여러 개라 수준을 정하지 못함)")
                 shown.append({"항목": item, "수준": "?"})
                 continue
             row = hits[0]
         compared += 1
         shown.append({"항목": item, "코드": row["code"], "수준": row["level"]})
         if row["level"] is not None and row["level"] > own:
-            higher.append(f"「{visible(item)}」 수준 {row['level']} > 이 모듈 수준 {own}")
+            higher.append(f"「{visible(item)}」 (수준 {row['level']}, 이 학습모듈 수준 {own}보다 높음)")
     checks = {label: X if higher else (TRI if unknown else (O if compared else NA))}
     notes = {}
     if higher or unknown:
-        notes[label] = " / ".join(higher + [f"확인 필요: {u}" for u in unknown])
+        notes[label] = lines(higher + [f"확인 필요: {u}" for u in unknown])
     if not compared and not unknown:
-        notes[label] = "NCS 학습모듈을 제시하지 않음(과목명만) — 해당 없음"
+        notes[label] = "NCS 학습모듈을 제시하지 않음 (과목명만, 해당 없음)"
     return [_level_row(shown, checks, notes, f"이 학습모듈(수준 {own})보다 수준이 높은 능력단위는 선수학습에서 제외", own)]
 
 

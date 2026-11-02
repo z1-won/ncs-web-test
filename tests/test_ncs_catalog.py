@@ -124,11 +124,12 @@ class PrerequisiteCodeTests(unittest.TestCase):
         row = self.run_items(["연회 행사 준비(1203020411_23v2)", "연회 행사 진행(LM1203020405_19v1)", "웨딩 행사 진행(LM1203020406_23v3)",
                               "연회 행사 정산(LM1203020408_23v3)", "연회 판촉"])
         self.assertEqual(row["판정"], "부적합")
-        self.assertIn("코드 꼴은 LM", row["비고"]["③ 코드 병기"])
-        self.assertIn("NCS 학습모듈명인데 코드가 없음 (예: 연회 판촉(LM1203020401_23v3))", row["비고"]["③ 코드 병기"])
+        self.assertIn("코드 꼴이 'LM + 10자리 + _NNvN'이 아님", row["비고"]["③ 코드 병기"])
+        self.assertIn("「연회 판촉」 (NCS 학습모듈명인데 코드가 없음)", row["비고"]["③ 코드 병기"])
+        self.assertIn("명칭 뒤에 코드 병기: 「연회 판촉(LM1203020401_23v3)」", row["수정 제안"])
         self.assertIn("버전이 목록과 다름", row["비고"]["③ 코드 유효(NCS 목록)"])
         self.assertIn("자신의 코드", row["비고"]["③ 코드 유효(NCS 목록)"])
-        self.assertIn("원고 「웨딩 행사 진행」 / NCS 목록 「웨딩 행사 준비」", row["비고"]["③ 명칭 일치(NCS 목록)"])
+        self.assertIn("원고 「웨딩 행사 진행」, NCS 목록 「웨딩 행사 준비」", row["비고"]["③ 명칭 일치(NCS 목록)"])
 
     def test_without_catalog_only_format_is_checked(self):
         os.environ["NCS_CATALOG_FILE"] = str(REAL) + ".missing"
@@ -166,7 +167,7 @@ class PrerequisiteLevelTests(unittest.TestCase):
     def test_higher_level_is_rejected_and_subjects_are_ignored(self):
         row = self.run_items(["연회 판촉(LM1203020401_23v3)", "연회 행사 진행(LM1203020405_23v2)", "호텔 경영론", "웨딩 행사 준비"])
         self.assertEqual(row["판정"], "부적합")
-        self.assertEqual(row["비고"]["④ 선수학습 수준 ≤ 이 모듈 수준"], "「연회 판촉(LM1203020401_23v3)」 수준 4 > 이 모듈 수준 3")
+        self.assertEqual(row["비고"]["④ 선수학습 수준 ≤ 이 모듈 수준"], "「연회 판촉(LM1203020401_23v3)」 (수준 4, 이 학습모듈 수준 3보다 높음)")
         self.assertEqual(row["이 모듈 수준"], 3)
         ok = self.run_items(["연회 행사 진행(LM1203020405_23v2)", "웨딩 행사 준비"])  # 2, 3 ≤ 3
         self.assertEqual(ok["판정"], "적합")
