@@ -8,6 +8,7 @@ import { Badge, Spinner } from "./components/Badge.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
 import { ExportButtons } from "./components/ExportButtons.jsx";
 import { KrdsSelect } from "./components/KrdsSelect.jsx";
+import { ResultHead } from "./components/ResultHead.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
 
 const HISTORY_PREVIEW = 5;
@@ -275,7 +276,7 @@ export default function App() {
       <div id="review-result" ref={resultsRef} className="results-anchor nav-anchor" />
 
       {busy && !allRun && (
-        <div className="result-head"><Spinner label={`검사 중 — ${selected.label}`} /></div>
+        <ResultHead status={<Spinner label={`검사 중 — ${selected.label}`} />} />
       )}
       {!allRun && !result && !busy && (
         <p className="empty result-placeholder">검사를 실행하면 결과가 여기에 표시됩니다{history?.length ? " — 아래 검수 이력에서 이전 결과를 열 수도 있습니다" : ""}.</p>
@@ -285,14 +286,20 @@ export default function App() {
 
       {result && (
         <section>
-          <div className="result-head">
-            <Badge value={result.요약.검수결과} large />
-            <span className="meta">{result.module_code} · {checks.find((item) => item.value === result.check)?.label || result.check}</span>
-            {result.id ? <a href={api.reviews.zipUrl(result.id)}>ZIP 다운로드</a> : <span className="meta">저장: {result.저장?.zip}</span>}
-            {/* 단독 결과도 확인서 파일로 — 이 구성요소만 채워지고 나머지는 '미검사' */}
-            <ExportButtons moduleCode={result.module_code} createdAt={result.created_at} rows={result.검수확인서 || []} onError={setError} onNotice={setNotice}
-                           annotate={{ upload: upload.status === "ready" ? upload.token : null, rows: (result.전체 || []).filter((r) => r.판정 !== "적합") }} />
-          </div>
+          <ResultHead
+            status={<Badge value={result.요약.검수결과} large />}
+            meta={`${result.module_code} · ${checks.find((item) => item.value === result.check)?.label || result.check}${result.created_at ? ` · ${formatDate(result.created_at)}` : ""}`}
+            downloads={
+              <>
+                {/* 단독 결과도 확인서 파일로 — 이 구성요소만 채워지고 나머지는 '미검사' */}
+                <ExportButtons moduleCode={result.module_code} createdAt={result.created_at} rows={result.검수확인서 || []} onError={setError} onNotice={setNotice}
+                               annotate={{ upload: upload.status === "ready" ? upload.token : null, rows: (result.전체 || []).filter((r) => r.판정 !== "적합") }} />
+                {result.id
+                  ? <><span className="meta sep">·</span><a href={api.reviews.zipUrl(result.id)} className="krds-btn small tertiary" title="결과 JSON 묶음">ZIP</a></>
+                  : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null}
+              </>
+            }
+          />
 
           <h2 className="section-title">검수 확인서</h2>
           {/* 전체 실행의 아코디언 몸통과 같은 구성: 확인서(행마다 지적사항 펼치기) + 진단 경고 + 접힌 지적사항·전체 체크리스트 */}

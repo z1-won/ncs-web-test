@@ -35,14 +35,18 @@ html { scrollbar-gutter: stable; }
 .review-form .run-buttons .krds-btn.large { height: var(--krds-size-height-8); }
 .review-form .krds-btn { width: 100%; }
 .selected-files { margin-top: var(--krds-gap-7); }
-.result-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--krds-gap-5);
-  margin-top: var(--krds-gap-9);
-}
+/* 결과 머리글(ResultHead): 1줄 판정·설명, 2줄 액션 바. 어떤 검수든 버튼 자리가 같다 */
+.result-head { display: flex; flex-direction: column; gap: var(--krds-gap-4); margin-top: var(--krds-gap-9); }
+.result-head .summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--krds-gap-5); }
 .result-head .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.result-head .actions {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--krds-gap-3) var(--krds-gap-5);
+  min-height: var(--krds-size-height-6);   /* 버튼(small) 높이 — 액션이 아직 없어도 자리를 지킨다 */
+  padding-top: var(--krds-gap-4);
+  border-top: var(--krds-light-border-width-static-regular) solid var(--krds-light-color-divider-gray-light);
+}
+.result-head .downloads { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--krds-gap-2); }
+.result-head .downloads .sep { padding: 0 var(--krds-gap-1); }
 .krds-table-wrap { width: 100%; }
 .tbl.sheet th.component { background: var(--krds-light-color-element-success-lighter); text-align: center; vertical-align: middle; }
 .tbl.sheet td.mark { text-align: center; font-weight: var(--krds-font-weight-bold); }
@@ -110,7 +114,7 @@ details.raw pre {
 .tbl.findings td.long .clamp { max-height: 16em; overflow: auto; }   /* 긴 목록(수정 제안 데이터 등)은 칸 안에서 스크롤 */
 
 /* ───── 전체 실행: 구성요소별 KRDS 아코디언 ───── */
-.result-head .toolbar { margin-left: auto; display: flex; gap: var(--krds-gap-2); }
+.result-head .toolbar { margin-left: auto; display: flex; gap: var(--krds-gap-2); }   /* 보기 도구는 항상 오른쪽 */
 /* 아코디언 머리: 왼쪽 구성요소 이름, 오른쪽 상태(판정 배지 + 항목 수). KRDS 화살표(::after)는 버튼 오른쪽 여백에 그대로 둔다 */
 .all-results .acc-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--krds-gap-3); width: 100%; text-align: left; }
 .all-results .acc-name { font-weight: var(--krds-font-weight-bold); }
@@ -232,6 +236,5 @@ details.raw pre {
 .form-group [class^="form-hint"]::before { flex: none; margin-top: calc((1em * 1.5 - var(--krds-icon--size-small)) / 2); }
 
 /* 확인서 내려받기 버튼 묶음(결과 머리 오른쪽) */
-.export-buttons { display: inline-flex; align-items: center; gap: var(--krds-gap-2); margin-left: auto; }
-.result-head .export-buttons + .toolbar { margin-left: 0; }
+.export-buttons { display: inline-flex; align-items: center; gap: var(--krds-gap-2); }
 .export-buttons .sep { padding: 0 var(--krds-gap-1); }
