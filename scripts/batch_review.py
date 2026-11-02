@@ -42,7 +42,7 @@ from ncs_service.registry import ENGINES  # noqa: E402
 ERROR = "오류"
 CODE = re.compile(r"LM\d{10}(?:_\d+v\d+)?")  # 버전(_23v3)이 빠진 파일명도 있다
 VERSION_ORDER = ["초고본·원고", "초고본·에디팅완료", "수정본·원고", "수정본·에디팅완료"]
-EXCLUDE_WORDS = ("의견서", "개발계획서", "수정내역서")
+EXCLUDE_WORDS = ("의견서", "개발계획서", "수정내역서", "검수 확인서", "검수확인서")
 
 
 def nfc(text: str) -> str:
