@@ -134,7 +134,6 @@ details.raw pre {
 .component-foot details { flex: 1 1 100%; }
 /* 확인서 표와 접힌 목록(지적사항·체크리스트) 사이 — 단독 결과·전체 실행 아코디언 모두 */
 .component-foot { margin-top: var(--krds-gap-7); }
-.component-foot details { padding-top: var(--krds-gap-5); border-top: var(--krds-light-border-width-static-regular) solid var(--krds-light-color-divider-gray-light); }
 .component-foot summary { cursor: pointer; font-weight: var(--krds-font-weight-bold); }   /* "원본 JSON" 접기 제목(details.raw summary)과 같은 글꼴·크기 */
 .component-foot details .krds-table-wrap { margin-top: var(--krds-gap-5); }   /* 펼친 제목과 표 사이 */
 .component-foot details .krds-table-wrap + .krds-table-wrap { margin-top: var(--krds-gap-7); }   /* 지적사항 표와 전체 체크리스트 표 사이 */
