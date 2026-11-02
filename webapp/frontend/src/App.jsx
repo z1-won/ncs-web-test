@@ -318,13 +318,14 @@ export default function App() {
               <table className="tbl col data history-table">
                 <caption>최근 검수 실행</caption>
                 {/* 열 너비 고정: '더 보기'로 행이 늘어도 칸 너비가 다시 계산되어 흔들리지 않게 */}
+                {/* 판정·열기·삭제는 내용 폭이 정해져 있어 rem으로 고정(%면 창이 좁아질 때 '부적합' 배지·버튼이 줄바꿈됨). 나머지는 비율 */}
                 <colgroup>
                   <col style={{ width: "18%" }} />
                   <col style={{ width: "18%" }} />
                   <col />
-                  <col style={{ width: "9%" }} />
-                  <col style={{ width: "11%" }} />
-                  <col style={{ width: "9%" }} />
+                  <col className="col-verdict" />
+                  <col className="col-action" />
+                  <col className="col-action" />
                 </colgroup>
                 <thead><tr><th scope="col">실행 시각</th><th scope="col">모듈</th><th scope="col">검수</th><th scope="col">판정</th><th scope="col">열기</th><th scope="col">삭제</th></tr></thead>
                 <tbody>{(historyExpanded ? history : history.slice(0, HISTORY_PREVIEW)).map((row) => (

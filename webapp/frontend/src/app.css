@@ -205,6 +205,10 @@ details.raw pre {
 .history tr.is-open > td { background: var(--krds-light-color-surface-secondary-subtler); }
 .history-table { table-layout: fixed; }
 .history-table td { overflow-wrap: anywhere; word-break: keep-all; }
+.history-table .col-verdict { width: 9.6rem; }
+.history-table .col-action { width: 11rem; }
+/* 배지·버튼은 한 덩어리 — 칸이 좁아져도 글자가 줄바꿈되지 않게 */
+.history-table .krds-badge, .history-table .krds-btn { white-space: nowrap; }
 
 /* 전체 실행 보기 전환 탭(KRDS 탭 line형). 탭 아래 영역 제목과의 간격만 조정 */
 .view-switch { margin-top: var(--krds-gap-7); }
