@@ -256,6 +256,8 @@ export default function App() {
         </div>
 
         <div className="form-group form-actions">
+          {/* 다른 칸의 레이블(form-tit) 높이만큼 빈 자리 — 같은 줄의 입력칸과 버튼 윗선·높이가 맞게 */}
+          <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
             <button className="krds-btn primary large" type="submit" disabled={busy || files.length === 0 || upload.status === "uploading"}>
               {busy ? "검사 중…" : check === ALL_CHECK ? "전체 검사 실행" : "검사 실행"}

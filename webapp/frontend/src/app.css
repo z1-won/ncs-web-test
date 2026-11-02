@@ -29,7 +29,10 @@ html { scrollbar-gutter: stable; }
   border-radius: var(--krds-radius-medium2);
   background: var(--krds-light-color-background-white);
 }
-.review-form .form-actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--krds-gap-3); }
+.review-form .form-actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--krds-form-group--gap); }
+.review-form .form-tit-spacer { user-select: none; }
+/* 실행 버튼은 입력칸·셀렉트(large = size-height-8)와 같은 높이 */
+.review-form .run-buttons .krds-btn.large { height: var(--krds-size-height-8); }
 .review-form .krds-btn { width: 100%; }
 .selected-files { margin-top: var(--krds-gap-7); }
 .result-head {
