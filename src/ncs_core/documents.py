@@ -143,8 +143,10 @@ def toc_title_index(paragraphs: list[str]) -> int | None:
     그런 것이 없으면 첫 '차례'(없으면 None).
     """
     titles = [i for i, t in enumerate(paragraphs) if TOC_TITLE.match(t)]
-    for i in titles:
-        if any(TOC_LESSON_LINE.match(t) for t in paragraphs[i + 1:i + 1 + TOC_LOOKAHEAD]):
+    for n, i in enumerate(titles):
+        # 다음 '차례' 제목 전까지만 본다 — 가짜 차례가 진짜 차례의 학습 줄을 제 것으로 셈하지 않게
+        stop = min(i + 1 + TOC_LOOKAHEAD, titles[n + 1] if n + 1 < len(titles) else len(paragraphs))
+        if any(TOC_LESSON_LINE.match(t) for t in paragraphs[i + 1:stop]):
             return i
     return titles[0] if titles else None
 
