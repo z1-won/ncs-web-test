@@ -70,6 +70,19 @@ class RuleTests(unittest.TestCase):
         rows = self.judge([history_table(10, template), colophon_table(50)], code="LM1203020201_26v1")
         self.assertIn("세분류명", rows[1]["비고"]["자리표시 제거"])
 
+    def test_both_forms_in_one_table_with_same_date_is_named_as_such(self):
+        """AIoT 원본: 한 표에 신규 블록(세분류명)과 개선 블록(학습모듈명)이 같은 발행일로 나란히 남음 → 양식 X, 신규 모듈이면 세분류명 블록을 검사."""
+        both = [("2026년 12월 31일", "세분류명", "AIoT운영플랫폼구축 (20010217)", "경복대학교, 한국직업능력연구원"),
+                ("2026년 12월 31일", "학습모듈명", "AIoT운영플랫폼구축 (20010217)", "경복대학교(개발책임자: 이정훈), 한국직업능력연구원")]
+        rows = self.judge([history_table(10, both), colophon_table(20, head="요구사항 분석(LM2001021701_25v1)")], code="LM2001021701_25v1")
+        by = {r["region_path"].split(" > ")[-1]: r for r in rows}
+        self.assertEqual(by["양식"]["판정"], "부적합")
+        self.assertIn("모두 남아 있음", by["양식"]["비고"]["양식"])
+        self.assertEqual(by["개발 이력"]["체크"]["세분류 코드 8자리"], "O", "신규 모듈이면 세분류명 블록을 이번 블록으로 본다")
+        # 개선 양식의 정상 모양(이전 이력은 옛 발행일)은 두 벌로 보지 않는다
+        rows = self.judge([history_table(10, IMPROVED), colophon_table(20)])
+        self.assertEqual(rows[0]["판정"], "적합")
+
     def test_agency_without_krivet_is_fine_but_old_name_or_blank_is_not(self):
         """F14 메모: 위탁 개발기관이 있으면 직능연을 병기하지 않는다 → 협회명만 적힌 칸은 적합."""
         only_agency = [("2021년 1월 1일", "세분류명", "숙박기획·개발(12030202)", "○○협회"),

@@ -14,6 +14,7 @@ from ncs_core.text import flatten
 from .config import DEFAULT_CONFIG, CheckConfig
 from .models import ReviewContext
 from .parsers import find_styled_position_table, parse_classification, parse_plan_module_name, parse_position
+from .patterns import MODULE_CODE_PARTS
 from .registry import ALL_ITEM_IDS, DEFAULT_RULES
 from .sheet import sheet
 
@@ -40,6 +41,7 @@ def prepare_review(
         # ② 소분류의 세분류 목록: '학습모듈 분류보기'에는 학습모듈이 개발된 세분류만 있어 전체 목록이 아니다(온디바이스AIoT처럼
         # 신설 세분류가 빠짐). 개발계획서가 세분류 목록을 적었으면 그것을 쓴다.
         reference_position = {**reference_position, "세분류": plan_position["세분류"]}
+    module_name, module_name_source = resolve_module_name(code, plan.sections, reference_position, source)
     return ReviewContext(
         manuscript,
         plan,
@@ -50,11 +52,44 @@ def prepare_review(
         reference_position,
         parse_position(manuscript.tables),
         find_styled_position_table(manuscript.tables) if manuscript.has_styles else None,
-        parse_plan_module_name(plan.sections, code),
+        module_name,
         source,
         plan_classification if source != "개발계획서" else None,
         plan_position if source != "개발계획서" else None,
+        module_name_source,
     )
+
+
+def reference_module_name(position: dict | None, module_code: str) -> str | None:
+    """기준 위치 표(NCS 목록 또는 개발계획서)에서 이 모듈의 학습모듈명 — 모듈 코드의 능력단위 번호(LM……EE)째 행.
+
+    위치 표의 능력단위·학습모듈명 열은 세분류의 능력단위를 NCS 순서로 나열하므로 EE번째가 이 모듈이다(학습모듈명 열이 비면 능력단위명).
+    """
+    parts = MODULE_CODE_PARTS.match(module_code or "")
+    if not parts or not position:
+        return None
+    names = position.get("학습모듈명") or position.get("능력단위") or []
+    index = int(parts.group(5)) - 1
+    return names[index] if 0 <= index < len(names) else None
+
+
+def resolve_module_name(module_code: str, plan_sections, reference_position: dict, source: str) -> tuple[str | None, str]:
+    """⑤의 '해당 행'을 고를 학습모듈명과 그 출처.
+
+    1) 개발계획서 모듈 블록의 '학습 모듈명' 칸 → 2) NCS 목록의 능력단위 코드(10자리) → 3) 기준 위치 표의 EE번째 행.
+    셋 다 없으면 (None, '없음')이고 규칙은 코드 번호 순번으로 돌아간다(기존 동작).
+    """
+    name = parse_plan_module_name(plan_sections, module_code)
+    if name:
+        return name, "개발계획서"
+    cat = catalog()
+    unit = cat.unit(module_code) if cat and source == "NCS 목록" else None
+    if unit:
+        return unit.name, "NCS 목록"
+    name = reference_module_name(reference_position, module_code)
+    if name:
+        return name, f"{source} 위치 표"
+    return None, "없음"
 
 
 def catalog_reference(module_code: str) -> tuple[dict | None, dict | None, str]:
@@ -87,6 +122,8 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         warnings.append("NCS 목록에 이 세분류가 없어 개발계획서를 기준으로 비교했습니다 (scripts/build_ncs_catalog.py로 목록 갱신)")
     if context.plan_module_name is None:
         warnings.append("개발계획서 학습모듈명을 읽지 못해 ⑤의 해당 행은 모듈 코드 번호로 정합니다")
+    elif context.module_name_source != "개발계획서":
+        warnings.append(f"개발계획서 학습모듈명을 읽지 못해 ⑤의 해당 행은 {context.module_name_source}의 「{context.plan_module_name}」로 정합니다")
     if not context.manuscript.has_styles:
         warnings.append("hwp(바이너리)는 글꼴·음영을 읽지 않아 ⑤는 판단불가입니다")
     implemented = {rule.item_prefix for rule in rules}

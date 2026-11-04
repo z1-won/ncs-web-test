@@ -114,6 +114,16 @@ def check_numbering(body: dict, units: list[dict], table_paragraphs: set[int] | 
             checks = {"번호 찾기": TRI}
             notes["번호 찾기"] = ("번호가 붙은 문단을 찾지 못함 — 원고 확인" if numbers is not None
                               else "번호가 붙은 문단을 텍스트에서 찾지 못함 — hwp는 자동 번호(문단 번호 속성)가 보이지 않음, hwpx로 변환 권장")
+        elif numbers is None and not any(level == 1 for _, items in segments for _, level, _, _ in items):
+            # hwp인데 첫 수준(󰊱) 기호가 텍스트에 하나도 없다: 양식의 󰊱 제목은 자동 번호라 보이지 않는 것이 보통이므로
+            # '󰊱로 시작해야 함'·건너뜀·연번(󰊱마다 다시 1.)은 전부 가짜가 된다. 판정하지 않고 사람 확인(△)으로 둔다.
+            checks = {"첫 수준이 󰊱": TRI, "수준 순서(건너뜀 없음)": TRI, "같은 수준 연번": TRI}
+            notes["자동 번호"] = ("hwp 라 자동 번호(문단 번호 속성)가 보이지 않고 텍스트에 󰊱 기호도 없음 — 󰊱 기준의 시작·건너뜀·연번은 "
+                              "판정할 수 없음, hwpx로 변환해 다시 검사")
+            if unmarked:
+                checks["󰊱 기호 표시"], notes["󰊱 기호 표시"] = X, " / ".join(unmarked[:6])
+            if table_paragraphs is None:
+                notes["표 안 문단"] = "hwp 라 표 안 번호도 함께 셈"
         else:
             if first_bad:
                 checks["첫 수준이 󰊱"], notes["첫 수준이 󰊱"] = X, " / ".join(first_bad[:4])
