@@ -2,7 +2,7 @@
 from ncs_core import ReviewResult, SavedReport, report_summary, save_report
 
 REPORT_NAME = "평가"
-ITEM_FILES = (("F02-평가-①", "평가①_학습내용명"), ("F02-평가-②", "평가②_준거학습목표"), ("F02-평가-③", "평가③_평가방법수"), ("F02-평가-⑤", "평가⑤_방법별피드백"))
+ITEM_FILES = (("F02-평가-①", "평가①_학습내용명"), ("F02-평가-②", "평가②_준거학습목표"), ("F02-평가-③", "평가③_평가방법수"), ("F02-평가-④", "평가④_평가항목"), ("F02-평가-⑤", "평가⑤_방법별피드백"))
 
 
 def summary(result: ReviewResult) -> dict:
