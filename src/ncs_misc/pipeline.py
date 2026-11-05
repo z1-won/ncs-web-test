@@ -1,4 +1,4 @@
-"""공통 파서(차례·본문·학습 내용 구간·꼬리 영역)로 문맥을 만들고 기타 ①②⑥⑦ 규칙을 실행한다. 개발계획서는 쓰지 않는다."""
+"""공통 파서(차례·본문·학습 내용 구간·꼬리 영역)로 문맥을 만들고 기타 ①~⑧ 규칙을 실행한다. 개발계획서는 쓰지 않는다."""
 
 from collections.abc import Sequence
 
@@ -36,7 +36,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     manuscript = context.manuscript
     warnings = []
     if manuscript.format != "hwpx":
-        warnings.append("hwp 원고는 쪽 나누기·그림 개체를 읽을 수 없어 ①②가 판단불가입니다. hwpx를 권장합니다")
+        warnings.append("hwp 원고는 쪽 나누기·그림 개체를 읽을 수 없어 ①②④⑤⑧과 ③의 그림 부분이 판단불가입니다. hwpx를 권장합니다")
     if not context.units:
         warnings.append("학습 내용(N-M) 구간을 찾지 못해 ⑥은 판단불가입니다")
     implemented = {rule.item_prefix for rule in rules}
