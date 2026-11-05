@@ -9,10 +9,13 @@ from .names import HEAD_NUMBER, diff_list, norm, pua_note, same
 from .overview import parse_overview, parse_plan, split_items
 from .plan_goals import parse_plan_goals
 from .presence import section_presence
+from .structure import BodyBoundary, detect_body_boundary
 from .toc import parse_plan_toc, parse_toc
 from .units import HEAD_MARK, MEMO_LINE, mark, unit_regions
 
 __all__ = [
+    "BodyBoundary",
+    "detect_body_boundary",
     "DEFAULT_PARSE_CONFIG",
     "HEAD_NUMBER",
     "ParseConfig",
