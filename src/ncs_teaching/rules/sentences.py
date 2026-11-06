@@ -1,6 +1,7 @@
 """F02 교수·학습 방법 ②·④: 교수 방법 / 학습 방법 내용은 행동동사로 종결하였는가? (~지도한다. ~학습한다.)
 
-판정은 ncs_core.sentences.judge_action_sentence(수행 내용 ④와 같음): '~한다.' O / '~이다·있다.' △ / 그 외 X.
+판정은 ncs_core.sentences.judge_action_sentence를 쓰되 △를 X로 올린다: '~한다.' O / 그 외 X.
+'~이다·있다·없다.'('~할 수 있다.' 등)는 행동동사 종결이 아니므로 X(체크리스트: "행동동사로 종결").
 행동동사인지(설명·지도·유도…)까지는 보지 않는다 — 종결 형태만 본다.
 """
 
@@ -27,6 +28,8 @@ def check_sentences(blocks: list[dict], part: str) -> list[dict]:
             values = []
             for item in items:
                 value, why = judge_action_sentence(item["text"])
+                if value == TRI:  # '~이다/있다/없다.' — 행동동사 종결이 아님
+                    value, why = X, "'~이다/있다/없다.'로 끝남 — 행동동사('~한다.')로 종결"
                 values.append(value)
                 if value != O:
                     bad.append({"idx": item["idx"], "체크": value, "문장": visible(item["text"]), "사유": why})

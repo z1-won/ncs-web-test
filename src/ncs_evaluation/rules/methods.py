@@ -29,6 +29,12 @@ def check_methods(regions: list[dict], *, min_methods: int = 2) -> list[dict]:
             if names and region["method_tables"] and region["method_tables"] != len(names):
                 checks["방법별 표 수"] = X
                 notes["방법별 표 수"] = f"평가 방법 {len(names)}개({', '.join(names)})인데 평가 항목 표는 {region['method_tables']}개"
+            odd = region.get("odd_method_heads") or []
+            if odd:
+                # 표는 평가 방법 표로 세되(표 수 비교는 정상), 양식의 머리 칸 '평가 항목'과 다르므로 X(완화하지 않음)
+                checks["방법별 표 머리"] = X
+                notes["방법별 표 머리"] = (f"평가 방법 표 {len(odd)}개의 머리 칸이 '평가 항목'이 아니라 '평가'(문단 {', '.join(map(str, odd))}) "
+                                       "— 양식대로 '평가 항목'으로 고칠 것")
         result = verdict(checks)
         rows.append({"item_id": ITEM_ID, "region_path": f"section1 > 학습 {lesson} > 평가 > 평가 방법", "위치": f"학습 {lesson}",
                      "원고": {"개수": len(names), "방법": names, "표": region["method_tables"]}, "체크": checks, "판정": result,

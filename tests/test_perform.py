@@ -133,7 +133,7 @@ class SentenceRuleTests(unittest.TestCase):
         self.assertEqual(judge_sentence(BOX + " 요금 제도가 무엇인지 안다.")[0], "O")  # -ㄴ다 현재형 동사
         self.assertEqual(judge_sentence(BOX + " 사용법을 가르친다.")[0], "O")
         self.assertEqual(judge_sentence(BOX + " 객실이 크다.")[0], "X")  # 형용사
-        self.assertEqual(judge_sentence(BOX + " 참고 사항이다.")[0], "△")
+        self.assertEqual(judge_sentence(BOX + " 참고 사항이다.")[0], "X")  # '~이다.'는 '~한다.' 종결이 아님
         self.assertEqual(judge_sentence(BOX + " 기록한다")[0], "X")
         self.assertEqual(judge_sentence(BOX + " 응대한다,")[0], "X")
         self.assertEqual(judge_sentence(BOX + " 예약 접수")[0], "X")
@@ -142,9 +142,9 @@ class SentenceRuleTests(unittest.TestCase):
     def test_block_rows_and_violations(self):
         texts, styles, tables, aside = manuscript()
         rows = check_perform_sentences(split_perform_blocks(texts, styles=styles, table_paragraphs=tables, aside_paragraphs=aside))
-        self.assertEqual([r["판정"] for r in rows], ["부적합", "부적합", "판단불가"])
+        self.assertEqual([r["판정"] for r in rows], ["부적합", "부적합", "부적합"])
         self.assertEqual([v["사유"] for v in rows[0]["위반 문단"]], ["마침표 없음"])
-        self.assertEqual([v["체크"] for v in rows[2]["위반 문단"]], ["△"])
+        self.assertEqual([v["체크"] for v in rows[2]["위반 문단"]], ["X"])
         self.assertTrue(all(r["item_id"] == "F02-수행-④" for r in rows))
 
     def test_hwp_without_styles_is_flagged(self):
