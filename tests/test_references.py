@@ -53,6 +53,54 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("쉼표로 구분한 곳이 있음(마침표로 구분)", hints("송재영(2017). 「제목」. 『학술지』, 29(10), 385-403.", "국문"))
         self.assertIn("국외 전자 자료는 '… Retrieved from(URL).' 꼴", hints("Oracle (2024). Title. Report. https://x.y/z", "영문"))
 
+    def test_hints_name_the_real_problem(self):
+        """테스트 데이터 원본 참고 자료 3~9번: 판정(X)은 맞지만 이유가 엉뚱했다 — URL 괄호·코드 괄호를 제목 괄호로 보고, 있는 날짜를 없다고 함."""
+        no_site = "국가과학기술정보센터(2026).(https://scienceon.kisti.re.kr/main/mainForm.do?v=2)에서 2026. 8. 2. AIoT 검색."
+        why = hints(no_site, "국문")
+        self.assertNotIn("제목 괄호 뒤 마침표 없이 바로 이어짐", why)
+        self.assertNotIn("URL이 있는데 검색 연월일(YYYY. MM. DD. 검색.)이 없음", why)
+        self.assertIn("연도 뒤에 자료명·홈페이지명 없이 바로 (URL)이 옴 — '자료명(연도). 홈페이지명(URL)에서 …'", why)
+        self.assertIn("검색 연월일(2026. 8. 2.)과 '검색' 사이에 「AIoT」이(가) 있음 — 'YYYY. MM. DD. 검색.' 꼴", why)
+        self.assertIsNone(match_template(no_site, "국문"))  # 판정은 그대로 X
+        spaced = "한국인터넷진흥원(2026). (https://www.kisa.or.kr/201)에서 2026. 8. 6. AIoT 검색."
+        self.assertIn("연도 뒤에 자료명·홈페이지명 없이 바로 (URL)이 옴 — '자료명(연도). 홈페이지명(URL)에서 …'", hints(spaced, "국문"))
+        code = "한국산업인력공단. NCS 정보통신 분야 AIoT 운영 플랫폼 구축(2001020417_20v1) 능력단위 정의서 및 학습모듈."
+        self.assertEqual(hints(code, "국문"), ["연도 괄호 (YYYY) 없음"])
+        self.assertEqual(hints("정보통신산업진흥원(https://www.nipa.kr).", "국문"),
+                         ["연도 괄호 (YYYY) 없음", "URL이 있는데 검색 연월일(YYYY. MM. DD. 검색.)이 없음"])
+        self.assertIn("검색 연월일 뒤에 '검색.'이 없음 — 'YYYY. MM. DD. 검색.' 꼴",
+                      hints("자료(2020). 홈페이지(https://a.kr)에서 2020. 1. 2.", "국문"))
+        # 바른 전자 자료는 이유가 없다(양식에 맞음)
+        ok = "AIoT 안내(2026). 국가과학기술정보센터(https://scienceon.kisti.re.kr)에서 2026. 8. 2. 검색."
+        self.assertIsNotNone(match_template(ok, "국문"))
+
+    def test_hints_by_source_type(self):
+        """최종본 10종에서 이유 없이 '골격이 다름'만 나오던 28건 — 유형별로 빠진 부분을 적는다(문장은 실제 원고)."""
+        cases = {
+            "행정안전부(2011). 과학적 조직 관리를 위한 조직 진단 매뉴얼.":
+                "제목 뒤 발행 기관 없음 — 보고서·자료집은 '저자(연도). 제목. 발행 기관.'",
+            "박상완(2012). 「특허 맵 활용을 통한 특허 기술의 사업화 전략」. 『POSRI 경영 경제 연구』.12권(2호).":
+                "학술지 논문의 쪽수 없음 — '「제목」. 『학술지명』. 권(호). 쪽수.'",
+            "이후재, 김두연, 최일우(2012). 「정량적인 OSS 선정을 위한 평가 지표 연구」. 『한국산학기술학회』.13권(4호).":
+                "국문 공동 저자는 쉼표가 아니라 가운뎃점(·)으로 잇는다",
+            "조달청(2024). 『공공정보화 사업유형별 제안요청서 작성 가이드』.": "책명 뒤 출판사 없음 — '저자(연도). 『책명』. 출판사.'",
+            "스콧웨스트․미치 앤서니(김선호 역)(2012). 『평생 고객을 얻는 최고의 질문』. 에프피북스.":
+                "번역서 꼴은 '저자([원서 연도] 번역 연도). 『번역서명(원서명)』. 번역자(역). 출판사.' — 역자는 저자 뒤가 아니라 책명 뒤",
+            "정보통신산업진흥원(2021. 1). 공공SW사업 제안요청서 작성을 위한 요구사항 가이드.": "연도 괄호에 월까지 적음 — 연도만 '(YYYY)'",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertIsNone(match_template(text, "국문"))  # 판정은 그대로 X
+                self.assertIn(expected, hints(text, "국문"))
+        self.assertIn("학술지 권·호는 숫자만 '12(2).' 꼴(권·호 글자 없이)", hints(next(iter(k for k in cases if "POSRI" in k)), "국문"))
+        iso = hints("ISO(2001). ISO/IEC 9126-1.", "영문")
+        self.assertEqual(iso, ["국외 자료는 저자와 연도 괄호 사이를 띄움 — '저자 (연도).'", "제목 뒤 발행처·출판사 없음"])
+        # 연도 괄호가 없으면 URL 괄호를 연도 괄호로 보지 않는다
+        self.assertNotIn("국외 자료는 저자와 연도 괄호 사이를 띄움 — '저자 (연도).'",
+                         hints("A.M.Davis. A.M.Davis Inc(https://www.amdavislift.com/)에서 2025. 06. 06 검색.", "영문"))
+        # 아는 위반에 안 맞아도 이유 칸은 비지 않는다
+        self.assertTrue(hints("알 수 없는 꼴의 자료", "국문"))
+
 
 class EntryTests(unittest.TestCase):
     def test_key_and_script(self):
