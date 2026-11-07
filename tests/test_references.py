@@ -72,6 +72,19 @@ class EntryTests(unittest.TestCase):
         citations = collect_citations(body, 3)
         self.assertEqual([(c["literature"], c["lm_code"]) for c in citations], [(False, None), (True, "LM1203020201_19v2")])
 
+    def test_bullet_operator_and_old_8_digit_code(self):
+        """실데이터(SW제품기획 최종본): 글머리가 ∙(U+2219), 옛 판본 코드는 8자리(LM20010410_14v2)."""
+        body = ["출처: 교육부(2015). SW제품 마케팅 계획 수립(LM20010410_14v2). 한국직업능력개발원. p.25.",
+                "참고 자료", "∙교육부(2015). SW제품 마케팅 계획 수립(LM20010410_14v2). 한국직업능력개발원.",
+                "∙권금택(2014). 『전략적 고객 관계 관리』. 피앤씨미디어.", "● Smith, J. (2020). Title. NY: Pub."]
+        entries = collect_entries(body, {"참고 자료": {"있음": True, "k": 1}})
+        self.assertEqual([(e["text"][:9], e["key"]["author"], e["script"]) for e in entries],
+                         [("교육부(2015)", "교육부", "국문"), ("권금택(2014)", "권금택", "국문"), ("Smith, J.", "smithj.", "영문")])
+        [cite] = collect_citations(body, 1)
+        self.assertEqual(cite["lm_code"], "LM20010410_14v2")
+        self.assertEqual(check_coverage(entries, [cite])[0]["판정"], "적합")
+
+
 
 def entry(n, text):
     return {"n": n, "idx": n, "raw": "• " + text, "text": text, "key": key_of(text), "script": script_of(text),

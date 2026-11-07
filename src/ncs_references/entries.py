@@ -8,14 +8,14 @@
 
 import re
 
-BULLET = re.compile(r"^[•·▪ㆍ‧◦○\-–]\s*")
+BULLET = re.compile(r"^[•·▪ㆍ‧◦○∙●\-–]\s*")  # ∙(U+2219)·●도 실데이터(SW제품기획 최종본)의 글머리
 MEMO = re.compile(r"^[★▶※]|要")
 NOT_CONTINUATION = re.compile(r"^(서식|부록|별지|표|그림)\s*\d+")  # 참고 자료 뒤 서식 목록 줄은 이어지는 서지가 아니다
 NEXT_HEAD = re.compile(r"^(활\s*용\s*서\s*식|부\s*록|NCS\s*학습모듈\s*개발\s*이력|개발\s*이력)")
 SRC_HEAD = re.compile(r"^출\s*처\s*[:：]\s*")
 YEAR_IN_PARENS = re.compile(r"^(?P<author>[^()]{1,80}?)\s*\((?P<year>\[\d{4}\]\s*\d{4}|\d{4}[a-z]?|n\.d\.|작성일 불명|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?)\)")
 NOT_LITERATURE = re.compile(r"집필진\s*제작|스크린\s*숏")
-LM_CODE = re.compile(r"LM\d{10}_\d{2}v\d+")
+LM_CODE = re.compile(r"LM(?:\d{10}|\d{8})_\d{2}v\d+")  # 옛 판본은 8자리(LM20010410_14v2)
 
 
 def key_of(text: str) -> dict | None:
@@ -40,7 +40,7 @@ def script_of(text: str) -> str:
     if any(0x3040 <= ord(ch) <= 0x30FF for ch in text):
         return "일문"
     for ch in text:
-        if ch.isspace() or ch in "•·▪ㆍ‧◦○-–『「《(":
+        if ch.isspace() or ch in "•·▪ㆍ‧◦○∙●-–『「《(":
             continue
         code = ord(ch)
         if 0xAC00 <= code <= 0xD7A3 or 0x3131 <= code <= 0x318E:
