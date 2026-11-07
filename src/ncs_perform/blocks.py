@@ -28,6 +28,26 @@ def _level1(text: str, style: str) -> bool:
     return bool(BOX_NUMBER.match(text))
 
 
+def _table_column_head(i: int, n: int, candidates: list[int], texts: list[str], in_table, aside) -> bool:
+    """표 안의 '수행 내용'이 블록 머리가 아니라 본문 표의 열 제목인가.
+
+    SW제품기획 최종본 0408: 필요 지식 본문의 '게시자 | 구독자 | 수신자' 표 열 제목 '수행 내용'을 머리로 보아
+    제목('게시자')·소제목 없는 가짜 블록이 생겨 수행 ①④가 X였다. 진짜 머리는 표(틀) 안에 있어도 뒤에
+    재료·기기·안전·수행 순서 소제목이 따른다 → 표 안이면서 다음 후보 전까지 소제목이 하나도 없으면 열 제목으로 본다.
+    """
+    if i not in in_table:
+        return False
+    stop = candidates[n + 1] if n + 1 < len(candidates) else len(texts)
+    for j in range(i + 1, stop):
+        if j in aside or j in in_table:
+            continue
+        if BLOCK_END.match(texts[j]):
+            break
+        if any(p.match(texts[j]) and len(texts[j]) <= 20 for p in SUBHEAD.values()):
+            return False
+    return True
+
+
 def split_perform_blocks(
     paragraphs: list[str],
     *,
@@ -42,7 +62,9 @@ def split_perform_blocks(
     aside = aside_paragraphs or frozenset()
     texts = [t.strip() for t in paragraphs]
 
-    heads = [i for i, t in enumerate(texts) if HEAD.match(t) and i not in aside]
+    candidates = [i for i, t in enumerate(texts) if HEAD.match(t) and i not in aside]
+    heads = [i for n, i in enumerate(candidates) if not _table_column_head(i, n, candidates, texts, in_table, aside)]
+    head_set = set(heads)
     blocks = []
     for n, head in enumerate(heads):
         # 블록 끝: 다음 수행 내용 머리 / 다음 N-M 머리 / 교수·학습 방법·평가 제목
@@ -50,7 +72,7 @@ def split_perform_blocks(
         for j in range(head + 1, len(texts)):
             if j in aside:
                 continue
-            if HEAD.match(texts[j]) or BLOCK_END.match(texts[j]):
+            if (HEAD.match(texts[j]) and j in head_set) or BLOCK_END.match(texts[j]):
                 end = j
                 break
             if UNIT.match(texts[j]) and len(texts[j]) < 60 and not re.search(r"\s\d+$", texts[j]):
