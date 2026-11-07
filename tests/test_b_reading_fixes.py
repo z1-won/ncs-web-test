@@ -5,7 +5,20 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from ncs_evaluation.region import eval_head
 from ncs_perform.blocks import split_perform_blocks
+
+
+class EvalHeadTests(unittest.TestCase):
+    def test_picks_head_followed_by_criteria(self):
+        """한 학습에 '평가' 문단이 둘(표 칸 등)이면 뒤에 '평가 준거'가 오는 쪽(0402·0407)."""
+        paragraphs = ["평가", "표 칸", "", "", "", "평가", "평가 준거", "• 평가자는 …"]
+        body = {"lines": [(0, "평가"), (5, "평가")]}
+        self.assertEqual(eval_head({"eval": [0, 1]}, body, paragraphs), 1)
+        self.assertEqual(eval_head({"eval": [0]}, body, paragraphs), 0)
+        # 둘 다 '평가 준거'가 따르거나 아무도 안 따르면 정하지 않는다(△ 유지)
+        self.assertIsNone(eval_head({"eval": [0, 1]}, body, ["평가", "평가 준거", "", "", "", "평가", "평가 준거"]))
+        self.assertIsNone(eval_head({"eval": [0, 1]}, body, ["평가", "", "", "", "", "평가", ""]))
 
 
 class PerformHeadTests(unittest.TestCase):

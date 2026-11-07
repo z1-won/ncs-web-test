@@ -4,6 +4,8 @@ import re
 from ncs_core import O, X, TRI, verdict
 from ncs_core.goals import explain_pair
 
+from ..region import eval_head
+
 ITEM_ID = "F02-평가-①"
 NUMBERED = re.compile(r"^(\d+)\s*-\s*(\d+)\s*\.\s*(.+)$")
 
@@ -162,10 +164,11 @@ def check_names(context):
     for lesson in lessons:
         own = {key: value for key, value in expected.items() if key[0] == lesson["no"]}
         place = f"section{body_section} > 학습 {lesson['no']}"
-        if len(lesson["eval"]) != 1:
+        head = eval_head(lesson, body, paragraphs)
+        if head is None:
             rows.append(row(place + " > 평가", TRI, note="평가 영역의 시작을 유일하게 식별하지 못함"))
             continue
-        start = body["lines"][lesson["eval"][0]][0]
+        start = body["lines"][head][0]
         end = lesson["raw_span"][1]
         found = set()
         parsed_tables = []
