@@ -19,6 +19,13 @@ BLOCK_END = re.compile(r"^(교수\s*\W{0,3}\s*학습\s*방법|평\s*가)$")
 # 네모 번호 글자: 한글 기호 글꼴의 사용자 영역 U+F02B1~(󰊱 󰊲 …). 스타일이 없을 때 첫 글자로 수준 1을 추정한다
 BOX_NUMBER = re.compile(r"^[\U000F02B0-\U000F02CF]")
 BULLET = re.compile(r"^[•·ㆍ‧◦○\-]\s*")
+# hwp 본문(UTF-16)은 코어가 2바이트씩 chr()로 읽어, 보조 평면 글자가 서로게이트 두 개(U+DB80 U+DEB1)로 갈라져 온다
+SURROGATE_PAIR = re.compile("[\ud800-\udbff][\udc00-\udfff]")
+
+
+def join_surrogates(text: str) -> str:
+    """갈라진 서로게이트 쌍을 원래 글자 하나로 합친다(U+DB80 U+DEB1 → U+F02B1). 짝 없는 서로게이트는 그대로 둔다."""
+    return SURROGATE_PAIR.sub(lambda m: m.group().encode("utf-16-le", "surrogatepass").decode("utf-16-le"), text or "")
 
 
 def _level1(text: str, style: str) -> bool:
@@ -60,7 +67,7 @@ def split_perform_blocks(
     styles = styles or [""] * len(paragraphs)
     in_table = table_paragraphs or frozenset()
     aside = aside_paragraphs or frozenset()
-    texts = [t.strip() for t in paragraphs]
+    texts = [join_surrogates(t).strip() for t in paragraphs]
 
     candidates = [i for i, t in enumerate(texts) if HEAD.match(t) and i not in aside]
     heads = [i for n, i in enumerate(candidates) if not _table_column_head(i, n, candidates, texts, in_table, aside)]

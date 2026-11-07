@@ -88,6 +88,19 @@ class BlockSplitTests(unittest.TestCase):
         blocks = split_perform_blocks(texts, styles=None, table_paragraphs=tables, aside_paragraphs=aside)
         self.assertEqual(sum(1 for s in blocks[0]["수행순서"] if s["level1"]), 2)
 
+    def test_hwp_split_surrogates_are_joined(self):
+        """hwp 본문은 UTF-16 단위로 읽혀 네모 번호가 서로게이트 두 개(U+DB80 U+DEB1)로 온다 → 합쳐서 첫 글자로 수준 1을 찾는다."""
+        split = "".join(chr(c) for c in (0xDB80, 0xDEB1))
+        texts, _, tables, aside = manuscript()
+        hwp_texts = [t.replace(BOX, split) for t in texts]
+        self.assertNotIn(BOX, "".join(hwp_texts))
+        blocks = split_perform_blocks(hwp_texts, styles=None, table_paragraphs=tables, aside_paragraphs=aside)
+        self.assertEqual([s["text"] for s in blocks[0]["수행순서"] if s["level1"]],
+                         [BOX + " 전화 수신 시 기본 응대 절차를 숙지한다.", BOX + " 예약 정보를 기록한다"])
+        rows = check_perform_sentences(blocks, has_styles=False)
+        self.assertEqual([r["판정"] for r in rows][:1], ["부적합"], "네모 번호를 찾았으니 '~한다.' 종결을 판정한다(마침표 없음 X)")
+        self.assertNotIn("\udb80", str(rows))
+
 
 class TitleRuleTests(unittest.TestCase):
     def test_hagi_ending_and_numbering(self):
