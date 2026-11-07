@@ -11,7 +11,8 @@ from unittest import mock
 from ncs_misc.config import CheckConfig
 from ncs_misc.images import decode_rows, image_header
 from ncs_misc.jpeg import decode_jpeg_rows
-from ncs_misc.rules import form_images, resolution
+from ncs_misc.rules import form_images, resolution, screenshots
+from ncs_misc.rules.screenshots import find_taskbar, is_capture_candidate
 from ncs_references.rules.old_module import check_old_module
 
 # Windows(.NET System.Drawing)로 만든 32×16 JPEG(품질 95)과 그 해독기가 낸 밝기 — 우리 해독기를 맞춰 본다
@@ -91,6 +92,40 @@ class ImageReadingTests(unittest.TestCase):
         for y, expected in JPEG_ROWS.items():
             diffs = [abs(a[0] - b) for a, b in zip(rows[y], expected)]
             self.assertLessEqual(max(diffs), 2, (y, diffs))
+
+
+class TaskbarTests(unittest.TestCase):
+    def lines(self, pixel, w, h):
+        rows = decode_rows(record(bmp(w, h, pixel), "bmp", (w, h)), range(0, h))
+        return {y: [(299 * r + 587 * g + 114 * b) // 1000 for r, g, b in line] for y, line in rows.items()}
+
+    def test_dark_taskbar_is_found(self):
+        self.assertEqual(find_taskbar(self.lines(screen_with_taskbar, 320, 180), 180), 10)
+
+    def test_no_bar_or_empty_margin_is_not_a_taskbar(self):
+        plain = lambda x, y: (250, 250, 250) if (x // 40 + y // 30) % 2 else (235, 240, 245)
+        self.assertIsNone(find_taskbar(self.lines(plain, 320, 180), 180))
+        empty_bar = lambda x, y: (32, 32, 40) if y >= 170 else (250, 250, 250)  # 아이콘 없는 빈 띠 = 여백·장식
+        self.assertIsNone(find_taskbar(self.lines(empty_bar, 320, 180), 180))
+
+    def test_capture_candidates(self):
+        self.assertTrue(is_capture_candidate(record(b"", "bmp", (1280, 720), caption=""), [""] * 5))      # 16:9 화면 크기
+        self.assertFalse(is_capture_candidate(record(b"", "jpeg", (4160, 2340), caption=""), [""] * 5))   # 카메라 사진 크기
+        self.assertFalse(is_capture_candidate(record(b"", "bmp", (600, 600), caption="[그림 1-2] 조직도"), [""] * 5))
+        self.assertTrue(is_capture_candidate(record(b"", "bmp", (600, 600), caption=""), ["", "", "출처: 프로그램명. 2024. 8. 12. 스크린 숏."]))
+
+    def test_rule_flags_taskbar_and_passes_clean_capture(self):
+        manuscript = SimpleNamespace(format="hwpx", sections=[[], ["그림", "[그림 1-1] 프로그램 화면"]])
+        with_bar = record(bmp(320, 180, screen_with_taskbar), "bmp", (320, 180))
+        clean = record(bmp(320, 180, lambda x, y: (250, 250, 250)), "bmp", (320, 180))
+        with mock.patch.object(screenshots, "picture_records", return_value=[with_bar]):
+            [row] = screenshots.check_screenshots(SimpleNamespace(manuscript=manuscript))
+            self.assertEqual(row["판정"], "부적합")
+        with mock.patch.object(screenshots, "picture_records", return_value=[clean]):
+            self.assertEqual(screenshots.check_screenshots(SimpleNamespace(manuscript=manuscript))[-1]["판정"], "적합")
+        progressive = record(b"", "jpeg-progressive", (1280, 720))
+        with mock.patch.object(screenshots, "picture_records", return_value=[progressive]):
+            self.assertEqual(screenshots.check_screenshots(SimpleNamespace(manuscript=manuscript))[0]["판정"], "판단불가")
 
 
 class ResolutionTests(unittest.TestCase):
