@@ -11,7 +11,7 @@ from unittest import mock
 from ncs_misc.config import CheckConfig
 from ncs_misc.images import decode_rows, image_header
 from ncs_misc.jpeg import decode_jpeg_rows
-from ncs_misc.rules import form_images, resolution, screenshots
+from ncs_misc.rules import brand_names, form_images, resolution, screenshots
 from ncs_misc.rules.screenshots import find_taskbar, is_capture_candidate
 from ncs_references.rules.old_module import check_old_module
 
@@ -155,6 +155,37 @@ class FormImageTests(unittest.TestCase):
         self.assertEqual([(r["판정"], r["region_path"]) for r in rows], [("부적합", "section1 > 활용 서식 > 문단 12")])
         context.presence = {}
         self.assertEqual(form_images.check_form_images(context)[0]["체크"], {"⑧ 서식·부록 글자 이미지 해상도": "-"})
+
+
+class BrandNameTests(unittest.TestCase):
+    def run_rule(self, body, presence=None):
+        manuscript = SimpleNamespace(format="hwpx", sections=[[], body], section_aside_paragraphs=lambda i: frozenset())
+        context = SimpleNamespace(manuscript=manuscript, config=CheckConfig(), presence=presence or {})
+        with mock.patch.object(brand_names, "picture_records", return_value=[]):
+            return brand_names.check_brand_names(context)
+
+    def test_names_ambiguous_words_and_exclusions(self):
+        body = ["엑셀을 사용하여 순위를 계산한다.",                      # X — 체크리스트 예시
+                "출처: 엑셀. 2024. 8. 12. 스크린 숏.",                   # 제외 — F14 스크린 숏 출처
+                "메타데이터와 애플리케이션을 관리한다.",                  # 제외 — 더 긴 낱말의 앞부분
+                "삼성전자 제품을 예로 든다.",                            # X — 기업명
+                "보고서는 한글로 작성한다.",                              # △ — 문자인지 프로그램인지
+                "Windows 환경에서 실행한다.",                            # X — 운영체제
+                "NCS학습모듈 개발이력", "배춘석(LG CNS)"]                  # 제외 — 판권 소속
+        rows = self.run_rule(body)
+        self.assertEqual([(r["위치"], r["판정"]) for r in rows],
+                         [("문단 0", "부적합"), ("문단 3", "부적합"), ("문단 4", "판단불가"), ("문단 5", "부적합")])
+        self.assertIn("스프레드시트 프로그램", rows[0]["비고"]["③ 본문 상호·상품명·프로그램명"])
+
+    def test_meta_spaced_prefix_is_ambiguous(self):
+        """'메타 데이터'처럼 띄어 쓴 접두어는 회사명(메타)과 구별할 수 없어 X가 아니라 사람 확인(△)."""
+        rows = self.run_rule(["메타 데이터를 관리한다.", "메타 정보를 기록한다."])
+        self.assertEqual([r["판정"] for r in rows], ["판단불가", "판단불가"])
+
+    def test_clean_text_and_references_excluded(self):
+        body = ["요구사항을 분석한다.", "참고 자료", "∙Microsoft(2020). 『Guide』. Microsoft Press."]
+        rows = self.run_rule(body, {"참고 자료": {"있음": True, "k": 1, "end": 2}})
+        self.assertEqual([r["판정"] for r in rows], ["적합"])
 
 
 class OldModuleTests(unittest.TestCase):
