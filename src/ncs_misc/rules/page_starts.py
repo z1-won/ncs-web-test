@@ -17,6 +17,10 @@ HEADS = (  # (이름, 머리 문단을 찾는 정규식)
 )
 OVERVIEW = re.compile(r"^학습\s*모듈의\s*개요$")
 CRITERIA = re.compile(r"^평가\s*준거$")
+# 참고 자료·활용 서식·부록 머리는 코어 section_presence가 준 위치('k')를 그대로 쓴다.
+# 제목이 그림이라 코어가 위치를 추정한 원고(근거에 '제목은 텍스트가 아님')는 그 위치가 실제 머리보다 뒤일 수 있어
+# '새 쪽 아님' X가 날 수 있다(SW제품기획 최종본 0405·0409). 위로 올라가 보정하던 코드는 참고 자료 엔진과
+# 같은 정규식을 복사해 써야 해서 '둘 이상이 쓰는 코드는 ncs_core로' 규칙에 따라 뺐다 — 보정은 코어 몫.
 
 
 def starts_new_page(index: int, paragraphs: list[str], page_breaks: frozenset[int], table_paragraphs=frozenset()) -> bool:
