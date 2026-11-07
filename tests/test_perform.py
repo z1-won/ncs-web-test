@@ -7,7 +7,7 @@ from ncs_perform.blocks import split_perform_blocks
 from ncs_perform.rules.sentences import check_perform_sentences, judge_sentence
 from ncs_perform.rules.title import check_perform_title
 
-BOX = "\U000F02B1"  # 󰊱
+BOX = "\U000F02B1"  # 네모 번호 [1] (한컴 기호 글꼴의 보조 평면 사용자 영역 글자)
 
 
 def manuscript():
@@ -124,7 +124,7 @@ class VisibleGlyphTests(unittest.TestCase):
         self.assertEqual(visible("객실\uf09e부대시설"), "객실⟨U+F09E⟩부대시설", "기본 평면 PUA 표기는 그대로")
 
     def test_sheet_item_text_has_no_raw_box_glyph(self):
-        """확인서 원문(f02_items)의 󰊱도 표로 나갈 때는 읽을 수 있는 표기로 바뀐다."""
+        """확인서 원문(f02_items)의 네모 번호(U+F02B1)도 표로 나갈 때는 읽을 수 있는 표기로 바뀐다."""
         from ncs_perform.sheet import sheet
         text = next(row["체크 항목"] for row in sheet([]) if row["번호"] == "④")
         self.assertNotIn(BOX, text)

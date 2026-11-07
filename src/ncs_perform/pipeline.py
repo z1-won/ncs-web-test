@@ -42,7 +42,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     if not context.blocks:
         warnings.append("본문에서 '수행 내용' 머리를 찾지 못했습니다. ①④는 판단불가입니다. 양식·섹션 설정을 확인하세요")
     if not context.has_styles:
-        warnings.append("hwp 원고는 문단 스타일이 없어 네모 번호(󰊱)를 첫 글자로 추정합니다. hwpx를 권장합니다")
+        warnings.append("hwp 원고는 문단 스타일이 없어 네모 번호([1])를 첫 글자로 추정합니다. hwpx를 권장합니다")
     missing = [(b["block_id"], b["소제목 누락"]) for b in context.blocks if b["소제목 누락"]]
     if missing:
         warnings.append("소제목(재료·기기·안전·수행 순서)을 찾지 못한 블록: " + "; ".join(f"{bid}: {', '.join(m)}" for bid, m in missing[:5]))
