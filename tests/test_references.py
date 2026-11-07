@@ -84,6 +84,21 @@ class EntryTests(unittest.TestCase):
         self.assertEqual(cite["lm_code"], "LM20010410_14v2")
         self.assertEqual(check_coverage(entries, [cite])[0]["판정"], "적합")
 
+    def test_guessed_region_extends_upward_and_skips_subheads(self):
+        """제목이 이미지라 구역을 참고문헌 꼴 줄로 추정하면, 연도 표기가 다른 줄에서 끊겨 끝부분만 잡힌다(SW제품기획 0405)."""
+        body = ["- 시험 점수가 낮은 학습자에게는 설명해 준다.", "", "국내 자료", "∙교육부(2015). SW제품 사양 정의(LM2001010405_14v2). 한국직업능력개발원.",
+                "∙정보통신산업진흥원(2021. 1). 요구사항 가이드.", "", "국외 자료", "∙A.M.Davis. 「Software Requirements」, Prentice Hall.",
+                "∙ISO(2001). ISO/IEC 9126-1.", "∙ISO(2011). ISO/IEC 25010."]
+        presence = {"참고 자료": {"있음": True, "k": 8, "end": 9, "근거": "참고문헌 꼴 줄 2개 연속 — 제목은 텍스트가 아님(이미지일 가능성)"}}
+        entries = collect_entries(body, presence)
+        self.assertEqual([e["text"][:9] for e in entries], ["교육부(2015)", "정보통신산업진흥원", "A.M.Davis", "ISO(2001)", "ISO(2011)"])
+        # 제목이 텍스트로 있으면(추정 아님) 넓히지 않는다
+        self.assertEqual(len(collect_entries(body, {"참고 자료": {"있음": True, "k": 8, "end": 9}})), 2)
+        # 피드백을 '•'로 쓴 원고: 서지 단서(연도·「」·URL·발행처) 없는 '•' 줄은 끌어오지 않는다
+        body = ["• 평가자 체크리스트", "• 구두 발표", "∙ISO(2001). ISO/IEC 9126-1.", "∙ISO(2011). ISO/IEC 25010."]
+        presence = {"참고 자료": {"있음": True, "k": 2, "end": 3, "근거": "참고문헌 꼴 줄 2개 연속 — 제목은 텍스트가 아님(이미지일 가능성)"}}
+        self.assertEqual([e["text"][:9] for e in collect_entries(body, presence)], ["ISO(2001)", "ISO(2011)"])
+
 
 
 def entry(n, text):

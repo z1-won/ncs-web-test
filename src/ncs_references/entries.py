@@ -14,6 +14,11 @@ NOT_CONTINUATION = re.compile(r"^(서식|부록|별지|표|그림)\s*\d+")  # �
 NEXT_HEAD = re.compile(r"^(활\s*용\s*서\s*식|부\s*록|NCS\s*학습모듈\s*개발\s*이력|개발\s*이력)")
 SRC_HEAD = re.compile(r"^출\s*처\s*[:：]\s*")
 YEAR_IN_PARENS = re.compile(r"^(?P<author>[^()]{1,80}?)\s*\((?P<year>\[\d{4}\]\s*\d{4}|\d{4}[a-z]?|n\.d\.|작성일 불명|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?)\)")
+SUBHEAD = re.compile(r"^(국내|국외|동양|서양|해외|외국)\s*(자료|문헌)$")  # 참고 자료 안 묶음 제목 — 항목이 아니다
+DOT_BULLET = re.compile(r"^[•·▪ㆍ‧◦○∙●]")  # 위로 넓힐 때 쓰는 글머리('-'는 피드백 줄도 써서 뺀다)
+# 점 글머리 줄이라도 서지처럼 생겨야 참고 자료로 끌어온다 — 피드백·평가의 '• 평가자 체크리스트' 같은 줄은 제외
+BIB_HINT = re.compile(r"\d{4}|[「『《]|https?://|www\.|출판|발행|학회|연구원|진흥원|센터|Press|Inc|Ltd|Publishing", re.IGNORECASE)
+GUESSED = "제목은 텍스트가 아님"  # section_presence가 제목 없이 참고문헌 꼴 줄로 구역을 추정했다는 표시
 NOT_LITERATURE = re.compile(r"집필진\s*제작|스크린\s*숏")
 LM_CODE = re.compile(r"LM(?:\d{10}|\d{8})_\d{2}v\d+")  # 옛 판본은 8자리(LM20010410_14v2)
 
@@ -69,10 +74,12 @@ def collect_entries(paragraphs: list[str], presence: dict, aside=frozenset()) ->
         later = [v["k"] for name, v in presence.items() if name != "참고 자료" and isinstance(v, dict) and v.get("k") is not None and v["k"] > start]
         head = next((i for i in range(start + 1, len(paragraphs)) if NEXT_HEAD.match((paragraphs[i] or "").strip())), len(paragraphs))
         end = min(later + [head]) - 1
+    if GUESSED in (found.get("근거") or ""):
+        start = extend_upward(paragraphs, start, aside)
     entries = []
     for i in range(start, min(end + 1, len(paragraphs))):
         text = (paragraphs[i] or "").strip()
-        if not text or i in aside or MEMO.search(text) or re.fullmatch(r"참\s*고\s*자\s*료", text):
+        if not text or i in aside or MEMO.search(text) or re.fullmatch(r"참\s*고\s*자\s*료", text) or SUBHEAD.match(text):
             continue
         if BULLET.match(text) or not entries or key_of(text) is not None or NOT_CONTINUATION.match(text):
             # 글머리 항목, 저자(연도)로 시작하는 줄, 서식·부록 머리 = 새 항목(또는 구역 밖 글)
@@ -86,6 +93,29 @@ def collect_entries(paragraphs: list[str], presence: dict, aside=frozenset()) ->
         entry["script"] = script_of(entry["text"])
         entry["translated"] = bool(re.match(r"^[^()]+\(\[\d{4}\]\s*\d{4}\)", entry["text"]))
     return entries
+
+
+def extend_upward(paragraphs: list[str], start: int, aside=frozenset()) -> int:
+    """제목이 이미지라 구역을 '참고문헌 꼴 줄이 가장 길게 이어진 곳'으로 추정한 경우, 그 앞의 같은 덩어리까지 시작을 당긴다.
+
+    추정은 '(2021. 1)'처럼 연도 표기가 다르거나 연도가 없는 국외 자료 줄에서 끊겨, 참고 자료 끝부분만 잡기도 한다
+    (SW제품기획 0405: 국내 5건·국외 3건을 빼고 ISO 3건만 잡힘). 빈 줄, 묶음 제목('국내 자료'), 점 글머리 줄,
+    저자(연도) 줄이 이어지는 동안 올라가고, 그 밖의 글(피드백 '- …' 줄 등)을 만나면 멈춘다.
+    점 글머리 줄은 서지처럼 생긴 줄(BIB_HINT: 연도·「」·URL·발행처 낱말)만 끌어온다 — 피드백을 '•'로 쓴 원고에서
+    피드백 줄을 참고 자료 항목으로 잘못 읽지 않도록.
+    """
+    j = start - 1
+    while j >= 0:
+        text = (paragraphs[j] or "").strip()
+        if not text or j in aside:
+            j -= 1
+            continue
+        if SUBHEAD.match(text) or (DOT_BULLET.match(text) and BIB_HINT.search(text)) or key_of(text) is not None:
+            start = j
+            j -= 1
+            continue
+        break
+    return start
 
 
 def collect_citations(paragraphs: list[str], end: int | None, aside=frozenset()) -> list[dict]:
