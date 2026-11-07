@@ -21,6 +21,24 @@ class EvalHeadTests(unittest.TestCase):
         self.assertIsNone(eval_head({"eval": [0, 1]}, body, ["평가", "", "", "", "", "평가", ""]))
 
 
+class MethodTableHeadTests(unittest.TestCase):
+    def test_method_table_with_short_head_counts_but_is_flagged(self):
+        """머리 칸이 '평가'인 평가 방법 표(0407 학습 5) — 표로 세어 '표 수 불일치'는 내지 않고, 머리 표기는 X(완화 없음)."""
+        from ncs_evaluation.region import table_kind
+        from ncs_evaluation.rules.methods import check_methods
+        short = {"paragraph": 30, "cells": {(0, 0): "학습 내용", (0, 1): "평가", (0, 2): "성취수준", (2, 0): "투입 자원 관리", (2, 1): "- 계획 수립 능력"}}
+        self.assertEqual(table_kind(short)[0], "평가 방법(머리 '평가')")
+        region = {"lesson": 5, "found": True, "methods": [{"name": "A"}, {"name": "B"}, {"name": "C"}], "method_tables": 3,
+                  "odd_method_heads": [30], "notes": []}
+        [row] = check_methods([region])
+        self.assertEqual(row["판정"], "부적합")
+        self.assertEqual(row["체크"]["방법별 표 머리"], "X")
+        self.assertNotIn("방법별 표 수", row["체크"])
+        # 표가 실제로 모자라면 여전히 X
+        [row] = check_methods([{**region, "method_tables": 2, "odd_method_heads": []}])
+        self.assertEqual(row["판정"], "부적합")
+
+
 class PerformHeadTests(unittest.TestCase):
     def test_table_column_head_is_not_a_block(self):
         """본문 표 열 제목 '수행 내용'(게시자/구독자 표)은 블록이 아니다(0408)."""

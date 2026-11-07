@@ -43,6 +43,10 @@ def table_kind(table: dict):
             return "평가 준거", header_row, name_col, c
         if key.startswith("평가항목"):
             return "평가 방법", header_row, name_col, c
+    for (r, c), v in cells.items():
+        # 머리 칸을 '평가 항목' 대신 '평가'로만 적은 평가 방법 표(SW제품기획 0407 학습 5) — 표로 세되 ③에서 △로 알린다
+        if r == header_row and _squash(v) == "평가":
+            return "평가 방법(머리 '평가')", header_row, name_col, c
     return None
 
 
@@ -115,6 +119,8 @@ def eval_regions(manuscript: Document, body: dict, body_section: int) -> list[di
                 info["criteria"].append(criteria_units(table, header_row, name_col, value_col))
             else:
                 info["method_tables"] += 1
+                if name != "평가 방법":
+                    info.setdefault("odd_method_heads", []).append(table["paragraph"])
         part, block = None, None
         for i in range(start, end):
             text = (paragraphs[i] or "").strip()
