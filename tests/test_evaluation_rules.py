@@ -61,10 +61,23 @@ class CriteriaGoalsTests(unittest.TestCase):
 
     def test_match_and_spacing_difference(self):
         rows = check_criteria_goals([region(criteria=[self.units()], criteria_tables=1)], PLAN)
+        # 띄어쓰기만 달라도 X(완화하지 않음) — 비고 머리에 '띄어쓰기·마침표·영문 대소문자만 다름'을 적는다
         self.assertEqual([(r["위치"], r["region_path"].split(" > ")[-1], r["판정"]) for r in rows],
                          [("학습 1", "호텔정보 구분", "적합"), ("학습 1", "상품 설명", "부적합")])
-        self.assertEqual(rows[1]["비고"]["② 평가 준거 학습 목표 계획서 일치"], "1-2 1번째 평가 준거 「판매촉진」, 개발계획서 「판매 촉진」 (띄어쓰기만 다름)")
+        self.assertTrue(rows[1]["비고"]["② 평가 준거 학습 목표 계획서 일치"].endswith(
+            "1-2 1번째 평가 준거 「판매촉진」, 개발계획서 「판매 촉진」 (띄어쓰기만 다름)"))
+        self.assertIn("띄어쓰기·마침표·영문 대소문자만 다름", rows[1]["비고"]["② 평가 준거 학습 목표 계획서 일치"])
         self.assertEqual(rows[1]["개발계획서"], ["2.1 " + C])
+
+    def test_word_difference_is_still_x(self):
+        """낱말이 다르면 여전히 X(△로 넘기지 않는다)."""
+        units = [{"name": "상품 설명", "goals": ["- " + C.replace("판매할", "안내할")], "row": 4}]
+        [row] = check_criteria_goals([region(criteria=[units], criteria_tables=1)], PLAN)
+        self.assertEqual(row["판정"], "부적합")
+        # 학습 내용명은 띄어쓰기를 무시하고 계획서와 연결한다(연결 실패로 대조를 건너뛰지 않음)
+        spaced = [{"name": "상품설명", "goals": ["- " + C], "row": 4}]
+        [row] = check_criteria_goals([region(criteria=[spaced], criteria_tables=1)], PLAN)
+        self.assertEqual(row["판정"], "적합", row["비고"])
 
     def test_unknown_name_missing_table_no_plan_and_no_region(self):
         unknown = [{"name": "없는 이름", "goals": [A], "row": 2}]
