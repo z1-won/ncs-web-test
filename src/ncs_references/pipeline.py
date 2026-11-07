@@ -7,7 +7,7 @@ from ncs_core.manuscript import section_presence
 from ncs_core.text import flatten
 
 from .config import DEFAULT_CONFIG, CheckConfig
-from .entries import collect_citations, collect_entries
+from .entries import collect_citations, collect_entries, find_short_reference_run
 from .models import ReviewContext
 from .registry import ALL_ITEM_IDS, DEFAULT_RULES
 from .sheet import sheet
@@ -24,6 +24,10 @@ def prepare_review(manuscript: Document, plan: Document | None = None, *, module
     presence = section_presence(sections, images, figures=manuscript.section_figures(body), tables=manuscript.section_tables(body),
                                 media_complete=manuscript.format == "hwpx")
     aside = manuscript.section_aside_paragraphs(body) or frozenset()
+    if not (presence.get("참고 자료") or {}).get("있음"):
+        guessed = find_short_reference_run(manuscript.sections[body], aside, manuscript.section_table_paragraphs(body) or frozenset())
+        if guessed:
+            presence = {**presence, "참고 자료": guessed}
     entries = collect_entries(manuscript.sections[body], presence, aside)
     start = (presence.get("참고 자료") or {}).get("k")
     citations = collect_citations(manuscript.sections[body], start, aside)

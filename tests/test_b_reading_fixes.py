@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from ncs_evaluation.region import eval_head
 from ncs_evaluation.rules.feedback import ENRICHMENT, REMEDIAL
 from ncs_perform.blocks import split_perform_blocks
+from ncs_references.entries import collect_entries, find_short_reference_run
 
 
 class EvalHeadTests(unittest.TestCase):
@@ -66,6 +67,18 @@ class FeedbackWordsTests(unittest.TestCase):
         self.assertTrue(ENRICHMENT.search("브랜드명 기획을 잘 수행하는 경우 평판을 조사하여 발표하도록 지도한다"))
         # 심화 내용이 없는 피드백은 여전히 못 찾는다(△ 유지 — 체크리스트가 심화를 직접 요구)
         self.assertIsNone(ENRICHMENT.search("성취도가 낮은 학생에게는 핵심 사항을 구체적으로 설명해 준다."))
+
+
+class ShortReferenceRunTests(unittest.TestCase):
+    def test_two_entries_without_title_are_found(self):
+        """제목이 이미지이고 항목이 2개뿐(0404) — 코어 기준(3개)에 못 미쳐도 엔진 보조 탐색으로 찾는다."""
+        body = ["4. 평가자 체크리스트", "- 부족한 부분을 설명해 준다.", "", "∙이강만(2012). 『소프트웨어 제품 마케팅』. 삼보아트.",
+                "∙프로그램심의조정위원회(2005). 『알기 쉬운 소프트웨어 라이선스』.", "비용 분석표"]
+        found = find_short_reference_run(body, in_table=frozenset({0, 1, 5}))
+        self.assertEqual((found["k"], found["end"]), (3, 4))
+        self.assertEqual(len(collect_entries(body, {"참고 자료": found})), 2)
+        # 서지처럼 생긴 줄이 하나뿐이면 찾지 않는다
+        self.assertIsNone(find_short_reference_run(["글", "∙이강만(2012). 『책』. 삼보아트.", "글"]))
 
 
 class OverviewAfterTocTests(unittest.TestCase):

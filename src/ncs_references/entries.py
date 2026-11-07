@@ -118,6 +118,47 @@ def extend_upward(paragraphs: list[str], start: int, aside=frozenset()) -> int:
     return start
 
 
+MIN_SHORT_RUN = 2  # 코어는 제목 없는 참고 자료를 '참고문헌 꼴 줄 3개 연속'부터 인정한다 — 2개짜리를 엔진에서 보조로 찾는다
+
+
+def is_reference_line(text: str) -> bool:
+    """참고 자료 항목처럼 생긴 줄 — 점 글머리 + 서지 단서, 또는 저자(연도)로 시작. '출처:' 줄은 아니다."""
+    text = (text or "").strip()
+    if not text or SRC_HEAD.match(text):
+        return False
+    body = BULLET.sub("", text)
+    return key_of(body) is not None or bool(DOT_BULLET.match(text) and BIB_HINT.search(text))
+
+
+def find_short_reference_run(paragraphs: list[str], aside=frozenset(), in_table=frozenset()) -> dict | None:
+    """코어(section_presence)가 참고 자료를 못 찾았을 때의 보조 탐색 — 표·메모 밖에서 참고 자료 항목 줄이
+    MIN_SHORT_RUN개 이상 이어진 마지막 덩어리. SW제품기획 0404: 제목이 이미지이고 항목이 2개뿐이라 코어 기준(3개)에 못 미쳐
+    참고 자료 ①②③이 모두 '항목을 찾지 못함' △였다(한글 PDF 94쪽에 실제로 있음). 결과는 코어와 같은 모양의 presence 항목."""
+    runs, run = [], []
+    for i, text in enumerate(paragraphs):
+        if i in aside or i in in_table:
+            if run and i in in_table:
+                runs.append(run)
+                run = []
+            continue
+        if not (text or "").strip():
+            continue
+        if is_reference_line(text):
+            run.append(i)
+        else:
+            if run:
+                runs.append(run)
+            run = []
+    if run:
+        runs.append(run)
+    runs = [r for r in runs if len(r) >= MIN_SHORT_RUN]
+    if not runs:
+        return None
+    best = runs[-1]
+    return {"있음": True, "근거": f"참고문헌 꼴 줄 {len(best)}개 연속 (section1 p{best[0]}~p{best[-1]}) — {GUESSED}(이미지일 가능성), 엔진 보조 탐색",
+            "k": best[0], "end": best[-1]}
+
+
 def collect_citations(paragraphs: list[str], end: int | None, aside=frozenset()) -> list[dict]:
     """본문(참고 자료 구역 앞)의 '출처:' 줄 → [{'idx', 'text', 'key', 'literature'(문헌인가), 'lm_code'}]"""
     stop = end if end is not None else len(paragraphs)
