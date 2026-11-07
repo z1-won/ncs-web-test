@@ -20,6 +20,8 @@ HEAD_FEEDBACK = re.compile(r"^피드백$")
 BULLET = re.compile(r"^[•·▪ㆍ‧◦○∙●\-–]\s*")  # ∙(U+2219)·●도 실데이터(SW제품기획 최종본)의 글머리
 MEMO = re.compile(r"^[★▶※]|要")
 FEEDBACK_BLOCK = re.compile(r"(?:^|\s)(\d{1,2})\.\s*([^\d\-•·.]{1,30}?)\s*$")  # 'N. 방법명'(마침표 없는 짧은 이름; 앞에 변경추적 찌꺼기가 붙어도 찾음)
+# 피드백 뒤에 오는 꼬리 구역 제목 — 여기서 피드백(과 평가 구역)이 끝난다
+TAIL_HEAD = re.compile(r"^(참고\s*자료|활용\s*서식(\s*\d+\.?)?|부록(\s*\d+\.?)?|(NCS\s*학습\s*모듈\s*)?개발\s*이력)$")
 
 
 def _squash(text: str) -> str:
@@ -132,7 +134,13 @@ def eval_regions(manuscript: Document, body: dict, body_section: int) -> list[di
                 if BULLET.match(text) or auto:
                     info["methods"].append({"idx": i, "name": BULLET.sub("", text).strip()})
             elif part == "feedback" and not MEMO.search(text):
+                if TAIL_HEAD.match(text):
+                    break
                 if not BULLET.match(text) and (m := FEEDBACK_BLOCK.search(text)):
+                    if block is not None and int(m.group(1)) <= block["no"]:
+                        # 번호가 다시 1.로 돌아가거나 뒤로 가면 피드백이 아니라 그 뒤 내용(부록·서식 속 번호 목록)이다.
+                        # 마지막 학습은 참고 자료가 없거나 제목이 그림이면 구역 끝(raw_span)이 부록까지 늘어난다(테스트 차례/혼합/2).
+                        break
                     block = {"no": int(m.group(1)), "name": m.group(2).strip(), "idx": i, "text": ""}
                     info["feedback"].append(block)
                 elif block is not None:
