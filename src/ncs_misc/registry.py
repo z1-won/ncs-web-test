@@ -2,6 +2,7 @@
 
 from ncs_core import Rule
 
+from .rules.form_images import check_form_images
 from .rules.page_starts import check_page_starts
 from .rules.pictures import check_pictures
 from .rules.ratio import check_ratio
@@ -14,6 +15,7 @@ DEFAULT_RULES = (
     Rule("resolution", "F02-기타-⑤", check_resolution),
     Rule("ratio", "F02-기타-⑥", check_ratio),
     Rule("references", "F02-기타-⑦", check_references),
+    Rule("form_images", "F02-기타-⑧", check_form_images),
 )
 
 ALL_ITEM_IDS = tuple("F02-기타-" + n for n in "①②③④⑤⑥⑦⑧")

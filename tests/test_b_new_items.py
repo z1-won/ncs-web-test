@@ -11,7 +11,7 @@ from unittest import mock
 from ncs_misc.config import CheckConfig
 from ncs_misc.images import decode_rows, image_header
 from ncs_misc.jpeg import decode_jpeg_rows
-from ncs_misc.rules import resolution
+from ncs_misc.rules import form_images, resolution
 from ncs_references.rules.old_module import check_old_module
 
 # Windows(.NET System.Drawing)로 만든 32×16 JPEG(품질 95)과 그 해독기가 낸 밝기 — 우리 해독기를 맞춰 본다
@@ -107,6 +107,19 @@ class ResolutionTests(unittest.TestCase):
         with mock.patch.object(resolution, "picture_records", return_value=[record(b"", "bmp", (100, 100), dpi=80)]):
             # 최종본 최저(80) — 사람이 통과시킨 해상도는 X가 아니다
             self.assertEqual(resolution.check_resolution(context)[0]["판정"], "판단불가")
+
+
+class FormImageTests(unittest.TestCase):
+    def test_only_pictures_inside_forms(self):
+        body = ["본문"] * 10 + ["활용 서식", "서식 1", "그림", "끝"]
+        context = SimpleNamespace(manuscript=SimpleNamespace(format="hwpx", sections=[[], body]), config=CheckConfig(),
+                                  presence={"활용 서식": {"있음": True, "k": 10}, "부록": {"있음": False}})
+        recs = [record(b"", "bmp", (50, 50), caption="", dpi=50, para=3), record(b"", "bmp", (50, 50), caption="", dpi=60, para=12)]
+        with mock.patch.object(form_images, "picture_records", return_value=recs):
+            rows = form_images.check_form_images(context)
+        self.assertEqual([(r["판정"], r["region_path"]) for r in rows], [("부적합", "section1 > 활용 서식 > 문단 12")])
+        context.presence = {}
+        self.assertEqual(form_images.check_form_images(context)[0]["체크"], {"⑧ 서식·부록 글자 이미지 해상도": "-"})
 
 
 class OldModuleTests(unittest.TestCase):
