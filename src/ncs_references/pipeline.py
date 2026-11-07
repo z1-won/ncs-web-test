@@ -1,4 +1,4 @@
-"""참고 자료 구역(section_presence)을 찾아 항목과 본문 출처 줄을 읽고 ①②③ 규칙을 실행한다. 개발계획서는 쓰지 않는다."""
+"""참고 자료 구역(section_presence)을 찾아 항목과 본문 출처 줄을 읽고 ①②③④ 규칙을 실행한다. 개발계획서는 쓰지 않는다."""
 
 from collections.abc import Sequence
 
