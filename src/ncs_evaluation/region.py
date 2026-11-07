@@ -17,7 +17,7 @@ from ncs_core import Document
 HEAD_CRITERIA = re.compile(r"^평가\s*준거$")
 HEAD_METHOD = re.compile(r"^평가\s*방법$")
 HEAD_FEEDBACK = re.compile(r"^피드백$")
-BULLET = re.compile(r"^[•·▪ㆍ‧◦○\-–]\s*")
+BULLET = re.compile(r"^[•·▪ㆍ‧◦○∙●\-–]\s*")  # ∙(U+2219)·●도 실데이터(SW제품기획 최종본)의 글머리
 MEMO = re.compile(r"^[★▶※]|要")
 FEEDBACK_BLOCK = re.compile(r"(?:^|\s)(\d{1,2})\.\s*([^\d\-•·.]{1,30}?)\s*$")  # 'N. 방법명'(마침표 없는 짧은 이름; 앞에 변경추적 찌꺼기가 붙어도 찾음)
 
