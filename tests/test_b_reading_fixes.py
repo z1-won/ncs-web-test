@@ -38,3 +38,18 @@ class PerformHeadTests(unittest.TestCase):
         self.assertEqual([b["title"] for b in blocks], ["요구사항 분석"])
 
 
+class OverviewAfterTocTests(unittest.TestCase):
+    def test_example_overview_before_toc_is_ignored(self):
+        """'NCS학습모듈의 이해' 쪽의 예시 개요(촬영 구성안…)가 아니라 차례 뒤 실제 개요를 읽는다."""
+        from ncs_core.documents import load_document
+        from ncs_evaluation.pipeline import _after_toc
+        fixture = next((Path(__file__).resolve().parent / "fixtures").glob("원고_ok_*.hwpx"))
+        document = load_document(fixture)
+        trimmed = _after_toc(document, 0)
+        self.assertEqual(len(trimmed.sections[0]), len(document.sections[0]))  # 문단 번호는 그대로
+        toc = next(i for i, t in enumerate(document.sections[0]) if t.replace(" ", "") == "차례")
+        self.assertTrue(all(t == "" for t in trimmed.sections[0][:toc]))
+
+
+if __name__ == "__main__":
+    unittest.main()
