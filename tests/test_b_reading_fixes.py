@@ -7,6 +7,8 @@ from types import SimpleNamespace
 
 from ncs_evaluation.region import eval_head
 from ncs_evaluation.rules.feedback import ENRICHMENT, REMEDIAL
+from ncs_misc.config import CheckConfig
+from ncs_misc.rules.page_starts import check_page_starts
 from ncs_perform.blocks import split_perform_blocks
 from ncs_references.entries import collect_entries, find_short_reference_run
 
@@ -67,6 +69,20 @@ class FeedbackWordsTests(unittest.TestCase):
         self.assertTrue(ENRICHMENT.search("브랜드명 기획을 잘 수행하는 경우 평판을 조사하여 발표하도록 지도한다"))
         # 심화 내용이 없는 피드백은 여전히 못 찾는다(△ 유지 — 체크리스트가 심화를 직접 요구)
         self.assertIsNone(ENRICHMENT.search("성취도가 낮은 학생에게는 핵심 사항을 구체적으로 설명해 준다."))
+
+
+class MiscEvalHeadTests(unittest.TestCase):
+    def test_only_real_eval_head_is_checked(self):
+        """기타 ①: '평가' 표 칸은 머리가 아니다(0407)."""
+        body = ["학습 1", "글", "평가", "칸", "", "평가", "평가 준거", "• …"]
+        manuscript = SimpleNamespace(format="hwpx", sections=[["학습모듈의 개요"], body],
+                                     section_page_breaks=lambda i: frozenset({0}) if i == 0 else frozenset({0, 5}),
+                                     section_table_paragraphs=lambda i: frozenset())
+        context = SimpleNamespace(manuscript=manuscript, config=CheckConfig(), body={"lessons": [{"no": 1, "raw_span": (0, 8)}]},
+                                  presence={})
+        heads = [(r["원고"]["머리"], r["원고"]["문단"], r["판정"]) for r in check_page_starts(context)]
+        self.assertIn(("평가", 5, "적합"), heads)
+        self.assertNotIn(("평가", 2, "부적합"), heads)
 
 
 class ShortReferenceRunTests(unittest.TestCase):
