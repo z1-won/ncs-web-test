@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from ncs_evaluation.region import eval_head
+from ncs_evaluation.rules.feedback import ENRICHMENT, REMEDIAL
 from ncs_perform.blocks import split_perform_blocks
 
 
@@ -54,6 +55,17 @@ class PerformHeadTests(unittest.TestCase):
         paragraphs = ["1-1. 분석", "수행 내용", "/", "요구사항 분석", "재료·자료", "• 명세서", "수행 순서", "\U000f02b1 분석."]
         blocks = split_perform_blocks(paragraphs, table_paragraphs=frozenset({1, 2, 3}))
         self.assertEqual([b["title"] for b in blocks], ["요구사항 분석"])
+
+
+class FeedbackWordsTests(unittest.TestCase):
+    def test_remedial_and_enrichment_phrases_from_finals(self):
+        for text in ("학습 내용 중 이해가 어려운 부분에 대해서는 구체적인 사례를 제시하고",
+                     "개발비용 분석에 어려움을 느낄 경우 직접비를 조사하게 한다",
+                     "평가 결과 일정 점수 이하인 학생들은 추가 학습 후 재시험"):
+            self.assertTrue(REMEDIAL.search(text), text)
+        self.assertTrue(ENRICHMENT.search("브랜드명 기획을 잘 수행하는 경우 평판을 조사하여 발표하도록 지도한다"))
+        # 심화 내용이 없는 피드백은 여전히 못 찾는다(△ 유지 — 체크리스트가 심화를 직접 요구)
+        self.assertIsNone(ENRICHMENT.search("성취도가 낮은 학생에게는 핵심 사항을 구체적으로 설명해 준다."))
 
 
 class OverviewAfterTocTests(unittest.TestCase):
