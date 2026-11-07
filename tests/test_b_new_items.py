@@ -68,7 +68,7 @@ def screen_with_taskbar(x, y, w=320, h=180, bar=10):
 
 
 def record(data, fmt, px, caption="[그림 1-1] 프로그램 화면", dpi=200, para=1):
-    return {"section": 1, "para": para, "bin_id": "image1", "format": fmt, "px": px, "size_hwp": (1, 1), "mm": (100, 60),
+    return {"section": 1, "para": para, "bin_id": "image1", "format": fmt, "px": px, "size_hwp": (28346, 17008), "mm": (100, 60),
             "dpi": dpi, "caption": caption, "data": data}
 
 
@@ -137,6 +137,9 @@ class ResolutionTests(unittest.TestCase):
         with mock.patch.object(resolution, "picture_records", return_value=recs):
             rows = resolution.check_resolution(context)
         self.assertEqual([r["판정"] for r in rows], ["부적합", "판단불가"])
+        # 수정 제안은 그림마다 계산 — 100×60mm를 150 DPI로: 591×355px 필요, 지금 60 DPI면 약 40×24mm(내림) 이하로 줄여야 함
+        self.assertIn("591×355px 이상 필요(지금 100×100px)", rows[0]["수정 제안"])
+        self.assertIn("39×24mm 이하로 줄이면", rows[0]["수정 제안"])
         with mock.patch.object(resolution, "picture_records", return_value=recs[2:]):
             self.assertEqual([r["판정"] for r in resolution.check_resolution(context)], ["적합"])
         with mock.patch.object(resolution, "picture_records", return_value=[record(b"", "bmp", (100, 100), dpi=80)]):

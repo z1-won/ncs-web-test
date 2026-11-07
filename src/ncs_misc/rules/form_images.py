@@ -12,7 +12,7 @@ import re
 
 from ncs_core import NA, O, TRI, X
 
-from ..images import label, picture_records
+from ..images import label, picture_records, size_advice
 from .common import row
 
 CHECK = "⑧ 서식·부록 글자 이미지 해상도"
@@ -61,11 +61,11 @@ def check_form_images(context) -> list[dict]:
         elif r["dpi"] < config.min_dpi:
             rows.append(row("⑧", place, name, shown, {CHECK: X},
                             {CHECK: f"{name}의 {label(r)} {r['dpi']} DPI — {config.min_dpi} DPI 미만, 글자 이미지라면 직접 입력"},
-                            "글자 이미지는 한글로 직접 입력, 사진·그림은 해상도가 높은 것으로 교체"))
+                            f"글자 이미지는 한글로 직접 입력, 사진·그림은 해상도가 높은 것으로 교체{size_advice(r, config.good_dpi)}"))
         elif r["dpi"] < config.good_dpi:
             rows.append(row("⑧", place, name, shown, {CHECK: TRI},
                             {CHECK: f"{name}의 {label(r)} {r['dpi']} DPI — 글자 이미지라면 읽을 수 있는지 사람 확인"},
-                            "글자가 흐리면 직접 입력"))
+                            f"글자가 흐리면 직접 입력. 사진·그림이라면 교체{size_advice(r, config.good_dpi)}"))
         else:
             rows.append(row("⑧", place, name, shown, {CHECK: O}, {}))
     return rows

@@ -6,11 +6,12 @@
   △  < 150 DPI  인쇄용으로 흔히 쓰는 최소 기준 미만 — 규정이 없고 사람이 검수한 최종본에도 107개 있어 사람 확인
   O  ≥ 150 DPI
 그림 파일을 못 읽거나 형식을 모르면 △. hwp는 그림 개체를 읽지 못해 △.
+수정 제안에는 그림마다 계산한 필요 픽셀 수와 최대 출력 크기(images.size_advice)를 적는다.
 """
 
 from ncs_core import NA, O, TRI, X
 
-from ..images import label, picture_records
+from ..images import label, picture_records, size_advice
 from .common import row
 
 CHECK = "⑤ 이미지 해상도"
@@ -36,13 +37,13 @@ def check_resolution(context) -> list[dict]:
             rows.append(row("⑤", place, r["caption"], shown, {CHECK: X},
                             {CHECK: f"{label(r)} {r['dpi']} DPI — {config.min_dpi} DPI 미만"
                                     f"({r['px'][0]}×{r['px'][1]}px를 {r['mm'][0]}×{r['mm'][1]}mm로 출력)"},
-                            f"원본 해상도가 높은 그림으로 바꾸거나 출력 크기를 줄임({config.good_dpi} DPI 이상 권장)"))
+                            f"원본 해상도가 높은 그림으로 바꾸거나 출력 크기를 줄임{size_advice(r, config.good_dpi)}"))
         elif r["dpi"] < config.good_dpi:
             low += 1
             rows.append(row("⑤", place, r["caption"], shown, {CHECK: TRI},
                             {CHECK: f"{label(r)} {r['dpi']} DPI — {config.good_dpi} DPI 미만, 인쇄 시 흐려 보이는지 사람 확인"
                                     f"({r['px'][0]}×{r['px'][1]}px를 {r['mm'][0]}×{r['mm'][1]}mm로 출력)"},
-                            f"흐려 보이면 원본 해상도가 높은 그림으로 교체({config.good_dpi} DPI 이상 권장)"))
+                            f"흐려 보이면 원본 해상도가 높은 그림으로 교체{size_advice(r, config.good_dpi)}"))
     if not low:
         dpis = [r["dpi"] for r in records]
         rows.append(row("⑤", "section1", "", {"그림": len(records), "최저 DPI": min(dpis)}, {CHECK: O},

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import struct
 import zipfile
@@ -97,6 +98,22 @@ def caption_near(paragraphs: list[str], para: int) -> str:
         if CAPTION.search(text):
             return text[:60]
     return ""
+
+
+def size_advice(record: dict, target_dpi: int) -> str:
+    """그림마다 그때그때 계산한 수정 안내 — 이 출력 크기에서 target_dpi가 되는 픽셀 수, 또는 지금 픽셀로 target_dpi가 되는 최대 출력 크기.
+
+    필요 픽셀 = 출력 길이(인치) × target_dpi, 최대 출력 크기 = 지금 출력 크기 × (실효 DPI ÷ target_dpi).
+    수정 제안 끝에 붙이므로 ' — '로 시작한다. 크기·픽셀을 모르면 ''.
+    """
+    (pw, ph), (w, h), dpi = record["px"], record["size_hwp"], record["dpi"]
+    if not (pw and ph and w and h and dpi):
+        return ""
+    need = (math.ceil(w / HWPUNIT_PER_INCH * target_dpi), math.ceil(h / HWPUNIT_PER_INCH * target_dpi))
+    scale = dpi / target_dpi
+    fit = (math.floor(w / HWPUNIT_PER_INCH * 25.4 * scale), math.floor(h / HWPUNIT_PER_INCH * 25.4 * scale))
+    return (f" — 이 크기({record['mm'][0]}×{record['mm'][1]}mm)로 {target_dpi} DPI가 되려면 {need[0]:,}×{need[1]:,}px 이상 필요"
+            f"(지금 {pw:,}×{ph:,}px), 또는 출력 크기를 {fit[0]}×{fit[1]}mm 이하로 줄이면 지금 그림으로 {target_dpi} DPI")
 
 
 def label(record: dict) -> str:
