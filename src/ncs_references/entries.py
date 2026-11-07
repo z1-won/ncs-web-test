@@ -41,9 +41,14 @@ def normalize_author(text: str) -> str:
 
 
 def script_of(text: str) -> str:
-    """항목의 문자 종류: 국문 / 영문 / 중문 / 일문 / 기타 — 첫 글자로 판정하되, 가나가 어디든 있으면 일문(한자 이름 저자)."""
+    """항목의 문자 종류: 국문 / 영문 / 중문 / 일문 / 기타 — 첫 글자로 판정하되, 가나가 어디든 있으면 일문(한자 이름 저자).
+
+    영문으로 시작해도 저자·제목(첫 괄호 앞)이 주로 한글이면 국문이다 — 'AIoT 기술 가이드라인 및 참조 아키텍처(2025), 한국…협회'.
+    """
     if any(0x3040 <= ord(ch) <= 0x30FF for ch in text):
         return "일문"
+    if latin_led_korean(text):
+        return "국문"
     for ch in text:
         if ch.isspace() or ch in "•·▪ㆍ‧◦○∙●-–『「《(":
             continue
@@ -60,6 +65,17 @@ def script_of(text: str) -> str:
             continue
         return "기타"
     return "기타"
+
+
+def latin_led_korean(text: str) -> bool:
+    """영문 글자로 시작하지만 첫 괄호 앞(저자·제목)에 한글이 영문보다 많은 항목인가."""
+    body = BULLET.sub("", text or "").strip()
+    if not body or not (body[0].isascii() and body[0].isalpha()):
+        return False
+    head = body.split("(", 1)[0]
+    hangul = sum(0xAC00 <= ord(ch) <= 0xD7A3 for ch in head)
+    latin = sum(ch.isascii() and ch.isalpha() for ch in head)
+    return hangul > latin
 
 
 def collect_entries(paragraphs: list[str], presence: dict, aside=frozenset()) -> list[dict]:

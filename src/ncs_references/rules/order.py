@@ -4,10 +4,16 @@ import re
 
 from ncs_core import O, TRI, X
 
+from ..entries import latin_led_korean
 from .common import row
 
 CHECK = "③ 나열 순서"
 GROUP_ORDER = {"국문": 0, "국문 번역": 1, "영문": 2, "중문": 3, "일문": 4, "기타": 5}
+AUTHOR_END = re.compile(r"[(「『]")  # 연도 괄호가 없는 항목에서 저자가 끝나는 자리(쉼표는 'Kovitz, B.'의 이름이라 자르지 않는다)
+
+# 영문으로 시작하는 국문 자료('AIoT 기술 가이드라인 및 …(2025), 한국…협회')는 첫 글자대로 영문 목록(알파벳순)에 있어야 한다고 본다.
+# 여러 배치 중 하나만 맞아도 통과시키던 완화는 뺐다 — 다른 자리에 두었으면 X(비고에 그 자료를 따로 적는다).
+PLACEMENT = "영문 목록"
 
 
 def group_of(entry: dict) -> str:
@@ -16,31 +22,56 @@ def group_of(entry: dict) -> str:
 
 def sort_key(entry: dict):
     key = entry["key"]
-    author = (key["raw_author"] if key else entry["text"]).strip().lower()
+    # 연도가 없는 항목('A.M.Davis. 「Software …」')은 문장 전체가 아니라 저자 부분으로 비교한다 — 전체로 비교하면
+    # 같은 저자의 두 자료가 제목 기호(「 > a) 때문에 순서 위반으로 나온다(SW제품기획 0405 국외 자료).
+    author = (key["raw_author"] if key else AUTHOR_END.split(entry["text"], 1)[0].rstrip(" .")).strip().lower()
     author = re.sub(r"\s+", " ", author)
     return author, (key["year_raw"] if key else "")
+
+
+def same_author(a: str, b: str) -> bool:
+    """같은 저자인가 — 연도 없는 항목은 저자 뒤에 제목이 붙어 읽히므로('a.m.davis. a.m.davis inc') 저자+마침표 앞부분이 같으면 같다."""
+    return a == b or a.startswith(b + ".") or b.startswith(a + ".")
+
+
+def precedes(cur: tuple[str, str], prev: tuple[str, str]) -> bool:
+    """cur가 prev보다 앞에 와야 하는가(=순서 위반). 같은 저자면 연도로만 본다."""
+    (ca, cy), (pa, py) = cur, prev
+    if same_author(ca, pa):
+        return bool(cy and py and cy < py)
+    return ca < pa
+
+
+def _order_problems(entries: list[dict], unsure: list[dict], placement: str | None) -> tuple[list[str], list[dict]]:
+    """언어 블록 순서와 블록 안 정렬 위반. unsure 항목은 placement대로 놓았다고 보고 따진다."""
+    unsure_ids = {id(e) for e in unsure}
+
+    def group(e):
+        if id(e) in unsure_ids and placement == "영문 목록":
+            return "영문"
+        return group_of(e)
+
+    problems, details = [], []
+    for prev, cur in zip(entries, entries[1:]):
+        if GROUP_ORDER[group(cur)] < GROUP_ORDER[group(prev)]:
+            problems.append(f"{cur['n']}번({group(cur)})이 {prev['n']}번({group(prev)}) 뒤에 옴")
+            details.append({"n": cur["n"], "문제": f"{group(cur)} 자료는 {group(prev)} 자료보다 앞에"})
+    for name in ("국문", "국문 번역", "영문", "중문", "일문"):
+        block = [e for e in entries if group(e) == name]
+        for prev, cur in zip(block, block[1:]):
+            if precedes(sort_key(cur), sort_key(prev)):
+                order = "가나다순" if name.startswith("국문") else "알파벳순"
+                problems.append(f"{cur['n']}번 「{sort_key(cur)[0][:12]}」이 {prev['n']}번 「{sort_key(prev)[0][:12]}」보다 앞이어야 함({order})")
+                details.append({"n": cur["n"], "문제": f"{order} 위반"})
+    return problems, details
 
 
 def check_order(entries: list[dict]) -> list[dict]:
     if not entries:
         return [row("③", "section1 > 참고 자료", "", None, {CHECK: TRI}, {CHECK: "참고 자료 항목을 찾지 못함"})]
-    problems, details = [], []
-    # 1) 언어 블록 순서
-    groups = [group_of(e) for e in entries]
-    for prev, cur in zip(entries, entries[1:]):
-        if GROUP_ORDER[group_of(cur)] < GROUP_ORDER[group_of(prev)]:
-            problems.append(f"{cur['n']}번({group_of(cur)})이 {prev['n']}번({group_of(prev)}) 뒤에 옴")
-            details.append({"n": cur["n"], "문제": f"{group_of(cur)} 자료는 {group_of(prev)} 자료보다 앞에"})
-    # 2) 블록 안 정렬: 저자 → 연도
-    for name in ("국문", "국문 번역", "영문", "중문", "일문"):
-        block = [e for e in entries if group_of(e) == name]
-        for prev, cur in zip(block, block[1:]):
-            pa, py = sort_key(prev)
-            ca, cy = sort_key(cur)
-            if ca < pa or (ca == pa and cy < py):
-                order = "가나다순" if name.startswith("국문") else "알파벳순"
-                problems.append(f"{cur['n']}번 「{ca[:12]}」이 {prev['n']}번 「{pa[:12]}」보다 앞이어야 함({order})")
-                details.append({"n": cur["n"], "문제": f"{order} 위반"})
+    # 1)·2) 언어 블록 순서와 블록 안 정렬(저자 → 연도)
+    unsure = [e for e in entries if group_of(e).startswith("국문") and latin_led_korean(e["text"])]
+    problems, details = _order_problems(entries, unsure, PLACEMENT if unsure else None)
     # 3) 동일 저자·동일 연도 a/b/c
     seen = {}
     for e in entries:
@@ -52,7 +83,11 @@ def check_order(entries: list[dict]) -> list[dict]:
         if len(same) > 1 and not all(re.search(r"\d{4}[a-z]", s["key"]["year_raw"]) for s in same):
             problems.append(f"{', '.join(str(s['n']) + '번' for s in same)} 동일 저자·동일 연도인데 a/b/c 구분이 없음")
             details.append({"n": same[0]["n"], "문제": "동일 저자 동일 연도 a/b/c 필요"})
+    groups = [group_of(e) for e in entries]
     counts = {name: groups.count(name) for name in GROUP_ORDER if groups.count(name)}
     checks = {CHECK: X if problems else O}
     notes = {CHECK: " / ".join(problems[:4]) + (" …" if len(problems) > 4 else "")} if problems else {}
+    if unsure:
+        names = ", ".join(f"{e['n']}번 「{e['text'][:16]}」" for e in unsure)
+        notes[CHECK + "(참고)"] = (f"영문으로 시작하는 국문 자료 {names} — 첫 글자대로 영문 목록(알파벳순)에 있어야 하는 것으로 봄")
     return [row("③", "section1 > 참고 자료", "", counts, checks, notes, "국문(가나다)→국문 번역→영문(알파벳)→중문→일문 순으로 정렬", 상세=details)]
