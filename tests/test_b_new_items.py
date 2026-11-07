@@ -8,8 +8,10 @@ import zlib
 from types import SimpleNamespace
 from unittest import mock
 
+from ncs_misc.config import CheckConfig
 from ncs_misc.images import decode_rows, image_header
 from ncs_misc.jpeg import decode_jpeg_rows
+from ncs_misc.rules import resolution
 from ncs_references.rules.old_module import check_old_module
 
 # Windows(.NET System.Drawing)로 만든 32×16 JPEG(품질 95)과 그 해독기가 낸 밝기 — 우리 해독기를 맞춰 본다
@@ -89,6 +91,22 @@ class ImageReadingTests(unittest.TestCase):
         for y, expected in JPEG_ROWS.items():
             diffs = [abs(a[0] - b) for a, b in zip(rows[y], expected)]
             self.assertLessEqual(max(diffs), 2, (y, diffs))
+
+
+class ResolutionTests(unittest.TestCase):
+    def test_thresholds(self):
+        context = SimpleNamespace(manuscript=SimpleNamespace(format="hwpx"), config=CheckConfig())
+        recs = [record(b"", "bmp", (100, 100), caption="[그림 1-1] 가", dpi=60),
+                record(b"", "bmp", (100, 100), caption="[그림 1-2] 나", dpi=100),
+                record(b"", "bmp", (100, 100), caption="[그림 1-3] 다", dpi=200)]
+        with mock.patch.object(resolution, "picture_records", return_value=recs):
+            rows = resolution.check_resolution(context)
+        self.assertEqual([r["판정"] for r in rows], ["부적합", "판단불가"])
+        with mock.patch.object(resolution, "picture_records", return_value=recs[2:]):
+            self.assertEqual([r["판정"] for r in resolution.check_resolution(context)], ["적합"])
+        with mock.patch.object(resolution, "picture_records", return_value=[record(b"", "bmp", (100, 100), dpi=80)]):
+            # 최종본 최저(80) — 사람이 통과시킨 해상도는 X가 아니다
+            self.assertEqual(resolution.check_resolution(context)[0]["판정"], "판단불가")
 
 
 class OldModuleTests(unittest.TestCase):

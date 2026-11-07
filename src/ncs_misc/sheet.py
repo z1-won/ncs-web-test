@@ -4,7 +4,7 @@ from ncs_core.f02_items import item_text
 from ncs_core.sheet import SheetItem, build_sheet
 
 COMPONENT = "기타"
-IMPLEMENTED = {"①", "②", "⑥", "⑦"}
+IMPLEMENTED = {"①", "②", "⑤", "⑥", "⑦"}
 ITEMS = [SheetItem(n, item_text(COMPONENT, n), ("F02-기타-" + n,) if n in IMPLEMENTED else ()) for n in "①②③④⑤⑥⑦⑧"]
 
 
