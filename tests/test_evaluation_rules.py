@@ -2,9 +2,10 @@
 
 import unittest
 
-from ncs_evaluation.region import criteria_units, table_kind
+from ncs_evaluation.region import criteria_units, method_items, table_kind
 from ncs_evaluation.rules.feedback import check_feedback
 from ncs_evaluation.rules.goals import check_criteria_goals
+from ncs_evaluation.rules.items import check_items, judge_ending
 from ncs_evaluation.rules.methods import check_methods
 
 A = "호텔의 객실 유형(위치, 면적, 객실 타입 등)에 따라 객실 및 부대시설 정보를 구분할 수 있다."
@@ -133,6 +134,58 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(row["판정"], "판단불가")
         self.assertIn("피드백 「서술형 시험」에 '심화' 문구 없음", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
         self.assertIn("피드백 「역할 연기」에 '보충' 문구 없음", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
+
+
+class ItemsTests(unittest.TestCase):
+    """평가 ④: 평가 항목 명사형 종결(O/△/X)과 학습 목표 유사(△만)."""
+
+    def units(self):
+        _, h, n, v = table_kind(criteria_table())
+        return criteria_units(criteria_table(), h, n, v)
+
+    def items(self, *pairs):
+        return [[{"name": name, "item": item, "row": i} for i, (name, item) in enumerate(pairs)]]
+
+    def test_method_items_split_bullets_in_one_cell(self):
+        table = {"paragraph": 20, "cells": {(0, 0): "학습 내용", (0, 1): "평가 항목", (0, 2): "성취수준", (1, 2): "상",
+                                            (2, 0): "호텔정보 구분", (2, 1): "- 객실 유형 구분 여부 - 부대시설 안내 능력",
+                                            (3, 1): "- 마켓별 요금 적용 정도", (4, 0): "상품 설명", (4, 1): "- 패키지 특징 설명 수준"}}
+        _, h, n, v = table_kind(table)
+        self.assertEqual([(e["name"], e["item"]) for e in method_items(table, h, n, v)],
+                         [("호텔정보 구분", "객실 유형 구분 여부"), ("호텔정보 구분", "부대시설 안내 능력"),
+                          ("호텔정보 구분", "마켓별 요금 적용 정도"), ("상품 설명", "패키지 특징 설명 수준")])
+        table["cells"][(4, 1)] = "∙ 패키지 특징 설명 수준 ∙ 판매 조건 안내 여부"  # ∙(U+2219) 글머리(SW제품기획 최종본)
+        self.assertEqual([e["item"] for e in method_items(table, h, n, v)][-2:], ["패키지 특징 설명 수준", "판매 조건 안내 여부"])
+
+    def test_judge_ending(self):
+        for text in ("객실 유형을 구분하는지 여부", "요금 적용 능력", "설명 수준", "이해 정도"):
+            self.assertEqual(judge_ending(text)[0], "O", text)
+        for text in ("객실 유형을 구분할 수 있다.", "요금을 적용한다", "구분하였는가?", "요금 적용 능력."):  # 개조식 끝 마침표도 X
+            self.assertEqual(judge_ending(text)[0], "X", text)
+        for text in ("객실 유형 이해", "요금 적용 방법"):
+            self.assertEqual(judge_ending(text)[0], "△", text)
+
+    def test_specific_noun_items_pass(self):
+        rows = check_items([region(criteria=[self.units()], method_items=self.items(
+            ("호텔정보 구분", "객실 면적별 차이 설명 능력"), ("상품 설명", "프로모션 상품 판매 조건 안내 여부")))])
+        self.assertEqual(rows[0]["판정"], "적합", rows[0]["비고"])
+
+    def test_sentence_item_fails_and_goal_copy_is_human_check(self):
+        copied = C.replace("할 수 있다.", "할 수 있는 능력")
+        [row] = check_items([region(criteria=[self.units()], method_items=self.items(
+            ("호텔정보 구분", "객실 유형을 구분할 수 있다."), ("상품 설명", copied)))])
+        self.assertEqual(row["판정"], "부적합")
+        self.assertEqual(row["체크"]["④ 평가 항목 명사형 종결"], "X")
+        self.assertEqual(row["체크"]["④ 평가 항목과 학습 목표 구별"], "X")
+        self.assertIn("학습 목표와 거의 같은", row["비고"]["④ 평가 항목과 학습 목표 구별"])
+        [row] = check_items([region(criteria=[self.units()], method_items=self.items(("상품 설명", copied)))])
+        self.assertEqual(row["판정"], "부적합", "체크리스트: 평가 항목과 학습 목표가 유사하면 안 됨 → X")
+
+    def test_missing_region_or_items_is_undecidable(self):
+        [row] = check_items([region(found=False, notes=["평가 머리를 찾지 못함"])])
+        self.assertEqual(row["판정"], "판단불가")
+        [row] = check_items([region(method_tables=1)])
+        self.assertEqual(row["판정"], "판단불가")
 
 
 if __name__ == "__main__":

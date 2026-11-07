@@ -65,6 +65,26 @@ def criteria_units(table: dict, header_row: int, name_col: int, value_col: int) 
     return units
 
 
+ITEM_BULLET = re.compile(r"(?:^|\s)[\-–•·▪ㆍ‧◦○∙●]\s+")  # 셀 문단은 공백으로 합쳐져 오므로 '- 항목 - 항목'을 글머리로 다시 나눈다
+
+
+def method_items(table: dict, header_row: int, name_col: int, value_col: int) -> list[dict]:
+    """평가 방법 표 → [{'name': 학습 내용명, 'item': 평가 항목 하나, 'row': 행}]. 병합된 학습 내용 셀은 첫 행에만 있다."""
+    out, current = [], ""
+    rows = sorted({r for (r, _) in table["cells"] if r > header_row})
+    for r in rows:
+        name = (table["cells"].get((r, name_col)) or "").strip()
+        value = (table["cells"].get((r, value_col)) or "").strip()
+        if name and not re.fullmatch(r"[상중하]", name):
+            current = name
+        if not value or re.fullmatch(r"[상중하]", value) or MEMO.search(value):
+            continue
+        for item in ITEM_BULLET.split(value):
+            if item.strip():
+                out.append({"name": current, "item": item.strip(), "row": r})
+    return out
+
+
 HEAD_LOOKAHEAD = 40  # 평가 머리 뒤 이 범위 안에 '평가 준거'가 있어야 진짜 평가 구역 머리
 
 
@@ -90,7 +110,7 @@ def eval_head(lesson: dict, body: dict, paragraphs: list[str]) -> int | None:
 
 def eval_regions(manuscript: Document, body: dict, body_section: int) -> list[dict]:
     """학습마다 {'lesson', 'start', 'end', 'found': bool, 'criteria': [표별 units], 'criteria_tables': n,
-    'methods': [방법 이름…], 'method_tables': n, 'feedback_found': bool, 'feedback': [{'no','name','idx','text'}], 'notes': [...]}."""
+    'methods': [방법 이름…], 'method_tables': n, 'method_items': [표별 평가 항목], 'feedback_found': bool, 'feedback': [{'no','name','idx','text'}], 'notes': [...]}."""
     paragraphs = manuscript.sections[body_section]
     table_paragraphs = manuscript.section_table_paragraphs(body_section) or frozenset()
     aside = manuscript.section_aside_paragraphs(body_section) or frozenset()
@@ -99,7 +119,7 @@ def eval_regions(manuscript: Document, body: dict, body_section: int) -> list[di
     out = []
     for lesson in body["lessons"]:
         info = {"lesson": lesson["no"], "found": False, "criteria": [], "criteria_tables": 0, "methods": [],
-                "method_tables": 0, "feedback_found": False, "feedback": [], "notes": []}
+                "method_tables": 0, "method_items": [], "feedback_found": False, "feedback": [], "notes": []}
         head = eval_head(lesson, body, paragraphs)
         if head is None:
             info["notes"].append("평가 구역의 시작을 유일하게 식별하지 못함" if lesson["eval"] else "평가 머리를 찾지 못함")
@@ -119,6 +139,7 @@ def eval_regions(manuscript: Document, body: dict, body_section: int) -> list[di
                 info["criteria"].append(criteria_units(table, header_row, name_col, value_col))
             else:
                 info["method_tables"] += 1
+                info["method_items"].append(method_items(table, header_row, name_col, value_col))
                 if name != "평가 방법":
                     info.setdefault("odd_method_heads", []).append(table["paragraph"])
         part, block = None, None

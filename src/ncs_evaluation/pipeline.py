@@ -1,4 +1,4 @@
-"""공통 파서로 문맥을 준비하고 평가 ①②③ 규칙을 실행한다."""
+"""공통 파서로 문맥을 준비하고 평가 ①~⑤ 규칙을 실행한다."""
 from collections.abc import Sequence
 from dataclasses import replace
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
@@ -51,7 +51,7 @@ def prepare_review(manuscript: Document, plan: Document | None = None, *, module
 
 
 def _warnings(context: ReviewContext) -> list[str]:
-    warnings = ["평가 ①②③⑤를 검사합니다(④ 미구현). 표 구조·학습 연결이 불명확하면 판단불가입니다."]
+    warnings = ["평가 ①~⑤를 검사합니다(④는 명사형 종결·학습 목표 유사만 — 내용의 구체성은 사람 확인). 표 구조·학습 연결이 불명확하면 판단불가입니다."]
     if context.plan is None:
         warnings.append("개발계획서가 없어 ② 학습 목표 대조는 생략(-)입니다")
     elif context.plan_goals is None:
