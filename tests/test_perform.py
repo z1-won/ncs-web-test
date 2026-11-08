@@ -147,6 +147,9 @@ class SentenceRuleTests(unittest.TestCase):
         self.assertEqual(judge_sentence(BOX + " 사용법을 가르친다.")[0], "O")
         self.assertEqual(judge_sentence(BOX + " 객실이 크다.")[0], "X")  # 형용사
         self.assertEqual(judge_sentence(BOX + " 참고 사항이다.")[0], "△")
+        # 수행 목표를 적는 '~할 수 있다.'는 다른 표현이 마땅치 않고 최종본(0401·0407)에도 있어 △
+        self.assertEqual(judge_sentence(BOX + " 개발 일정을 수립할 수 있다.")[0], "△")
+        self.assertEqual(judge_sentence(BOX + " 필요한 자원이 없다.")[0], "△")
         self.assertEqual(judge_sentence(BOX + " 기록한다")[0], "X")
         self.assertEqual(judge_sentence(BOX + " 응대한다,")[0], "X")
         self.assertEqual(judge_sentence(BOX + " 예약 접수")[0], "X")
