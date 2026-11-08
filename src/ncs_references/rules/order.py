@@ -11,9 +11,10 @@ CHECK = "③ 나열 순서"
 GROUP_ORDER = {"국문": 0, "국문 번역": 1, "영문": 2, "중문": 3, "일문": 4, "기타": 5}
 AUTHOR_END = re.compile(r"[(「『]")  # 연도 괄호가 없는 항목에서 저자가 끝나는 자리(쉼표는 'Kovitz, B.'의 이름이라 자르지 않는다)
 
-# 영문으로 시작하는 국문 자료('AIoT 기술 가이드라인 및 …(2025), 한국…협회')는 첫 글자대로 영문 목록(알파벳순)에 있어야 한다고 본다.
-# 여러 배치 중 하나만 맞아도 통과시키던 완화는 뺐다 — 다른 자리에 두었으면 X(비고에 그 자료를 따로 적는다).
-PLACEMENT = "영문 목록"
+# 영문으로 시작하는 국문 자료('AIoT 기술 가이드라인 및 …(2025), 한국…협회')를 어디에 둘지는 체크리스트·F14에 규정이 없고
+# 최종본(0405 「SW공학센터(2013.12)」)에도 있다. 판정 원칙(체크리스트에 없지만 최종본에 있는 것은 △)에 따라
+# 아래 배치 중 하나로 보면 순서가 맞을 때 △(사람 확인), 어느 배치로도 순서가 틀리면 X.
+PLACEMENTS = ("국문 맨 앞", "국문 맨 뒤", "영문 목록")
 
 
 def group_of(entry: dict) -> str:
@@ -51,6 +52,13 @@ def _order_problems(entries: list[dict], unsure: list[dict], placement: str | No
             return "영문"
         return group_of(e)
 
+    def key(e):
+        if id(e) in unsure_ids and placement == "국문 맨 앞":
+            return "", ""
+        if id(e) in unsure_ids and placement == "국문 맨 뒤":
+            return "􏿿", ""
+        return sort_key(e)
+
     problems, details = [], []
     for prev, cur in zip(entries, entries[1:]):
         if GROUP_ORDER[group(cur)] < GROUP_ORDER[group(prev)]:
@@ -59,7 +67,7 @@ def _order_problems(entries: list[dict], unsure: list[dict], placement: str | No
     for name in ("국문", "국문 번역", "영문", "중문", "일문"):
         block = [e for e in entries if group(e) == name]
         for prev, cur in zip(block, block[1:]):
-            if precedes(sort_key(cur), sort_key(prev)):
+            if precedes(key(cur), key(prev)):
                 order = "가나다순" if name.startswith("국문") else "알파벳순"
                 problems.append(f"{cur['n']}번 「{sort_key(cur)[0][:12]}」이 {prev['n']}번 「{sort_key(prev)[0][:12]}」보다 앞이어야 함({order})")
                 details.append({"n": cur["n"], "문제": f"{order} 위반"})
@@ -71,7 +79,13 @@ def check_order(entries: list[dict]) -> list[dict]:
         return [row("③", "section1 > 참고 자료", "", None, {CHECK: TRI}, {CHECK: "참고 자료 항목을 찾지 못함"})]
     # 1)·2) 언어 블록 순서와 블록 안 정렬(저자 → 연도)
     unsure = [e for e in entries if group_of(e).startswith("국문") and latin_led_korean(e["text"])]
-    problems, details = _order_problems(entries, unsure, PLACEMENT if unsure else None)
+    fits = []
+    if unsure:
+        tried = {p: _order_problems(entries, unsure, p) for p in PLACEMENTS}
+        fits = [p for p, (found, _) in tried.items() if not found]
+        problems, details = tried[fits[0] if fits else "영문 목록"]
+    else:
+        problems, details = _order_problems(entries, [], None)
     # 3) 동일 저자·동일 연도 a/b/c
     seen = {}
     for e in entries:
@@ -85,9 +99,16 @@ def check_order(entries: list[dict]) -> list[dict]:
             details.append({"n": same[0]["n"], "문제": "동일 저자 동일 연도 a/b/c 필요"})
     groups = [group_of(e) for e in entries]
     counts = {name: groups.count(name) for name in GROUP_ORDER if groups.count(name)}
-    checks = {CHECK: X if problems else O}
+    checks = {CHECK: X if problems else (TRI if unsure else O)}
     notes = {CHECK: " / ".join(problems[:4]) + (" …" if len(problems) > 4 else "")} if problems else {}
     if unsure:
         names = ", ".join(f"{e['n']}번 「{e['text'][:16]}」" for e in unsure)
-        notes[CHECK + "(참고)"] = (f"영문으로 시작하는 국문 자료 {names} — 첫 글자대로 영문 목록(알파벳순)에 있어야 하는 것으로 봄")
+        if fits:
+            where = "·".join(fits)
+            to = "으로" if (ord(where[-1]) - 0xAC00) % 28 else "로"  # 받침 있으면 '으로'(목록으로), 없으면 '로'(뒤로)
+            if not problems:
+                notes[CHECK] = f"영문으로 시작하는 국문 자료 {names}의 자리는 규정이 없음 — {where}{to} 보면 순서가 맞음, 사람 확인"
+            notes[CHECK + "(참고)"] = f"영문으로 시작하는 국문 자료 {names} — {where}{to} 보고 순서를 따짐"
+        else:
+            notes[CHECK + "(참고)"] = (f"영문으로 시작하는 국문 자료 {names} — 국문 맨 앞·국문 맨 뒤·영문 목록(알파벳순) 어느 자리로 보아도 순서가 맞지 않음")
     return [row("③", "section1 > 참고 자료", "", counts, checks, notes, "국문(가나다)→국문 번역→영문(알파벳)→중문→일문 순으로 정렬", 상세=details)]

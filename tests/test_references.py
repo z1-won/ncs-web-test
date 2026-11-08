@@ -148,22 +148,27 @@ class EntryTests(unittest.TestCase):
         self.assertEqual([e["text"][:9] for e in collect_entries(body, presence)], ["ISO(2001)", "ISO(2011)"])
 
     def test_latin_led_korean_source(self):
-        """'AIoT 기술 가이드라인…'은 영문으로 시작하는 국문 자료 — 첫 글자대로 영문 목록(알파벳순)에 있어야 적합(완화 없음)."""
+        """'AIoT 기술 가이드라인…'은 영문으로 시작하는 국문 자료 — 자리 규정이 없어(최종본에도 있음) 맞는 배치가 있으면 △, 없으면 X."""
         text = "AIoT 기술 가이드라인 및 참조 아키텍처(2025), 한국지능형사물인터넷협회(AIoT Korea)."
         self.assertEqual(script_of(text), "국문")
         self.assertEqual(script_of("AIoT Data and Functional Viewpoint Guide(2026)."), "영문")
         korean = [entry(1, "교육부(2023). 「추진방안」. 교육부."), entry(2, "한국지능정보사회진흥원(2026). 자료.")]
         english = [entry(9, "Al-Fuqaha, A.(2015). Internet of Things.")]
-        # 국문 다음·영문 맨 앞(aiot < al-fuqaha, 테스트 데이터 원본의 배치) = 영문 목록 알파벳 자리 → 적합
+        # 국문 다음·영문 맨 앞(테스트 데이터 원본의 배치) = 국문 맨 뒤·영문 목록 알파벳 자리 → △
         [row] = check_order(korean + [entry(3, text)] + english)
-        self.assertEqual(row["판정"], "적합", row["비고"])
-        self.assertIn("영문 목록", row["비고"]["③ 나열 순서(참고)"])
-        # 국문 맨 앞 → X (예전에는 세 배치 중 하나라 적합이었음)
-        self.assertEqual(check_order([entry(3, text)] + korean + english)[0]["판정"], "부적합")
-        # 영문 목록 안이지만 알파벳 자리가 아님(al-fuqaha 뒤) → X
-        self.assertEqual(check_order(korean + english + [entry(3, text)])[0]["판정"], "부적합")
+        self.assertEqual(row["판정"], "판단불가", row["비고"])
+        self.assertIn("국문 맨 뒤·영문 목록", row["비고"]["③ 나열 순서"])
+        # 국문 맨 앞 → △
+        self.assertEqual(check_order([entry(3, text)] + korean + english)[0]["판정"], "판단불가")
+        # 영문 목록 안이지만 알파벳 자리가 아님(al-fuqaha 뒤) → 어느 배치로도 틀림 → X
+        [row] = check_order(korean + english + [entry(3, text)])
+        self.assertEqual(row["판정"], "부적합")
+        self.assertIn("어느 자리로 보아도", row["비고"]["③ 나열 순서(참고)"])
         # 국문 한가운데 → X
         self.assertEqual(check_order([korean[0], entry(3, text), korean[1]] + english)[0]["판정"], "부적합")
+        # 다른 위반(동일 저자·동일 연도 a/b/c)이 있으면 배치와 상관없이 X
+        twins = [entry(4, "교육부(2023). 「추진방안」. 교육부."), entry(5, "교육부(2023). 「계획」. 교육부.")]
+        self.assertEqual(check_order(twins + [entry(6, text)] + english)[0]["판정"], "부적합")
 
     def test_same_author_without_year_compares_author_only(self):
         """연도 없는 같은 저자 두 자료: 제목 기호(「)로 순서 위반을 내지 않는다(SW제품기획 0405)."""
