@@ -219,9 +219,12 @@ python scripts/data/build_action_nouns.py --from-manuscripts 원고.hwpx …   #
 
 `ncs_core.llm`이 OpenAI 호환 API를 표준 라이브러리로 호출합니다. 블록의 재료·기기 줄만 보내고, 결과는 항상 △(사람 확인) + 줄 번호·근거·일반 명칭 제안이며 자동 X는 없습니다. (모델, 프롬프트) 해시로 `.llm_cache/`(git 제외)에 캐시해 재검수는 과금되지 않고, `usage.jsonl`에 토큰이 기록됩니다. LLM을 부를 수 있는 작업은 `ncs_core.llm.ALLOWED_TASKS`에 명시된 것뿐입니다(지금은 수행 ② 하나).
 
+프롬프트는 원고 분야에 맞춰 만들어집니다. 모듈 코드의 세분류로 NCS 목록에서 분야 이름(예: 숙박서비스 > 연회관리)을 넣고, `src/ncs_core/data/field_terms.tsv`에서 그 분야의 공용 약어·문서명(상표로 보지 않을 것)을 모읍니다. 코드 앞자리로 고르므로 `*`(전 분야)·대분류 2자리·중분류 4자리·소분류 6자리·세분류 8자리 어디에나 둘 수 있습니다. 새 분야 원고에서 일반 명칭이 후보로 잡히면(오탐) 이 파일에 그 분야 코드로 한 줄 추가합니다. 프롬프트가 바뀌므로 그 분야의 캐시는 다음 검수 때 한 번 새로 호출됩니다.
+
 ```bash
 python scripts/probe/llm_probe.py           # 합성 문장으로 키·모델·캐시 점검(실제 원고 전송 없음)
 python scripts/probe/llm_probe.py --usage   # 토큰 합계·비용 추정
+python scripts/probe/llm_probe.py --code LM2001021701 --show   # 그 분야의 프롬프트만 출력(호출 없음)
 ```
 
 ## 다문서 배치 테스트

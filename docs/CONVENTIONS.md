@@ -32,7 +32,7 @@
 | 입력 확인 | `inputs` · `module_code` | 파일 역할 판별, 모듈 코드 추출·검증 |
 | 판정 도우미 | `text` · `goals` · `sentences` · `notes` | 정규화·비교·`verdict`, 목표 문장 비교, 종결 판정, 비고 문장 틀. 정책은 두지 않는다 |
 | 규칙·결과 | `rules` · `models` · `sheet` · `f02_items` · `reporting` | 규칙 등록·실행, 결과 계약, 확인서 접기, F02 항목 원문, 파일 저장 |
-| 기준 데이터 | `lexicon` · `ncs_catalog` · `data/` | 행동명사 목록, NCS 분류·수준 표, F02 양식 |
+| 기준 데이터 | `lexicon` · `ncs_catalog` · `field_terms` · `data/` | 행동명사 목록, NCS 분류·수준 표, 분야별 공용 명칭, F02 양식 |
 | 외부 호출 | `lexicon`(사전) · `llm` · `ncs_api` | 표준국어대사전, 생성형 AI, 공공데이터포털. 검수 중 호출은 승인·키가 있을 때만, 실패는 △ |
 
 ## 공개 API (모든 검수 패키지 동일)
