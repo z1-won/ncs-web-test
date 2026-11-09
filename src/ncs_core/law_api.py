@@ -84,9 +84,18 @@ def search(name: str, *, display: int = 20) -> list[LawRecord]:
     return _parse(_get({"target": "law", "query": name, "display": display}))
 
 
+HISTORY_TARGETS = ("lsHistory", "lsHstInf", "eflaw")   # 연혁 서비스의 target 이름 후보. 첫 번째로 XML을 주는 것을 쓴다
+
+
 def history(name: str, *, display: int = 50) -> list[LawRecord]:
-    """법령 연혁 목록(폐지·개정 이력)에서 이름으로 찾는다."""
-    return _parse(_get({"target": "lsHistory", "query": name, "display": display}))
+    """법령 연혁 목록(폐지·개정 이력)에서 이름으로 찾는다. 연혁 서비스가 미신청이면 LawApiError."""
+    errors = []
+    for target in HISTORY_TARGETS:
+        try:
+            return _parse(_get({"target": target, "query": name, "display": display}))
+        except LawApiError as error:
+            errors.append(f"{target}: {str(error)[:80]}")
+    raise LawApiError("연혁 조회 불가(법령 연혁 서비스 미신청?) — " + " / ".join(errors))
 
 
 def raw(params: dict) -> str:

@@ -2,7 +2,7 @@
 
 출처: scripts/data/build_law_names.py(법제처 Open API). 검수 중에는 이 표만 읽는다.
 열: 표기 \\t 정식명칭 \\t 법령ID \\t 시행일자 \\t 제개정구분 \\t 상태 \\t 현행명칭 \\t 조회일
-상태: 현행 / 폐지 / 명칭변경 / 미검색. 명칭변경이면 현행명칭에 지금 이름.
+상태: 현행 / 폐지 / 명칭변경 / 미검색 / 현행목록없음(연혁 조회 불가). 명칭변경이면 현행명칭에 지금 이름.
 파일 위치는 LAW_NAMES_FILE 환경 변수로 바꿀 수 있다(기본: 패키지 data/law_names.tsv).
 """
 
@@ -68,7 +68,7 @@ class LawEntry:
     law_id: str
     effective: str
     revision: str
-    status: str       # 현행 / 폐지 / 명칭변경 / 미검색
+    status: str       # 현행 / 폐지 / 명칭변경 / 미검색 / 현행목록없음
     current_name: str
     checked: str
 

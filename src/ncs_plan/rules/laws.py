@@ -46,6 +46,14 @@ def check_laws(module: dict, catalog: LawCatalog | None) -> list[dict]:
         elif entry.status == "미검색":
             checks[LABEL] = TRI
             notes[LABEL] = f"{where} 「{name}」 — 법제처 현행·연혁 목록에 없는 이름(법령명이 틀렸거나 법령이 아님). 정확한 법령명 확인"
+        elif entry.status == "현행목록없음":
+            if ncs_side:
+                checks[LABEL] = TRI
+                notes[LABEL] = f"{where} 「{name}」 — 현행 법령 목록에 없음(폐지·명칭 변경·오기 중 하나). NCS 원문(수정 금지)이므로 직능연과 협의"
+            else:
+                checks[LABEL] = X
+                notes[LABEL] = f"{where} 「{name}」 — 현행 법령 목록에 없음(폐지·명칭 변경·오기 중 하나). 법제처에서 현행 명칭 확인"
+                suggestion = f"「{name}」의 현행 법령명 확인 후 현행화"
         elif entry.status == "현행":
             checks[LABEL] = O
         elif entry.status in ("폐지", "명칭변경"):

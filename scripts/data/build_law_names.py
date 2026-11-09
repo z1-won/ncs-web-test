@@ -5,7 +5,8 @@
   python scripts/data/build_law_names.py --names "화학물질관리법" "개인정보 보호법"   # 이름을 직접
   python scripts/data/build_law_names.py --probe "화학물질관리법"                     # 응답 원문 확인(첫 실행 때)
 이미 표에 있는 이름은 건너뛴다(--refresh로 다시 조회). 조회 결과는 표에 바로 덧붙인다.
-판정: 현행 목록에 같은 이름 → 현행 / 연혁에만 있고 제개정구분이 폐지 → 폐지 / 연혁의 법령ID로 현행 이름이 다르면 → 명칭변경 / 아무 데도 없음 → 미검색.
+판정: 현행 목록에 같은 이름 → 현행 / 연혁에만 있고 제개정구분이 폐지 → 폐지 / 연혁의 법령ID로 현행 이름이 다르면 → 명칭변경 /
+아무 데도 없음 → 미검색 / 연혁 서비스를 못 쓰면 → 현행목록없음(폐지·명칭 변경·오기 중 하나).
 """
 
 from __future__ import annotations
@@ -33,7 +34,11 @@ def judge(name: str) -> tuple[str, str, str, str, str, str]:
     if current:
         r = sorted(current, key=lambda x: x.effective)[-1]
         return r.name, r.law_id, r.effective, r.revision, "현행", r.name
-    past = [r for r in history(name) if normalize(r.name) == key]
+    try:
+        past = [r for r in history(name) if normalize(r.name) == key]
+    except LawApiError:
+        # 연혁 서비스를 못 쓰면 '현행 목록에 없음'까지만 안다(폐지·명칭 변경·오기 중 무엇인지는 사람이 확인)
+        return "", "", "", "", "현행목록없음", ""
     if not past:
         return "", "", "", "", "미검색", ""
     last = sorted(past, key=lambda x: (x.promulgated, x.serial))[-1]
@@ -56,7 +61,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.probe:
-        for target in ("law", "lsHistory"):
+        for target in ("law", "eflaw", "lsHistory", "lsHstInf", "lsAbrv"):
             print(f"===== target={target} query={args.probe}")
             try:
                 print(raw({"target": target, "query": args.probe, "display": 5})[:3000])
