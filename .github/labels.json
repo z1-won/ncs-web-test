@@ -1,0 +1,17 @@
+[
+  { "name": "Feature ✨", "color": "fef2c0", "description": "FEAT: 새 기능·검수 항목 구현", "from": "enhancement" },
+  { "name": "Fix 🐜", "color": "d73a4a", "description": "FIX: 오류·오판정 수정", "from": "bug" },
+  { "name": "Refactor 🛠️", "color": "c2e0c6", "description": "REFACTOR: 판정·동작 변경 없는 코드 개선", "from": "Refactor" },
+  { "name": "UI 🎨", "color": "73ce17", "description": "UI: 기능은 그대로, 화면·사용성 개선", "from": "UIUX" },
+  { "name": "Test 🧪", "color": "bfd4f2", "description": "TEST: 테스트·골든 케이스·테스트 원고" },
+  { "name": "Data 🗃️", "color": "fbca04", "description": "DATA: 행동명사 사전·NCS 목록·F02 양식 등 기준 데이터" },
+  { "name": "Docs 📃", "color": "d4c5f9", "description": "DOCS: README·docs 문서" },
+  { "name": "Chore 🧹", "color": "c5def5", "description": "CHORE: 설정·의존성·배포·스크립트" },
+  { "name": "직능연 📋", "color": "81016f", "description": "직능연 회의에서 확인할 판정 기준·질문", "from": "직능연" },
+  { "name": "PoC① 교수·학습", "color": "1d76db", "description": "교수·학습 활용 지원 (LLM + NCS/학습모듈 검색)" },
+  { "name": "PoC② 원고 검수", "color": "0e8a16", "description": "집필·원고 검수 지원 (Rule + DB 비교 + LLM, F02)" },
+  { "name": "PoC③ 사업운영 Q&A", "color": "5319e7", "description": "사업운영 Q&A 지원 (RAG + LLM)" },
+  { "name": "LLM 🤖", "color": "f9d0c4", "description": "LLM 호출·원고 반출 승인에 영향" },
+  { "name": "보류 ⏸️", "color": "ededed", "description": "지금 PoC 범위 밖이라 미룸" },
+  { "name": "중복 ♻️", "color": "cfd3d7", "description": "이미 있는 이슈·PR과 중복" }
+]
