@@ -11,12 +11,12 @@ FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다.
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[web]"
-.venv/bin/ncs-web --out webapp/결과
+.venv/bin/ncs-web
 ```
 
-기본 주소는 `http://127.0.0.1:8765`입니다. 위 명령은 결과를 기존 `webapp/결과/`의 실행별 폴더에 저장합니다.
+기본 주소는 `http://127.0.0.1:8765`입니다. 결과는 저장소 루트의 `결과/` 아래 실행별 폴더에 저장합니다(`DATABASE_URL`이 있으면 폴더 대신 DB 이력). 결과 폴더는 `결과/` 한 곳만 씁니다.
 `--port`, `--out`, `--dist` 옵션을 사용합니다. `--src`는 제거하고 설치된 Python 패키지를 사용하도록 통일했습니다.
-프로젝트 설치 후에는 기존 `python webapp/server.py --out webapp/결과` 명령도 호환 진입점을 통해 실행됩니다. 이 파일은 설치된 `ncs_web.server`를 호출하며 검색 경로를 추가하지 않습니다.
+프로젝트 설치 후에는 기존 `python webapp/server.py` 명령도 호환 진입점을 통해 실행됩니다. 이 파일은 설치된 `ncs_web.server`를 호출하며 검색 경로를 추가하지 않습니다.
 가상환경을 활성화하면 `ncs-web` 또는 `python -m ncs_web`로도 실행할 수 있습니다.
 **패키지는 `.venv` 안에 설치되므로 반드시 그 Python으로 실행합니다.** `python3 webapp/server.py`처럼 시스템 Python으로 실행하면 `ModuleNotFoundError: No module named 'ncs_web'`이 납니다. `.venv/bin/ncs-web`, `.venv/bin/python …`, 또는 `source .venv/bin/activate` 뒤에 실행하세요.
 
@@ -32,7 +32,7 @@ npm run dev
 프런트엔드 폴더에서 `npm run build`를 실행한 뒤, 저장소 루트에서 아래처럼 시작하면 빌드된 화면도 8765에서 제공합니다.
 
 ```bash
-.venv/bin/ncs-web --out webapp/결과 --dist webapp/frontend/dist
+.venv/bin/ncs-web --dist webapp/frontend/dist
 ```
 
 ## 저장·화면 경로 분리
@@ -46,7 +46,7 @@ npm run dev
 다른 위치에서 실행할 때는 절대 경로를 지정하면 같은 결과 폴더와 화면 빌드를 계속 사용할 수 있습니다.
 결과 폴더는 첫 저장 때 생성하며, 화면 폴더는 빌드된 파일을 읽는 용도입니다.
 화면 경로가 없거나 지정되지 않으면 `/`는 안내와 함께 404를 반환하고 API·`/docs`는 계속 사용할 수 있습니다.
-기존 결과 파일은 이동하거나 삭제하지 않습니다. 기존 위치를 쓰려면 위 예시처럼 `--out webapp/결과`를 명시하세요.
+예전 안내대로 `--out webapp/결과`로 띄웠다면 결과가 `webapp/결과/`에 따로 쌓여 있습니다. 한 곳으로 모으려면 그 안의 실행 폴더를 루트 `결과/`로 옮기거나 아래 이관 명령으로 DB에 넣습니다.
 `DATABASE_URL`을 설정하지 않으면 기존 JSON·ZIP 파일 저장 방식을 유지합니다.
 
 ## PostgreSQL 검수 이력
@@ -75,7 +75,7 @@ set +a
 기존 결과를 가져올 때는 다음 명령을 실행합니다. 재실행하면 이미 가져온 폴더를 건너뛰며 원본 파일은 삭제하지 않습니다. 이관 시각은 요약 JSON의 수정 시각을 사용하고, 과거 입력 원본의 해시·엔진 버전은 복원할 수 없습니다.
 
 ```bash
-.venv/bin/python -m ncs_service.postgres_cli import webapp/결과
+.venv/bin/python -m ncs_service.postgres_cli import 결과
 ```
 
 DB 모드에서는 `GET /api/reviews`(최근 50건, 최대 100건; `module_code`, `check`, `verdict`, `limit`, `offset` 필터), `GET /api/reviews/{id}`(상세), `GET /api/reviews/{id}/zip`(ZIP 다운로드)을 제공합니다. 화면에 최근 검수 이력 목록과 상세 보기·ZIP 다운로드가 표시됩니다. DB 모드의 `POST /api/review` 응답에는 `id`가 들어가고 `저장`은 `null`입니다.

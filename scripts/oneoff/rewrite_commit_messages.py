@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""scripts/commit_messages.tsv 대로 과거 커밋 메시지를 일괄 변경한다 (작업 트리·작성자·날짜는 그대로).
+"""scripts/oneoff/commit_messages.tsv 대로 과거 커밋 메시지를 일괄 변경한다 (작업 트리·작성자·날짜는 그대로).
 
-  python scripts/rewrite_commit_messages.py --check      # 표의 해시가 현재 main 히스토리와 맞는지만 확인
-  python scripts/rewrite_commit_messages.py              # 적용 (git filter-repo 필요: pip install git-filter-repo)
+  python scripts/oneoff/rewrite_commit_messages.py --check      # 표의 해시가 현재 main 히스토리와 맞는지만 확인
+  python scripts/oneoff/rewrite_commit_messages.py              # 적용 (git filter-repo 필요: pip install git-filter-repo)
   git push --force-with-lease origin main                # 적용 뒤, main 보호 규칙은 잠시 해제
 
 표 형식(탭 구분): hash  new_subject  body_prefix

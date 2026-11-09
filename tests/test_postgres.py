@@ -84,13 +84,16 @@ class PostgresModeTests(unittest.TestCase):
         self.assertIn("DELETE", client.options("/api/reviews/run-1").headers["Access-Control-Allow-Methods"])
 
     def test_existing_folder_can_be_imported_without_mutation(self):
-        folder = next((ROOT / "webapp" / "결과").glob("*"), None)
-        if folder is None:
-            self.skipTest("기존 결과 폴더가 없음")
-        with patch("ncs_service.postgres_cli.import_review", return_value=True) as imported:
-            self.assertTrue(import_directory("postgresql://example", folder))
-        self.assertIn(imported.call_args.kwargs["check"], ("position", "toc", "overview", "knowledge"))
-        self.assertIsInstance(imported.call_args.kwargs["checklist"], list)
+        """파일로 저장된 결과 폴더를 고치지 않고 이관 입력으로 읽는다. 개인 PC의 결과 폴더에 기대지 않도록 여기서 만들어 쓴다."""
+        review = execute_review(ReviewRequest((MANUSCRIPT, PLAN), "toc"))
+        with tempfile.TemporaryDirectory() as out:
+            folder = persist_review(review, out).directory
+            before = {path.name: path.read_bytes() for path in folder.iterdir()}
+            with patch("ncs_service.postgres_cli.import_review", return_value=True) as imported:
+                self.assertTrue(import_directory("postgresql://example", folder))
+            self.assertEqual({path.name: path.read_bytes() for path in folder.iterdir()}, before, "이관은 폴더를 고치지 않는다")
+        self.assertEqual(imported.call_args.kwargs["check"], "toc")
+        self.assertEqual(imported.call_args.kwargs["checklist"], review.result.checklist)
 
 
 if __name__ == "__main__":
