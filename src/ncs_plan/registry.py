@@ -34,13 +34,13 @@ def _module_rule(no: str, fn):
 
 DEFAULT_RULES = (
     Rule("catalog", "PLAN-①", lambda c: check_catalog(c.data, c.catalog if c.config.use_catalog else None)),
-    Rule("identity", "PLAN-②", lambda c: check_identity(c.data)),
+    Rule("identity", "PLAN-②", lambda c: check_identity(c.data, draft=c.config.stage == "draft")),
     Rule("goal", "PLAN-③", _module_rule("③", check_goal)),
     Rule("lessons", "PLAN-④", _module_rule("④", check_lessons)),
     Rule("element_codes", "PLAN-⑤", _module_rule("⑤", check_element_codes)),
     Rule("targets", "PLAN-⑥", _module_rule("⑥", check_targets)),
-    Rule("subs", "PLAN-⑦", lambda c: _module_rule("⑦", lambda m: check_subs(m, c.lexicon))(c)),
-    Rule("required", "PLAN-⑧", lambda c: check_required(c.data, c.module_cells)),
+    Rule("subs", "PLAN-⑦", lambda c: _module_rule("⑦", lambda m: check_subs(m, c.lexicon, draft=c.config.stage == "draft"))(c)),
+    Rule("required", "PLAN-⑧", lambda c: check_required(c.data, c.module_cells, draft=c.config.stage == "draft")),
     Rule("change_table", "PLAN-⑨", lambda c: check_change_table(c.data)),
     Rule("laws", "PLAN-⑩", lambda c: _module_rule("⑩", lambda m: check_laws(m, c.laws))(c)),
 )

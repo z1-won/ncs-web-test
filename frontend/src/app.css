@@ -326,3 +326,6 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .history .krds-pagination button { border: 0; background: none; font: inherit; cursor: pointer; }
 .history .krds-pagination button:disabled { cursor: default; }
 .findings-list .finding-head .meta { font-size: var(--krds-pc-font-size-label-small); }
+
+/* 개발계획서 점검 단계 라디오 — 입력칸과 같은 줄 높이 */
+.plan-stage { display: flex; gap: 1.5rem; align-items: center; min-height: var(--krds-size-height-7, 3.5rem); }

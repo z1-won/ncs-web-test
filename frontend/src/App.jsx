@@ -23,6 +23,7 @@ export default function App() {
   const [checks, setChecks] = useState(CHECKS);
   const [files, setFiles] = useState([]);
   const [moduleCode, setModuleCode] = useState("");
+  const [planStage, setPlanStage] = useState("final");   // 개발계획서 점검 단계(final/draft) — check === "plan"일 때만 보인다
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);   // 성공 안내(메모 원고 요약 등)
@@ -114,12 +115,12 @@ export default function App() {
     const controller = new AbortController();
     aborter.current = controller;
     let kept = await ensureUpload(controller.signal);
-    let answer = kept ? await api.review({ check, moduleCode, upload: kept.token, signal: controller.signal }) : null;
+    let answer = kept ? await api.review({ check, moduleCode, upload: kept.token, stage: planStage, signal: controller.signal }) : null;
     if (answer && !answer.ok && answer.status === 400 && /만료/.test(answer.error)) {
       setUpload({ status: "idle" });
       uploadRef.current = { status: "idle" };
       kept = await ensureUpload(controller.signal);
-      answer = kept ? await api.review({ check, moduleCode, upload: kept.token, signal: controller.signal }) : null;
+      answer = kept ? await api.review({ check, moduleCode, upload: kept.token, stage: planStage, signal: controller.signal }) : null;
     }
     if (answer && !answer.aborted) {
       if (!answer.ok) setError(answer.error);
@@ -162,7 +163,7 @@ export default function App() {
       if (items[value].status === "skipped") continue;
       if (cancelled) { update(value, { status: "cancelled" }); continue; }
       update(value, { status: "running" });
-      const { ok, data, error: message, aborted } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group, signal: controller.signal });
+      const { ok, data, error: message, aborted } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group, stage: planStage, signal: controller.signal });
       if (aborted) { cancelled = true; update(value, { status: "cancelled" }); continue; }
       update(value, ok ? { status: "done", data } : { status: "error", error: message });
     }
@@ -264,6 +265,21 @@ export default function App() {
           </div>
           <p className="form-hint">비우면 원고 파일명에서 추출</p>
         </div>
+
+        {check === "plan" && (
+          <div className="form-group">
+            <div className="form-tit"><span id="plan-stage-label">점검 단계</span></div>
+            <div className="form-conts plan-stage" role="radiogroup" aria-labelledby="plan-stage-label">
+              {[["final", "최종본 (개발기관)"], ["draft", "1차본 (직능연)"]].map(([value, label]) => (
+                <div className="krds-form-check" key={value}>
+                  <input type="radio" id={`plan-stage-${value}`} name="plan-stage" value={value} checked={planStage === value} onChange={() => setPlanStage(value)} />
+                  <label htmlFor={`plan-stage-${value}`}>{label}</label>
+                </div>
+              ))}
+            </div>
+            <p className="form-hint">1차본은 학습모듈명·영문명·기관명·집필진·학습 내용명이 비어 있어도 부적합으로 보지 않습니다(최종 단계에서 기관 기재)</p>
+          </div>
+        )}
 
         <div className="form-group form-actions">
           {/* 다른 칸의 레이블(form-tit) 높이만큼 빈 자리 — 같은 줄의 입력칸과 버튼 윗선·높이가 맞게 */}

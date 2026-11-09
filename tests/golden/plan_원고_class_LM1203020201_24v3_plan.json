@@ -171,6 +171,7 @@
   "module_code": "LM1203020201_24v3",
   "modules": [],
   "not_implemented": [],
+  "stage": "final",
   "warnings": [
    "모듈 표(NCS 수정 금지 ⇰ NCS학습모듈)를 찾지 못했습니다",
    "개발계획 총괄표를 찾지 못했습니다",

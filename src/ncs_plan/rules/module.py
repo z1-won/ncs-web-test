@@ -216,7 +216,10 @@ def head_word(name: str) -> str:
     return pieces[-1] if pieces else text
 
 
-def check_subs(module: dict, lexicon: ActionNounLexicon) -> list[dict]:
+WRITER_PLACEHOLDER = "(집필자 작성)"
+
+
+def check_subs(module: dict, lexicon: ActionNounLexicon, *, draft: bool = False) -> list[dict]:
     label_seq, label_noun = "⑦ N-M 연번·기재", "⑦ 행동명사 종결"
     if module["머리행"] is None:
         return [_unreadable("⑦", "학습 내용명", module)]
@@ -228,21 +231,29 @@ def check_subs(module: dict, lexicon: ActionNounLexicon) -> list[dict]:
             seq_problems.append("학습 내용(N-M.) 행이 없음")
         for i, sub in enumerate(subs, 1):
             if sub["소번호"] is None:
+                if draft and not sub["명칭"]:
+                    continue   # 1차 문서의 빈 학습 내용 칸(학습 목표만 들어 있음) — 최종 단계에서 집필진이 나눠 적는다
                 seq_problems.append(f"{i}번째 학습 내용의 번호가 'N-M.' 꼴이 아님: 「{sub['명칭'][:40]}」")
                 continue
             if sub["소번호"] != i:
                 seq_problems.append(f"{i}번째 학습 내용의 번호가 {sub['번호']}-{sub['소번호']}")
-            if not sub["명칭"]:
-                seq_problems.append(f"{sub['번호']}-{sub['소번호']} 학습 내용명이 비어 있음")
+            if not sub["명칭"] or sub["명칭"] == WRITER_PLACEHOLDER:
+                if not draft:
+                    seq_problems.append(f"{sub['번호']}-{sub['소번호']} 학습 내용명이 비어 있음")
         noun_notes, noun_value = [], O
+        deferred = False
         for sub in subs:
-            if not sub["명칭"] or sub["소번호"] is None:
+            if not sub["명칭"] or sub["소번호"] is None or sub["명칭"] == WRITER_PLACEHOLDER:
+                deferred = deferred or (draft and (not sub["명칭"] or sub["명칭"] == WRITER_PLACEHOLDER))
                 continue
             value, note = lexicon.judge(head_word(sub["명칭"]))
             if value == X or (value == TRI and noun_value != X):
                 noun_value = value
             if note:
                 noun_notes.append(f"{sub['번호']}-{sub['소번호']} 「{sub['명칭']}」: {note}")
+        if draft and deferred and not noun_notes:
+            noun_value = NA
+            noun_notes.append("1차 문서 — 학습 내용명은 최종 단계에서 집필진이 기재")
         checks = {label_seq: X if seq_problems else O, label_noun: noun_value if subs else NA}
         notes = {label_seq: "\n".join(seq_problems), label_noun: "\n".join(noun_notes)}
         rows.append(row("⑦", _region(module, f"학습 {lesson['번호']}"), f"학습 {lesson['번호']}", " / ".join(f"{s['번호']}-{s['소번호']}. {s['명칭']}" if s["소번호"] is not None else f"(번호 오류) {s['명칭']}" for s in subs) or None,

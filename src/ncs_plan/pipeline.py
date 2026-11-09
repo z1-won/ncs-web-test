@@ -65,6 +65,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
+        "stage": context.config.stage,
         "inputs": {"manuscript": str(context.manuscript.path) if context.manuscript else None, "plan": str(context.plan.path)},
         "format": context.plan.format,
         "기본": data["기본"],

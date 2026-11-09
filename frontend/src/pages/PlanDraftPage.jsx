@@ -116,7 +116,7 @@ export default function PlanDraftPage() {
           <div className="form-conts">
             <input id="agency" type="text" className="krds-input" placeholder="예: (사)한국호텔전문경영인협회" value={agency} onChange={(e) => setAgency(e.target.value)} aria-describedby="agency-hint" aria-required="true" />
           </div>
-          <p className="form-hint" id="agency-hint">⑧ 필수 기재 항목 — 비우면 초안 점검에서 부적합</p>
+          <p className="form-hint" id="agency-hint">⑧ 필수 기재 항목 — 초안 점검은 1차본(직능연) 기준이라 비워도 해당 없음으로 두고, 최종본 점검에서 확인합니다</p>
         </div>
 
         <div className="form-group">
@@ -124,7 +124,7 @@ export default function PlanDraftPage() {
           <div className="form-conts">
             <input id="english" type="text" className="krds-input" placeholder="예: Rooms Operation" value={english} onChange={(e) => setEnglish(e.target.value)} aria-describedby="english-hint" aria-required="true" />
           </div>
-          <p className="form-hint" id="english-hint">⑧ 필수 기재 항목 — NCS 누리집 ‘환경 분석’의 영문명. 비우면 초안 점검에서 부적합</p>
+          <p className="form-hint" id="english-hint">⑧ 필수 기재 항목 — NCS 누리집 ‘환경 분석’의 영문명. 1차본 점검에서는 비워도 해당 없음</p>
         </div>
 
         {subclass && (
@@ -183,7 +183,7 @@ export default function PlanDraftPage() {
             </button>
           </div>
           {missing.length > 0 && !busy && (
-            <p className="form-hint" id="missing-hint">비어 있는 필수 항목: {missing.join(", ")} — 초안은 만들어지지만 점검 ⑧에서 부적합으로 표시됩니다</p>
+            <p className="form-hint" id="missing-hint">비어 있는 필수 항목: {missing.join(", ")} — 초안(1차본)에서는 비워 둘 수 있고, 최종본 점검 ⑧에서 확인됩니다</p>
           )}
           <PageAlert kind="danger">{error}</PageAlert>
         </div>
@@ -205,7 +205,7 @@ export default function PlanDraftPage() {
             }
           />
           <h2 className="section-title">개발계획서 점검 확인서</h2>
-          <p className="meta section-desc">⑦(학습 내용명)은 집필자가 채울 칸이라 판단불가, ⑧은 영문명·집필진·검토진을 비우면 부적합으로 나옵니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하세요.</p>
+          <p className="meta section-desc">1차본(직능연) 기준 점검입니다 — 학습 내용명·영문명·집필진 등 기관 기재 칸은 해당 없음으로 둡니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하고, 완성본은 원고 검수 페이지에서 ‘최종본’으로 다시 점검하세요.</p>
           <SheetTable sheet={check} findings={[]} />
         </section>
       )}

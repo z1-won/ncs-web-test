@@ -175,6 +175,7 @@ def create_app(
     @app.post("/api/plan/draft", responses={400: {"model": ErrorResponse}})
     def plan_draft(body: PlanDraftRequest) -> Response:
         """개발계획서 초안 hwpx를 만들어 내려 준다. 만든 초안의 ①~⑩ 점검 요약은 X-Plan-Check 헤더(JSON)에."""
+        from ncs_plan import CheckConfig as PlanConfig
         from ncs_plan import run_review
         from ncs_plan.fill import build_plan, spec_from_catalog
 
@@ -192,7 +193,7 @@ def create_app(
             path = Path(folder) / f"개발계획서_초안_{body.duty}.hwpx"
             path.write_bytes(content)
             try:
-                result = run_review([path])
+                result = run_review([path], config=PlanConfig(stage="draft"))   # 초안은 1차 문서 — 기관 기재 칸은 해당 없음
                 summary = [{k: r.get(k, "") for k in ("구성요소", "번호", "체크 항목", "검수결과", "비고")} for r in result.sheet]
             except ValueError as error:   # 점검이 실패해도 초안은 준다
                 summary = [{"구성요소": "개발계획서", "번호": "", "체크 항목": "점검 실행", "검수결과": "오류", "비고": str(error)}]
@@ -307,6 +308,7 @@ def create_app(
         module_code: Annotated[str, Form()] = "",
         upload: Annotated[str, Form()] = "",
         group: Annotated[str, Form()] = "",
+        stage: Annotated[str, Form()] = "",     # 개발계획서 점검(plan) 단계: final / draft. 다른 검수는 무시
     ) -> ReviewResponse | JSONResponse:
         """files로 직접 올리거나, /api/uploads 토큰(upload)으로 올려 둔 파일을 쓴다. group은 이력 묶음 id(토큰 응답의 group)."""
         # 동기 엔진은 일반 def 경로 함수의 스레드풀에서 실행한다.
@@ -318,7 +320,7 @@ def create_app(
                 if group and group != kept.group_id:
                     raise ValueError("group이 업로드 토큰의 묶음 id와 다릅니다")
                 # group을 보내지 않으면 단독 실행(묶음 없음) — 화면이 파일을 미리 올려 두고 토큰만으로 1건 돌리는 경우
-                payload = _run(kept.files, check, module_code, group or None)
+                payload = _run(kept.files, check, module_code, group or None, stage=stage)
             else:
                 if group:
                     raise ValueError("group은 upload 토큰과 함께만 쓸 수 있습니다")
@@ -340,7 +342,7 @@ def create_app(
                             saved.append((name, path))
                     if not saved:
                         raise ValueError("업로드된 파일이 없습니다")
-                    payload = _run(saved, check, module_code, None)
+                    payload = _run(saved, check, module_code, None, stage=stage)
         except ValueError as error:
             return error_response(400, str(error))
         except Exception as error:
@@ -348,9 +350,14 @@ def create_app(
         response.headers.update(CORS_HEADERS)
         return payload
 
-    def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None) -> ReviewResponse:
+    def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None, *, stage: str = "") -> ReviewResponse:
         paths = tuple(path for _, path in saved)
-        execution = execute_review(ReviewRequest(paths, check, module_code.strip()))
+        config = None
+        if check == "plan" and stage:
+            from ncs_plan import CheckConfig as PlanConfig
+
+            config = PlanConfig(stage=stage)
+        execution = execute_review(ReviewRequest(paths, check, module_code.strip(), config=config))
         result = execution.result
         stored = store.save(execution, saved, group_id=group_id)
         saved_paths = (

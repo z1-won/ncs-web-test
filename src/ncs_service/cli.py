@@ -20,7 +20,9 @@ from .store import save_cli_review, saved_location
 def run_cli(check: str, description: str, argv: list[str] | None = None) -> None:
     engine = get_engine(check)
     config_class = engine.load().CheckConfig
-    has_body = "body_section" in {field.name for field in fields(config_class)}
+    field_names = {field.name for field in fields(config_class)}
+    has_body = "body_section" in field_names
+    has_stage = "stage" in field_names
     plan_help = "원고와 개발계획서" if "plan" in engine.required else "원고와 (선택) 개발계획서"
 
     parser = argparse.ArgumentParser(prog=f"python -m {engine.package}", description=description)
@@ -31,6 +33,8 @@ def run_cli(check: str, description: str, argv: list[str] | None = None) -> None
     parser.add_argument("--front-section", type=int, default=0)
     if has_body:
         parser.add_argument("--body-section", type=int, default=1)
+    if has_stage:
+        parser.add_argument("--stage", choices=("final", "draft"), default="final", help="개발계획서 점검 단계: final 최종본(기본) / draft 직능연 1차본")
     parser.add_argument("--out", help="결과 폴더. 비우면 DATABASE_URL이 있을 때 DB 이력에, 없을 때 '결과' 폴더에 저장")
     args = parser.parse_args(argv)
 
@@ -42,6 +46,8 @@ def run_cli(check: str, description: str, argv: list[str] | None = None) -> None
     sections = {"front_section": args.front_section}
     if has_body:
         sections["body_section"] = args.body_section
+    if has_stage:
+        sections["stage"] = args.stage
     try:
         execution = execute_review(
             ReviewRequest(

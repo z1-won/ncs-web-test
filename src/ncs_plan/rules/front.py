@@ -77,7 +77,10 @@ def check_catalog(plan: dict, catalog: Catalog | None) -> list[dict]:
 
 # ── ② 학습모듈 코드·명칭 ─────────────────────────────────────────────────────────
 
-def check_identity(plan: dict) -> list[dict]:
+DRAFT_NOTE = "1차 문서 — 최종 단계에서 개발기관이 기재"
+
+
+def check_identity(plan: dict, *, draft: bool = False) -> list[dict]:
     summary = plan.get("총괄표") or []
     position = plan.get("위치") or {}
     modules = plan.get("모듈") or []
@@ -100,11 +103,15 @@ def check_identity(plan: dict) -> list[dict]:
             checks[label_code] = O
         if same_loose(entry["명칭"], entry["LM 명칭"]):
             checks[label_name] = O
+        elif draft and not entry["LM 명칭"]:
+            checks[label_name] = NA
+            notes[label_name] = DRAFT_NOTE
         else:
             checks[label_name] = X if not same_text(entry["명칭"], entry["LM 명칭"]) else O
             notes[label_name] = pair(entry["명칭"], entry["LM 명칭"], "총괄표 학습모듈명", "능력단위명")
         cross = []
-        if position_pairs and not any(same_loose(entry["명칭"], u) and same_loose(entry["LM 명칭"], m) for u, m in position_pairs):
+        if position_pairs and not any(same_loose(entry["명칭"], u) and (same_loose(entry["LM 명칭"], m) or (draft and not entry["LM 명칭"] and not m))
+                                      for u, m in position_pairs):
             cross.append(f"위치 표에 「{entry['명칭']} / {entry['LM 명칭']}」 짝이 없음")
         module = module_by_code.get(code)
         if module is None:
@@ -112,7 +119,7 @@ def check_identity(plan: dict) -> list[dict]:
         else:
             if not same_loose(module["명칭"], entry["명칭"]):
                 cross.append(pair(entry["명칭"], module["명칭"], "모듈 표 능력단위명", "총괄표"))
-            if not same_loose(module["학습모듈명"], entry["LM 명칭"]):
+            if not same_loose(module["학습모듈명"], entry["LM 명칭"]) and not (draft and not entry["LM 명칭"]):
                 cross.append(pair(entry["LM 명칭"], module["학습모듈명"], "모듈 표 학습모듈명", "총괄표"))
         checks[label_cross] = X if cross else O
         if cross:
@@ -128,15 +135,21 @@ def check_identity(plan: dict) -> list[dict]:
 
 # ── ⑧ 필수 기재 ─────────────────────────────────────────────────────────────────
 
-def check_required(plan: dict, module_cells: list[str]) -> list[dict]:
+DRAFT_OPTIONAL = ("영문 세분류명", "개발기관명")   # 1차 문서에서 비어 있어도 되는 기본 정보 칸(세분류명·신규/개선은 1차에도 있어야 함)
+
+
+def check_required(plan: dict, module_cells: list[str], *, draft: bool = False) -> list[dict]:
     basic = plan.get("기본") or {}
     summary = plan.get("총괄표") or []
     label_basic, label_type, label_people, label_placeholder = "⑧ 기본 정보", "⑧ 개선 유형", "⑧ 담당 집필진·검토진", "⑧ 안내 문구·자리표시"
     checks, notes = {}, {}
-    missing = [k for k, v in basic.items() if not v]
+    missing = [k for k, v in basic.items() if not v and not (draft and k in DRAFT_OPTIONAL)]
+    deferred = [k for k, v in basic.items() if not v and draft and k in DRAFT_OPTIONAL]
     checks[label_basic] = X if missing else O
     if missing:
         notes[label_basic] = "비어 있음: " + ", ".join(missing)
+    elif deferred:
+        notes[label_basic] = f"{DRAFT_NOTE}: " + ", ".join(deferred)
     if not summary:
         checks[label_type] = checks[label_people] = TRI
         notes[label_type] = notes[label_people] = "총괄표를 읽지 못함"
@@ -144,6 +157,9 @@ def check_required(plan: dict, module_cells: list[str]) -> list[dict]:
         if all(e["개선 유형"] is None for e in summary):
             checks[label_type] = NA   # 신규 개발 양식에는 개선 유형 열이 없다
             notes[label_type] = "총괄표에 개선 유형 열이 없음(신규 개발 양식)"
+        elif draft and all(not e["개선 유형"] for e in summary):
+            checks[label_type] = NA
+            notes[label_type] = DRAFT_NOTE
         else:
             bad_type = [f"{e['코드']} 「{e['개선 유형'] or '빈 칸'}」" for e in summary
                         if squash(e["개선 유형"] or "") not in {squash(t) for t in IMPROVE_TYPES}]
@@ -151,9 +167,13 @@ def check_required(plan: dict, module_cells: list[str]) -> list[dict]:
             if bad_type:
                 notes[label_type] = "개선 유형은 신규 개발/기존 개선/양식 편집/최소개선 중 하나: " + ", ".join(bad_type)
         no_people = [e["코드"] for e in summary if not e["집필진"] or not e["검토진"]]
-        checks[label_people] = X if no_people else O
-        if no_people:
-            notes[label_people] = "집필진 또는 검토진이 비어 있음: " + ", ".join(no_people)
+        if draft and no_people:
+            checks[label_people] = NA
+            notes[label_people] = DRAFT_NOTE
+        else:
+            checks[label_people] = X if no_people else O
+            if no_people:
+                notes[label_people] = "집필진 또는 검토진이 비어 있음: " + ", ".join(no_people)
     placeholders = sorted({m.group(0) for text in module_cells for m in [PLACEHOLDER.search(text)] if m})
     checks[label_placeholder] = X if placeholders else O
     if placeholders:

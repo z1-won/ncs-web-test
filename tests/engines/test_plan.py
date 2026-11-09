@@ -261,7 +261,12 @@ class FillTests(unittest.TestCase):
             by_no = {row["번호"]: row["검수결과"] for row in result.sheet}
             for no in "②③④⑤⑥⑧":
                 self.assertEqual(by_no[no], "적합", (no, [r["비고"] for r in result.checklist if r["item_id"] == f"PLAN-{no}" and r["판정"] != "적합"]))
-            self.assertEqual(by_no["⑦"], "판단불가")   # 학습 내용명은 집필자 작성 칸이라 비어 있음
+            self.assertEqual(by_no["⑦"], "부적합")   # 최종본 기준: '(집필자 작성)' 자리표시가 남아 있으면 부적합
+            # 1차(draft) 기준: 기관 기재 칸(학습모듈명·영문명·집필진·학습 내용명)은 해당 없음 → 전부 적합
+            from ncs_plan import CheckConfig
+
+            draft = run_review([path], config=CheckConfig(stage="draft"))
+            self.assertTrue(all(row["검수결과"] == "적합" for row in draft.sheet), [(r["번호"], r["검수결과"]) for r in draft.sheet])
 
 
 class LawTests(unittest.TestCase):
