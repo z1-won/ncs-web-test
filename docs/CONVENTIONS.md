@@ -56,7 +56,7 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 스키마 변경은 `ncs_service/migrations.py`의 `MIGRATIONS`에 `NNN_이름` 항목을 **뒤에 추가**해서만 한다. 적용된 항목은 고치지 않는다. 모든 문장은 `IF (NOT) EXISTS`로 보호해 시작마다 돌아도 안전하게 한다(`tests/service/test_migrations.py`가 검사). 엔진 이름을 SQL에 적지 않는다.
 
 ## 저장 파일
-`<out>/<코드>_xxxx/` 아래 `<코드>_<항목 꼬리말>.json`, `<코드>_<이름>_00_요약.json`, `_지적사항.json`, `_전체.json`, `_진단.json`, `<코드>_<이름>_검수결과.zip`.
+`<out>/<코드>_<YYYYMMDD-HHMMSS>_<이름>_xxxx/`(실행 시각·검수 이름 + 겹침 방지 꼬리) 아래 `<코드>_<항목 꼬리말>.json`, `<코드>_<이름>_00_요약.json`, `_지적사항.json`, `_전체.json`, `_진단.json`, `<코드>_<이름>_검수결과.zip`.
 항목 꼬리말은 각 패키지 `reporting.ITEM_FILES`에 둔다.
 
 ## 코드 스타일

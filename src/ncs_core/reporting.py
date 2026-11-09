@@ -1,6 +1,6 @@
 """검사 결과를 항목별 JSON과 ZIP으로 저장한다. 파일 이름 규칙은 두 패키지가 같다.
 
-<out_dir>/<코드>_<실행별 폴더>/
+<out_dir>/<코드>_<YYYYMMDD-HHMMSS>_<이름>_<임의 6~8자>/   실행별 폴더(시각·검수 이름으로 찾고, 임의 꼬리로 겹치지 않게)
     <코드>_<항목 꼬리말>.json   항목별 체크리스트
     <코드>_<이름>_00_요약.json  검수결과(적합/부적합/판단불가) 종합과 항목별 집계
     <코드>_<이름>_지적사항.json  X·△만
@@ -14,6 +14,7 @@ import json
 import tempfile
 import zipfile
 from collections.abc import Sequence
+from datetime import datetime
 from pathlib import Path
 
 from .models import ReviewResult, SavedReport
@@ -73,7 +74,11 @@ def save_report(
     code = validate_module_code(result.module_code)
     root = Path(out_dir).resolve()
     root.mkdir(parents=True, exist_ok=True)
-    directory = Path(tempfile.mkdtemp(prefix=f"{code}_", dir=root)) if per_run_dir else root
+    if per_run_dir:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        directory = Path(tempfile.mkdtemp(prefix=f"{code}_{stamp}_{name}_", dir=root))
+    else:
+        directory = root
 
     buckets = _buckets(result, item_files, other_tail)
     paths: list[Path] = []
