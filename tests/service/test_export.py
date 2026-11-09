@@ -30,9 +30,9 @@ class FullSheetTests(unittest.TestCase):
         self.assertEqual(rows[0]["검수결과"], "미검사")
         toc = [r for r in rows if r["구성요소"] == "차례"]
         self.assertEqual([r["번호"] for r in toc], list("①②③④⑤⑥⑦"))
-        # ⑦(쪽수)은 미구현 항목이라 실행해도 미검사
-        self.assertTrue(all(r["검수결과"] != "미검사" for r in toc if r["번호"] != "⑦"))
-        self.assertEqual(next(r for r in toc if r["번호"] == "⑦")["검수결과"], "미검사")
+        # ⑦(쪽수)은 출력본 PDF가 없으면 판단불가(미검사가 아니라 이유가 남는다)
+        self.assertTrue(all(r["검수결과"] != "미검사" for r in toc))
+        self.assertEqual(next(r for r in toc if r["번호"] == "⑦")["검수결과"], "판단불가")
 
 
 class XlsxTests(unittest.TestCase):

@@ -47,7 +47,7 @@
 | 화면 | `frontend` | 업로드, 검수 종류 선택(KRDS 셀렉트, 라벨은 `/api/health`의 `engines`), 확인서·체크리스트·지적사항 표, 이력 조회·삭제 | HTTP만 |
 | HTTP | `ncs_web/server.py` | 파일 수신·임시 저장, 요청 검증, 응답 JSON, zip·확인서 내려주기, 이력 API | `ncs_service` |
 | 조정 | `ncs_service` | 검수 종류 ↔ 엔진 연결(`registry`), 실행(`service`), 저장(`store`: 파일/PostgreSQL), 공용 CLI(`cli`), 내보내기(`export`), 메모 원고(`annotate`) | 엔진, `ncs_core` |
-| 엔진 10개 | `ncs_position` `ncs_toc` `ncs_overview` `ncs_knowledge` `ncs_perform` `ncs_teaching` `ncs_evaluation` `ncs_references` `ncs_colophon` `ncs_misc` | F02 구성요소 하나씩. 구조 추출(pipeline) + 판정 규칙(rules/) + 확인서 표(sheet) + 저장 이름(reporting) | `ncs_core`만 |
+| 엔진 10개 | `ncs_position` `ncs_toc`(출력본 PDF 선택 입력) `ncs_overview` `ncs_knowledge` `ncs_perform` `ncs_teaching` `ncs_evaluation` `ncs_references` `ncs_colophon` `ncs_misc` | F02 구성요소 하나씩. 구조 추출(pipeline) + 판정 규칙(rules/) + 확인서 표(sheet) + 저장 이름(reporting) | `ncs_core`만 |
 | 코어 | `ncs_core` | 문서 읽기, 공통 파서, 비교·정규화, 외부 데이터(NCS 목록·수준·행동명사), 규칙 실행기, 확인서 접기, 저장 | 표준 라이브러리만 |
 | 도구 | `scripts/{batch,data,probe}` | 다문서 배치 테스트, 기준 데이터 갱신, 외부 API 점검 | 코어·엔진 |
 | 테스트 | `tests/{core,engines,service,contract,integration}` | 단위(규칙·파서) + 골든(합성 원고 6종 × 10엔진 스냅샷) + 계약(엔진 등록·계층·설치) + DB 통합 | |
@@ -109,8 +109,8 @@
 - `pipeline.py`: 기준 = NCS 목록(모듈 코드의 세분류가 목록에 있으면). 세분류 목록(②)만 계획서 우선. 목록이 없으면 개발계획서. 계획서가 목록과 다르면 △로 알림.
 - `rules/classification.py` ①: 대·중·소 명칭 + 기호 글꼴 문자. `rules/position.py` ②③④: 목록 비교 — 누락/원고에만/다름/순서, 능력단위-학습모듈명 행 대응. `rules/emphasis.py` ⑤: hwpx 글꼴(KoPub 돋움 Bold)·셀 음영 속성.
 
-### `ncs_toc` 차례 ①~⑥ — "차례 면이 계획서·본문과 맞는가"
-- `rules/names.py` ①: 학습명 '~하기', 계획서 학습명·요소명 준용. `rules/action_nouns.py` ②: 학습 내용명 머리어가 행동명사인가(사전→API→△). `rules/consistency.py` ③: 계획서를 기준으로 다섯 자리(차례·내용체계 표·내비게이터 묶음·본문 N-M 제목·평가 표)의 학습명·내용명 비교. `rules/placement.py` ④: 각 학습 끝에 필요 지식 → 교수·학습 방법 → 평가 순서. `rules/tail.py` ⑤⑥: 참고 자료 존재, 활용 서식·부록의 차례↔본문 일치. `evaluation.py`: 평가 표에서 '학습 내용' 열 읽기.
+### `ncs_toc` 차례 ①~⑦ — "차례 면이 계획서·본문과 맞는가"
+- `rules/names.py` ①: 학습명 '~하기', 계획서 학습명·요소명 준용. `rules/action_nouns.py` ②: 학습 내용명 머리어가 행동명사인가(사전→API→△). `rules/consistency.py` ③: 계획서를 기준으로 다섯 자리(차례·내용체계 표·내비게이터 묶음·본문 N-M 제목·평가 표)의 학습명·내용명 비교. `rules/placement.py` ④: 각 학습 끝에 필요 지식 → 교수·학습 방법 → 평가 순서. `rules/tail.py` ⑤⑥: 참고 자료 존재, 활용 서식·부록의 차례↔본문 일치. `evaluation.py`: 평가 표에서 '학습 내용' 열 읽기. `rules/pages.py` ⑦: 차례 쪽수 = 출력본(PDF, 역할 print)에서 그 제목이 시작하는 쪽(`ncs_core.manuscript.pages.locate_headings`). 출력본이 없으면 △ 한 행, 다른 원고의 출력본이면 △, 쪽 번호를 추정한 쪽은 △.
 
 ### `ncs_overview` 개요 ①~⑧ — "학습모듈의 개요 면"
 - `rules/goal.py` ①: 목표 문장 '~할 수 있다.' 종결, 계획서 능력단위 정의와 대응. `prerequisites.py` ②: 선수학습 5개 이내. `prerequisite_codes.py` ③④: `이름(LM코드)` 분해 → 코드 꼴·NCS 목록 존재·버전·명칭·자기 모듈(③), 수준 표로 선수학습 수준 > 이 모듈 수준이면 X(④). `structure.py` ⑤⑥⑦: 내용체계 표의 학습명·내용명·요소 코드/명칭 = 계획서, 통합 요소는 코드·명칭 모두. `terms.py` ⑧: 핵심 용어 10개 이내 명사형.

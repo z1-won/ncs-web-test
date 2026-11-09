@@ -44,7 +44,7 @@ class SelectDocumentsTests(unittest.TestCase):
 
 class EngineDispatchTests(unittest.TestCase):
     def test_print_copy_reaches_only_engines_that_declare_it(self):
-        """엔진이 optional=('print',)를 선언했을 때만 prepare_review(print=…)로 넘어간다. 선언하지 않은 엔진은 PDF가 있어도 그대로 돈다."""
+        """엔진이 optional=('print',)를 선언했을 때만 prepare_review(print_copy=…)로 넘어간다. 선언하지 않은 엔진은 PDF가 있어도 그대로 돈다."""
         for check, engine in ENGINES.items():
             with self.subTest(check=check):
                 module = engine.load()
@@ -53,9 +53,9 @@ class EngineDispatchTests(unittest.TestCase):
                     execute_review(ReviewRequest(paths, check, "LM1203020201_24v3"))
                 kwargs = prepare.call_args.kwargs
                 if "print" in engine.optional:
-                    self.assertIsInstance(kwargs["print"], PdfDocument)
+                    self.assertIsInstance(kwargs["print_copy"], PdfDocument)
                 else:
-                    self.assertNotIn("print", kwargs)
+                    self.assertNotIn("print_copy", kwargs)
 
     def test_optional_is_passed_only_when_present(self):
         declared = Engine("ncs_toc", optional=("print",))
@@ -63,7 +63,7 @@ class EngineDispatchTests(unittest.TestCase):
             module = declared.load()
             with mock.patch.object(module, "prepare_review", wraps=module.prepare_review) as prepare:
                 execute_review(ReviewRequest((MANUSCRIPT,), "toc", "LM1203020201_24v3"))
-            self.assertNotIn("print", prepare.call_args.kwargs)
+            self.assertNotIn("print_copy", prepare.call_args.kwargs)
 
     def test_describe_engines_reports_optional(self):
         for row in describe_engines():

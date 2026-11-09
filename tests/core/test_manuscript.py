@@ -222,7 +222,7 @@ class TocBrokenPageTests(unittest.TestCase):
 
     def test_lesson_line_and_tail_question_pages(self):
         toc = self.toc("학습 1. ○○하기 ?", "1-1. ○○ 3", "• 교수·학습 방법 ?", "• 평가?", "참고 자료 ?", "부록 ……?")
-        self.assertEqual(toc["학습"], [{"no": 1, "text": "○○하기"}])
+        self.assertEqual(toc["학습"], [{"no": 1, "text": "○○하기", "page": None}])
         self.assertEqual([(l["kind"], l["page"]) for l in toc["줄"]], [("교수·학습 방법", None), ("평가", None)])
         self.assertEqual(toc["꼬리"], {"참고 자료": None, "부록": None})
         self.assertEqual(toc["쪽 깨짐"], ["학습 1", "학습 1 교수·학습 방법", "학습 1 평가", "참고 자료", "부록"])
@@ -244,7 +244,8 @@ class TocBrokenPageTests(unittest.TestCase):
         def diagnostics(toc):
             manuscript = SimpleNamespace(path="m.hwpx", format="hwpx", sections=[[], []])
             context = SimpleNamespace(manuscript=manuscript, plan=None, config=DEFAULT_CONFIG, toc=toc, plan_toc=None,
-                                      body={"lessons": [1], "nav_runs": []}, eval_tables=[1], module_code="LM0")
+                                      body={"lessons": [1], "nav_runs": []}, eval_tables=[1], module_code="LM0",
+                                      print_copy=None, print_error=None)
             return [w for w in _diagnostics(context, [])["warnings"] if "쪽 번호" in w]
 
         broken = self.toc("학습 1. ○○하기 1", "1-1. ○○ ?", "1-2. ○○?", "1-3. ○○ 7")

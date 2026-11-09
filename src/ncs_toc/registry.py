@@ -5,6 +5,7 @@ from ncs_core import Rule
 from .rules.action_nouns import check_toc2
 from .rules.consistency import check_toc3
 from .rules.names import check_toc1
+from .rules.pages import check_toc7
 from .rules.placement import check_toc4
 from .rules.tail import check_toc5, check_toc6
 
@@ -21,7 +22,10 @@ DEFAULT_RULES = (
     Rule("placement", "F02-차례-④", _check_toc4),
     Rule("references", "F02-차례-⑤", lambda c: check_toc5(c.presence, c.toc)),
     Rule("appendix", "F02-차례-⑥", lambda c: check_toc6(c.presence, c.toc)),
+    Rule("pages", "F02-차례-⑦", lambda c: check_toc7(
+        c.toc, c.headings, module_code=c.module_code,
+        print_code=c.print_copy.module_code if c.print_copy else None, print_missing=c.print_error)),
 )
 
-# 차례 항목 ①~⑦ 중 규칙이 없는 것(⑦: hwpx에 쪽 번호가 없어 불가)은 진단의 not_implemented로 보고한다.
+# 차례 ⑦은 출력본 PDF(역할 print)가 있을 때만 확정하고, 없으면 판단불가 한 행으로 이유를 남긴다.
 ALL_ITEM_IDS = tuple("F02-차례-" + n for n in "①②③④⑤⑥⑦")

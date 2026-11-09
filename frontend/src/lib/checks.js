@@ -18,7 +18,7 @@ export const FILE_HINTS = {
 
 export const CHECKS = [
   { value: "position", label: "NCS-학습모듈의 위치 ①~⑤" },
-  { value: "toc", label: "차례 ①~⑥" },
+  { value: "toc", label: "차례 ①~⑦" },
   { value: "overview", label: "학습모듈의 개요 ①·②·⑤~⑧" },
   { value: "knowledge", label: "필요 지식 ①~⑧" },
   { value: "perform", label: "수행 내용 ①·④" },
