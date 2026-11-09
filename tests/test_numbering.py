@@ -102,6 +102,15 @@ class CheckNumberingWithAutoNumbersTests(unittest.TestCase):
         self.assertIn("자동 번호", self.run_unit(lines, None)["비고"])
         self.assertEqual(self.run_unit(lines, [None, None, None, "1.", None])["판정"], "부적합")  # 자동 번호를 봐도 (1) 없이 (2)
 
+    def test_hwp_without_any_first_level_symbol_is_undecided(self):
+        """AIoT 원본(hwp): 󰊱 제목이 자동 번호라 텍스트에 안 보이고 '1.'부터 보인다 → 시작·건너뜀·연번을 판정하지 않는다(△)."""
+        lines = [(2, "1. 가"), (3, "2. 나"), (4, "(1) 다"), (5, "1. 라")]
+        row = self.run_unit(lines, None)
+        self.assertEqual(row["판정"], "판단불가", row["비고"])
+        self.assertIn("󰊱 기호도 없음", row["비고"]["자동 번호"])
+        # hwpx(자동 번호를 봄)면 같은 줄이 그대로 X
+        self.assertEqual(self.run_unit(lines, [None, None, None, None, None, None])["판정"], "부적합")
+
     def test_empty_auto_numbered_paragraph_is_reported(self):
         # 문단 3은 본문 줄 목록에 없음(빈 문단)인데 자동 번호 (2)가 달려 있다
         lines = [(2, "\U000F02B1 큰 제목"), (4, "(3) 셋째")]

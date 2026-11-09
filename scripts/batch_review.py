@@ -9,6 +9,10 @@
 
 run은 --budget 초가 지나면 새 단위를 시작하지 않고 끝나므로(원격 셸 시간 제한용) 끝날 때까지 반복 실행한다.
 표준국어대사전 API는 STDICT_API_KEY가 없으면 자동으로 쓰지 않는다(차례 ②는 △).
+
+테스트 원고 묶음(폴더 = 망가뜨린 체크 항목, 파일 = '1.hwp'…)처럼 파일명에 모듈 코드가 없으면 --module-code 로 코드를,
+'(세분류 8자리)'가 없는 개발계획서는 --plan 으로 지정한다. 그런 원고의 문서ID는 상대 경로가 된다.
+기대 판정과의 대조는 scripts/batch_compare.py 가 한다.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from functools import lru_cache
 from importlib import import_module
 from pathlib import Path
 
@@ -37,7 +42,7 @@ from ncs_service.registry import ENGINES  # noqa: E402
 ERROR = "오류"
 CODE = re.compile(r"LM\d{10}(?:_\d+v\d+)?")  # 버전(_23v3)이 빠진 파일명도 있다
 VERSION_ORDER = ["초고본·원고", "초고본·에디팅완료", "수정본·원고", "수정본·에디팅완료"]
-EXCLUDE_WORDS = ("의견서", "개발계획서", "수정내역서")
+EXCLUDE_WORDS = ("의견서", "개발계획서", "수정내역서", "검수 확인서", "검수확인서")
 
 
 def nfc(text: str) -> str:
@@ -80,6 +85,28 @@ def title_of(name: str, code: str) -> str:
     return stem.strip("_ ") or Path(name).stem
 
 
+def _resolve_plan(root: Path, given: str) -> Path:
+    path = Path(given)
+    if not path.is_absolute():
+        path = root / path
+    if not path.is_file():
+        raise SystemExit(f"--plan 파일이 없습니다: {path}")
+    return path
+
+
+def _plan_matches(plan: Path, module_code: str) -> bool:
+    """개발계획서가 이 모듈의 세분류 것인지 — 파일명에 8자리 코드가 있으면 그것으로, 없으면 본문에서 모듈 코드를 찾는다."""
+    match = re.search(r"\((\d{8})\)", nfc(plan.name))
+    if match:
+        return match.group(1) == module_code[2:10]
+    return module_code.replace("LM", "")[:10] in _plan_text(plan)
+
+
+@lru_cache(maxsize=4)
+def _plan_text(plan: Path) -> str:
+    return "\n".join(l for s in load_document(plan).sections for l in s)
+
+
 def find_plans(root: Path) -> dict[str, dict[str, Path]]:
     """{세분류 8자리: {형식: 경로}}"""
     plans: dict[str, dict[str, Path]] = defaultdict(dict)
@@ -92,8 +119,21 @@ def find_plans(root: Path) -> dict[str, dict[str, Path]]:
     return plans
 
 
-def scan(root: Path) -> list[Doc]:
+def path_id(rel: str) -> str:
+    """파일명에 모듈 코드가 없는 원고의 식별자: 확장자를 뗀 상대 경로(폴더 구분은 '__', 파일 이름에 못 쓰는 글자는 '_')."""
+    stem = re.sub(r"\.(hwpx?|HWPX?)$", "", rel)
+    return re.sub(r'[\\:*?"<>|]+', "_", stem).replace("/", "__")
+
+
+def scan(root: Path, default_code: str = "", default_plan: str = "") -> list[Doc]:
+    """root 아래 원고를 모두 찾는다.
+
+    default_code: 파일명에 모듈 코드가 없는 원고(테스트 원고 '1.hwp' 등)에 쓸 코드. 비우면 그런 파일은 건너뛴다.
+    default_plan: '(세분류 8자리)'가 파일명에 없어 자동 매칭되지 않는 개발계획서(root 기준 상대 경로 또는 절대 경로).
+        세분류 코드가 그 원고의 코드와 같은 문서에만 붙인다.
+    """
     plans = find_plans(root)
+    fallback_plan = _resolve_plan(root, default_plan) if default_plan else None
     docs: list[Doc] = []
     for path in sorted(root.rglob("*"), key=lambda p: nfc(str(p))):
         if path.suffix.lower() not in (".hwp", ".hwpx"):
@@ -102,20 +142,25 @@ def scan(root: Path) -> list[Doc]:
         if any(word in name for word in EXCLUDE_WORDS):
             continue
         codes = list(dict.fromkeys(CODE.findall(name)))
-        if len(codes) != 1:
+        if len(codes) > 1 or (not codes and not default_code):
             continue
-        code = codes[0]
-        rel = nfc(str(path.relative_to(root)))
+        code = codes[0] if codes else default_code
+        rel = nfc(path.relative_to(root).as_posix())  # Windows에서도 '/' 구분(버전 분류·식별자가 폴더를 읽는다)
         parts = rel.split("/")[:-1]
         fmt = path.suffix.lower()[1:]
         plan_set = plans.get(code[2:10], {})
         plan = plan_set.get(fmt) or next(iter(plan_set.values()), None)
-        pair_key = nfc(str(path.relative_to(root).with_suffix("")))
+        if plan is None and fallback_plan is not None and _plan_matches(fallback_plan, code):
+            plan = fallback_plan
+        pair_key = nfc(path.relative_to(root).with_suffix("").as_posix())
         docs.append(Doc(
-            doc_id="", path=rel, module_code=code, title=title_of(name, code),
+            doc_id=path_id(rel) if not codes else "", path=rel, module_code=code,
+            # 코드 없는 테스트 원고는 폴더 이름이 곧 '무엇을 망가뜨린 원고인가'이므로 제목에 폴더를 쓴다
+            title=title_of(name, code) if codes else ("/".join(parts) or Path(name).stem),
             version=classify_version(parts, name), fmt=fmt,
             size_mb=round(path.stat().st_size / 1_048_576, 1), pair_key=pair_key, duplicate="",
             plan=nfc(str(plan.relative_to(root))) if plan else "",
+            note="" if codes else f"파일명에 모듈 코드가 없어 --module-code {default_code} 적용",
         ))
     # 파일명에 버전(_23v3)이 없는 원고: 같은 능력단위의 다른 파일에서 보완한다(엔진은 완전한 코드를 요구한다)
     full_codes = {c[:12]: c for d in docs for c in [d.module_code] if "_" in c}
@@ -126,15 +171,19 @@ def scan(root: Path) -> list[Doc]:
                         else "파일명에 모듈 코드 버전이 없고 보완할 형제 파일도 없음 → 엔진 실행 불가")
             if full:
                 doc.module_code = full
-    # 식별자: 모듈코드(10자리)_버전_형식(_n)
+    # 식별자: 모듈코드(10자리)_버전_형식(_n). 코드 없는 원고는 경로 식별자(path_id)를 그대로 둔다
     seen: Counter = Counter()
     for doc in docs:
+        if doc.doc_id:
+            continue
         base = f"{doc.module_code[:12]}_{doc.version.replace('·', '-')}_{doc.fmt}"
         seen[base] += 1
         doc.doc_id = base if seen[base] == 1 else f"{base}_{seen[base]}"
     # 중복: 같은 모듈·버전·형식이 둘 이상이면 서로를 가리킨다(" 수정.hwpx" 재업로드, 상위 폴더 복사본 등)
     groups: dict[tuple, list[Doc]] = defaultdict(list)
     for doc in docs:
+        if doc.note:  # 코드를 --module-code로 보완한 테스트 원고는 같은 코드가 당연하므로 사본으로 보지 않는다
+            continue
         groups[(doc.module_code, doc.version, doc.fmt)].append(doc)
     for group in groups.values():
         if len(group) > 1:
@@ -177,9 +226,9 @@ def to_jsonable(value):
         return json.loads(json.dumps(value, ensure_ascii=False, default=str))
 
 
-def run_units(root: Path, work: Path, budget: float) -> None:
+def run_units(root: Path, work: Path, budget: float, default_code: str = "", default_plan: str = "") -> None:
     started = time.monotonic()
-    docs = scan(root)
+    docs = scan(root, default_code, default_plan)
     work.mkdir(parents=True, exist_ok=True)
     (work / "docs.json").write_text(json.dumps([asdict(d) for d in docs], ensure_ascii=False, indent=1), "utf-8")
     pending = [(d, check) for d in docs for check in ENGINES if not (work / d.doc_id / f"{check}.json").exists()]
@@ -450,13 +499,15 @@ def main() -> None:
     parser.add_argument("--work", required=True, help="체크포인트(json) 작업 폴더")
     parser.add_argument("--out", help="xlsx 출력 경로")
     parser.add_argument("--budget", type=float, default=150, help="run: 이 시간(초)이 지나면 새 단위를 시작하지 않는다")
+    parser.add_argument("--module-code", default="", help="파일명에 모듈 코드가 없는 원고('1.hwp' 같은 테스트 원고)에 쓸 코드")
+    parser.add_argument("--plan", default="", help="파일명에 '(세분류 8자리)'가 없어 자동 매칭되지 않는 개발계획서 경로")
     args = parser.parse_args()
     root, work = Path(args.root), Path(args.work)
     if args.command == "scan":
-        for d in scan(root):
-            print(f"{d.doc_id:45s} {d.version:12s} {d.size_mb:7.1f}MB  계획서={'O' if d.plan else 'X'}  {d.duplicate}")
+        for d in scan(root, args.module_code, args.plan):
+            print(f"{d.doc_id:45s} {d.version:12s} {d.size_mb:7.1f}MB  계획서={'O' if d.plan else 'X'}  {d.duplicate} {d.note}")
     elif args.command == "run":
-        run_units(root, work, args.budget)
+        run_units(root, work, args.budget, args.module_code, args.plan)
     else:
         if not args.out:
             parser.error("xlsx에는 --out이 필요합니다")

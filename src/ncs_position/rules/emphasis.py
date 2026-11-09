@@ -1,7 +1,7 @@
 """F02 위치 ⑤: 해당 학습모듈 행의 굵게·KoPub돋움체·셀 음영 (v1.1 판정 정책 유지).
 
-주의: 개발계획서 학습모듈명으로 행을 못 찾으면 모듈 코드의 번호를 행 순번으로 쓰는
-기존 fallback을 유지한다. 정확성 개선 과제는 docs/REVIEW.md를 참고한다.
+해당 행은 pipeline.resolve_module_name이 고른 학습모듈명(개발계획서 → NCS 목록 → 기준 위치 표의 능력단위 번호째 행)으로 찾고,
+그 이름이 표에 없으면 모듈 코드의 능력단위 번호를 표의 행 순번으로 쓰는 기존 fallback으로 돌아간다.
 """
 
 from ncs_core import FAIL, O, PASS, Table, TRI, UNDECIDED, verdict, X
@@ -52,8 +52,12 @@ def _unreadable(item_id, check_name, value, result, note, manuscript=None, plan_
     }
 
 
-def check_emphasis(table: Table | None, module_code: str, plan_module_name: str | None = None, *, has_styles=True):
-    """체크리스트 2건: F02-위치-⑤ (능력단위·학습모듈명 행) + F02-위치-⑤-세분류 (덤)."""
+def check_emphasis(table: Table | None, module_code: str, plan_module_name: str | None = None, *, has_styles=True,
+                   name_source: str = "개발계획서"):
+    """체크리스트 2건: F02-위치-⑤ (능력단위·학습모듈명 행) + F02-위치-⑤-세분류 (덤).
+
+    plan_module_name: 해당 행을 고를 학습모듈명(없으면 모듈 코드의 능력단위 번호 순번). name_source: 그 이름의 출처(근거 문장에 적는다).
+    """
     if not has_styles:
         return [_unreadable(ITEM_ID, "서식 읽기", TRI, UNDECIDED, "hwp(바이너리)는 글꼴·음영을 읽지 않음 — hwpx로 저장해 다시 검사")]
     if table is None:
@@ -74,7 +78,7 @@ def check_emphasis(table: Table | None, module_code: str, plan_module_name: str 
     )
     index = i_name if i_name is not None else i_unit
     how = (
-        f'개발계획서 학습모듈명 "{plan_module_name}" 과 일치하는 행'
+        f'{name_source} 학습모듈명 "{plan_module_name}" 과 일치하는 행'
         if i_name is not None
         else f'모듈 코드 {module_code} 의 능력단위 번호 {i_unit + 1 if i_unit is not None else "?"}'
     )
