@@ -429,8 +429,11 @@ def create_app(
 
         @app.exception_handler(404)
         async def spa_fallback(request: Request, error: HTTPException) -> Response:
-            # 화면은 react-router(BrowserRouter)라 /plan 같은 경로를 새로 고침해도 index.html을 줘야 한다. API 404는 그대로.
-            if not request.url.path.startswith("/api/") and index_html.is_file() and request.method == "GET":
+            # 화면은 react-router(BrowserRouter)라 /plan 같은 경로를 새로 고침해도 index.html을 줘야 한다.
+            # API 404와 파일처럼 생긴 경로(마지막 조각에 '.'이 있는 /결과/x.zip 등)는 그대로 404.
+            path = request.url.path
+            if (request.method == "GET" and not path.startswith("/api/") and "." not in path.rsplit("/", 1)[-1]
+                    and index_html.is_file()):
                 return Response(index_html.read_bytes(), media_type="text/html")
             return error_response(404, str(error.detail) if isinstance(error, HTTPException) else "없는 경로입니다")
 
