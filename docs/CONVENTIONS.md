@@ -12,7 +12,7 @@
 - 검수 패키지의 **뼈대 파일 8개는 고정**이다. 모든 패키지가 같은 이름으로 갖는다(`tests/contract/test_engines.py`가 검사).
   `config.py`(양식 가정, frozen dataclass; 공통 파서를 쓰면 `parse_config() -> ParseConfig`) · `models.py`(`ReviewContext`) ·
   `rules/<규칙>.py`(판정, I/O 없음) · `registry.py`(`DEFAULT_RULES`, `ALL_ITEM_IDS`) · `pipeline.py` ·
-  `reporting.py`(`REPORT_NAME`, `ITEM_FILES`, `summary(result)`, `save_results`) · `sheet.py`(확인서 항목 `ITEMS`·`COMPONENT`) · `__main__.py`.
+  `reporting.py`(`REPORT_NAME`, `ITEM_FILES`, `summary(result)`, `save_results`) · `sheet.py`(확인서 항목 `ITEMS`·`COMPONENT`) · `__main__.py`(`run_cli(check, 설명)` 한 줄 — 인자·저장은 `ncs_service.cli`가 한다).
 - 필요할 때만 두는 파일: `patterns.py`(그 패키지 판정에만 쓰는 정규식·라벨) · `text.py`(`norm, same = make_normalizer(접두 패턴)`; 공통 `ncs_core.manuscript.names`로 충분하면 없음) · `compare.py`(목록 비교 도우미).
 - 그 패키지 고유의 **추출 모듈**(원고에서 자기 항목에 필요한 구조를 읽는 코드, I/O 없음)은 읽는 대상을 드러내는 이름으로 둔다.
   지금 있는 것: 위치 `parsers` · 차례 `evaluation`(평가 표) · 필요 지식 `figtab`(그림·표 번호)·`plan`·`structure`(뒤 둘은 코어로 옮긴 파서의 이름 유지용) ·
@@ -52,7 +52,7 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 
 ## DB 이력 (PostgreSQL 모드)
 저장소 선택은 `ncs_service.store.open_store()` 한 곳에서만 한다. 웹 서버는 `store.save()`를 부르고 `store.supports_history`일 때만 이력 API를 등록한다.
-검수 CLI는 `ncs_service.save_cli_review()`로 같은 선택을 탄다: `--out`을 주면 그 폴더, 안 주면 `DATABASE_URL`이 있을 때 DB 이력에만(출처 `cli`), 없을 때 `결과/` 폴더. CLI의 `__main__`에 저장소 분기를 따로 적지 않는다. 저장 방식이 늘면 `store.py`에 같은 호출 모양(`prepare`·`save`·`supports_history`)의 클래스를 추가한다.
+검수 CLI는 `ncs_service.save_cli_review()`로 같은 선택을 탄다: `--out`을 주면 그 폴더, 안 주면 `DATABASE_URL`이 있을 때 DB 이력에만(출처 `cli`), 없을 때 `결과/` 폴더. CLI 인자 처리는 `ncs_service.cli.run_cli` 한 곳이다: 개발계획서 필수 여부는 `Engine.required`, `--body-section`은 엔진 `CheckConfig`에 `body_section`이 있을 때만 생긴다. 엔진 `__main__`에 인자·저장소 분기를 따로 적지 않는다. 저장 방식이 늘면 `store.py`에 같은 호출 모양(`prepare`·`save`·`supports_history`)의 클래스를 추가한다.
 스키마 변경은 `ncs_service/migrations.py`의 `MIGRATIONS`에 `NNN_이름` 항목을 **뒤에 추가**해서만 한다. 적용된 항목은 고치지 않는다. 모든 문장은 `IF (NOT) EXISTS`로 보호해 시작마다 돌아도 안전하게 한다(`tests/service/test_migrations.py`가 검사). 엔진 이름을 SQL에 적지 않는다.
 
 ## 저장 파일

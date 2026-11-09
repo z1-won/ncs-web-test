@@ -117,6 +117,7 @@ class ServiceTests(unittest.TestCase):
         for check in CHECKS:
             with self.subTest(check=check):
                 cli = importlib.import_module(f"ncs_{check}.__main__")
+                shared = importlib.import_module("ncs_service.cli")
                 engine = importlib.import_module(f"ncs_{check}")
                 output = self.folder / check
                 args = [f"ncs_{check}", str(self.swapped), str(PLAN),
@@ -127,8 +128,8 @@ class ServiceTests(unittest.TestCase):
                 stdout = io.StringIO()
                 with (
                     patch.object(sys, "argv", args),
-                    patch.object(cli, "execute_review", wraps=execute_review) as execute,
-                    patch.object(cli, "save_cli_review", wraps=save_cli_review) as persist,
+                    patch.object(shared, "execute_review", wraps=execute_review) as execute,
+                    patch.object(shared, "save_cli_review", wraps=save_cli_review) as persist,
                     patch.object(engine, "run_review", side_effect=AssertionError("CLI가 엔진 직접 호출")),
                     redirect_stdout(stdout),
                 ):
