@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ncs_core import Document
+from ncs_core.law_catalog import LawCatalog
 from ncs_core.lexicon import ActionNounLexicon
 from ncs_core.ncs_catalog import Catalog
 
@@ -19,3 +20,4 @@ class ReviewContext:
     catalog: Catalog | None
     lexicon: ActionNounLexicon
     module_cells: list[str]          # 모듈 표의 모든 셀 글(자리표시 탐지용)
+    laws: LawCatalog | None          # 법령명 표(law_names.tsv). 없으면 ⑩ 판단불가

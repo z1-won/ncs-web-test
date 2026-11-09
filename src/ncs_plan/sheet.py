@@ -4,7 +4,7 @@ from ncs_core.plan_items import PLAN_COMPONENT, plan_item_text
 from ncs_core.sheet import SheetItem, build_sheet
 
 COMPONENT = PLAN_COMPONENT
-ITEMS = [SheetItem(no, plan_item_text(no), (f"PLAN-{no}",)) for no in "①②③④⑤⑥⑦⑧⑨"] + [SheetItem("⑩", plan_item_text("⑩"))]
+ITEMS = [SheetItem(no, plan_item_text(no), (f"PLAN-{no}",)) for no in "①②③④⑤⑥⑦⑧⑨⑩"]
 
 
 def sheet(checklist):

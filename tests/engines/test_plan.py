@@ -262,3 +262,34 @@ class FillTests(unittest.TestCase):
             for no in "②③④⑤⑥⑧":
                 self.assertEqual(by_no[no], "적합", (no, [r["비고"] for r in result.checklist if r["item_id"] == f"PLAN-{no}" and r["판정"] != "적합"]))
             self.assertEqual(by_no["⑦"], "판단불가")   # 학습 내용명은 집필자 작성 칸이라 비어 있음
+
+
+class LawTests(unittest.TestCase):
+    def test_extract_law_names(self):
+        from ncs_core.law_catalog import extract_law_names
+
+        self.assertEqual(extract_law_names("「개인정보 보호법」에 따라"), [("개인정보 보호법", True)])
+        self.assertEqual(extract_law_names("근로기준법과 최저임금법은"), [("근로기준법", False), ("최저임금법", False)])
+        self.assertEqual(extract_law_names("규정에 따라 산업안전보건법을 지킨다"), [("산업안전보건법", False)])
+        self.assertEqual(extract_law_names("화학물질관리법 시행규칙에 따른다"), [("화학물질관리법 시행규칙", False)])
+        self.assertEqual(extract_law_names("작업 방법과 분석 기법, 법인 설립의 법적 근거"), [])
+
+    def test_rule_with_table(self):
+        from ncs_core.law_catalog import LawCatalog
+        from ncs_plan.rules.laws import LABEL, check_laws
+
+        with tempfile.TemporaryDirectory() as folder:
+            table = Path(folder) / "law_names.tsv"
+            table.write_text("# 표\n개인정보 보호법\t개인정보 보호법\t011357\t20250313\t일부개정\t현행\t개인정보 보호법\t2026-11-10\n"
+                             "정보통신망법\t정보통신망 이용촉진 및 정보보호 등에 관한 법률\t000001\t20240101\t일부개정\t명칭변경\t정보통신망 이용촉진 및 정보보호 등에 관한 법률\t2026-11-10\n"
+                             "고객정보보호법\t\t\t\t\t미검색\t\t2026-11-10\n", encoding="utf-8")
+            catalog = LawCatalog(table)
+            elements = ((f"{CODE}.1", "a하기", ["1.1 「개인정보 보호법」에 따라 등록할 수 있다.", "1.2 고객정보보호법에 따라 관리할 수 있다."]),)
+            m = read_module(module_table([([0], "1. a하기", [("1-1. 등록", ["1.1 정보통신망법에 따라 등록할 수 있다."])])], elements=elements))
+            rows = {r["원고"]: r for r in check_laws(m, catalog)}
+            self.assertEqual(rows["개인정보 보호법"]["체크"][LABEL], "O")
+            self.assertEqual(rows["정보통신망법"]["체크"][LABEL], "X")          # 학습모듈 쪽 → X, 현행 명칭 제안
+            self.assertIn("정보통신망 이용촉진", rows["정보통신망법"]["수정 제안"])
+            self.assertEqual(rows["고객정보보호법"]["체크"][LABEL], "△")      # NCS 쪽·미검색 → △
+            [none] = check_laws(m, None)
+            self.assertEqual(none["체크"][LABEL], "△")

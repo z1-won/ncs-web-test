@@ -1,8 +1,9 @@
-"""규칙 등록. 개발계획서 ①~⑨ (⑩ 법령 명칭은 미구현)."""
+"""규칙 등록. 개발계획서 ①~⑩."""
 
 from ncs_core import Rule
 
 from .rules.front import check_catalog, check_change_table, check_identity, check_required
+from .rules.laws import check_laws
 from .rules.module import check_element_codes, check_goal, check_lessons, check_subs, check_targets
 
 
@@ -41,5 +42,6 @@ DEFAULT_RULES = (
     Rule("subs", "PLAN-⑦", lambda c: _module_rule("⑦", lambda m: check_subs(m, c.lexicon))(c)),
     Rule("required", "PLAN-⑧", lambda c: check_required(c.data, c.module_cells)),
     Rule("change_table", "PLAN-⑨", lambda c: check_change_table(c.data)),
+    Rule("laws", "PLAN-⑩", lambda c: _module_rule("⑩", lambda m: check_laws(m, c.laws))(c)),
 )
 ALL_ITEM_IDS = tuple(f"PLAN-{n}" for n in "①②③④⑤⑥⑦⑧⑨⑩")

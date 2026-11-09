@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 
 from ncs_core import Document, ReviewResult, Rule, run_rules, select_documents, validate_module_code
+from ncs_core.law_catalog import law_catalog
 from ncs_core.lexicon import default_lexicon
 from ncs_core.module_code import CODE_IN_NAME
 from ncs_core.ncs_catalog import catalog
@@ -46,7 +47,7 @@ def prepare_review(manuscript: Document | None, plan: Document | None, *, module
     data = read_plan(plan.tables)
     cells = [text for table in plan.tables if is_module_table(table) for text in table["cells"].values() if text]
     code = _module_code(manuscript, plan, data, module_code)
-    return ReviewContext(manuscript, plan, code, config, data, catalog() if config.use_catalog else None, default_lexicon(), cells)
+    return ReviewContext(manuscript, plan, code, config, data, catalog() if config.use_catalog else None, default_lexicon(), cells, law_catalog())
 
 
 def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
@@ -59,6 +60,8 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         warnings.append("NCS 변경 전·후 대조표를 찾지 못했습니다")
     if context.catalog is None:
         warnings.append("NCS 목록을 읽지 못해 ①은 판단불가입니다")
+    if context.laws is None:
+        warnings.append("법령명 표(law_names.tsv)가 없어 ⑩은 판단불가입니다 — scripts/data/build_law_names.py")
     implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
