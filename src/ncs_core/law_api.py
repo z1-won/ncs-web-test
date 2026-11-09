@@ -84,7 +84,7 @@ def search(name: str, *, display: int = 20) -> list[LawRecord]:
     return _parse(_get({"target": "law", "query": name, "display": display}))
 
 
-HISTORY_TARGETS = ("lsHistory", "lsHstInf", "eflaw")   # 연혁 서비스의 target 이름 후보. 첫 번째로 XML을 주는 것을 쓴다
+HISTORY_TARGETS = ("lsHistory",)   # 연혁 서비스 target. eflaw(시행일 법령)는 현행만 주므로 연혁 대용으로 쓰지 않는다
 
 
 def history(name: str, *, display: int = 50) -> list[LawRecord]:

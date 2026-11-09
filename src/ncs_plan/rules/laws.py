@@ -6,6 +6,7 @@ NCS(수정 금지) 쪽에 있는 법령명은 집필자가 고칠 수 없으므�
 
 from ncs_core import NA, O, TRI, X
 from ncs_core.law_catalog import LawCatalog, extract_law_names
+from ncs_core.law_catalog import normalize as normalize_name
 
 from .common import row
 
@@ -56,6 +57,8 @@ def check_laws(module: dict, catalog: LawCatalog | None) -> list[dict]:
                 suggestion = f"「{name}」의 현행 법령명 확인 후 현행화"
         elif entry.status == "현행":
             checks[LABEL] = O
+            if entry.name and normalize_name(entry.name) != normalize_name(name):
+                notes[LABEL] = f"「{name}」는 약칭·축약 표기 — 정식 명칭 「{entry.name}」 (참고)"
         elif entry.status in ("폐지", "명칭변경"):
             why = f"폐지됨({entry.revision}, 시행 {entry.effective})" if entry.status == "폐지" else f"현행 명칭 「{entry.current_name}」"
             if ncs_side:
