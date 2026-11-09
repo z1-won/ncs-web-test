@@ -14,6 +14,8 @@ from ncs_core.manuscript.plan_table import ELEMENT_IN_CELL, GOAL_SPLIT
 UNIT_CODE = re.compile(r"^\d{10}_\d{2}v\d+$")
 LM_CODE = re.compile(r"^LM\d{10}_\d{2}v\d+$")
 NUMBER_HEAD = re.compile(r"^\d{1,2}\.\s*")          # 위치 표의 '20. 정보통신'
+FORM_MARK = re.compile(r"^[①②③④⑤⑥⑦⑧⑨⑩]\s*")       # 양식 안내 번호가 값 칸에 남은 것: '① SW제품기획'
+LESSON_CELL = re.compile(r"^(\d+)\.(?!\d)\s*(\S.*)$")   # 학습명 칸: '4. 기술 도입 평가하기' / '4.기술 도입 평가하기'(공백 누락도 읽는다; '4.1 …' 수행준거와는 구별)
 SENTENCE_SPLIT = re.compile(r"\s*\n\s*|" + GOAL_SPLIT.pattern)  # 셀 안의 '1.1 … 1.2 …' 또는 줄바꿈
 
 
@@ -71,10 +73,14 @@ def read_basic(tables: list[dict]) -> dict:
     for table in tables:
         if label_value(table, "(한글) 세분류명", prefix=True) is None:
             continue
-        out["세분류명"] = label_value(table, "(한글) 세분류명", prefix=True) or None
-        out["영문 세분류명"] = label_value(table, "(영문) 세분류명", prefix=True) or None
-        out["신규/개선"] = label_value(table, "신규 / 개선", prefix=True) or None
-        out["개발기관명"] = label_value(table, "개발기관명", prefix=True) or None
+        def value(label: str) -> str | None:
+            text = FORM_MARK.sub("", label_value(table, label, prefix=True) or "").strip()
+            return text or None
+
+        out["세분류명"] = value("(한글) 세분류명")
+        out["영문 세분류명"] = value("(영문) 세분류명")
+        out["신규/개선"] = value("신규 / 개선")
+        out["개발기관명"] = value("개발기관명")
         break
     return out
 
@@ -195,7 +201,7 @@ def read_module(table: dict) -> dict:
             out["요소"].append({"행": r, "코드": f"{m.group(1)}.{m.group(2)}", "능력단위": m.group(1), "번호": int(m.group(2)), "명칭": name,
                                "수행준거": split_sentences(cells.get((r, col["수행준거"])) or "")})
         lesson = (cells.get((r, col["학습명"])) or "").strip()
-        if m := PLAN_LESSON.match(lesson):
+        if m := LESSON_CELL.match(lesson):
             lessons.append({"행": r, "번호": int(m.group(1)), "명칭": m.group(2).strip(), "내용": [], "요소": []})
         sub = (cells.get((r, col["내용명"])) or "").strip()
         goals = split_sentences(cells.get((r, col["목표"])) or "")

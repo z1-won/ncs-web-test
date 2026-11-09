@@ -13,9 +13,10 @@ from ncs_core.goals import normalize
 from ncs_core.lexicon import ActionNounLexicon
 
 from ..patterns import DEFINITION_END, DEFINITION_SUBJECT, GOAL_END, LESSON_END, SEPARATOR, TRAILING_NOTE
-from .common import compact, pair, row, same_loose, same_text
+from .common import compact, pair, row, same_loose, same_text, similarity
 
-SIMILARITY_MIN = 0.85
+SIMILARITY_MIN = 0.85        # ③ 정의↔목표
+NAME_SIMILARITY_MIN = 0.6    # ④ 요소명↔학습명: 이 이상이면 윤문(△), 미만이면 다른 이름(X)
 
 
 def _region(module: dict, tail: str = "") -> str:
@@ -101,8 +102,11 @@ def check_lessons(module: dict) -> list[dict]:
                 element_name = own[0]["명칭"]
                 if same_loose(element_name, name):
                     checks[label_name] = O
-                elif set(normalize(element_name).split()) & set(normalize(name).split()):
-                    checks[label_name] = TRI
+                elif not name:
+                    checks[label_name] = X
+                    notes[label_name] = f"학습명이 비어 있음 — 능력단위요소명 「{element_name}」 준용"
+                elif similarity(element_name, name) >= NAME_SIMILARITY_MIN:
+                    checks[label_name] = TRI   # 용어·표기 윤문(F04 2-1·2-4 허용 범위) — 협의 여부는 사람이 확인
                     notes[label_name] = pair(element_name, name, "학습명", "능력단위요소명") + " — 윤문 범위인지, 직능연과 협의했는지 확인"
                 else:
                     checks[label_name] = X

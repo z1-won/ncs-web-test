@@ -25,10 +25,24 @@ def same_text(a: str | None, b: str | None) -> bool:
     return compact(a) == compact(b)
 
 
+DOTS = re.compile(r"[･・•∙‧ㆍ]")   # 가운뎃점의 여러 꼴(반각 ･, 가타카나 ・ 등) → 보통 가운뎃점
+
+
+def loose(text: str | None) -> str:
+    return PUNCT_ONLY.sub("", DOTS.sub("·", normalize(text or "")))
+
+
 def same_loose(a: str | None, b: str | None) -> bool:
-    """기호·띄어쓰기만 다른 것은 같은 것으로 본다(가운뎃점 앞뒤 공백 등 글꼴·입력 차이)."""
-    return PUNCT_ONLY.sub("", normalize(a or "")) == PUNCT_ONLY.sub("", normalize(b or ""))
+    """기호·띄어쓰기만 다른 것은 같은 것으로 본다(가운뎃점 꼴·앞뒤 공백 등 글꼴·입력 차이)."""
+    return loose(a) == loose(b)
+
+
+def similarity(a: str | None, b: str | None) -> float:
+    """공백·기호를 뺀 글자열의 유사도(0~1). NCS 요소명은 띄어쓰기 없이 오기도 해 어절 비교가 안 된다."""
+    import difflib
+
+    return difflib.SequenceMatcher(None, loose(a), loose(b), autojunk=False).ratio()
 
 
 def pair(expected: str, actual: str, where: str, basis: str) -> str:
-    return explain_pair(normalize(expected), normalize(actual), where=where, basis=basis)
+    return explain_pair(DOTS.sub("·", normalize(expected)), DOTS.sub("·", normalize(actual)), where=where, basis=basis)
