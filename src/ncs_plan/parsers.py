@@ -154,7 +154,14 @@ def read_position(tables: list[dict]) -> dict:
 
 # ── 모듈 표 ─────────────────────────────────────────────────────────────────────
 
+PLACEHOLDER_CODE = re.compile(r"^0{10}_")   # 양식의 작성 예시 '0000000000_20v2'
+
+
 def is_module_table(table: dict) -> bool:
+    """'능력단위 코드번호' 라벨이 있는 표. 양식의 작성 예시(코드 0000000000_…)와 라벨만 있는 안내 표는 제외."""
+    code = label_value(table, "능력단위 코드번호")
+    if code is None or PLACEHOLDER_CODE.match(code.strip()):
+        return False
     return any(squash(v).startswith("능력단위코드번호") for v in table["cells"].values())
 
 

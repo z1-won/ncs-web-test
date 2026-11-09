@@ -209,3 +209,56 @@ class RealSampleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FillTests(unittest.TestCase):
+    """자동 입력(fill): 합성 spec → 초안 hwpx → 다시 읽어 NCS 쪽이 그대로이고 점검 ①~⑥·⑧에서 X가 없어야 한다."""
+
+    SPEC = {
+        "기본": {"세분류명": "객실관리", "영문 세분류명": "Rooms Operation", "신규/개선": "신규", "개발기관명": "테스트기관"},
+        "위치": {"대분류": "이용·숙박·여행·오락·스포츠", "중분류": "관광·레저", "소분류": "숙박서비스", "세분류": ["숙박기획·개발", "객실관리"]},
+        "총괄표": [{"코드": CODE, "명칭": "객실 예약 관리", "집필진": "김집필", "검토진": "이검토"},
+                 {"코드": "1203020202_24v2", "명칭": "체크 인(Check In)", "집필진": "김집필", "검토진": "이검토"}],
+        "모듈": [{"코드": CODE, "명칭": "객실 예약 관리",
+                 "정의": "객실 예약 접수란 객실 · 부대시설 이용정보 파악, 예약 현황 확인을 처리하는 능력이다.",
+                 "요소": [{"코드": f"{CODE}.1", "명칭": "객실 · 부대시설 이용정보 파악하기", "수행준거": C1},
+                          {"코드": f"{CODE}.2", "명칭": "예약 현황 확인하기", "수행준거": C2}]},
+                {"코드": "1203020202_24v2", "명칭": "체크 인(Check In)", "정의": "체크 인이란 고객 응대를 제공하는 능력이다.",
+                 "요소": [{"코드": "1203020202_24v2.1", "명칭": "체크 인 준비하기", "수행준거": ["1.1 투숙 현황에 따라 체크 인 업무를 준비할 수 있다."]}]}],
+    }
+
+    def test_draft_round_trip(self):
+        import io
+        import zipfile
+
+        from ncs_core import load_document
+        from ncs_plan.fill import build_plan, draft_goal
+        from ncs_plan.parsers import read_plan
+
+        self.assertEqual(draft_goal("객실 매출 관리란 수입을 증대하기 위한 관리 능력이다."), "수입을 증대하기 위한 관리를 할 수 있다.")
+        data = build_plan(self.SPEC)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            self.assertEqual(archive.infolist()[0].filename, "mimetype")
+            self.assertEqual(archive.infolist()[0].compress_type, zipfile.ZIP_STORED)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "개발계획서_초안.hwpx"
+            path.write_bytes(data)
+            plan = read_plan(load_document(path).tables)
+            self.assertEqual(plan["기본"]["세분류명"], "객실관리")
+            self.assertEqual([e["코드"] for e in plan["총괄표"]], [CODE, "1203020202_24v2"])
+            self.assertEqual(plan["총괄표"][0]["LM 코드"], f"LM{CODE}")
+            self.assertEqual(plan["위치"]["모듈"][0], {"능력단위": "객실 예약 관리", "학습모듈명": "객실 예약 관리"})
+            self.assertEqual(len(plan["모듈"]), 2)
+            first = plan["모듈"][0]
+            self.assertEqual([e["수행준거"] for e in first["요소"]], [C1, C2])
+            self.assertEqual([(l["번호"], l["명칭"], l["요소"]) for l in first["학습"]],
+                             [(1, "객실 · 부대시설 이용정보 파악하기", [f"{CODE}.1"]), (2, "예약 현황 확인하기", [f"{CODE}.2"])])
+            self.assertEqual(first["학습"][0]["내용"][0]["목표"], C1)
+            self.assertEqual(first["목표"], "객실 · 부대시설 이용정보 파악, 예약 현황 확인을 처리할 수 있다.")
+            from ncs_plan import run_review
+
+            result = run_review([path])
+            by_no = {row["번호"]: row["검수결과"] for row in result.sheet}
+            for no in "②③④⑤⑥⑧":
+                self.assertEqual(by_no[no], "적합", (no, [r["비고"] for r in result.checklist if r["item_id"] == f"PLAN-{no}" and r["판정"] != "적합"]))
+            self.assertEqual(by_no["⑦"], "판단불가")   # 학습 내용명은 집필자 작성 칸이라 비어 있음
