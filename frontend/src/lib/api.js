@@ -56,7 +56,8 @@ export async function download(path, body, filename) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   const summary = response.headers.get("x-memo-summary");
-  return { ok: true, summary: summary ? JSON.parse(summary) : null };
+  const check = response.headers.get("x-plan-check");   // 개발계획서 초안 — 함께 돌린 ①~⑩ 점검 요약(URL 인코딩 JSON)
+  return { ok: true, summary: summary ? JSON.parse(summary) : null, check: check ? JSON.parse(decodeURIComponent(check)) : null };
 }
 
 export const api = {
@@ -84,6 +85,11 @@ export const api = {
   exportAnnotated: ({ moduleCode, upload, runId, rows, createdAt }) =>
     download("/api/export/annotated", multipart({ upload: upload || "", run_id: runId || "", rows: JSON.stringify(rows), module_code: moduleCode, created_at: createdAt || "" }),
              `원고_검수메모_${moduleCode || "모듈"}.hwpx`),
+  // 개발계획서 작성(REQ-02-001): 초안을 만들 수 있는 세분류와 초안 내려받기
+  plan: {
+    subclasses: () => request("/api/plan/subclasses"),
+    draft: (body) => download("/api/plan/draft", body, `개발계획서_초안_${body.duty}.hwpx`),
+  },
   groups: {
     list: () => request("/api/groups"),
     get: (id) => request(`/api/groups/${id}`),

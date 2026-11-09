@@ -281,3 +281,9 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .export-buttons { display: inline-flex; align-items: center; gap: var(--krds-gap-2); }
 .export-buttons > .meta:first-child { margin-right: var(--krds-gap-3); }   /* "확인서 내려받기" 글자와 첫 버튼 사이 */
 .export-buttons .sep { padding: 0 var(--krds-gap-1); }
+
+/* 개발계획서 작성 페이지 — 능력단위 표 */
+.plan-units td, .plan-units th { vertical-align: middle; }
+.plan-units .code { color: var(--krds-color-light-gray-60, #6b7280); font-size: 0.875rem; }
+.plan-units .krds-input.small { min-width: 7rem; }
+.form-group-wide { grid-column: 1 / -1; }
