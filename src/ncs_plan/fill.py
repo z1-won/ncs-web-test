@@ -141,6 +141,7 @@ def fill_summary(root: ET.Element, rows: list[dict]) -> None:
             set_addr(tc, head + 1 + i)
         table.append(tr)
     table.set("rowCnt", str(head + 1 + len(rows)))
+    fit_row_heights(table)
 
 
 def fill_position(root: ET.Element, position: dict) -> None:
@@ -271,13 +272,81 @@ def fill_module_table(table: ET.Element, module: dict) -> None:
     table.set("rowCnt", str(r))
 
 
+# ── 행 높이 추정 ──────────────────────────────────────────────────────────────
+# HWPUNIT(1/7200인치). 양식 본문 글자 8pt(charPr height 800) 기준. 실제 계획서 셀(10줄·6문단 → 15,425)에서 역산한 값:
+# 한 줄 1,250, 문단 사이 150, 셀 안쪽 여백 위아래 합 560. 글자 너비는 숫자·영문·공백·자간(-3%)이 섞여 글자 크기의 0.62 정도.
+# 한글은 내용이 셀보다 크면 행을 스스로 키우므로 추정은 조금 모자란 쪽이 낫다(남으면 빈 여백이 남는다).
+LINE_HEIGHT = 1150
+PARA_GAP = 120
+CELL_PADDING = 560
+CHAR_WIDTH = 800 * 0.55
+MIN_ROW_HEIGHT = 2348
+
+
+def estimate_cell_height(cell: ET.Element) -> int:
+    width = int(cell.find(HP + "cellSz").get("width")) - CELL_PADDING
+    per_line = max(1, int(width // CHAR_WIDTH))
+    lines, paragraphs = 0, 0
+    for p in cell.iter(HP + "p"):
+        text = "".join(t.text or "" for t in p.iter(HP + "t"))
+        lines += max(1, -(-len(text) // per_line))
+        paragraphs += 1
+    return lines * LINE_HEIGHT + max(0, paragraphs - 1) * PARA_GAP + CELL_PADDING
+
+
+def fit_row_heights(table: ET.Element) -> None:
+    """각 행 높이 = 그 행에서 시작하는 rowSpan=1 셀들의 필요 높이 최대값. 여러 행에 걸친 셀은 걸친 행 높이의 합을 받고,
+    그 셀이 더 필요하면 걸친 행들에 나눠 더한다. 표 높이는 행 높이의 합."""
+    trs = table.findall(HP + "tr")
+    heights = [MIN_ROW_HEIGHT] * len(trs)
+    spanning: list[tuple[int, int, ET.Element]] = []
+    for r, tr in enumerate(trs):
+        for tc in tr.findall(HP + "tc"):
+            span = int(tc.find(HP + "cellSpan").get("rowSpan"))
+            need = estimate_cell_height(tc)
+            if span <= 1:
+                heights[r] = max(heights[r], need)
+            else:
+                spanning.append((r, span, tc))
+    for r, span, tc in spanning:
+        covered = heights[r:r + span]
+        shortfall = estimate_cell_height(tc) - sum(covered)
+        if shortfall > 0:
+            extra = -(-shortfall // span)
+            for i in range(r, min(r + span, len(heights))):
+                heights[i] += extra
+    for r, tr in enumerate(trs):
+        for tc in tr.findall(HP + "tc"):
+            span = int(tc.find(HP + "cellSpan").get("rowSpan"))
+            tc.find(HP + "cellSz").set("height", str(sum(heights[r:r + span])))
+    size = table.find(HP + "sz")
+    if size is not None:
+        size.set("height", str(sum(heights)))
+
+
 def fill_modules(section: ET.Element, modules: list[dict]) -> None:
     proto_p = module_table_paragraph(section)
     index = list(section).index(proto_p)
     section.remove(proto_p)
+    # 양식 문단에 붙은 '작성필요' 메모 필드와 배치 캐시는 복제하지 않는다(메모 id가 겹치고, 캐시는 빈 쪽을 만든다)
+    for run in proto_p.findall(HP + "run"):
+        for ctrl in run.findall(HP + "ctrl"):
+            if ctrl.find(HP + "fieldBegin") is not None or ctrl.find(HP + "fieldEnd") is not None:
+                run.remove(ctrl)
+    for seg in proto_p.findall(HP + "linesegarray"):
+        proto_p.remove(seg)
+    base_id = int(next(proto_p.iter(HP + "tbl")).get("id") or "1000000")
     for i, module in enumerate(modules):
         p = copy.deepcopy(proto_p)
-        fill_module_table(next(p.iter(HP + "tbl")), module)
+        table = next(p.iter(HP + "tbl"))
+        table.set("id", str(base_id + i))     # 복제한 표마다 다른 id
+        fill_module_table(table, module)
+        fit_row_heights(table)
+        # 양식의 빈 모듈 표는 '글자처럼 취급'(treatAsChar=1)이라 한 쪽을 넘는 표가 쪽 경계에서 나뉘지 않고 아래로 밀려 나간다.
+        # 실제 계획서처럼 0으로 두어 셀 단위(pageBreak=CELL)로 다음 쪽에 이어지게 한다.
+        pos = table.find(HP + "pos")
+        if pos is not None:
+            pos.set("treatAsChar", "0")
         section.insert(index + i, p)
 
 
