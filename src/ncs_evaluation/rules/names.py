@@ -4,6 +4,8 @@ import re
 from ncs_core import O, X, TRI, verdict
 from ncs_core.goals import explain_pair
 
+from ..region import eval_head
+
 ITEM_ID = "F02-평가-①"
 NUMBERED = re.compile(r"^(\d+)\s*-\s*(\d+)\s*\.\s*(.+)$")
 
@@ -56,15 +58,31 @@ def describe(missing, extra, changed, unresolved=(), expected=None, actual=None,
     return " · ".join(parts) if parts else "일치"
 
 
-def compare_indexed(place, items, expected):
+SPACING_ONLY = "띄어쓰기만 다름 — 개발계획서 명칭과 글자 그대로 맞출 것: "
+
+
+def _verdict(missing, extra, changed, unresolved, expected, actual):
+    """누락·추가·글자 차이는 X. 띄어쓰기만 달라도 X — 체크리스트는 '일치'를 요구한다(완화하지 않음).
+    띄어쓰기만 다른 경우는 비고 머리에 그렇다고 적어 검수자가 바로 알게 한다."""
+    if missing or extra or unresolved:
+        return X, ""
+    if not changed:
+        return O, ""
+    if all(re.sub(r"\s", "", expected[k]) == re.sub(r"\s", "", actual[k]) for k in changed):
+        return X, SPACING_ONLY
+    return X, ""
+
+
+def compare_indexed(place, items, expected, where="평가 표"):
     actual = indexed(items)
     if actual is None:
         return row(place, TRI, items, display(expected), "명칭이 비었거나 번호가 중복되어 완전한 목록을 식별하지 못함")
     missing = sorted(set(expected) - set(actual))
     extra = sorted(set(actual) - set(expected))
     changed = sorted(k for k in expected.keys() & actual.keys() if expected[k] != actual[k])
-    return row(place, X if missing or extra or changed else O, display(actual), display(expected),
-               describe(missing, extra, changed, expected=expected, actual=actual))
+    value, lead = _verdict(missing, extra, changed, (), expected, actual)
+    return row(place, value, display(actual), display(expected),
+               lead + describe(missing, extra, changed, expected=expected, actual=actual, where=where))
 
 
 def table_names(table):
@@ -112,8 +130,9 @@ def compare_table(place, values, expected):
     missing = sorted(set(expected) - set(actual))
     extra = sorted(set(actual) - set(expected))
     changed = sorted(key for key in actual.keys() & expected.keys() if actual[key] != expected[key])
-    return row(place, X if missing or extra or changed or unresolved else O, values, display(expected),
-               describe(missing, extra, changed, unresolved, expected=expected, actual=actual))
+    value, lead = _verdict(missing, extra, changed, unresolved, expected, actual)
+    return row(place, value, values, display(expected),
+               lead + describe(missing, extra, changed, unresolved, expected=expected, actual=actual))
 
 
 def check_names(context):
@@ -129,7 +148,7 @@ def check_names(context):
         if not source or source.get("건너뜀"):
             rows.append(row(f"section{front} > {title}", TRI, note="영역 또는 학습 번호를 완전히 식별하지 못함"))
         else:
-            rows.append(compare_indexed(f"section{front} > {title}", source.get("내용", []), expected))
+            rows.append(compare_indexed(f"section{front} > {title}", source.get("내용", []), expected, where=title))
     body = context.body
     lessons = body["lessons"]
     lesson_numbers = sorted({key[0] for key in expected})
@@ -158,14 +177,15 @@ def check_names(context):
                     p = q
             p += 1
         own = {key: value for key, value in expected.items() if key[0] == lesson["no"]}
-        rows.append(compare_indexed(f"section{body_section} > 학습 {lesson['no']} > 필요 지식", items, own))
+        rows.append(compare_indexed(f"section{body_section} > 학습 {lesson['no']} > 필요 지식", items, own, where="본문 제목"))
     for lesson in lessons:
         own = {key: value for key, value in expected.items() if key[0] == lesson["no"]}
         place = f"section{body_section} > 학습 {lesson['no']}"
-        if len(lesson["eval"]) != 1:
+        head = eval_head(lesson, body, paragraphs)
+        if head is None:
             rows.append(row(place + " > 평가", TRI, note="평가 영역의 시작을 유일하게 식별하지 못함"))
             continue
-        start = body["lines"][lesson["eval"][0]][0]
+        start = body["lines"][head][0]
         end = lesson["raw_span"][1]
         found = set()
         parsed_tables = []
