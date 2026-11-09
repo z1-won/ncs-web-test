@@ -34,7 +34,7 @@
 
 ## ✅ 체크리스트
 
-- [ ] `pytest` 통과
+- [ ] `python -m unittest discover tests` 통과 (PR을 열면 CI가 같은 검사를 돌립니다)
 - [ ] (화면) `npm run lint`, `npm run build` 통과
 - [ ] (새 엔진) `ENGINES` → `src/ncs_web/server.py` → `webapp/frontend/src/lib/checks.js` 세 곳 반영
 - [ ] (DB) 스키마 변경은 `MIGRATIONS` 뒤에 추가만 함
