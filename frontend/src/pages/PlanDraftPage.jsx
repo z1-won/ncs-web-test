@@ -6,6 +6,9 @@ import { api } from "../lib/api.js";
 import { Badge, Spinner } from "../components/Badge.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
+import { ResultHead } from "../components/ResultHead.jsx";
+import { SheetTable } from "../components/Tables.jsx";
+import { overallVerdict } from "../lib/checks.js";
 
 const ANCHORS = [
   { id: "plan-form", label: "초안 만들기" },
@@ -62,6 +65,13 @@ export default function PlanDraftPage() {
     setTimeout(() => document.getElementById("plan-check")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
+  const allPicked = !!subclass && chosen.length === subclass.units.length;
+  const somePicked = chosen.length > 0 && !allPicked;
+  function pickAll(on) {
+    if (subclass) setPicked(Object.fromEntries(subclass.units.map((u) => [u.code, on])));
+  }
+  const verdict = check ? overallVerdict(check.map((row) => row.검수결과)) : null;
+
   function setPerson(code, key, value) {
     setPeople((prev) => ({ ...prev, [code]: { ...(prev[code] || {}), [key]: value } }));
   }
@@ -109,30 +119,48 @@ export default function PlanDraftPage() {
 
         {subclass && (
           <div className="form-group form-group-wide">
-            <div className="form-tit"><span>능력단위 ({chosen.length}/{subclass.units.length})</span></div>
+            <div className="form-tit"><span id="units-title">능력단위 ({chosen.length}/{subclass.units.length})</span></div>
             <div className="form-conts">
-              <table className="krds-table plan-units">
-                <thead>
-                  <tr><th scope="col">선택</th><th scope="col">능력단위</th><th scope="col">수준</th><th scope="col">요소 / 수행준거</th><th scope="col">담당 집필진</th><th scope="col">담당 검토진</th></tr>
-                </thead>
-                <tbody>
-                  {subclass.units.map((u) => (
-                    <tr key={u.code}>
-                      <td>
-                        <div className="krds-form-check">
-                          <input type="checkbox" id={`unit-${u.code}`} checked={!!picked[u.code]} onChange={(e) => setPicked({ ...picked, [u.code]: e.target.checked })} />
-                          <label htmlFor={`unit-${u.code}`}><span className="sr-only">{u.name} 선택</span></label>
+              <div className="krds-table-wrap">
+                <table className="tbl col data plan-units" aria-labelledby="units-title">
+                  <caption>초안에 넣을 능력단위 선택과 담당자</caption>
+                  <colgroup>
+                    <col className="col-check" /><col /><col className="col-level" /><col className="col-count" /><col className="col-person" /><col className="col-person" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th scope="col">
+                        <div className="krds-check-area">
+                          <div className="krds-form-check">
+                            <input type="checkbox" id="unit-all" checked={allPicked} ref={(el) => { if (el) el.indeterminate = somePicked; }} onChange={(e) => pickAll(e.target.checked)} />
+                            <label htmlFor="unit-all"><span className="sr-only">능력단위 전체 선택</span></label>
+                          </div>
                         </div>
-                      </td>
-                      <td><strong>{u.name}</strong><br /><span className="code">{u.code}</span></td>
-                      <td>{u.level ?? "-"}</td>
-                      <td>{u.elements} / {u.criteria}</td>
-                      <td><input type="text" className="krds-input small" aria-label={`${u.name} 담당 집필진`} value={people[u.code]?.writer || ""} onChange={(e) => setPerson(u.code, "writer", e.target.value)} /></td>
-                      <td><input type="text" className="krds-input small" aria-label={`${u.name} 담당 검토진`} value={people[u.code]?.reviewer || ""} onChange={(e) => setPerson(u.code, "reviewer", e.target.value)} /></td>
+                      </th>
+                      <th scope="col">능력단위</th><th scope="col">수준</th><th scope="col">요소 / 수행준거</th><th scope="col">담당 집필진</th><th scope="col">담당 검토진</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {subclass.units.map((u) => (
+                      <tr key={u.code}>
+                        <td>
+                          <div className="krds-check-area">
+                            <div className="krds-form-check">
+                              <input type="checkbox" id={`unit-${u.code}`} checked={!!picked[u.code]} onChange={(e) => setPicked({ ...picked, [u.code]: e.target.checked })} />
+                              <label htmlFor={`unit-${u.code}`}><span className="sr-only">{u.name} 선택</span></label>
+                            </div>
+                          </div>
+                        </td>
+                        <td><strong>{u.name}</strong><br /><span className="code">{u.code}</span></td>
+                        <td>{u.level ?? "-"}</td>
+                        <td>{u.elements} / {u.criteria}</td>
+                        <td><input type="text" className="krds-input small" aria-label={`${u.name} 담당 집필진`} value={people[u.code]?.writer || ""} onChange={(e) => setPerson(u.code, "writer", e.target.value)} /></td>
+                        <td><input type="text" className="krds-input small" aria-label={`${u.name} 담당 검토진`} value={people[u.code]?.reviewer || ""} onChange={(e) => setPerson(u.code, "reviewer", e.target.value)} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -149,24 +177,23 @@ export default function PlanDraftPage() {
       </form>
 
       <div id="plan-check" className="results-anchor nav-anchor" />
-      {busy && <p className="empty"><Spinner label="초안을 만들고 점검하는 중" /></p>}
+      {busy && <ResultHead status={<Spinner label="초안을 만들고 점검하는 중" />} />}
       {!busy && !check && <p className="empty result-placeholder">초안을 만들면 함께 돌린 점검 ①~⑩ 결과가 여기에 표시됩니다.</p>}
       {check && made && (
         <section>
-          <h2 className="section-title">초안 점검 — {made.name} ({made.duty}) · 능력단위 {made.units}개 · 요소 {made.elements}개</h2>
-          <p className="page-desc">⑦(학습 내용명)은 집필자가 채울 칸이라 판단불가, ⑧은 영문명·집필진·검토진을 비우면 부적합으로 나옵니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하세요.</p>
-          <table className="krds-table">
-            <thead><tr><th scope="col">번호</th><th scope="col">판정</th><th scope="col">비고</th></tr></thead>
-            <tbody>
-              {check.map((row) => (
-                <tr key={row.번호}>
-                  <td>{row.번호}</td>
-                  <td><Badge value={row.검수결과} /></td>
-                  <td style={{ whiteSpace: "pre-wrap" }}>{row.비고}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ResultHead
+            status={verdict ? <Badge value={verdict} large /> : <span className="krds-badge large bg-light-gray">결과 없음</span>}
+            meta={`${made.name} (${made.duty}) · 능력단위 ${made.units}개 · 요소 ${made.elements}개 · 초안 점검 ①~⑩`}
+            downloads={
+              <>
+                <span className="meta">초안 파일은 내려받기 폴더에 저장됐습니다</span>
+                <button type="button" className="krds-btn small tertiary" disabled={busy} onClick={submit} title="같은 설정으로 초안을 다시 만들어 내려받기">다시 내려받기</button>
+              </>
+            }
+          />
+          <h2 className="section-title">개발계획서 점검 확인서</h2>
+          <p className="meta section-desc">⑦(학습 내용명)은 집필자가 채울 칸이라 판단불가, ⑧은 영문명·집필진·검토진을 비우면 부적합으로 나옵니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하세요.</p>
+          <SheetTable sheet={check} findings={[]} />
         </section>
       )}
       <TopButton />

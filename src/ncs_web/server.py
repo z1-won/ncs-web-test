@@ -193,9 +193,9 @@ def create_app(
             path.write_bytes(content)
             try:
                 result = run_review([path])
-                summary = [{"번호": r["번호"], "검수결과": r["검수결과"], "비고": r["비고"]} for r in result.sheet]
+                summary = [{k: r.get(k, "") for k in ("구성요소", "번호", "체크 항목", "검수결과", "비고")} for r in result.sheet]
             except ValueError as error:   # 점검이 실패해도 초안은 준다
-                summary = [{"번호": "", "검수결과": "오류", "비고": str(error)}]
+                summary = [{"구성요소": "개발계획서", "번호": "", "체크 항목": "점검 실행", "검수결과": "오류", "비고": str(error)}]
         filename = f"개발계획서_초안_{body.duty}.hwpx"
         return Response(content, media_type="application/octet-stream", headers={
             **CORS_HEADERS,

@@ -282,8 +282,15 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .export-buttons > .meta:first-child { margin-right: var(--krds-gap-3); }   /* "확인서 내려받기" 글자와 첫 버튼 사이 */
 .export-buttons .sep { padding: 0 var(--krds-gap-1); }
 
-/* 개발계획서 작성 페이지 — 능력단위 표 */
-.plan-units td, .plan-units th { vertical-align: middle; }
-.plan-units .code { color: var(--krds-color-light-gray-60, #6b7280); font-size: 0.875rem; }
-.plan-units .krds-input.small { min-width: 7rem; }
+/* 개발계획서 작성 페이지 — 능력단위 표(KRDS .tbl.col.data). 열 너비는 colgroup으로 고정해 담당자 입력칸이 좁아지지 않게 */
 .form-group-wide { grid-column: 1 / -1; }
+.plan-units { table-layout: fixed; width: 100%; }
+.plan-units .col-check { width: 6.4rem; }
+.plan-units .col-level { width: 7.2rem; }
+.plan-units .col-count { width: 12rem; }
+.plan-units .col-person { width: 16rem; }
+.plan-units td, .plan-units th { vertical-align: middle; }
+.plan-units .code { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
+.plan-units .krds-check-area { padding-top: 0; }
+.plan-units .krds-input.small { width: 100%; }
+.section-desc { margin: calc(-1 * var(--krds-gap-3)) 0 var(--krds-gap-5); }   /* 섹션 제목 바로 아래 설명 */
