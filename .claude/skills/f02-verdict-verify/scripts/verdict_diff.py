@@ -3,7 +3,7 @@
   python .claude/skills/f02-verdict-verify/scripts/verdict_diff.py \\
       --before _workspace/batch_before --after _workspace/batch_after [--engines toc overview] [--remarks] [--out 경로.md]
 
-입력은 scripts/batch_review.py run 이 만든 체크포인트 폴더다. 두 폴더에 모두 있는 문서의 54개 항목 판정을 비교해
+입력은 scripts/batch/batch_review.py run 이 만든 체크포인트 폴더다. 두 폴더에 모두 있는 문서의 54개 항목 판정을 비교해
 달라진 것만 PR 템플릿의 '판정 변화' 표(원고 | 체크 항목 | 이전 | 이후) 모양으로 낸다.
 
 --remarks 를 주면 수정 후 비고를 함께 적는다. 비고에는 원고 문구가 들어 있으므로 _workspace 안에서 볼 때만 쓰고,

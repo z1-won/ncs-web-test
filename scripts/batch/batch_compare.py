@@ -1,7 +1,7 @@
 """batch_review.py 결과(체크포인트)를 기대 판정 표와 대조해 미탐·오탐 후보를 뽑는다.
 
-  python scripts/batch_compare.py --work samples/batch_x --expected scripts/batch_expected_테스트데이터.tsv \\
-      --baseline "LM2001021701_기타_hwp" --engines position toc overview knowledge colophon --out 결과/대조.md
+  python scripts/batch/batch_compare.py --work _workspace/batch/20261109_x --expected scripts/batch/batch_expected_테스트데이터.tsv \\
+      --baseline "LM2001021701_기타_hwp" --engines position toc overview knowledge colophon --out _workspace/batch/20261109_x/대조.md
 
 기대 표(TSV): 경로(root 기준 상대 경로, fnmatch 글로브) · 구성요소 · 번호 · 기대(부적합|적합|판단불가|미검사) · 수정사항 · 비고.
 '#'으로 시작하는 줄과 머리 행은 건너뛴다.
@@ -22,7 +22,7 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 

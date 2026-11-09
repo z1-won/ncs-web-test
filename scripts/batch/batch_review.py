@@ -4,15 +4,15 @@
 정답(기대값)이 없으므로 정확도는 판정하지 않고, 판정 분포·버전 간 변화·형식(hwp↔hwpx) 차이·실행 오류를 보여 주며
 사람이 채울 '사람 판정' 열을 비워 둔다.
 
-  python scripts/batch_review.py run  --root 폴더 --work 작업폴더 [--budget 150]   # 문서×엔진 단위로 체크포인트(json)
-  python scripts/batch_review.py xlsx --root 폴더 --work 작업폴더 --out 결과.xlsx    # 체크포인트를 모아 xlsx 작성
+  python scripts/batch/batch_review.py run  --root 폴더 --work 작업폴더 [--budget 150]   # 문서×엔진 단위로 체크포인트(json)
+  python scripts/batch/batch_review.py xlsx --root 폴더 --work 작업폴더 --out 결과.xlsx    # 체크포인트를 모아 xlsx 작성
 
 run은 --budget 초가 지나면 새 단위를 시작하지 않고 끝나므로(원격 셸 시간 제한용) 끝날 때까지 반복 실행한다.
 표준국어대사전 API는 STDICT_API_KEY가 없으면 자동으로 쓰지 않는다(차례 ②는 △).
 
 테스트 원고 묶음(폴더 = 망가뜨린 체크 항목, 파일 = '1.hwp'…)처럼 파일명에 모듈 코드가 없으면 --module-code 로 코드를,
 '(세분류 8자리)'가 없는 개발계획서는 --plan 으로 지정한다. 그런 원고의 문서ID는 상대 경로가 된다.
-기대 판정과의 대조는 scripts/batch_compare.py 가 한다.
+기대 판정과의 대조는 scripts/batch/batch_compare.py 가 한다.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from functools import lru_cache
 from importlib import import_module
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ncs_core import FAIL, PASS, UNDECIDED, load_document  # noqa: E402

@@ -1,6 +1,6 @@
 """NCS 포털 '학습모듈 분류보기' 엑셀(실제로는 HTML 표, ClassificationView*.xls)을 읽어 NCS 분류·능력단위 목록을 만든다.
 
-  python scripts/build_ncs_catalog.py 폴더 [--out src/ncs_core/data/ncs_units.tsv]
+  python scripts/data/build_ncs_catalog.py 폴더 [--out src/ncs_core/data/ncs_units.tsv]
 
 포털에서 대분류마다 하나씩 내려받은 파일(24개)을 한 표로 합친다. 셀 병합(rowspan)을 풀어 모든 행에 분류 값을 채운다.
 출력(탭 구분, 주석 # 허용): 세분류코드(8자리)  대분류  중분류  소분류  세분류  NCS개발연도  학습모듈개발연도  능력단위코드  능력단위명
@@ -16,7 +16,7 @@ from datetime import date
 from html.parser import HTMLParser
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 HEADER = ["세분류코드", "대분류", "중분류", "소분류", "세분류", "NCS개발연도", "학습모듈개발연도", "능력단위코드", "능력단위명"]
 NUMBERED = re.compile(r"^\d{2}\.\s*")
 UNIT_CODE = re.compile(r"^(\d{10})_\d+v\d+$")
@@ -99,7 +99,7 @@ def main() -> None:
     if not records:
         sys.exit("능력단위 행을 찾지 못했습니다")
     subclasses = {r[0] for r in records}
-    lines = [f"# NCS 분류·능력단위 목록 — NCS 포털 '학습모듈 분류보기' 내려받기({date.today().isoformat()} 변환). 갱신: scripts/build_ncs_catalog.py",
+    lines = [f"# NCS 분류·능력단위 목록 — NCS 포털 '학습모듈 분류보기' 내려받기({date.today().isoformat()} 변환). 갱신: scripts/data/build_ncs_catalog.py",
              "# " + "\t".join(HEADER)]
     lines += ["\t".join(r) for r in records]
     args.out.write_text("\n".join(lines) + "\n", encoding="utf-8")

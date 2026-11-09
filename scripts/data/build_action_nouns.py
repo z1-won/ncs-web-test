@@ -5,11 +5,11 @@
 
 사용 (저장소 루트, .env의 STDICT_API_KEY 필요):
   set -a; source .env; set +a
-  python scripts/build_action_nouns.py 분석 설계 구현            # 단어 직접
-  python scripts/build_action_nouns.py --from-file scripts/action_noun_candidates.txt
-  python scripts/build_action_nouns.py --from-plans 개발계획서폴더   # 개발계획서들의 학습 내용명 머리어(이 사업의 어휘)
-  python scripts/build_action_nouns.py --from-manuscripts 원고폴더  # 원고 차례의 학습 내용명 머리어
-  python scripts/build_action_nouns.py --from-manuscripts a.hwpx b.hwpx  # 파일을 직접 골라서(폴더·파일 섞어도 됨)
+  python scripts/data/build_action_nouns.py 분석 설계 구현            # 단어 직접
+  python scripts/data/build_action_nouns.py --from-file scripts/data/action_noun_candidates.txt
+  python scripts/data/build_action_nouns.py --from-plans 개발계획서폴더   # 개발계획서들의 학습 내용명 머리어(이 사업의 어휘)
+  python scripts/data/build_action_nouns.py --from-manuscripts 원고폴더  # 원고 차례의 학습 내용명 머리어
+  python scripts/data/build_action_nouns.py --from-manuscripts a.hwpx b.hwpx  # 파일을 직접 골라서(폴더·파일 섞어도 됨)
 결과: 행동명사 → action_nouns.txt(stdict), 아님 → action_nouns_rejected.txt(stdict, X). 둘 다 git으로 관리한다.
 """
 
@@ -20,7 +20,7 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))  # 설치 없이도 저장소에서 바로 실행할 수 있게
 
 from ncs_core import load_document  # noqa: E402

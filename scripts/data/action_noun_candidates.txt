@@ -1,5 +1,5 @@
 # 행동명사 후보 — NCS 학습 내용명 마지막 어절로 자주 쓰이는 말. 이 목록 자체는 사전이 아니다.
-# scripts/build_action_nouns.py --from-file scripts/action_noun_candidates.txt 로 표준국어대사전에 확인한 뒤 통과한 것만 사전에 들어간다.
+# scripts/data/build_action_nouns.py --from-file scripts/data/action_noun_candidates.txt 로 표준국어대사전에 확인한 뒤 통과한 것만 사전에 들어간다.
 분석
 설계
 구현

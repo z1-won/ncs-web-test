@@ -1,6 +1,6 @@
 """공공데이터포털 '한국산업인력공단_국가직무능력표준 정보'(B490007/ncsInfo) 조회.
 
-인증키는 환경 변수 NCS_API_KEY. 네트워크가 막힌 곳(검수 서버)에서는 호출하지 않고, 운용 전에 scripts/build_ncs_levels.py로
+인증키는 환경 변수 NCS_API_KEY. 네트워크가 막힌 곳(검수 서버)에서는 호출하지 않고, 운용 전에 scripts/data/build_ncs_levels.py로
 능력단위 수준 표(data/ncs_levels.tsv)를 만들어 두고 ncs_catalog가 그것을 읽는다. 일일 트래픽 10,000건.
 
 응답(returnType=json): {"data": [...], "dataInfo": {"code": "000", "message": "정상", "totalPage": n, "pageNo": "1", "totCnt": m}}

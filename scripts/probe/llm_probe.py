@@ -1,8 +1,8 @@
 """LLM 연결 점검 — 키·모델·JSON 응답·캐시가 동작하는지 합성 문장으로 확인한다(실제 원고는 보내지 않는다).
 
   set -a; source .env; set +a
-  python scripts/llm_probe.py            # 합성 재료·기기 목록으로 수행 ② 프롬프트 1회 호출
-  python scripts/llm_probe.py --usage    # 지금까지의 토큰 사용량 합계
+  python scripts/probe/llm_probe.py            # 합성 재료·기기 목록으로 수행 ② 프롬프트 1회 호출
+  python scripts/probe/llm_probe.py --usage    # 지금까지의 토큰 사용량 합계
 
 출력에 키는 나오지 않는다. 비용 추정은 gpt-5.4-mini 표준 요금(입력 $0.75/M, 출력 $4.5/M) 기준.
 """
@@ -13,7 +13,7 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ncs_core import llm  # noqa: E402

@@ -5,9 +5,9 @@
 출력에는 가린다(KEY=****).
 
   set -a; source .env; set +a
-  python scripts/ncs_api_probe.py                # 기본 후보 탐색
-  python scripts/ncs_api_probe.py getNcsList      # 경로를 직접 지정(여러 개 가능)
-  python scripts/ncs_api_probe.py --duty 12030204 getCompUnitList   # dutyCd를 붙여 호출
+  python scripts/probe/ncs_api_probe.py                # 기본 후보 탐색
+  python scripts/probe/ncs_api_probe.py getNcsList      # 경로를 직접 지정(여러 개 가능)
+  python scripts/probe/ncs_api_probe.py --duty 12030204 getCompUnitList   # dutyCd를 붙여 호출
 """
 
 from __future__ import annotations

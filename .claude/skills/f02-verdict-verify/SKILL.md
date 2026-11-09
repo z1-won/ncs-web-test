@@ -49,8 +49,8 @@ git diff -- tests/golden | grep -E '^[+-]\s+"(판정|검수결과)"' | sort | un
 BASE=$(git rev-parse HEAD)                      # 변경이 아직 커밋 전일 때. 브랜치에 커밋돼 있으면 git merge-base HEAD main
 git worktree add --detach _workspace/base "$BASE"
 
-python _workspace/base/scripts/batch_review.py run --root "<원고폴더>" --work _workspace/batch_before --budget 600
-python scripts/batch_review.py              run --root "<원고폴더>" --work _workspace/batch_after  --budget 600
+python _workspace/base/scripts/batch/batch_review.py run --root "<원고폴더>" --work _workspace/batch_before --budget 600
+python scripts/batch/batch_review.py              run --root "<원고폴더>" --work _workspace/batch_after  --budget 600
 ```
 
 `batch_review.py`는 자기 옆의 `src/`를 먼저 import하므로, 어느 작업 트리의 스크립트를 부르느냐가 어느 코드로 검수하느냐를 정한다. 끝에 '모든 단위 완료'가 나올 때까지 같은 명령을 반복한다(예산이 다 되면 이어서 한다). 테스트 원고 묶음처럼 파일명에 모듈 코드가 없으면 양쪽에 같은 `--module-code`·`--plan`을 준다. `--plan`을 줄 때는 `--root`와 `--plan`을 **둘 다 절대 경로**로 준다(상대 `--root`에 절대 `--plan`을 섞으면 ValueError).
@@ -107,7 +107,7 @@ python .claude/skills/f02-verdict-verify/scripts/rows_diff.py --before _workspac
 드라이브 테스트 원고 묶음(폴더 = 망가뜨린 항목)처럼 기대 표가 있으면 수정 후 결과를 대조한다.
 
 ```bash
-python scripts/batch_compare.py --work _workspace/batch_after --expected scripts/batch_expected_테스트데이터.tsv \
+python scripts/batch/batch_compare.py --work _workspace/batch_after --expected scripts/batch/batch_expected_테스트데이터.tsv \
     --baseline "<원본 문서ID 또는 글로브>" --engines <담당 엔진…> --out _workspace/03_qa_compare.md
 ```
 

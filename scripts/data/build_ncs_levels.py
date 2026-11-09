@@ -1,10 +1,10 @@
 """NCS API로 능력단위 수준 표(src/ncs_core/data/ncs_levels.tsv)를 만든다. 개요 ④(선수학습 능력단위 수준)가 쓴다.
 
   set -a; source .env; set +a            # NCS_API_KEY
-  python scripts/build_ncs_levels.py 12030204 20010217          # 세분류 코드 직접
-  python scripts/build_ncs_levels.py --from-catalog              # ncs_units.tsv의 세분류 전부(1,086건 ≈ 1,086회 호출, 일일 한도 10,000)
-  python scripts/build_ncs_levels.py --from-catalog --refresh    # 이미 있는 세분류도 다시 받음
-  python scripts/build_ncs_levels.py --from-csv 능력단위목록.csv     # NCS 포털 '능력단위 목록' CSV(분류번호,명칭,수준,훈련시간; cp949)로 한 번에
+  python scripts/data/build_ncs_levels.py 12030204 20010217          # 세분류 코드 직접
+  python scripts/data/build_ncs_levels.py --from-catalog              # ncs_units.tsv의 세분류 전부(1,086건 ≈ 1,086회 호출, 일일 한도 10,000)
+  python scripts/data/build_ncs_levels.py --from-catalog --refresh    # 이미 있는 세분류도 다시 받음
+  python scripts/data/build_ncs_levels.py --from-csv 능력단위목록.csv     # NCS 포털 '능력단위 목록' CSV(분류번호,명칭,수준,훈련시간; cp949)로 한 번에
 
 세분류 단위로 이어받는다(이미 표에 있는 세분류는 건너뜀). 출력: 세분류코드  능력단위코드  능력단위명  수준  훈련시간
 """
@@ -17,14 +17,14 @@ import time
 from datetime import date
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ncs_core import ncs_api  # noqa: E402
 from ncs_core.ncs_catalog import LEVELS_FILE, Catalog, read_levels  # noqa: E402
 
 OUT = ROOT / "src" / "ncs_core" / "data" / LEVELS_FILE
-HEADER = "# NCS 능력단위 수준·훈련시간 — NCS 포털 능력단위 목록 CSV 또는 공공데이터포털 B490007/ncsInfo/ncsCompeUnitInfo. 갱신: scripts/build_ncs_levels.py\n# 세분류코드\t능력단위코드\t능력단위명\t수준\t훈련시간\n"
+HEADER = "# NCS 능력단위 수준·훈련시간 — NCS 포털 능력단위 목록 CSV 또는 공공데이터포털 B490007/ncsInfo/ncsCompeUnitInfo. 갱신: scripts/data/build_ncs_levels.py\n# 세분류코드\t능력단위코드\t능력단위명\t수준\t훈련시간\n"
 
 
 def main() -> None:
@@ -53,7 +53,7 @@ def main() -> None:
     if args.from_catalog:
         units_file = OUT.with_name("ncs_units.tsv")
         if not units_file.is_file():
-            parser.exit(2, "ncs_units.tsv가 없습니다 (scripts/build_ncs_catalog.py 먼저)\n")
+            parser.exit(2, "ncs_units.tsv가 없습니다 (scripts/data/build_ncs_catalog.py 먼저)\n")
         duties += sorted(Catalog(units_file).subclasses)
     duties = list(dict.fromkeys(duties))
     if not duties:

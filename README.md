@@ -131,7 +131,7 @@ db/, compose.yaml   PostgreSQL 컨테이너 정의(검수 이력, 선택)
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[web]"            # 엔진만 쓰면 pip install -e .
 pip install -e ".[test]"           # 테스트 의존성
-pip install openpyxl               # scripts/batch_review.py xlsx 출력용
+pip install openpyxl               # scripts/batch/batch_review.py xlsx 출력용
 ```
 
 `.env`(git 제외)에 두는 값. 서버·CLI를 띄우는 셸에서 `set -a; source .env; set +a`로 올립니다.
@@ -206,10 +206,10 @@ DB에 쓰지 못하면(접속 실패, `psycopg` 미설치) 파일로 바꿔 쓰�
 ## 외부 데이터 갱신 (`src/ncs_core/data/`, git 관리)
 
 ```bash
-python scripts/build_ncs_catalog.py 분류보기폴더          # NCS 포털 '학습모듈 분류보기' 내려받기(.xls 24개) → ncs_units.tsv
-python scripts/build_ncs_levels.py --from-csv 능력단위목록.csv   # NCS 포털 능력단위 목록 CSV → ncs_levels.tsv (또는 --refresh 세분류코드… 로 API)
+python scripts/data/build_ncs_catalog.py 분류보기폴더          # NCS 포털 '학습모듈 분류보기' 내려받기(.xls 24개) → ncs_units.tsv
+python scripts/data/build_ncs_levels.py --from-csv 능력단위목록.csv   # NCS 포털 능력단위 목록 CSV → ncs_levels.tsv (또는 --refresh 세분류코드… 로 API)
 set -a; source .env; set +a
-python scripts/build_action_nouns.py --from-manuscripts 원고.hwpx …   # 차례 ② 행동명사 — 운용 전에 채워 둔다
+python scripts/data/build_action_nouns.py --from-manuscripts 원고.hwpx …   # 차례 ② 행동명사 — 운용 전에 채워 둔다
 ```
 
 ## 생성형 AI (수행 ②)
@@ -217,16 +217,16 @@ python scripts/build_action_nouns.py --from-manuscripts 원고.hwpx …   # 차�
 `ncs_core.llm`이 OpenAI 호환 API를 표준 라이브러리로 호출합니다. 블록의 재료·기기 줄만 보내고, 결과는 항상 △(사람 확인) + 줄 번호·근거·일반 명칭 제안이며 자동 X는 없습니다. (모델, 프롬프트) 해시로 `.llm_cache/`(git 제외)에 캐시해 재검수는 과금되지 않고, `usage.jsonl`에 토큰이 기록됩니다. LLM을 부를 수 있는 작업은 `ncs_core.llm.ALLOWED_TASKS`에 명시된 것뿐입니다(지금은 수행 ② 하나).
 
 ```bash
-python scripts/llm_probe.py           # 합성 문장으로 키·모델·캐시 점검(실제 원고 전송 없음)
-python scripts/llm_probe.py --usage   # 토큰 합계·비용 추정
+python scripts/probe/llm_probe.py           # 합성 문장으로 키·모델·캐시 점검(실제 원고 전송 없음)
+python scripts/probe/llm_probe.py --usage   # 토큰 합계·비용 추정
 ```
 
 ## 다문서 배치 테스트
 
 ```bash
-python scripts/batch_review.py scan --root 원고폴더 --work samples/batch_x
-python scripts/batch_review.py run  --root 원고폴더 --work samples/batch_x --budget 3600
-python scripts/batch_review.py xlsx --root 원고폴더 --work samples/batch_x --out 결과.xlsx
+python scripts/batch/batch_review.py scan --root 원고폴더 --work _workspace/batch/20261109_x
+python scripts/batch/batch_review.py run  --root 원고폴더 --work _workspace/batch/20261109_x --budget 3600
+python scripts/batch/batch_review.py xlsx --root 원고폴더 --work _workspace/batch/20261109_x --out 결과.xlsx
 ```
 
 폴더의 원고 전부(hwp·hwpx, 초고본/수정본/에디팅완료 자동 분류, 세분류 계획서 자동 매칭) × 10엔진을 문서×엔진 단위로 체크포인트하며 돌리고, xlsx 9시트(문서목록·실행요약·판정매트릭스·항목별집계·상세비고(사람 판정 열)·버전변화·형식비교·실행오류·설정)로 모읍니다. `samples/`는 git 제외입니다.
@@ -234,10 +234,10 @@ python scripts/batch_review.py xlsx --root 원고폴더 --work samples/batch_x -
 파일명에 모듈 코드가 없는 테스트 원고 묶음(폴더 = 망가뜨린 항목, 파일 = `1.hwp`…)은 `--module-code LM…`으로 코드를, 파일명에 `(세분류 8자리)`가 없는 개발계획서는 `--plan 경로`로 지정합니다(세 명령 모두). 그런 원고의 문서ID는 상대 경로(`2. 차례__혼합__1`)가 됩니다.
 
 ```bash
-python scripts/batch_compare.py --work samples/batch_x --expected scripts/batch_expected_테스트데이터.tsv     --baseline "LM2001021701_기타_hwp" --engines position toc overview knowledge colophon --out 결과/대조.md
+python scripts/batch/batch_compare.py --work _workspace/batch/20261109_x --expected scripts/batch/batch_expected_테스트데이터.tsv     --baseline "LM2001021701_기타_hwp" --engines position toc overview knowledge colophon --out _workspace/batch/20261109_x/대조.md
 ```
 
-`batch_compare.py`는 체크포인트를 기대 판정 표(TSV: 경로 글로브·구성요소·번호·기대·수정사항·비고)와 대조해 **미탐**(기대 부적합인데 못 잡음)·**오탐 후보**(조작하지 않은 항목이 부적합이고 원본은 아님)·**원본 자체 부적합**을 마크다운으로 냅니다. `scripts/batch_expected_테스트데이터.tsv`는 드라이브 테스트 원고의 `수정사항.md`를 옮긴 것(위치·차례·개요·필요지식)입니다.
+`batch_compare.py`는 체크포인트를 기대 판정 표(TSV: 경로 글로브·구성요소·번호·기대·수정사항·비고)와 대조해 **미탐**(기대 부적합인데 못 잡음)·**오탐 후보**(조작하지 않은 항목이 부적합이고 원본은 아님)·**원본 자체 부적합**을 마크다운으로 냅니다. `scripts/batch/batch_expected_테스트데이터.tsv`는 드라이브 테스트 원고의 `수정사항.md`를 옮긴 것(위치·차례·개요·필요지식)입니다.
 
 ## 변경 검증
 

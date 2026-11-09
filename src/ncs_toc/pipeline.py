@@ -120,7 +120,7 @@ def evaluate_review(context: ReviewContext, *, rules: Sequence[Rule] = DEFAULT_R
         if row["item_id"] == "F02-차례-⑤":
             row["원고"] = _actual_sections(row["원고"], config)
     diagnostics = _diagnostics(context, rules)
-    # ②에서 목록에 없어 △로 남은 머리어. scripts/build_action_nouns.py --from-results 가 이 키를 읽는다.
+    # ②에서 목록에 없어 △로 남은 머리어. scripts/data/build_action_nouns.py --from-results 가 이 키를 읽는다.
     diagnostics["행동명사 미확인"] = unknown_words(checklist)
     return ReviewResult(context.module_code, checklist, flatten(checklist), diagnostics, context, sheet(checklist))
 

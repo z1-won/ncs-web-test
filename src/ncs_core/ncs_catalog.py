@@ -1,6 +1,6 @@
 """NCS 분류·능력단위 목록(data/ncs_units.tsv) 조회.
 
-출처: NCS 포털 '학습모듈 분류보기' 내려받기(scripts/build_ncs_catalog.py로 변환). 학습모듈이 개발된 능력단위가 세분류별로
+출처: NCS 포털 '학습모듈 분류보기' 내려받기(scripts/data/build_ncs_catalog.py로 변환). 학습모듈이 개발된 능력단위가 세분류별로
 들어 있다. 위치 ①~④(대·중·소분류 명칭, 소분류의 세분류 목록, 세분류의 능력단위·학습모듈 목록·순서)의 기준과
 개요 ③(선수학습의 NCS 코드·명칭 유효성)에 쓴다. 개발계획서는 이 목록을 옮겨 적은 것이라 목록이 있으면 목록을 기준으로 삼고,
 없는 세분류(목록 갱신 전 신규 등)는 개발계획서로 돌아간다.
@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 
 CATALOG_FILE = "ncs_units.tsv"
-LEVELS_FILE = "ncs_levels.tsv"   # 세분류코드  능력단위코드  능력단위명  수준  훈련시간 (scripts/build_ncs_levels.py)
+LEVELS_FILE = "ncs_levels.tsv"   # 세분류코드  능력단위코드  능력단위명  수준  훈련시간 (scripts/data/build_ncs_levels.py)
 CLASS_LABELS = ("대분류", "중분류", "소분류")
 
 
