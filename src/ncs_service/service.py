@@ -26,7 +26,7 @@ def execute_review(request: ReviewRequest) -> ExecutedReview:
         if role in documents:
             prepare_options[OPTIONAL_KWARGS.get(role, role)] = documents[role]
     context = module.prepare_review(
-        documents["manuscript"], documents.get("plan"), **prepare_options
+        documents.get("manuscript"), documents.get("plan"), **prepare_options
     )
     return ExecutedReview(request.check, module.evaluate_review(context, **evaluate_options))
 

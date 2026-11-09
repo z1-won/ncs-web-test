@@ -20,7 +20,7 @@ from starlette.exceptions import HTTPException
 
 from .uploads import UploadStore
 
-CheckName = Literal["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "references", "colophon", "misc"]
+CheckName = Literal["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "references", "colophon", "misc", "plan"]
 CORS_HEADERS = {"Access-Control-Allow-Origin": "*"}
 
 
@@ -121,7 +121,7 @@ def create_app(
             if field in ("files", "upload") and detail["type"] == "missing":
                 messages.append("업로드된 파일이 없습니다")
             elif field == "check":
-                messages.append("check는 position / toc / overview / knowledge / perform / teaching / evaluation / references / colophon / misc 중 하나여야 합니다")
+                messages.append("check는 position / toc / overview / knowledge / perform / teaching / evaluation / references / colophon / misc / plan 중 하나여야 합니다")
             else:
                 messages.append(f"{field}: {detail['msg']}")
         return error_response(400, "; ".join(messages))
