@@ -74,7 +74,7 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
             <div className="inner">
               <div className="header-branding">
                 <h2 className="logo">
-                  <a href="/"><span className="sr-only">NCS 학습모듈 검수 — 동국대학교</span></a>
+                  <Link to="/"><span className="sr-only">NCS 학습모듈 검수 — 동국대학교</span></Link>
                 </h2>
               </div>
             </div>
@@ -129,8 +129,7 @@ export function Footer() {
         <div className="f-btm">
           <div className="f-btm-text">
             <div className="f-menu">
-              {/* TODO: 개인정보처리방침 페이지가 생기면 <a href="..." className="point">로 교체 */}
-              <span className="point">개인정보처리방침</span>
+              <Link to="/privacy" className="point">개인정보처리방침</Link>
             </div>
             <p className="f-copy">© 2026 동국대학교 종합설계1 프로토콜 팀. All rights reserved.</p>
           </div>

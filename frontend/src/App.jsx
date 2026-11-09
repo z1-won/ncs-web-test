@@ -11,10 +11,13 @@ import { KrdsSelect } from "./components/KrdsSelect.jsx";
 import { RawJson } from "./components/RawJson.jsx";
 import { ResultHead } from "./components/ResultHead.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
+import { PageAlert } from "./components/PageAlert.jsx";
+import { usePageTitle } from "./lib/hooks.js";
 
 const HISTORY_PREVIEW = 5;
 
 export default function App() {
+  usePageTitle("원고 검수");
   const [check, setCheck] = useState(ALL_CHECK); // 기본은 전체 검수
   const [checks, setChecks] = useState(CHECKS);
   const [files, setFiles] = useState([]);
@@ -267,10 +270,8 @@ export default function App() {
             {busy && <button className="krds-btn tertiary large" type="button" onClick={cancel}>취소</button>}
           </div>
           {/* 실행·이력 열기 오류는 버튼 바로 아래에 — 검수 이력 표보다 먼저 보이도록 */}
-          {error && (
-            <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error}</p>
-          )}
-          {notice && !error && <p className="form-hint-success" role="status">{notice}</p>}
+          {error && <PageAlert kind="danger">{error}</PageAlert>}
+          {notice && !error && <PageAlert kind="success">{notice}</PageAlert>}
         </div>
       </form>
 

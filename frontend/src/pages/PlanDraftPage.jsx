@@ -7,7 +7,9 @@ import { Badge, Spinner } from "../components/Badge.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
+import { PageAlert } from "../components/PageAlert.jsx";
 import { SheetTable } from "../components/Tables.jsx";
+import { usePageTitle } from "../lib/hooks.js";
 import { overallVerdict } from "../lib/checks.js";
 
 const ANCHORS = [
@@ -16,6 +18,7 @@ const ANCHORS = [
 ];
 
 export default function PlanDraftPage() {
+  usePageTitle("개발계획서 작성");
   const [catalog, setCatalog] = useState(null);     // /api/plan/subclasses 응답
   const [loadError, setLoadError] = useState(null);
   const [duty, setDuty] = useState("");
@@ -71,6 +74,12 @@ export default function PlanDraftPage() {
     if (subclass) setPicked(Object.fromEntries(subclass.units.map((u) => [u.code, on])));
   }
   const verdict = check ? overallVerdict(check.map((row) => row.검수결과)) : null;
+  const missing = [
+    ...(!agency.trim() ? ["개발기관명"] : []),
+    ...(!english.trim() ? ["영문 세분류명"] : []),
+    ...(chosen.some((u) => !(people[u.code]?.writer || "").trim()) ? ["담당 집필진"] : []),
+    ...(chosen.some((u) => !(people[u.code]?.reviewer || "").trim()) ? ["담당 검토진"] : []),
+  ];
 
   function setPerson(code, key, value) {
     setPeople((prev) => ({ ...prev, [code]: { ...(prev[code] || {}), [key]: value } }));
@@ -86,7 +95,7 @@ export default function PlanDraftPage() {
         학습 내용명·선수학습 등 집필자가 정할 칸은 비워 두며, 초안은 바로 개발계획서 점검 ①~⑩을 거칩니다.
       </p>
 
-      {loadError && <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{loadError}</p>}
+      <PageAlert kind="danger">{loadError}</PageAlert>
       {catalog && !catalog.subclasses?.length && (
         <p className="empty">초안을 만들 수 있는 세분류가 없습니다. 운용 전에 <code>{catalog.build}</code>로 요소·수행준거 표를 받아 두세요.</p>
       )}
@@ -103,23 +112,24 @@ export default function PlanDraftPage() {
         </div>
 
         <div className="form-group">
-          <div className="form-tit"><label htmlFor="agency">개발기관명</label></div>
+          <div className="form-tit"><label htmlFor="agency">개발기관명 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></label></div>
           <div className="form-conts">
-            <input id="agency" type="text" className="krds-input" placeholder="예: (사)한국호텔전문경영인협회" value={agency} onChange={(e) => setAgency(e.target.value)} />
+            <input id="agency" type="text" className="krds-input" placeholder="예: (사)한국호텔전문경영인협회" value={agency} onChange={(e) => setAgency(e.target.value)} aria-describedby="agency-hint" aria-required="true" />
           </div>
+          <p className="form-hint" id="agency-hint">⑧ 필수 기재 항목 — 비우면 초안 점검에서 부적합</p>
         </div>
 
         <div className="form-group">
-          <div className="form-tit"><label htmlFor="english">영문 세분류명</label></div>
+          <div className="form-tit"><label htmlFor="english">영문 세분류명 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></label></div>
           <div className="form-conts">
-            <input id="english" type="text" className="krds-input" placeholder="예: Rooms Operation" value={english} onChange={(e) => setEnglish(e.target.value)} />
+            <input id="english" type="text" className="krds-input" placeholder="예: Rooms Operation" value={english} onChange={(e) => setEnglish(e.target.value)} aria-describedby="english-hint" aria-required="true" />
           </div>
-          <p className="form-hint">비우면 ⑧ 필수 기재에서 부적합으로 표시됩니다(NCS 누리집 ‘환경 분석’의 영문명)</p>
+          <p className="form-hint" id="english-hint">⑧ 필수 기재 항목 — NCS 누리집 ‘환경 분석’의 영문명. 비우면 초안 점검에서 부적합</p>
         </div>
 
         {subclass && (
           <div className="form-group form-group-wide">
-            <div className="form-tit"><span id="units-title">능력단위 ({chosen.length}/{subclass.units.length})</span></div>
+            <div className="form-tit"><span id="units-title">능력단위 ({chosen.length}/{subclass.units.length}) — 담당 집필진·검토진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></span></div>
             <div className="form-conts">
               <div className="krds-table-wrap">
                 <table className="tbl col data plan-units" aria-labelledby="units-title">
@@ -137,7 +147,7 @@ export default function PlanDraftPage() {
                           </div>
                         </div>
                       </th>
-                      <th scope="col">능력단위</th><th scope="col">수준</th><th scope="col">요소 / 수행준거</th><th scope="col">담당 집필진</th><th scope="col">담당 검토진</th>
+                      <th scope="col">능력단위</th><th scope="col">수준</th><th scope="col">요소 / 수행준거</th><th scope="col">담당 집필진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></th><th scope="col">담당 검토진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -172,7 +182,10 @@ export default function PlanDraftPage() {
               {busy ? "만드는 중…" : "초안 만들기 (hwpx 내려받기)"}
             </button>
           </div>
-          {error && <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error}</p>}
+          {missing.length > 0 && !busy && (
+            <p className="form-hint" id="missing-hint">비어 있는 필수 항목: {missing.join(", ")} — 초안은 만들어지지만 점검 ⑧에서 부적합으로 표시됩니다</p>
+          )}
+          <PageAlert kind="danger">{error}</PageAlert>
         </div>
       </form>
 

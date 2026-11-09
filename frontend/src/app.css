@@ -294,3 +294,29 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .plan-units .krds-check-area { padding-top: 0; }
 .plan-units .krds-input.small { width: 100%; }
 .section-desc { margin: calc(-1 * var(--krds-gap-3)) 0 var(--krds-gap-5); }   /* 섹션 제목 바로 아래 설명 */
+
+/* ── 페이지 수준 알림(PageAlert) ── 왼쪽 상태색 선 + 옅은 상태색 바탕 + 상태 아이콘. 폼 칸 밖의 오류·안내용 */
+.page-alert {
+  display: flex; align-items: flex-start; gap: var(--krds-gap-3);
+  margin-top: var(--krds-gap-5); padding: var(--krds-padding-5) var(--krds-padding-6);
+  border-left: 0.3rem solid; border-radius: 0 var(--krds-radius-medium1) var(--krds-radius-medium1) 0;
+  font-size: var(--krds-pc-font-size-body-small); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.page-alert .svg-icon { flex: none; width: var(--krds-icon--size-medium); height: var(--krds-icon--size-medium); margin-top: 0.1em; background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-5h2v2h-2zm0-8h2v6h-2z'/></svg>") no-repeat center / contain;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-5h2v2h-2zm0-8h2v6h-2z'/></svg>") no-repeat center / contain; }
+.page-alert.danger  { background: var(--krds-light-color-surface-danger-subtler); border-color: var(--krds-light-color-border-danger); color: var(--krds-light-color-text-danger); }
+.page-alert.success { background: var(--krds-light-color-surface-success-subtler); border-color: var(--krds-light-color-border-success); color: var(--krds-light-color-text-success); }
+.page-alert.info    { background: var(--krds-light-color-surface-information-subtler); border-color: var(--krds-light-color-border-information); color: var(--krds-light-color-text-information); }
+.page-alert.success .svg-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.5 14.5-3.8-3.8 1.4-1.4 2.4 2.4 5.9-5.9 1.4 1.4z'/></svg>");
+                                        mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.5 14.5-3.8-3.8 1.4-1.4 2.4 2.4 5.9-5.9 1.4 1.4z'/></svg>"); }
+.page-alert-body { flex: 1; color: var(--krds-light-color-text-basic); }
+.form-actions .page-alert { width: 100%; margin-top: 0; }
+
+/* ── 필수 표시 ── 레이블 뒤 빨간 별표(KRDS danger 텍스트색), 스크린리더에는 '필수' */
+.required > i { font-style: normal; color: var(--krds-light-color-text-danger); font-weight: var(--krds-font-weight-bold); }
+
+/* ── 정책 페이지(개인정보처리방침) ── */
+.policy .section-title { margin-top: var(--krds-gap-8); }
+.policy .krds-info-list li { line-height: 1.6; }
+.policy code { padding: 0 0.4rem; border-radius: var(--krds-radius-small2); background: var(--krds-light-color-surface-gray-subtler); font-size: 0.95em; }
