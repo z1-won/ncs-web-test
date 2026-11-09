@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "batch"))
 
 from batch_review import item_columns, load_results, remark_of, verdict_of  # noqa: E402
 from ncs_service.registry import ENGINES  # noqa: E402

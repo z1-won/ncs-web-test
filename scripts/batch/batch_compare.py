@@ -24,7 +24,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "batch"))
 
 from batch_review import ERROR, item_columns, load_results, verdict_of  # noqa: E402
 from ncs_core import FAIL, PASS, UNDECIDED  # noqa: E402
