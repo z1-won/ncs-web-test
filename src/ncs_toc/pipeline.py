@@ -77,6 +77,11 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
             f"차례에서 '학습 {skipped['no']}. {skipped['text']}' 줄을 학습으로 받지 않았습니다"
             f"(학습 {skipped['기대']}을 기대). 번호가 건너뛰었거나 중복됐습니다. 이후 학습이 누락될 수 있습니다"
         )
+    if broken := context.toc.get("쪽 깨짐"):
+        warnings.append(
+            f"차례 쪽 번호가 '?'(상호 참조 미갱신)인 줄 {len(broken)}개({', '.join(broken)}) — "
+            "한글에서 필드 갱신(F9 등) 후 다시 검수하세요"
+        )
     if not context.plan_toc:
         warnings.append("개발계획서가 없거나 해당 모듈 블록을 읽지 못했습니다")
     elif not context.plan_toc["학습명"] or not context.plan_toc["내용명"]:

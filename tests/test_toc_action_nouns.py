@@ -88,6 +88,24 @@ class LexiconJudgeTests(unittest.TestCase):
         self.assertEqual(value, "△")
         self.assertIn("인증키", note)
 
+    def test_word_without_letters_is_undecided_without_lookup_or_record(self):
+        def must_not_call(word):
+            raise AssertionError(f"글자 없는 머리어를 사전에 물었다: {word!r}")
+
+        before = sorted(p.name for p in self.dir.iterdir())
+        lexicon = ActionNounLexicon(self.dir, must_not_call)
+        for word in ("?", "…", "-"):
+            value, note = lexicon.judge(word)
+            self.assertEqual(value, "△")
+            self.assertIn("읽지 못함", note)
+            self.assertIn(f"'{word}'", note)
+        self.assertEqual(sorted(p.name for p in self.dir.iterdir()), before)
+        self.assertFalse((self.dir / REJECTED_FILE).exists())
+
+    def test_word_without_letters_is_undecided_even_if_listed_rejected(self):
+        (self.dir / REJECTED_FILE).write_text("?\tstdict\t2026-11-02\t없음\n", encoding="utf-8")
+        self.assertEqual(ActionNounLexicon(self.dir, None).judge("?")[0], "△")
+
     def test_manual_add_overrides_rejection(self):
         lexicon = ActionNounLexicon(self.dir, fake_resolver({"코딩": (False, "없음")}))
         self.assertEqual(lexicon.judge("코딩")[0], "X")
@@ -127,6 +145,11 @@ class PackagedLexiconTests(unittest.TestCase):
         words = ActionNounLexicon(DATA).words
         self.assertGreaterEqual(len(words), 100)
         self.assertTrue(all(" " not in w and "\t" not in w for w in words))
+
+    def test_packaged_rejected_list_has_no_symbol_words(self):
+        # 차례 쪽 칸의 '?'가 머리어로 새어 기록된 적이 있다. 기호만이거나 기호가 붙은 단어는 목록에 있으면 안 된다.
+        rejected = ActionNounLexicon(DATA).rejected
+        self.assertTrue(all(w.isalnum() for w in rejected), [w for w in rejected if not w.isalnum()])
 
     def test_default_lexicon_has_no_resolver_without_key(self):
         with patch.dict(os.environ, {}, clear=False):

@@ -183,5 +183,92 @@ class TailPresenceTests(unittest.TestCase):
             self.assertEqual(toc["꼬리"], {"활용 서식": "98", "부록": "100"})
 
 
+class TocBrokenPageTests(unittest.TestCase):
+    """쪽 칸이 숫자 대신 '?'(갱신 안 된 상호 참조)인 차례 줄. '?'는 쪽 칸이지 내용명이 아니다."""
+
+    def toc(self, *lines):
+        return parse_toc([["차례", *lines, "학습모듈의 개요"], []])
+
+    def test_question_page_is_not_part_of_content_name(self):
+        toc = self.toc("학습 1. ○○하기 1", "1-1. ○○ ○○ ○○ ?", "1-2. ○○ ○○?", "1-3. ○○ ○○ 7")
+        self.assertEqual([s["text"] for s in toc["내용"]], ["○○ ○○ ○○", "○○ ○○", "○○ ○○"])
+        self.assertEqual([s["page"] for s in toc["내용"]], [None, None, "7"])
+        self.assertEqual(toc["쪽 깨짐"], ["1-1", "1-2"])
+
+    def test_question_mark_before_numeric_page_stays_in_name(self):
+        toc = self.toc("학습 1. ○○하기 1", "1-1. ○○인가? 12")
+        self.assertEqual(toc["내용"][0]["text"], "○○인가?")
+        self.assertEqual(toc["내용"][0]["page"], "12")
+        self.assertEqual(toc["쪽 깨짐"], [])
+
+    def test_numeric_and_missing_pages_unchanged(self):
+        toc = self.toc("학습 1. ○○하기 1", "1-1. ○○ ○○ 3", "1-2. ○○ ○○··········9", "1-3. ○○ ○○", "• 평가52")
+        self.assertEqual([(s["text"], s["page"]) for s in toc["내용"]],
+                         [("○○ ○○", "3"), ("○○ ○○··········", "9"), ("○○ ○○", None)])
+        self.assertEqual(toc["줄"][0]["page"], "52")
+        self.assertEqual(toc["쪽 깨짐"], [])
+
+    def test_trailing_question_without_page_is_read_as_broken_page(self):
+        # 감수한 한계(사양 '달라지면 안 되는 것'): 쪽 번호 없이 내용명이 '?'로 끝나면 그 '?'는 쪽 칸으로 읽힌다.
+        toc = self.toc("학습 1. ○○하기 1", "1-1. 무엇을 ○○하는가?")
+        self.assertEqual(toc["내용"][0]["text"], "무엇을 ○○하는가")
+        self.assertIsNone(toc["내용"][0]["page"])
+        self.assertEqual(toc["쪽 깨짐"], ["1-1"])
+
+    def test_doubled_question_mark_is_not_a_page(self):
+        toc = self.toc("학습 1. ○○하기 1", "1-1. ○○??")
+        self.assertEqual(toc["내용"][0]["text"], "○○??")
+        self.assertEqual(toc["쪽 깨짐"], [])
+
+    def test_lesson_line_and_tail_question_pages(self):
+        toc = self.toc("학습 1. ○○하기 ?", "1-1. ○○ 3", "• 교수·학습 방법 ?", "• 평가?", "참고 자료 ?", "부록 ……?")
+        self.assertEqual(toc["학습"], [{"no": 1, "text": "○○하기"}])
+        self.assertEqual([(l["kind"], l["page"]) for l in toc["줄"]], [("교수·학습 방법", None), ("평가", None)])
+        self.assertEqual(toc["꼬리"], {"참고 자료": None, "부록": None})
+        self.assertEqual(toc["쪽 깨짐"], ["학습 1", "학습 1 교수·학습 방법", "학습 1 평가", "참고 자료", "부록"])
+
+    def test_tail_question_page_does_not_leak_into_notes(self):
+        toc = self.toc("학습 1. ○○하기 1", "1-1. ○○ 3", "참고 자료 ?", "부록 ?")
+        presence = section_presence([[], ["참고 자료", "• ○○(2020). ○○."]], [], media_complete=True)
+        rows = {r["region_path"].split(" > ")[-1]: r for r in check_toc6(presence, toc)}
+        self.assertEqual(rows["부록"]["판정"], "부적합")
+        self.assertNotIn("?", str(rows["부록"]["비고"]))
+        self.assertIsNone(rows["부록"]["원고"]["차례"])
+
+    def test_broken_pages_are_reported_in_toc_diagnostics(self):
+        from types import SimpleNamespace
+
+        from ncs_toc.config import DEFAULT_CONFIG
+        from ncs_toc.pipeline import _diagnostics
+
+        def diagnostics(toc):
+            manuscript = SimpleNamespace(path="m.hwpx", format="hwpx", sections=[[], []])
+            context = SimpleNamespace(manuscript=manuscript, plan=None, config=DEFAULT_CONFIG, toc=toc, plan_toc=None,
+                                      body={"lessons": [1], "nav_runs": []}, eval_tables=[1], module_code="LM0")
+            return [w for w in _diagnostics(context, [])["warnings"] if "쪽 번호" in w]
+
+        broken = self.toc("학습 1. ○○하기 1", "1-1. ○○ ?", "1-2. ○○?", "1-3. ○○ 7")
+        self.assertEqual(len(warnings := diagnostics(broken)), 1)
+        self.assertIn("2개(1-1, 1-2)", warnings[0])
+        self.assertEqual(diagnostics(self.toc("학습 1. ○○하기 1", "1-1. ○○ 3")), [])
+
+    def test_hwpx_crossref_question_result(self):
+        # 문단 = [t "1-1. 명"] [점선 탭] [CROSSREF 필드 시작] [t "?"] [필드 끝] — 한글이 상호 참조를 못 찾은 차례 줄
+        from xml.etree import ElementTree as ET
+
+        from ncs_core.hwpx import para_text
+
+        xml = (
+            '<hp:p xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"><hp:run><hp:t>1-1. ○○ ○○</hp:t>'
+            '<hp:t><hp:tab leader="2"/></hp:t>'
+            '<hp:ctrl><hp:fieldBegin type="CROSSREF" name="r"/></hp:ctrl><hp:t>?</hp:t>'
+            '<hp:ctrl><hp:fieldEnd/></hp:ctrl></hp:run></hp:p>'
+        )
+        line = para_text(ET.fromstring(xml))
+        toc = self.toc("학습 1. ○○하기 1", line)
+        self.assertEqual(toc["내용"][0]["text"], "○○ ○○")
+        self.assertEqual(toc["쪽 깨짐"], ["1-1"])
+
+
 if __name__ == "__main__":
     unittest.main()

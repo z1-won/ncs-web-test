@@ -5,7 +5,7 @@ sections는 [차례·개요 문단, 본문 문단]의 두 섹션 목록이다(�
 
 import re
 
-from .patterns import PLAN_SUB, OV_SUB_BARE, OV_SUB_NAMED, TOC_LESSON, TOC_LINE, TOC_SUB, TOC_TAIL
+from .patterns import PLAN_SUB, OV_SUB_BARE, OV_SUB_NAMED, TOC_BROKEN_PAGE, TOC_LESSON, TOC_LINE, TOC_SUB, TOC_TAIL
 
 TAIL_NAMES = {"참고자료": "참고 자료", "활용서식": "활용 서식", "부록": "부록"}
 
@@ -13,7 +13,8 @@ TAIL_NAMES = {"참고자료": "참고 자료", "활용서식": "활용 서식", 
 def parse_toc(sections) -> dict | None:
     """차례 블록 → {'학습': [{'no','text'}], '내용': [{'no','sub','text','page'}],
     '줄': [{'lesson','kind','page','after'}], '꼬리': {참고 자료: 쪽, ...}, 'span': (s, e),
-    '건너뜀': [{'no','text','기대'}] — 번호가 이어지지 않아 학습으로 받지 않은 '학습 N.' 줄}"""
+    '건너뜀': [{'no','text','기대'}] — 번호가 이어지지 않아 학습으로 받지 않은 '학습 N.' 줄,
+    '쪽 깨짐': ['2-1', '학습 1 평가', '참고 자료', ...] — 쪽 칸이 숫자 대신 '?'(갱신 안 된 상호 참조)인 줄. 그 줄의 쪽은 None}"""
     from ncs_core.documents import toc_title_index
 
     lines = [l for l in sections[0] if l] if sections else []
@@ -29,9 +30,17 @@ def parse_toc(sections) -> dict | None:
         ),
         len(lines),
     )
-    toc = {"학습": [], "내용": [], "줄": [], "꼬리": {}, "span": (start, end), "건너뜀": []}
+    toc = {"학습": [], "내용": [], "줄": [], "꼬리": {}, "span": (start, end), "건너뜀": [], "쪽 깨짐": []}
+
+    def page(value: str | None, label: str) -> str | None:
+        if value == TOC_BROKEN_PAGE:
+            toc["쪽 깨짐"].append(label)
+            return None
+        return value
+
     for line in lines[start + 1 : end]:
         if m := TOC_LESSON.match(line):
+            page(m.group(4), f"학습 {m.group(1)}")
             if int(m.group(1)) == len(toc["학습"]) + 1:
                 toc["학습"].append({"no": int(m.group(1)), "text": m.group(2).strip()})
             else:
@@ -39,16 +48,23 @@ def parse_toc(sections) -> dict | None:
                 toc["건너뜀"].append({"no": int(m.group(1)), "text": m.group(2).strip(), "기대": len(toc["학습"]) + 1})
         elif m := TOC_SUB.match(line):
             toc["내용"].append(
-                {"no": int(m.group(1)), "sub": int(m.group(2)), "text": m.group(3).strip(), "page": m.group(4)}
+                {
+                    "no": int(m.group(1)),
+                    "sub": int(m.group(2)),
+                    "text": m.group(3).strip(),
+                    "page": page(m.group(4), f"{m.group(1)}-{m.group(2)}"),
+                }
             )
         elif m := TOC_LINE.match(line):
             kind = "교수·학습 방법" if "교수" in m.group(1) else "평가"
             lesson_no = len(toc["학습"])
             # after: 이 줄까지 읽은 해당 학습의 내용(N-M.) 줄 수. ④가 '블록 끝에 있는가'를 판단할 때 쓴다.
             after = sum(1 for s in toc["내용"] if s["no"] == lesson_no)
-            toc["줄"].append({"lesson": lesson_no, "kind": kind, "page": m.group(2), "after": after})
+            line_page = page(m.group(2), f"학습 {lesson_no} {kind}")
+            toc["줄"].append({"lesson": lesson_no, "kind": kind, "page": line_page, "after": after})
         elif m := TOC_TAIL.match(line):
-            toc["꼬리"][TAIL_NAMES[re.sub(r"\s+", "", m.group(1))]] = m.group(2)
+            name = TAIL_NAMES[re.sub(r"\s+", "", m.group(1))]
+            toc["꼬리"][name] = page(m.group(2), name)
     return toc
 
 
