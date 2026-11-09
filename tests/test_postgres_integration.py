@@ -1,6 +1,9 @@
 """NCS_TEST_DATABASE_URL을 지정하면 실제 PostgreSQL 저장·조회·이관을 검사한다."""
 
 import os
+import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,7 +13,8 @@ import psycopg
 from fastapi.testclient import TestClient
 
 from ncs_service import ReviewRequest, execute_review, persist_review
-from ncs_service.postgres import delete_review, get_review, input_metadata, list_reviews, migrate, save_review
+from ncs_service.postgres import (delete_review, get_manuscript, get_review, input_metadata, list_reviews, migrate,
+                                  save_review)
 from ncs_service.postgres_cli import import_directory
 from ncs_web.server import create_app
 
@@ -25,6 +29,29 @@ class PostgresIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         migrate(DSN)
+
+    def test_cli_without_out_saves_history_only_as_cli_source(self):
+        """검수 CLI: DATABASE_URL이 있고 --out이 없으면 DB 이력에만 남긴다(출처 cli, 입력 기록·원고 보관 포함)."""
+        run_id = None
+        try:
+            with tempfile.TemporaryDirectory() as folder:
+                done = subprocess.run(
+                    [sys.executable, "-m", "ncs_toc", str(MANUSCRIPT), str(PLAN)], cwd=folder,
+                    env={**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, "DATABASE_URL": DSN},
+                    capture_output=True, text=True, timeout=60,
+                )
+                self.assertEqual(done.returncode, 0, done.stderr)
+                match = re.search(r"DB 이력 ([0-9a-f-]{36})", done.stdout)
+                self.assertIsNotNone(match, done.stdout[-300:])
+                run_id = match.group(1)
+                self.assertEqual(os.listdir(folder), [], "폴더를 만들지 않는다")
+            found = get_review(DSN, run_id)
+            self.assertEqual((found["source"], found["check"]), ("cli", "toc"))
+            self.assertEqual(found["진단"]["inputs"], {"manuscript": MANUSCRIPT.name, "plan": PLAN.name})
+            self.assertEqual(get_manuscript(DSN, run_id), (MANUSCRIPT.name, MANUSCRIPT.read_bytes()))
+        finally:
+            if run_id:
+                delete_review(DSN, run_id)
 
     def test_save_query_export_and_import(self):
         ids = []

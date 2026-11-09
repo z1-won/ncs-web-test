@@ -261,6 +261,27 @@ AIoT 원본은 개발 이력 표 하나에 '발행일/세분류명'(신규) 블�
 검증: `tests/test_manuscript.py::TocBrokenPageTests`, `tests/test_toc_action_nouns.py`(글자 없는 머리어·패키지 rejected 목록). 골든 동일. 해당 원고(인증키 없음): 차례 ② 2-1·3-1 X→O, 3-2는 '명세화'로 X 유지,
 차례 ④ 차례 줄 위치 X→O(학습 1·2·3), 차례 ⑥ 활용 서식 O→X(차례에 줄이 있으나 본문에 없음), 필요지식 ④·평가 ①은 비고에서 「?」만 사라짐(판정 같음). 다른 샘플 4종은 `parse_toc` 결과 동일.
 
+### 5.16 검수 CLI도 DB 이력에 남긴다 (2026-11-09, CLI 저장 동작 변경)
+
+문제: DB 이력은 웹 서버만 썼다. 엔진 10개의 `__main__`이 `persist_review(execution, args.out)`을 직접 불러 `DATABASE_URL`이 있어도 CLI 결과는 언제나 폴더에 쌓였고,
+`review_runs.source`도 `'web'`·`'import'`만 허용했다.
+
+조치: `ncs_service.store.save_cli_review()`를 두고 10개 CLI가 이것을 부른다. 저장소는 종전대로 `open_store()`가 고른다.
+`--out`을 주면 그 폴더(파일), 안 주면 `DATABASE_URL`이 있을 때 DB 이력에만(폴더를 만들지 않음), 없을 때 `결과/` 폴더다.
+명령에 준 입력 경로를 넘겨 이력에 파일 이름·해시를 남기고 원고 hwpx를 보관한다(화면 이력에서 ZIP·수정 메모 원고를 받을 수 있다).
+출처는 `'cli'` — 마이그레이션 `005_source_cli`가 CHECK 제약을 지우고 다시 건다. DB 저장 실패는 파일로 바꿔 쓰지 않고 `ValueError`로 올린다.
+
+| 바뀐 동작 | 이유 | 영향 |
+|---|---|---|
+| `--out` 기본값 `"결과"` → 없음. `DATABASE_URL`이 올라와 있고 `--out`이 없으면 폴더 대신 DB에만 저장 | 웹 서버와 같은 규칙(저장소 선택은 한 곳), 결과 폴더 누적 방지 | `.env`를 올린 채 `--out` 없이 돌리던 사용: 결과 폴더·ZIP이 생기지 않고 마지막 줄이 `DB 이력 <id>`로 바뀐다. 파일이 필요하면 `--out` 지정 |
+| 마지막 출력 줄의 ZIP 경로 자리가 DB 저장일 때 `DB 이력 <id>` | 저장된 곳을 그대로 알림 | 출력의 ZIP 경로를 읽던 스크립트는 `--out`을 준다 |
+| 화면의 검수 이력에 CLI 실행이 함께 보임 | 한 곳에서 이력을 본다 | 시험 삼아 돌린 실행도 남는다 — 남기지 않으려면 `--out` |
+
+`scripts/batch_review.py`는 대상이 아니다(체크포인트 형식이 이력과 다르고, 한 번에 수백 건이 이력에 섞인다).
+
+검증: `tests/test_store.py::CliSaveTests`(선택 규칙, 출처·입력 기록, 실패 메시지), `tests/test_service.py`(10개 CLI가 공유 저장을 탐),
+`tests/test_postgres_integration.py::test_cli_without_out_saves_history_only_as_cli_source`(실제 PostgreSQL), 004 상태의 DB에 005만 적용되는 경로와 재실행 무변화를 임시 DB로 확인.
+
 ## 6. 남은 과제 (이번 범위 밖)
 
 - 위치 ⑤ 정확성 과제 가운데 '코드 번호 기반 행 선택'은 §5.11로 처리했다. hwp(바이너리)의 서식 읽기는 그대로 과제다.

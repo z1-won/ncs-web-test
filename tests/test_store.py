@@ -6,7 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ncs_service import FileStore, PostgresStore, ReviewRequest, StoredReview, execute_review, open_store
+import os
+
+from ncs_service import (FileStore, PostgresStore, ReviewRequest, StoredReview, execute_review, open_store,
+                         save_cli_review, saved_location)
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -59,6 +62,61 @@ class FileStoreTests(unittest.TestCase):
             a = FileStore(Path(folder) / "a").save(review)
             b = FileStore(Path(folder) / "b").save(review, [("x.hwpx", MANUSCRIPT)])
             self.assertEqual(a.summary, b.summary)
+
+
+class CliSaveTests(unittest.TestCase):
+    """검수 CLI의 저장 규칙: --out을 주면 폴더, 안 주면 open_store 규칙(DATABASE_URL이 있으면 DB 이력에만)."""
+
+    def setUp(self):
+        self.review = execute_review(ReviewRequest((MANUSCRIPT, PLAN), "toc"))
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.folder = Path(temp.name).resolve()
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(self.folder)  # 기본 '결과' 폴더는 실행 위치 기준
+
+    def test_out_folder_wins_even_with_database_url(self):
+        stored = save_cli_review(self.review, [MANUSCRIPT, PLAN], out=self.folder / "여기", database_url="postgresql://example")
+        self.assertIsNone(stored.run_id)
+        self.assertEqual(stored.directory.parent, self.folder / "여기")
+        self.assertEqual(saved_location(stored), str(stored.zip_path))
+        self.assertTrue(stored.zip_path.is_file())
+
+    def test_without_out_and_database_url_writes_default_folder(self):
+        stored = save_cli_review(self.review, [MANUSCRIPT, PLAN])
+        self.assertEqual(stored.directory.parent, self.folder / "결과")
+
+    @unittest.skipUnless(importlib.util.find_spec("psycopg"), "psycopg 미설치(web extra 없음)")
+    def test_database_url_saves_history_only_as_cli_source(self):
+        with patch("ncs_service.postgres.migrate") as migrate, \
+             patch("ncs_service.postgres.save_review", return_value=("run-9", {"검수결과": "적합", "항목": {}})) as save:
+            stored = save_cli_review(self.review, [str(MANUSCRIPT), str(PLAN)], database_url="postgresql://example")
+        migrate.assert_called_once_with("postgresql://example")
+        self.assertEqual(save.call_args.kwargs, {"source": "cli"})
+        inputs = {item["role"]: item for item in save.call_args.args[2]}
+        self.assertEqual(set(inputs), {"manuscript", "plan"}, "명령에 준 경로가 역할별 입력 기록으로 이어진다")
+        self.assertEqual(inputs["manuscript"]["filename"], MANUSCRIPT.name)
+        self.assertEqual(inputs["manuscript"]["content"], MANUSCRIPT.read_bytes(), "원고 hwpx는 메모 원고용으로 보관")
+        self.assertEqual((stored.run_id, stored.directory, stored.zip_path), ("run-9", None, None))
+        self.assertEqual(saved_location(stored), "DB 이력 run-9")
+        self.assertEqual(os.listdir(self.folder), [], "DB에만 남기고 폴더는 만들지 않는다")
+
+    @unittest.skipUnless(importlib.util.find_spec("psycopg"), "psycopg 미설치(web extra 없음)")
+    def test_database_failure_is_reported_as_value_error(self):
+        import psycopg
+
+        with patch("ncs_service.postgres.migrate", side_effect=psycopg.OperationalError("connection refused\n상세")):
+            with self.assertRaisesRegex(ValueError, r"DB 이력 저장 실패\(OperationalError\): connection refused — .*--out"):
+                save_cli_review(self.review, [MANUSCRIPT, PLAN], database_url="postgresql://example")
+
+    def test_missing_driver_is_reported_as_value_error(self):
+        missing = ModuleNotFoundError("No module named 'psycopg'", name="psycopg")
+        with patch.object(PostgresStore, "prepare", side_effect=missing):
+            with self.assertRaisesRegex(ValueError, "psycopg가 없습니다"):
+                save_cli_review(self.review, [MANUSCRIPT, PLAN], database_url="postgresql://example")
+        with patch.object(PostgresStore, "prepare", side_effect=ModuleNotFoundError("다른 모듈", name="other")):
+            with self.assertRaises(ModuleNotFoundError):
+                save_cli_review(self.review, [MANUSCRIPT, PLAN], database_url="postgresql://example")
 
 
 @unittest.skipUnless(importlib.util.find_spec("psycopg"), "psycopg 미설치(web extra 없음)")

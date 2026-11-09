@@ -112,7 +112,7 @@ class ServiceTests(unittest.TestCase):
             execute_review(ReviewRequest((MANUSCRIPT,), "toc", rules=(rule, rule)))
 
     def test_each_cli_uses_shared_execution_and_save(self):
-        from ncs_service import persist_review
+        from ncs_service import save_cli_review
 
         for check in CHECKS:
             with self.subTest(check=check):
@@ -128,13 +128,15 @@ class ServiceTests(unittest.TestCase):
                 with (
                     patch.object(sys, "argv", args),
                     patch.object(cli, "execute_review", wraps=execute_review) as execute,
-                    patch.object(cli, "persist_review", wraps=persist_review) as persist,
+                    patch.object(cli, "save_cli_review", wraps=save_cli_review) as persist,
                     patch.object(engine, "run_review", side_effect=AssertionError("CLI가 엔진 직접 호출")),
                     redirect_stdout(stdout),
                 ):
                     cli.main()
                 execute.assert_called_once()
                 persist.assert_called_once()
+                self.assertEqual(persist.call_args.kwargs["out"], str(output), "--out은 저장 폴더로 그대로 넘어간다")
+                self.assertEqual(list(persist.call_args.args[1]), [str(self.swapped), str(PLAN)], "입력 경로를 이력용으로 넘긴다")
                 request = execute.call_args.args[0]
                 self.assertEqual(request.check, check)
                 self.assertEqual(request.config, self.config_for(check))

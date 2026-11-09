@@ -131,7 +131,7 @@ FastAPI 업로드 → 임시 파일 → execute_review(ReviewRequest)
 `ncs_service`는 표준 라이브러리와 기존 엔진만 사용합니다.
 `execute_review()`는 입력 역할·필수 파일을 확인하고 문서를 읽은 뒤 해당 엔진의 `prepare_review()`와 `evaluate_review()`를 실행합니다.
 `persist_review()`는 같은 검수 종류의 `save_results()`를 호출합니다.
-네 CLI도 동일한 `execute_review()`·`persist_review()` 경로를 사용합니다. 기존 명령·옵션·출력 형식은 유지합니다.
+검수 CLI도 같은 `execute_review()`와 저장소(`save_cli_review()` → `open_store`)를 사용합니다. `--out`을 주면 그 폴더에, 안 주면 `DATABASE_URL`이 있을 때 DB 이력에만(출처 `cli`), 없을 때 `결과/` 폴더에 남깁니다.
 각 검수 패키지의 `run_review()` 공개 API도 Python 호출자와의 호환성을 위해 유지합니다.
 
 ### 설정과 규칙 전달

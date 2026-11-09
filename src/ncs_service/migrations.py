@@ -58,4 +58,10 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "    byte_size bigint NOT NULL,\n"
      "    created_at timestamptz NOT NULL DEFAULT now()\n"
      ")"),
+    # 005: 실행 출처에 'cli' 추가 — 검수 CLI(ncs-toc 등)도 DATABASE_URL이 있으면 이력에 남긴다. 화면의 이력과 구분하려는 값이다.
+    # CHECK 제약은 값을 늘릴 수 없어 지우고 다시 건다(이름은 PostgreSQL 자동 명명 규칙 <표>_<열>_check).
+    ("005_source_cli",
+     "ALTER TABLE IF EXISTS review_runs DROP CONSTRAINT IF EXISTS review_runs_source_check;\n"
+     "ALTER TABLE IF EXISTS review_runs ADD CONSTRAINT review_runs_source_check "
+     "CHECK (source IN ('web', 'import', 'cli'))"),
 )

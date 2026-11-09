@@ -50,7 +50,7 @@ pip install openpyxl               # scripts/batch_review.py xlsx 출력용
 | `STDICT_API_KEY` | 표준국어대사전 — 차례 ② 행동명사 조회(없으면 목록에 없는 단어는 △) |
 | `NCS_API_KEY` | 공공데이터포털 B490007/ncsInfo — 수준 표 갱신 스크립트만 사용(검수 서버는 호출하지 않음) |
 | `LLM_API_KEY`(또는 `OPENAI_API_KEY`), `LLM_MODEL`(기본 gpt-5.4-mini), `LLM_ALLOW_UPLOAD=1` | 수행 ② LLM 후보. 키와 반출 승인 스위치가 **둘 다** 있어야 원고 문장을 전송. `LLM_ALLOWED_TASKS`로 더 좁힐 수 있음 |
-| `NCS_DB_*` / DSN | PostgreSQL 검수 이력(선택). 없으면 파일 저장만 |
+| `DATABASE_URL`, `NCS_DB_*` | PostgreSQL 검수 이력(선택). `DATABASE_URL`이 있으면 웹 서버와 검수 CLI가 결과를 DB에 남기고, 없으면 파일로만 저장 |
 
 키 값은 저장소·문서·채팅에 적지 않습니다.
 
@@ -83,6 +83,16 @@ ncs-overview / ncs-knowledge / ncs-perform / ncs-teaching / ncs-evaluation / ncs
 ```
 
 모듈 코드는 파일명(`LM##########_NNvN`)에서 읽고, 없으면 `--module-code`로 지정합니다. `python -m ncs_toc …` 꼴도 같습니다.
+
+결과를 어디에 남기는지는 웹 서버와 같은 규칙입니다.
+
+| 실행할 때 | 저장되는 곳 |
+|---|---|
+| `--out 폴더`를 줌 | 언제나 그 폴더(실행별 하위 폴더에 JSON·ZIP) |
+| `--out` 없음, `DATABASE_URL` 있음 | **DB 이력에만**(폴더를 만들지 않음). 출처가 `cli`로 남고, 화면의 검수 이력에서 열어 보고 ZIP·수정 메모 원고를 받을 수 있습니다 |
+| `--out` 없음, `DATABASE_URL` 없음 | 실행 위치의 `결과/` 폴더 |
+
+DB에 쓰지 못하면(접속 실패, `psycopg` 미설치) 파일로 바꿔 쓰지 않고 오류로 끝납니다. 그때는 DB를 확인하거나 `--out`을 줍니다. 처음 DB에 쓰는 실행이 스키마 마이그레이션도 함께 적용합니다.
 
 ## 검수 범위 (47/54)
 

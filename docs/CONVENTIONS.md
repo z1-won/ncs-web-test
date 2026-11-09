@@ -35,7 +35,8 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 추가 키(`개발계획서`, `기준`, `자리`, `해당 행 근거` 등)는 패키지가 정한다. 판정은 반드시 `ncs_core.verdict`로 계산한다.
 
 ## DB 이력 (PostgreSQL 모드)
-저장소 선택은 `ncs_service.store.open_store()` 한 곳에서만 한다. 웹 서버는 `store.save()`를 부르고 `store.supports_history`일 때만 이력 API를 등록한다. 저장 방식이 늘면 `store.py`에 같은 호출 모양(`prepare`·`save`·`supports_history`)의 클래스를 추가한다.
+저장소 선택은 `ncs_service.store.open_store()` 한 곳에서만 한다. 웹 서버는 `store.save()`를 부르고 `store.supports_history`일 때만 이력 API를 등록한다.
+검수 CLI는 `ncs_service.save_cli_review()`로 같은 선택을 탄다: `--out`을 주면 그 폴더, 안 주면 `DATABASE_URL`이 있을 때 DB 이력에만(출처 `cli`), 없을 때 `결과/` 폴더. CLI의 `__main__`에 저장소 분기를 따로 적지 않는다. 저장 방식이 늘면 `store.py`에 같은 호출 모양(`prepare`·`save`·`supports_history`)의 클래스를 추가한다.
 스키마 변경은 `ncs_service/migrations.py`의 `MIGRATIONS`에 `NNN_이름` 항목을 **뒤에 추가**해서만 한다. 적용된 항목은 고치지 않는다. 모든 문장은 `IF (NOT) EXISTS`로 보호해 시작마다 돌아도 안전하게 한다(`tests/test_migrations.py`가 검사). 엔진 이름을 SQL에 적지 않는다.
 
 ## 저장 파일
@@ -50,7 +51,7 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 
 ## 실행과 수정
 프로젝트를 가상환경에 설치한 뒤 실행한다(`pip install -e ".[web]"`, 테스트는 `.[test]`). 런타임 `sys.path` 주입과 `--src`는 사용하지 않는다. 검수 CLI는 `ncs-position` 등 설치 명령 또는 기존 `python -m ncs_position`을 사용한다.
-검수 엔진의 수정 원본은 `src/`이다. 웹 서버와 네 CLI는 모두 `ncs_service.execute_review()` 및 `persist_review()`를 통해 검수·저장을 실행한다.
+검수 엔진의 수정 원본은 `src/`이다. 웹 서버와 검수 CLI는 모두 `ncs_service.execute_review()`로 검수하고, 저장은 `ncs_service.store`(웹은 `store.save()`, CLI는 `save_cli_review()`)를 거친다. 파일로 쓰는 경우 둘 다 `persist_review()`에 닿는다.
 `ncs_service`는 파일 경로를 받아 문서 선택·엔진 실행·저장을 조정하며 HTTP 요청이나 업로드 객체를 받지 않는다.
 `ReviewRequest.config`에는 선택한 엔진의 `CheckConfig`, `rules`에는 사용자 지정 `Rule` 목록을 전달할 수 있다. 둘 다 `None`이면 엔진 기본값을 사용하며 `rules=()`는 규칙을 실행하지 않는다. 다른 엔진의 설정 객체는 `ValueError`로 거절한다.
 각 엔진의 기존 `run_review()` 공개 API는 Python 호출자와의 호환성을 위해 유지한다.

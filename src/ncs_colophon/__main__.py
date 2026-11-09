@@ -2,9 +2,10 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 
-from ncs_service import ReviewRequest, execute_review, persist_review
+from ncs_service import ReviewRequest, execute_review, save_cli_review, saved_location
 
 from . import CheckConfig
 
@@ -17,7 +18,7 @@ def main() -> None:
     parser.add_argument("--module-code", default="", help="비우면 원고 파일명에서 추출")
     parser.add_argument("--front-section", type=int, default=0)
     parser.add_argument("--body-section", type=int, default=1)
-    parser.add_argument("--out", default="결과")
+    parser.add_argument("--out", help="결과 폴더. 비우면 DATABASE_URL이 있을 때 DB 이력에, 없을 때 '결과' 폴더에 저장")
     args = parser.parse_args()
     roles = {}
     if args.manuscript:
@@ -36,11 +37,11 @@ def main() -> None:
             )
         )
         result = execution.result
-        saved = persist_review(execution, args.out)
+        saved = save_cli_review(execution, args.paths, out=args.out, database_url=os.getenv("DATABASE_URL"))
     except (OSError, ValueError) as error:
         parser.exit(2, f"검수 실행 실패: {error}\n")
     print(json.dumps({"요약": saved.summary, "진단": result.diagnostics}, ensure_ascii=False, indent=2))
-    print(f"지적사항 {len(result.findings)}건 · {saved.zip_path}")
+    print(f"지적사항 {len(result.findings)}건 · {saved_location(saved)}")
 
 
 if __name__ == "__main__":
