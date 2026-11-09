@@ -12,9 +12,10 @@ import { RawJson } from "./components/RawJson.jsx";
 import { ResultHead } from "./components/ResultHead.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
 import { PageAlert } from "./components/PageAlert.jsx";
+import { Pagination } from "./components/Pagination.jsx";
 import { usePageTitle } from "./lib/hooks.js";
 
-const HISTORY_PREVIEW = 5;
+const HISTORY_PAGE = 10;   // 이력 표 한 쪽 행 수(KRDS 페이지네이션)
 
 export default function App() {
   usePageTitle("원고 검수");
@@ -36,7 +37,11 @@ export default function App() {
   const aborter = useRef(null);      // 진행 중 요청의 AbortController — 취소 버튼
   const fileInput = useRef(null);    // 숨긴 <input type=file> — 진짜 <button>이 대신 열어 키보드(Enter/Space)로도 동작
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
-  const [historyExpanded, setHistoryExpanded] = useState(false); // 이력은 기본 최근 5건만, '더 보기'로 전체
+  const [historyPage, setHistoryPage] = useState(1);   // 이력 표 현재 쪽
+  useEffect(() => {
+    const pages = Math.max(1, Math.ceil((history?.length || 0) / HISTORY_PAGE));
+    if (historyPage > pages) setHistoryPage(pages);
+  }, [history, historyPage]);
   const [deleting, setDeleting] = useState(false);
 
   async function refreshHistory() {
@@ -287,7 +292,7 @@ export default function App() {
                              uploadToken={upload.status === "ready" ? upload.token : null} />}
 
       {result && (
-        <section>
+        <section aria-live="polite">
           <ResultHead
             status={<Badge value={result.요약.검수결과} large />}
             meta={`${result.module_code} · ${checks.find((item) => item.value === result.check)?.label || result.check}${result.created_at ? ` · ${formatDate(result.created_at)}` : ""}`}
@@ -315,13 +320,7 @@ export default function App() {
       {history && (
         <section id="review-history" className="nav-anchor history">
           <div className="section-head">
-            <h2 className="section-title">검수 이력 <span className="meta">({history.length}건)</span></h2>
-            {history.length > HISTORY_PREVIEW && (
-              <button type="button" className="krds-btn small text" aria-expanded={historyExpanded} aria-controls="history-table"
-                      onClick={() => setHistoryExpanded((v) => !v)}>
-                {historyExpanded ? "최근 5건만 보기" : `더 보기 (${history.length - HISTORY_PREVIEW}건 더)`}
-              </button>
-            )}
+            <h2 className="section-title">검수 이력 <span className="meta">({history.length}건{history.length > HISTORY_PAGE ? ` · ${historyPage}/${Math.ceil(history.length / HISTORY_PAGE)}쪽` : ""})</span></h2>
           </div>
           {history.length === 0 ? <p className="empty">저장된 검수 이력이 없습니다.</p> : (
             <div className="krds-table-wrap" id="history-table">
@@ -338,7 +337,7 @@ export default function App() {
                   <col className="col-action" />
                 </colgroup>
                 <thead><tr><th scope="col">실행 시각</th><th scope="col">모듈</th><th scope="col">검수</th><th scope="col">판정</th><th scope="col">열기</th><th scope="col">삭제</th></tr></thead>
-                <tbody>{(historyExpanded ? history : history.slice(0, HISTORY_PREVIEW)).map((row) => (
+                <tbody>{history.slice((historyPage - 1) * HISTORY_PAGE, historyPage * HISTORY_PAGE).map((row) => (
                   <tr key={row.id} className={row.id === result?.id || row.id === allRun?.group ? "is-open" : undefined}>
                     <td className="when">{formatDateLines(row.created_at).map((line, i) => <span key={i}>{line}</span>)}</td>
                     <td>{row.module_code}</td>
@@ -357,6 +356,7 @@ export default function App() {
               </table>
             </div>
           )}
+          <Pagination page={historyPage} total={Math.ceil(history.length / HISTORY_PAGE)} onChange={setHistoryPage} label="검수 이력 쪽" />
         </section>
       )}
 

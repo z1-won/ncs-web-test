@@ -320,3 +320,9 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .policy .section-title { margin-top: var(--krds-gap-8); }
 .policy .krds-info-list li { line-height: 1.6; }
 .policy code { padding: 0 0.4rem; border-radius: var(--krds-radius-small2); background: var(--krds-light-color-surface-gray-subtler); font-size: 0.95em; }
+
+/* 이력 페이지네이션: 표 아래 가운데. KRDS 마크업은 a 기준이라 button으로 쓸 때 기본 버튼 모양만 지운다 */
+.history .krds-pagination { margin-top: var(--krds-gap-6); justify-content: center; }
+.history .krds-pagination button { border: 0; background: none; font: inherit; cursor: pointer; }
+.history .krds-pagination button:disabled { cursor: default; }
+.findings-list .finding-head .meta { font-size: var(--krds-pc-font-size-label-small); }
