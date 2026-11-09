@@ -293,3 +293,19 @@ class LawTests(unittest.TestCase):
             self.assertEqual(rows["고객정보보호법"]["체크"][LABEL], "△")      # NCS 쪽·미검색 → △
             [none] = check_laws(m, None)
             self.assertEqual(none["체크"][LABEL], "△")
+
+
+class ElementsTableTests(unittest.TestCase):
+    def test_read_elements_and_criteria_format(self):
+        from ncs_core.ncs_catalog import CRITERIA_SEP, read_elements
+
+        with tempfile.TemporaryDirectory() as folder:
+            table = Path(folder) / "ncs_elements.tsv"
+            table.write_text("# 표\n12030202\t1203020201_24v3\t객실 예약 관리\t3\t객실 예약 접수란 … 능력이다.\t1203020201_24v3.1\t객실 · 부대시설 이용정보 파악하기\t"
+                             + CRITERIA_SEP.join(C1) + "\n12030202\t1203020201_24v3\t객실 예약 관리\t3\t객실 예약 접수란 … 능력이다.\t1203020201_24v3.2\t예약 현황 확인하기\t"
+                             + CRITERIA_SEP.join(C2) + "\n", encoding="utf-8")
+            units = read_elements(table)
+            unit = units["1203020201"]
+            self.assertEqual((unit["name"], unit["level"], len(unit["elements"])), ("객실 예약 관리", 3, 2))
+            self.assertEqual(unit["elements"][0]["criteria"], C1)
+            self.assertEqual(unit["elements"][1]["no"], 2)

@@ -405,3 +405,26 @@ def spec_from_plan(data: dict) -> dict:
         "모듈": [{"코드": m["코드"], "명칭": m["명칭"], "정의": m["정의"],
                  "요소": [{"코드": e["코드"], "명칭": e["명칭"], "수행준거": e["수행준거"]} for e in m["요소"]]} for m in data.get("모듈") or []],
     }
+
+
+def spec_from_catalog(duty: str, *, units: list[str] | None = None, agency: str = "") -> dict:
+    """세분류 코드 → spec. 분류 명칭은 NCS 목록(ncs_units.tsv), 요소·수행준거·정의는 ncs_elements.tsv(build_ncs_elements.py)."""
+    from ncs_core.ncs_catalog import catalog
+
+    cat = catalog()
+    if cat is None:
+        raise ValueError("NCS 목록(ncs_units.tsv)이 없습니다")
+    duty = duty.replace("LM", "")[:8]
+    subclass = cat.subclass(duty)
+    details = [u for u in cat.units_with_detail(duty) if not units or u["code"][8:10] in units]
+    if not details:
+        raise ValueError(f"요소·수행준거 표에 세분류 {duty}가 없습니다 — scripts/data/build_ncs_elements.py --duty {duty} 로 받아 두세요")
+    modules = [{"코드": u["code"], "명칭": u["name"], "정의": u["definition"],
+                "요소": [{"코드": e["code"], "명칭": e["name"], "수행준거": e["criteria"]} for e in u["elements"]]} for u in details]
+    names = subclass.names if subclass else {}
+    siblings = [s.name for s in cat.subclasses_of_small(duty)] if subclass else []
+    return {
+        "기본": {"세분류명": names.get("세분류", ""), "영문 세분류명": "", "신규/개선": "신규", "개발기관명": agency},
+        "위치": {"대분류": names.get("대분류"), "중분류": names.get("중분류"), "소분류": names.get("소분류"), "세분류": siblings},
+        "모듈": modules,
+    }

@@ -7,6 +7,8 @@
   /ncsCompeUnitInfo?dutyCd=12030204 → data[]: dutyCd, ncsClCd(1203020401_23v3), compUnitCd(01), compUnitName("01.연회 판촉"),
                                      compUnitDef, compUnitLevel(4)
   /ncsCompeUnitFactrInfo?dutyCd=…&compUnitCd=01 → 능력단위요소: compUnitFactrNo, compUnitFactrName("1.연회 행사 고객사 분류하기")
+  /ncsKsaInfo?dutyCd=…&compUnitCd=01 → 요소별 수행준거·지식·기술·태도 한 줄씩: compUnitFactrNo, compUnitFactrName,
+                                      gbnCd/gbnName("수행준거"|"지식"|"기술"|"태도"), gbnVal("1.호텔의 객실 유형에 따라 … 구분 할 수 있다.")
 오류는 XML(OpenAPI_ServiceResponse/cmmMsgHeader/errMsg)로 온다.
 """
 
@@ -102,3 +104,22 @@ def elements(duty: str, unit_no: str | None = None) -> list[dict]:
         params["compUnitCd"] = unit_no
     return [{"code": r["ncsClCd"], "no": int(r.get("compUnitFactrNo") or 0), "name": NUMBERED.sub("", r.get("compUnitFactrName", "")).strip()}
             for r in _pages("ncsCompeUnitFactrInfo", params)]
+
+
+def ksa(duty: str, unit_no: str | None = None) -> list[dict]:
+    """요소별 수행준거·지식·기술·태도 — [{'code', 'no', 'name', 'kind', 'text'}] (kind: 수행준거/지식/기술/태도, text는 머리 번호 제거)."""
+    params = {"dutyCd": duty[:8]}
+    if unit_no:
+        params["compUnitCd"] = unit_no
+    return [{"code": r["ncsClCd"], "no": int(r.get("compUnitFactrNo") or 0), "name": NUMBERED.sub("", r.get("compUnitFactrName", "")).strip(),
+             "kind": (r.get("gbnName") or "").strip(), "text": NUMBERED.sub("", r.get("gbnVal", "")).strip()}
+            for r in _pages("ncsKsaInfo", params)]
+
+
+def criteria(duty: str, unit_no: str) -> dict[int, list[str]]:
+    """능력단위 하나의 수행준거 — {요소 번호: ['1.1 …', '1.2 …']} (계획서 표기대로 '요소번호.연번 ' 머리를 붙인다)."""
+    out: dict[int, list[str]] = {}
+    for row in ksa(duty, unit_no):
+        if row["kind"] == "수행준거" and row["text"]:
+            out.setdefault(row["no"], []).append(row["text"])
+    return {no: [f"{no}.{i} {text}" for i, text in enumerate(texts, 1)] for no, texts in out.items()}
