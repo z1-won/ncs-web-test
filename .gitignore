@@ -20,5 +20,8 @@ scripts/.stdict_debug.xml
 # LLM 응답 캐시·사용량(원고 문장이 들어 있음 — git 제외)
 /.llm_cache/
 
+# 배치 검증 출력(체크포인트·xlsx에 원고 문구가 들어 있음 — git 제외)
+/_batch/
+
 # 하네스 중간 산출물(사례 분석·배치 결과에 원고 문구가 들어 있음 — git 제외)
 /_workspace*/
