@@ -24,6 +24,11 @@ HEADER = ("# NCS 능력단위요소·수행준거 — 공공데이터포털 B490
           "# 세분류코드\t능력단위코드\t능력단위명\t수준\t정의\t요소코드\t요소명\t수행준거(‖ 구분)\n")
 
 
+def clean(value: str) -> str:
+    """표 한 칸에 들어갈 글 — API 문장 안의 줄바꿈·탭을 공백으로(줄바꿈이 섞이면 다음 줄이 다른 행으로 읽힌다)."""
+    return " ".join(str(value or "").split())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--duty", action="append", required=True, help="세분류 코드 8자리(여러 번 가능)")
@@ -57,8 +62,8 @@ def main() -> None:
                     print(f"[오류] {unit.code}: {error}")
                     continue
                 for no in sorted(set(names) | set(sentences)):
-                    handle.write("\t".join([duty, unit.code, unit.name, str(unit.level or ""), unit.definition.replace("\t", " "),
-                                            f"{unit.code}.{no}", names.get(no, ""), CRITERIA_SEP.join(sentences.get(no, []))]) + "\n")
+                    handle.write("\t".join(clean(v) for v in [duty, unit.code, unit.name, str(unit.level or ""), unit.definition,
+                                                              f"{unit.code}.{no}", names.get(no, ""), CRITERIA_SEP.join(sentences.get(no, []))]) + "\n")
                 added += 1
                 print(f"{unit.code} {unit.name}: 요소 {len(names)}개, 수행준거 {sum(len(v) for v in sentences.values())}개")
     print(f"능력단위 {added}개 추가 → {table}")

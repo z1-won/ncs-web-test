@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -57,9 +58,15 @@ class Subclass:
 def read_elements(path: Path) -> dict[str, dict]:
     """ncs_elements.tsv → {능력단위 10자리: {'duty','code','name','level','definition','elements':[{'code','no','name','criteria':[…]}]}}."""
     out: dict[str, dict] = {}
+    rows: list[str] = []
     for line in path.read_text(encoding="utf-8").splitlines():
-        if not line or line.startswith("#"):
+        if not line.strip() or line.startswith("#"):
             continue
+        if re.match(r"^\d{8}\t", line) or not rows:
+            rows.append(line)
+        else:   # 문장 안 줄바꿈으로 쪼개진 조각 — 앞 행에 붙인다
+            rows[-1] += " " + line.strip()
+    for line in rows:
         duty, code, name, level, definition, element_code, element_name, criteria = (line.split("\t") + [""] * 8)[:8]
         unit = out.setdefault(code[:10], {"duty": duty, "code": code, "name": name, "level": int(level) if level.strip() else None,
                                           "definition": definition, "elements": []})
