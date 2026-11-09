@@ -11,7 +11,7 @@ import os
 from ncs_service import (FileStore, PostgresStore, ReviewRequest, StoredReview, execute_review, open_store,
                          save_cli_review, saved_location)
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures"
 MANUSCRIPT = FIXTURES / "원고_ok_LM1203020201_24v3.hwpx"
 PLAN = FIXTURES / "개발계획서_LM1203020201_24v3.hwpx"

@@ -16,7 +16,7 @@ assignees: ""
 
 ## 🔧 개선 방법
 
-<!-- 엔진끼리 import하지 않는다는 계층 규칙(tests/test_layering.py)을 지키는지도 적어 주세요 -->
+<!-- 엔진끼리 import하지 않는다는 계층 규칙(tests/contract/test_layering.py)을 지키는지도 적어 주세요 -->
 
 ## ⚠️ 영향 범위
 

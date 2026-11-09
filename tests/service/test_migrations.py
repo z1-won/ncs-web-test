@@ -1,6 +1,6 @@
 """스키마 마이그레이션 목록의 규약 검사. DB 없이 SQL 텍스트와 목록 구조만 본다.
 
-실제 적용은 tests/test_postgres_integration.py(NCS_TEST_DATABASE_URL 필요)가 검사한다.
+실제 적용은 tests/integration/test_postgres_integration.py(NCS_TEST_DATABASE_URL 필요)가 검사한다.
 """
 
 import re

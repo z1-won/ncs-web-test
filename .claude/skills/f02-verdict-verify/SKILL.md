@@ -131,13 +131,13 @@ python scripts/batch_compare.py --work _workspace/batch_after --expected scripts
 | `비고`(체크 이름 → 문장, 사례는 줄바꿈) | `src/ncs_core/sheet.py`가 줄 단위로 쌓고 자름 | 사례가 한 줄로 뭉치거나 머리 줄이 사례로 세어짐 |
 | 비고의 `원고 「…」`, `region_path`, `위치` | `src/ncs_service/annotate.py`가 메모 달 문단을 찾음 | 메모가 문단을 못 찾아 총괄 메모로 밀린다 |
 
-확인 방법은 돌려 보는 것이다. 수정 후 배치 결과(`_workspace/batch_after/<문서>/<엔진>.json`의 `sheet`)에서 바뀐 항목의 `검수결과`와 `비고`가 체크리스트 행의 판정과 맞는지 본다. 비고 꼴을 바꾼 변경이면 `tests/test_annotate.py`·`tests/test_sheet.py`가 그 꼴을 다루는지 확인하고, 다루지 않으면 '미검증 경계면'으로 보고한다.
+확인 방법은 돌려 보는 것이다. 수정 후 배치 결과(`_workspace/batch_after/<문서>/<엔진>.json`의 `sheet`)에서 바뀐 항목의 `검수결과`와 `비고`가 체크리스트 행의 판정과 맞는지 본다. 비고 꼴을 바꾼 변경이면 `tests/service/test_annotate.py`·`tests/core/test_sheet.py`가 그 꼴을 다루는지 확인하고, 다루지 않으면 '미검증 경계면'으로 보고한다.
 
-메모 원고는 비고만 봐서는 알 수 없다. 원고 문구가 바뀌면 메모가 다른 문단에 붙을 수 있으므로, 사례 원고가 hwpx이면 `ncs_service.annotate`의 `Annotator`를 수정 전 행(`rows_before`)과 수정 후 행(`rows_after`)으로 각각 돌려 **붙은 문단과 못 붙인 행**을 비교한다(호출 방법은 `tests/test_annotate.py` 참고). 메모가 옮겨 붙었으면 이번 변경이 만든 것인지, 기존 약점이 드러난 것인지 갈라 적는다.
+메모 원고는 비고만 봐서는 알 수 없다. 원고 문구가 바뀌면 메모가 다른 문단에 붙을 수 있으므로, 사례 원고가 hwpx이면 `ncs_service.annotate`의 `Annotator`를 수정 전 행(`rows_before`)과 수정 후 행(`rows_after`)으로 각각 돌려 **붙은 문단과 못 붙인 행**을 비교한다(호출 방법은 `tests/service/test_annotate.py` 참고). 메모가 옮겨 붙었으면 이번 변경이 만든 것인지, 기존 약점이 드러난 것인지 갈라 적는다.
 
 파서가 새 키를 내거나 값의 꼴을 바꿨으면(숫자였던 값이 None이 되는 등) 그 값을 읽는 곳을 `grep -rn "키 이름" src --include='*.py'`로 모두 찾아 한 곳씩 연다.
 
-참고: 테스트 모듈 하나만 고를 때는 `tests/` 안에서 돌린다(`cd tests && python -m unittest test_manuscript`). 저장소 루트에서 모듈 이름으로 부르면 import 오류가 난다.
+참고: 테스트 모듈 하나만 고를 때는 `tests/` 안에서 묶음 이름을 붙여 돌린다(`cd tests && python -m unittest core.test_manuscript`). 묶음은 core·engines·service·contract·integration이다.
 
 ## 6. 검증 보고서
 

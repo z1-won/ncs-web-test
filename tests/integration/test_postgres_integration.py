@@ -18,7 +18,7 @@ from ncs_service.postgres import (delete_review, get_manuscript, get_review, inp
 from ncs_service.postgres_cli import import_directory
 from ncs_web.server import create_app
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MANUSCRIPT = ROOT / "tests/fixtures/원고_ok_LM1203020201_24v3.hwpx"
 PLAN = ROOT / "tests/fixtures/개발계획서_LM1203020201_24v3.hwpx"
 DSN = os.getenv("NCS_TEST_DATABASE_URL")

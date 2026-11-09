@@ -13,7 +13,7 @@ from ncs_core.hwpx import HP
 from ncs_service import ReviewRequest, execute_review
 from ncs_service.annotate import Annotator, annotate_hwpx
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures"
 MANUSCRIPT = FIXTURES / "원고_eval_LM1203020201_24v3.hwpx"
 PLAN = FIXTURES / "개발계획서_LM1203020201_24v3.hwpx"

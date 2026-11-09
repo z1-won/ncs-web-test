@@ -123,7 +123,7 @@ db/, compose.yaml   PostgreSQL 컨테이너 정의(검수 이력, 선택)
 | `ncs_colophon` | 판권: 개발 이력·개발기관 | 판권 ① |
 | `ncs_misc` | 기타: 쪽 시작, 그림, 비율, 참고 표기 | 기타 ①②⑥⑦ (③④⑤⑧ 이미지 분석 미구현) |
 
-엔진은 서로 import하지 않고 `ncs_core` 위에 평행하게 선다. (`tests/test_layering.py`). 모든 엔진은 "구역 0 = 앞부분(위치·차례·개요), 구역 1 = 본문"을 가정하고, 원고의 실제 구역 나눔은 `ncs_core.documents.normalize_sections`가 그 모양으로 맞춥니다.
+엔진은 서로 import하지 않고 `ncs_core` 위에 평행하게 선다. (`tests/contract/test_layering.py`). 모든 엔진은 "구역 0 = 앞부분(위치·차례·개요), 구역 1 = 본문"을 가정하고, 원고의 실제 구역 나눔은 `ncs_core.documents.normalize_sections`가 그 모양으로 맞춥니다.
 
 ## 설치와 환경 변수
 
@@ -245,4 +245,4 @@ python scripts/batch_compare.py --work samples/batch_x --expected scripts/batch_
 pip install -e . -q && python -m unittest discover tests      # 단위 + 골든 + 계약
 ```
 
-골든은 `tests/golden/`의 합성 원고 6종 × 10엔진 × 개발계획서 유/무 결과 스냅샷입니다. 판정 정책을 **의도적으로** 바꿨을 때만 `PYTHONPATH=src python tests/make_golden.py`로 다시 만들고, `git diff tests/golden`에서 판정 변동이 의도한 것인지 확인한 뒤 함께 커밋합니다(문구만 바뀐 경우 메시지에 적습니다). 골든은 NCS 목록을 끄고(개발계획서 기준), 외부 API 키를 비운 채(`tests/test_0_environment.py`) 실행됩니다.
+골든은 `tests/golden/`의 합성 원고 6종 × 10엔진 × 개발계획서 유/무 결과 스냅샷입니다. 판정 정책을 **의도적으로** 바꿨을 때만 `PYTHONPATH=src python tests/make_golden.py`로 다시 만들고, `git diff tests/golden`에서 판정 변동이 의도한 것인지 확인한 뒤 함께 커밋합니다(문구만 바뀐 경우 메시지에 적습니다). 골든은 NCS 목록을 끄고(개발계획서 기준), 외부 API 키를 비운 채(`tests/_env.py`) 실행됩니다.

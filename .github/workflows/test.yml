@@ -18,7 +18,7 @@ jobs:
   python:
     name: 검수 엔진·서버 테스트
     runs-on: ubuntu-latest
-    # 통합 테스트(tests/test_postgres_integration.py)용 일회용 DB. 테스트 전용 값이며 실제 접속 정보가 아니다.
+    # 통합 테스트(tests/integration/test_postgres_integration.py)용 일회용 DB. 테스트 전용 값이며 실제 접속 정보가 아니다.
     services:
       postgres:
         image: postgres:18-alpine

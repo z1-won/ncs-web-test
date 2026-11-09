@@ -14,7 +14,7 @@ import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 from ncs_core import Rule, ReviewResult, SavedReport, VERDICTS, flatten, visible
 from ncs_core.f02_items import F02_ITEMS

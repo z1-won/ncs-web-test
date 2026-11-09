@@ -9,7 +9,7 @@ from xml.etree import ElementTree as ET
 from ncs_service import ReviewRequest, execute_review
 from ncs_service.export import HP, MARK, build_hwpx, build_xlsx, full_sheet
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures"
 MANUSCRIPT = FIXTURES / "원고_ok_LM1203020201_24v3.hwpx"
 PLAN = FIXTURES / "개발계획서_LM1203020201_24v3.hwpx"

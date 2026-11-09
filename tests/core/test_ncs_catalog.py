@@ -10,7 +10,7 @@ from ncs_core.ncs_catalog import Catalog
 from ncs_position.rules.classification import check_classification
 from ncs_position.rules.position import check_position
 
-REAL = Path(__file__).resolve().parents[1] / "src" / "ncs_core" / "data" / "ncs_units.tsv"
+REAL = Path(__file__).resolve().parents[2] / "src" / "ncs_core" / "data" / "ncs_units.tsv"
 
 SMALL = """# 테스트용
 12030204\t이용\t관광\t숙박서비스\t연회관리\t\t2014\t1203020401_23v3\t연회 판촉

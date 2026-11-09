@@ -10,7 +10,7 @@ from unittest.mock import patch
 from ncs_core.lexicon import ACTION_NOUNS_FILE, REJECTED_FILE, ActionNounLexicon, default_lexicon
 from ncs_toc.rules.action_nouns import check_toc2, head_word, unknown_words
 
-DATA = Path(__file__).resolve().parents[1] / "src" / "ncs_core" / "data"
+DATA = Path(__file__).resolve().parents[2] / "src" / "ncs_core" / "data"
 
 
 def fake_resolver(answers: dict):

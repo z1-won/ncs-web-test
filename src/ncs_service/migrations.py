@@ -1,7 +1,7 @@
 """PostgreSQL 스키마와 번호 마이그레이션 목록. SQL 텍스트만 두고 psycopg를 import하지 않는다.
 
 규칙: 적용된 항목은 수정하지 않고 다음 번호를 뒤에 추가한다. 모든 문장은 IF (NOT) EXISTS로 보호한다.
-check_name의 허용값은 registry.ENGINES가 검증하므로 SQL에 엔진 이름을 적지 않는다 (tests/test_migrations.py).
+check_name의 허용값은 registry.ENGINES가 검증하므로 SQL에 엔진 이름을 적지 않는다 (tests/service/test_migrations.py).
 """
 
 # 001: 최초 스키마. check_name의 허용값은 Python(registry.ENGINES)이 검증하므로 DB 제약으로 두지 않는다 — 엔진을

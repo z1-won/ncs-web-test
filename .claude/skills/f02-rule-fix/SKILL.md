@@ -15,7 +15,7 @@ description: "F02 검수 엔진의 규칙·파서·기준 데이터를 수정 �
 | B 규칙 | `src/ncs_<엔진>/rules/<규칙>.py`, 필요하면 같은 엔진의 `patterns.py`·`config.py` | 판정 조건은 규칙에, 양식을 읽는 정규식은 코어 `manuscript/patterns.py`에 |
 | C 기준 데이터 | `src/ncs_core/data/` | 손으로 고치지 말고 `scripts/build_*.py`로 만든다. 행동명사의 사람 승격만 목록 파일을 직접 고친다 |
 
-계층 규칙: 엔진은 `ncs_core`만 import한다. 두 엔진이 같은 추출이 필요하면 코어로 올린다. 엔진끼리 import하면 `tests/test_layering.py`가 막는다 — 막히라고 있는 테스트이므로 우회하지 않는다.
+계층 규칙: 엔진은 `ncs_core`만 import한다. 두 엔진이 같은 추출이 필요하면 코어로 올린다. 엔진끼리 import하면 `tests/contract/test_layering.py`가 막는다 — 막히라고 있는 테스트이므로 우회하지 않는다.
 
 `ncs_core`에는 판정 정책을 두지 않는다. "이 경우는 봐준다" 같은 판단이 코어 파서에 들어가면 그 파서를 쓰는 다른 엔진의 판정이 함께 바뀐다. 코어는 원고를 있는 그대로 읽어 주고, 봐줄지는 규칙이 정한다.
 
@@ -27,7 +27,7 @@ description: "F02 검수 엔진의 규칙·파서·기준 데이터를 수정 �
 - 문서 구조가 필요하면 `tests/make_fixtures.py`의 합성 HWPX 생성 방식을 쓴다. 기존 픽스처 원고(`tests/fixtures/원고_*.hwpx`)를 바꾸면 골든 전체가 흔들리므로 새 테스트 안에서 따로 만든다.
 - **실제 원고 문구를 옮기지 않는다.** `samples/`는 git 제외다. 같은 구조(문단이 갈린 자리, 번호 꼴, 공백 위치)를 가진 지어낸 문구를 쓴다.
 - 사양의 '달라지면 안 되는 것'도 테스트로 만든다. 오탐을 고친 수정이 진짜 부적합까지 통과시키지 않는다는 증거가 된다.
-- 외부 호출이 걸린 규칙(차례 ② 사전, 수행 ② LLM)은 가짜 resolver를 주입한다. 기존 `tests/test_toc_action_nouns.py`, `tests/test_llm.py` 방식.
+- 외부 호출이 걸린 규칙(차례 ② 사전, 수행 ② LLM)은 가짜 resolver를 주입한다. 기존 `tests/engines/test_toc_action_nouns.py`, `tests/core/test_llm.py` 방식.
 
 ## 3. 판정과 비고
 
@@ -47,7 +47,7 @@ pip install -e . -q && python -m unittest discover tests
 
 기준선(`_workspace/00_input/baseline_tests.txt`)과 비교해 **새로 생긴** 실패만 본다. 수정 전부터 실패하던 테스트는 건드리지 않고 그대로 보고한다.
 
-`tests/test_golden.py`가 깨졌을 때:
+`tests/contract/test_golden.py`가 깨졌을 때:
 
 | 상황 | 할 일 |
 |---|---|

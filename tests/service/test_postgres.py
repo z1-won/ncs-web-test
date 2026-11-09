@@ -14,7 +14,7 @@ from ncs_service.postgres import input_metadata, summary_for
 from ncs_service.postgres_cli import import_directory
 from ncs_web.server import create_app
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures"
 MANUSCRIPT = FIXTURES / "원고_ok_LM1203020201_24v3.hwpx"
 PLAN = FIXTURES / "개발계획서_LM1203020201_24v3.hwpx"

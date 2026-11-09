@@ -8,8 +8,8 @@
   본문(`parse_body`), 꼬리 섹션(`section_presence`), 양식 인식 패턴(`patterns`), 학습명 비교(`names`: `norm`/`same`/`diff_list`/`pua_note`).
   임계값은 `ParseConfig`로 받는다. 양식 구조를 읽는 코드는 여기에 두고, 검수 패키지는 자기 항목에만 필요한 추출만 가진다.
 - **계층 규칙**: 검수 패키지는 `ncs_core`만 import한다. 다른 검수 패키지를 import하지 않으며, `ncs_core`는 검수 패키지·`ncs_service`를 모른다.
-  `tests/test_layering.py`가 이를 검사한다. 두 패키지가 같은 추출이 필요해지면 `ncs_core.manuscript`로 올린다.
-- 검수 패키지의 **뼈대 파일 8개는 고정**이다. 모든 패키지가 같은 이름으로 갖는다(`tests/test_engines.py`가 검사).
+  `tests/contract/test_layering.py`가 이를 검사한다. 두 패키지가 같은 추출이 필요해지면 `ncs_core.manuscript`로 올린다.
+- 검수 패키지의 **뼈대 파일 8개는 고정**이다. 모든 패키지가 같은 이름으로 갖는다(`tests/contract/test_engines.py`가 검사).
   `config.py`(양식 가정, frozen dataclass; 공통 파서를 쓰면 `parse_config() -> ParseConfig`) · `models.py`(`ReviewContext`) ·
   `rules/<규칙>.py`(판정, I/O 없음) · `registry.py`(`DEFAULT_RULES`, `ALL_ITEM_IDS`) · `pipeline.py` ·
   `reporting.py`(`REPORT_NAME`, `ITEM_FILES`, `summary(result)`, `save_results`) · `sheet.py`(확인서 항목 `ITEMS`·`COMPONENT`) · `__main__.py`.
@@ -36,7 +36,7 @@
 | 외부 호출 | `lexicon`(사전) · `llm` · `ncs_api` | 표준국어대사전, 생성형 AI, 공공데이터포털. 검수 중 호출은 승인·키가 있을 때만, 실패는 △ |
 
 ## 공개 API (모든 검수 패키지 동일)
-`tests/test_engines.py`가 `ncs_service.registry.ENGINES`에 등록된 모든 엔진에 대해 이 계약을 검사한다(공개 이름, frozen `CheckConfig`, 체크리스트 행 키, 확인서 행이 F02 원문 항목과 일치, `reporting.REPORT_NAME`·`summary()`와 파일 요약 일치, 저장 파일·ZIP, 빈 규칙 목록, 다른 엔진 설정 거절).
+`tests/contract/test_engines.py`가 `ncs_service.registry.ENGINES`에 등록된 모든 엔진에 대해 이 계약을 검사한다(공개 이름, frozen `CheckConfig`, 체크리스트 행 키, 확인서 행이 F02 원문 항목과 일치, `reporting.REPORT_NAME`·`summary()`와 파일 요약 일치, 저장 파일·ZIP, 빈 규칙 목록, 다른 엔진 설정 거절).
 새 구성요소 엔진은 **`ENGINES`에 등록 → `src/ncs_web/server.py`의 `CheckName`·`/api/health`·오류 메시지 → `webapp/frontend/src/lib/checks.js`의 `CHECKS`·`FILE_HINTS`** 세 곳을 같이 고친다. 하나라도 빠지면 같은 테스트가 알려 준다. 화면의 **전체 실행**은 `/api/health`의 `engines` 순서를 그대로 돌리므로 따로 고칠 것이 없다(개발계획서 필요 여부도 `required`에서 읽는다).
 ```python
 run_review(paths, *, roles=None, module_code="", config=DEFAULT_CONFIG, rules=DEFAULT_RULES) -> ReviewResult
@@ -53,7 +53,7 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 ## DB 이력 (PostgreSQL 모드)
 저장소 선택은 `ncs_service.store.open_store()` 한 곳에서만 한다. 웹 서버는 `store.save()`를 부르고 `store.supports_history`일 때만 이력 API를 등록한다.
 검수 CLI는 `ncs_service.save_cli_review()`로 같은 선택을 탄다: `--out`을 주면 그 폴더, 안 주면 `DATABASE_URL`이 있을 때 DB 이력에만(출처 `cli`), 없을 때 `결과/` 폴더. CLI의 `__main__`에 저장소 분기를 따로 적지 않는다. 저장 방식이 늘면 `store.py`에 같은 호출 모양(`prepare`·`save`·`supports_history`)의 클래스를 추가한다.
-스키마 변경은 `ncs_service/migrations.py`의 `MIGRATIONS`에 `NNN_이름` 항목을 **뒤에 추가**해서만 한다. 적용된 항목은 고치지 않는다. 모든 문장은 `IF (NOT) EXISTS`로 보호해 시작마다 돌아도 안전하게 한다(`tests/test_migrations.py`가 검사). 엔진 이름을 SQL에 적지 않는다.
+스키마 변경은 `ncs_service/migrations.py`의 `MIGRATIONS`에 `NNN_이름` 항목을 **뒤에 추가**해서만 한다. 적용된 항목은 고치지 않는다. 모든 문장은 `IF (NOT) EXISTS`로 보호해 시작마다 돌아도 안전하게 한다(`tests/service/test_migrations.py`가 검사). 엔진 이름을 SQL에 적지 않는다.
 
 ## 저장 파일
 `<out>/<코드>_xxxx/` 아래 `<코드>_<항목 꼬리말>.json`, `<코드>_<이름>_00_요약.json`, `_지적사항.json`, `_전체.json`, `_진단.json`, `<코드>_<이름>_검수결과.zip`.
@@ -76,5 +76,5 @@ FastAPI 요청·응답 모델 및 오류 상태 코드는 `src/ncs_web/server.py
 웹 화면은 `webapp/frontend/src/`에서 수정하고, 프런트엔드 폴더에서 `npm run build`로 `webapp/frontend/dist/`를 생성한다.
 
 ## 변경 검증
-정책을 바꾸지 않는 리팩토링은 `tests/test_golden.py`가 통과함으로써(현재 결과 == `tests/golden/*.json`) 검수 결과가 동일함을 보인다. 이때 `tests/make_golden.py`를 실행하지 않는다.
+정책을 바꾸지 않는 리팩토링은 `tests/contract/test_golden.py`가 통과함으로써(현재 결과 == `tests/golden/*.json`) 검수 결과가 동일함을 보인다. 이때 `tests/make_golden.py`를 실행하지 않는다.
 정책을 바꾸면 `docs/CONSISTENCY_REVIEW.md`의 "의도적으로 바꾼 동작" 표에 적는다.

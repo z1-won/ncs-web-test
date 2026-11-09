@@ -11,7 +11,7 @@ from ncs_evaluation import CheckConfig, prepare_review, evaluate_review
 from ncs_evaluation.rules.names import compare_table
 from ncs_web.server import create_app
 
-FIXTURES = Path(__file__).parent / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 class EvaluationTests(unittest.TestCase):
