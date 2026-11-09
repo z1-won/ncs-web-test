@@ -9,6 +9,7 @@ from types import ModuleType
 class Engine:
     package: str
     required: tuple[str, ...] = ("manuscript",)
+    optional: tuple[str, ...] = ()      # 있으면 prepare_review(<역할>=…)로 넘기는 선택 입력. 예: ("print",) 출력본 PDF
 
     def load(self) -> ModuleType:
         return import_module(self.package)
@@ -36,7 +37,7 @@ def get_engine(check: str) -> Engine:
 
 
 def describe_engines() -> list[dict]:
-    """화면·API용 엔진 설명 — [{'check', 'component', 'items': ['①', …](구현된 확인서 항목), 'required'}]. 확인서 순서."""
+    """화면·API용 엔진 설명 — [{'check', 'component', 'items': ['①', …](구현된 확인서 항목), 'required', 'optional'}]. 확인서 순서."""
     out = []
     for check, engine in ENGINES.items():
         sheet = import_module(engine.package + ".sheet")
@@ -46,6 +47,7 @@ def describe_engines() -> list[dict]:
             "items": [item.no for item in sheet.ITEMS if item.item_ids],
             "total": len(sheet.ITEMS),
             "required": list(engine.required),
+            "optional": list(engine.optional),
         })
     return out
 

@@ -18,6 +18,9 @@ def execute_review(request: ReviewRequest) -> ExecutedReview:
         prepare_options["config"] = request.config
     evaluate_options = {} if request.rules is None else {"rules": request.rules}
     documents = select_documents(request.paths, request.roles, required=engine.required)
+    for role in engine.optional:  # 선택 입력(출력본 PDF 등)은 그 역할을 받겠다고 선언한 엔진에만 넘긴다
+        if role in documents:
+            prepare_options[role] = documents[role]
     context = module.prepare_review(
         documents["manuscript"], documents.get("plan"), **prepare_options
     )

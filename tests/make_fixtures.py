@@ -1,4 +1,4 @@
-"""검증용 합성 HWPX(원고·개발계획서)를 만든다. 실제 양식의 최소 골격만 흉내 낸다."""
+"""검증용 합성 HWPX(원고·개발계획서)와 출력본 PDF를 만든다. 실제 양식의 최소 골격만 흉내 낸다."""
 
 import sys
 import zipfile
@@ -161,12 +161,83 @@ def plan():
     ]
 
 
+# --- 출력본 PDF -------------------------------------------------------------------
+# 원고_ok의 차례 쪽수(학습 1 → 1쪽, 1-1 → 3쪽, … 활용 서식 → 42쪽)와 맞는 45쪽짜리 PDF.
+# 물리 쪽 0·1·2(표지·차례·개요)에는 쪽 번호가 없고, 본문은 꼬리말 가운데에 쪽 번호, 머리말에 학습명이 매 쪽 반복된다.
+# fpdf2와 한글 글꼴이 있을 때만 만든다(개발용). 글꼴은 FIXTURE_FONT 환경 변수 또는 아래 후보에서 찾는다.
+FONT_CANDIDATES = (
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
+    "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+    "C:/Windows/Fonts/malgun.ttf",
+)
+PRINT_HEADINGS = {  # folio → 그 쪽 본문 첫 줄들 (차례와 같은 쪽수)
+    1: ["학습 1", "요구사항 확인하기", "학습 2", "화면 구현하기"],
+    3: ["1-1. 현행 시스템 분석", "학습 목표", "현행 시스템을 분석할 수 있다."],
+    7: ["1-2. 요구사항 정의", "요구사항을 정의한다."],
+    10: ["교수·학습 방법", "강의와 실습을 병행한다."],
+    12: ["평 가", "평가 준거"],
+    15: ["학습 1", "요구사항 확인하기", "학습 2", "화면 구현하기"],
+    16: ["2-1. UI 요구사항 확인", "UI 요구사항을 확인한다."],
+    20: ["교수·학습 방법", "실습 중심으로 진행한다."],
+    22: ["평 가", "평가 준거"],
+    40: ["참고 자료", "• 홍길동(2020). 소프트웨어 공학. 출판사."],
+    42: ["활용 서식", "서식 1. 요구사항 목록"],
+}
+LAST_FOLIO = 42
+
+
+def print_copy_pdf(path: Path) -> bool:
+    import os
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        print("fpdf2가 없어 출력본 PDF는 건너뜀 (pip install fpdf2)")
+        return False
+    font = os.environ.get("FIXTURE_FONT") or next((f for f in FONT_CANDIDATES if Path(f).is_file()), None)
+    if not font:
+        print("한글 글꼴을 찾지 못해 출력본 PDF는 건너뜀 (FIXTURE_FONT=글꼴 경로)")
+        return False
+    pdf = FPDF(format="A4")
+    pdf.set_auto_page_break(False)
+    pdf.add_font("K", "", font)
+    pdf.set_font("K", size=11)
+    front = [["NCS 학습모듈", "요구사항 확인", "LM1203020201_24v3"],
+             ["차 례", "학습 1. 요구사항 확인하기 1", "1-1. 현행 시스템 분석 3", "1-2. 요구사항 정의 7", "• 교수·학습 방법 10", "• 평가 12",
+              "학습 2. 화면 구현하기 15", "2-1. UI 요구사항 확인 16", "• 교수·학습 방법 20", "• 평가 22", "참고 자료 40", "활용 서식 42"],
+             ["학습모듈의 개요", "학습모듈의 내용 체계", "1. 요구사항 확인하기", "1-1. 현행 시스템 분석", "1-2. 요구사항 정의", "2. 화면 구현하기", "2-1. UI 요구사항 확인"]]
+    for lines in front:
+        pdf.add_page()
+        pdf.set_y(40)
+        for line in lines:
+            pdf.cell(0, 8, line, new_x="LMARGIN", new_y="NEXT")
+    lesson = 1
+    for folio in range(1, LAST_FOLIO + 1):
+        if folio >= 15:
+            lesson = 2
+        pdf.add_page()
+        pdf.set_y(8)                       # 달리는 머리말(위 띠): 학습명이 매 쪽 반복 — 본문 검색에서 빠져야 한다
+        pdf.cell(0, 6, f"학습 {lesson} {'요구사항 확인하기' if lesson == 1 else '화면 구현하기'}", align="R")
+        pdf.set_y(40)
+        for line in PRINT_HEADINGS.get(folio, [f"본문 {folio}쪽 내용이다."]):
+            pdf.cell(0, 8, line, new_x="LMARGIN", new_y="NEXT")
+        if folio == 4:                      # 아래 띠에 걸친 그림 캡션은 본문으로 되돌려야 한다
+            pdf.set_y(276)
+            pdf.cell(0, 6, "[그림 1-1] 현행 시스템 구성도")
+        pdf.set_y(284)                      # 꼬리말(아래 띠): 쪽 번호
+        pdf.cell(0, 6, str(folio), align="C")
+    pdf.output(str(path))
+    return True
+
+
 def main(out_dir):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     write_hwpx(out / "개발계획서_LM1203020201_24v3.hwpx", plan())
     for variant in ("ok", "pua", "name", "class", "pos", "eval"):
         write_hwpx(out / f"원고_{variant}_LM1203020201_24v3.hwpx", manuscript(variant))
+    print_copy_pdf(out / "출력본_ok_LM1203020201_24v3.pdf")
     print("fixtures:", sorted(f.name for f in out.iterdir()))
 
 

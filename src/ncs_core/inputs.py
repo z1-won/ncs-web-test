@@ -4,8 +4,9 @@ import hashlib
 from pathlib import Path
 
 from .documents import Document, load_document
+from .pdf import PdfDocument, is_pdf, load_pdf
 
-ROLE_LABELS = {"manuscript": "원고", "plan": "개발계획서"}
+ROLE_LABELS = {"manuscript": "원고", "plan": "개발계획서", "print": "출력본"}  # print: 원고를 한글에서 PDF로 저장한 것(쪽수 확인용, 선택)
 MANUSCRIPT_MARKERS = ("차 례", "차례", "학습모듈의 개요", "NCS-학습모듈의 위치")
 
 
@@ -48,24 +49,32 @@ def select_documents(
     roles: dict | None = None,
     *,
     required: tuple[str, ...] = ("manuscript",),
-) -> dict[str, Document]:
-    """경로 목록을 읽어 {'manuscript': Document, 'plan': Document}로 나눈다.
+) -> dict[str, Document | PdfDocument]:
+    """경로 목록을 읽어 {'manuscript': Document, 'plan': Document, 'print': PdfDocument}로 나눈다.
 
-    roles={경로: 'plan'|'manuscript'}로 자동 판별을 덮어쓴다.
+    roles={경로: 'plan'|'manuscript'}로 자동 판별을 덮어쓴다. PDF는 언제나 'print'(출력본)이며 다른 역할을 줄 수 없다.
     required에 있는 역할이 없거나, 한 역할에 파일이 둘 이상이면 ValueError.
     """
     overrides = {str(Path(p).resolve()): r for p, r in (roles or {}).items()}
     if set(overrides.values()) - set(ROLE_LABELS):
-        raise ValueError("roles 값은 'manuscript' 또는 'plan'이어야 합니다")
-    documents: dict[str, Document] = {}
+        raise ValueError("roles 값은 'manuscript', 'plan', 'print' 중 하나여야 합니다")
+    documents: dict[str, Document | PdfDocument] = {}
     seen: set[str] = set()
     for path in paths:
         key = str(Path(path).resolve())
         if key in seen:
             raise ValueError(f"같은 입력 파일이 중복 지정되었습니다: {path}")
         seen.add(key)
-        document = load_document(path)
-        role = overrides.get(key, detect_role(document.sections))
+        if is_pdf(path):
+            if overrides.get(key, "print") != "print":
+                raise ValueError(f"PDF는 출력본으로만 받습니다. 원고·개발계획서는 hwp/hwpx로 올리세요: {path}")
+            document = load_pdf(path)
+            role = "print"
+        else:
+            if overrides.get(key) == "print":
+                raise ValueError(f"출력본은 PDF여야 합니다: {path}")
+            document = load_document(path)
+            role = overrides.get(key, detect_role(document.sections))
         if role not in ROLE_LABELS:
             raise ValueError(f"파일 역할을 판단하지 못했습니다: {path}. roles로 역할을 지정하세요")
         if role in documents:

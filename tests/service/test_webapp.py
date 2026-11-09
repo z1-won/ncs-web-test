@@ -93,7 +93,7 @@ class WebappTests(unittest.TestCase):
         ])
         self.assertEqual(created.status_code, 200, created.text)
         token = created.json()
-        self.assertEqual(token["roles"], {"manuscript": MANUSCRIPT.name, "plan": PLAN.name})
+        self.assertEqual(token["roles"], {"manuscript": MANUSCRIPT.name, "plan": PLAN.name, "print": None})
         self.assertEqual(sorted(token["files"]), sorted([MANUSCRIPT.name, PLAN.name]))
         self.assertGreater(token["expires_in"], 0)
         for check in ("position", "toc", "colophon"):
@@ -114,7 +114,7 @@ class WebappTests(unittest.TestCase):
 
     def test_upload_token_reports_missing_plan_and_rejects_bad_input(self):
         only_manuscript = self.client.post("/api/uploads", files=[("files", (MANUSCRIPT.name, MANUSCRIPT.read_bytes()))]).json()
-        self.assertEqual(only_manuscript["roles"], {"manuscript": MANUSCRIPT.name, "plan": None})
+        self.assertEqual(only_manuscript["roles"], {"manuscript": MANUSCRIPT.name, "plan": None, "print": None})
         # 개발계획서가 필요한 위치 검수는 토큰으로도 400 — 화면은 roles.plan이 없으면 위치를 건너뛴다
         self.assertEqual(self.client.post("/api/review", data={"check": "position", "upload": only_manuscript["upload"]}).status_code, 400)
         single = self.client.post("/api/review", data={"check": "toc", "upload": only_manuscript["upload"]})
