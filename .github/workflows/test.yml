@@ -41,8 +41,8 @@ jobs:
           python-version: "3.14"   # 웹 의존성 고정 버전을 검증한 버전(README)
           cache: pip
           cache-dependency-path: |
-            webapp/requirements.txt
-            tests/requirements.txt
+            requirements/web.txt
+            requirements/test.txt
       - name: 설치
         run: pip install -e ".[test]"
       - name: 테스트 (단위·골든·계약·계층·DB 통합)

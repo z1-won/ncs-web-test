@@ -1,12 +1,11 @@
 # F02 검수 로컬 웹앱
 
-FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다. **이 폴더에는 화면과 웹 의존성 목록만 있고, 서버 코드는 `src/`에 있습니다.**
+FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다. **이 폴더에는 화면만 있습니다. 서버 코드는 `src/`, 의존성 목록은 저장소 루트의 `requirements/`에 있습니다.**
 
 | 무엇 | 어디 |
 |---|---|
 | 화면(React·Vite·KRDS) | `webapp/frontend/` — 소스 `src/`, 빌드 결과 `dist/`(git 제외) |
-| 웹 의존성 고정 목록 | `webapp/requirements.txt`, `requirements-dev.txt` — `pyproject.toml`의 `web`·`test` extra가 읽음 |
-| 옛 실행 명령 호환 | `webapp/server.py` — `python webapp/server.py`를 `ncs_web.server`로 넘기는 7줄짜리 진입점 |
+| 웹 의존성 고정 목록 | `requirements/web.txt`·`test.txt`·`dev.txt` — `pyproject.toml`의 `web`·`test` extra가 읽음 |
 | 서버(FastAPI) | `src/ncs_web/server.py` — 파일 업로드·요청 검증·HTTP 응답. 명령은 `ncs-web` |
 | 검수 실행·저장 | `src/ncs_service/` |
 
@@ -24,9 +23,8 @@ python3 -m venv .venv
 
 기본 주소는 `http://127.0.0.1:8765`입니다. 결과는 저장소 루트의 `결과/` 아래 실행별 폴더에 저장합니다(`DATABASE_URL`이 있으면 폴더 대신 DB 이력). 결과 폴더는 `결과/` 한 곳만 씁니다.
 `--port`, `--out`, `--dist` 옵션을 사용합니다. `--src`는 제거하고 설치된 Python 패키지를 사용하도록 통일했습니다.
-프로젝트 설치 후에는 기존 `python webapp/server.py` 명령도 호환 진입점을 통해 실행됩니다. 이 파일은 설치된 `ncs_web.server`를 호출하며 검색 경로를 추가하지 않습니다.
 가상환경을 활성화하면 `ncs-web` 또는 `python -m ncs_web`로도 실행할 수 있습니다.
-**패키지는 `.venv` 안에 설치되므로 반드시 그 Python으로 실행합니다.** `python3 webapp/server.py`처럼 시스템 Python으로 실행하면 `ModuleNotFoundError: No module named 'ncs_web'`이 납니다. `.venv/bin/ncs-web`, `.venv/bin/python …`, 또는 `source .venv/bin/activate` 뒤에 실행하세요.
+**패키지는 `.venv` 안에 설치되므로 반드시 그 Python으로 실행합니다.** `python3 -m ncs_web`처럼 시스템 Python으로 실행하면 `ModuleNotFoundError: No module named 'ncs_web'`이 납니다. `.venv/bin/ncs-web`, `.venv/bin/python …`, 또는 `source .venv/bin/activate` 뒤에 실행하세요.
 
 별도 터미널에서 화면을 실행합니다.
 
@@ -177,7 +175,7 @@ CLI는 기존 섹션 옵션을 설정 객체로 전달합니다. HTTP로 임의 
 
 ```bash
 .venv/bin/python -m pip install -e ".[test]"
-.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+.venv/bin/python -m unittest discover tests -v
 ```
 
 네 엔진 × 합성 원고 6종의 결과 일치·ZIP 내용, 계획서 필수 조건, 입력 오류,
@@ -185,8 +183,8 @@ CLI는 기존 섹션 옵션을 설정 객체로 전달합니다. HTTP로 임의 
 서비스·CLI 테스트는 엔진별 설정·규칙 전달, 역할·모듈 코드 지정, 섹션을 바꾼 문서 검수,
 빈 규칙 목록, 잘못된 설정, CLI 실행 경로·종료 코드·저장 결과를 검사합니다.
 `pyproject.toml`이 설치 진입점입니다. 기본 설치는 외부 런타임 의존성이 없는 엔진·서비스이며,
-`web` extra는 `webapp/requirements.txt`, `test` extra는 여기에 `tests/requirements.txt`를 합쳐 읽습니다.
-`requirements-dev.txt`는 기존 의존성 설치 명령을 위한 호환 목록입니다. 이 파일만 설치하면 프로젝트 자체는 설치되지 않으므로 위의 `pip install -e ".[test]"`를 사용하세요.
+`web` extra는 `requirements/web.txt`, `test` extra는 여기에 `requirements/test.txt`를 합쳐 읽습니다.
+`requirements/dev.txt`는 둘을 합친 목록입니다. 이 파일만 설치하면 프로젝트 자체는 설치되지 않으므로 위의 `pip install -e ".[test]"`를 사용하세요.
 
 ## 설치 구조
 

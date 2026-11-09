@@ -60,7 +60,7 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 항목 꼬리말은 각 패키지 `reporting.ITEM_FILES`에 둔다.
 
 ## 코드 스타일
-- 검수 엔진·실행 조정 계층은 Python 3.10+, 표준 라이브러리만. 웹 계층은 FastAPI·Uvicorn을 사용하며 설치는 `pyproject.toml`로 통일하고 `web` extra는 `webapp/requirements.txt`, `test` extra는 추가로 `tests/requirements.txt`의 고정 버전을 읽는다. 타입 힌트는 공개 함수와 dataclass에 붙인다.
+- 검수 엔진·실행 조정 계층은 Python 3.10+, 표준 라이브러리만. 웹 계층은 FastAPI·Uvicorn을 사용하며 설치는 `pyproject.toml`로 통일하고 `web` extra는 `requirements/web.txt`, `test` extra는 추가로 `requirements/test.txt`의 고정 버전을 읽는다. 타입 힌트는 공개 함수와 dataclass에 붙인다.
 - black 스타일, 줄 길이 120. 한 줄에 여러 문장(`if …: a; b`) 금지. 한 글자 변수는 짧은 comprehension 안에서만.
 - 모듈 첫 줄은 한국어 docstring 한 문단. 사용자에게 보이는 문자열(비고·오류)은 한국어.
 - 오류는 `ValueError`로 올리고, 웹 서버·CLI가 잡아서 메시지를 보여준다. 규칙·파서는 `print`하지 않는다.
