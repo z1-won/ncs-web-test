@@ -91,17 +91,20 @@ NCS 학습모듈 원고(한글 파일)를 올리면, 한국직업능력연구원
 ### 폴더 구조
 
 ```
-src/            검수 코드. ncs_core(공통) · 검수 엔진 10개 · ncs_service(실행·저장) · ncs_web(FastAPI 서버)
-webapp/         화면(frontend/)과 웹 의존성 목록. 서버 코드는 src/ncs_web에 있습니다 → webapp/README.md
-tests/          단위·골든·계약 테스트, 합성 원고(fixtures/), 골든 스냅샷(golden/)
-scripts/        배치 검증, 기준 데이터 생성, 연결 점검 도구 → scripts/README.md
-docs/           규약(CONVENTIONS), 변경 기록(CONSISTENCY_REVIEW), 초기 기획(F02_DEVELOPMENT_PLAN)
+src/            검수 코드. ncs_core(공통) · 검수 엔진 10개 · ncs_service(실행·저장·CLI) · ncs_web(FastAPI 서버)
+webapp/         화면(frontend/)만. 서버 코드는 src/ncs_web에 있습니다 → webapp/README.md
+requirements/   고정 의존성 목록(web·test·dev). pyproject의 web·test extra가 읽습니다
+tests/          core·engines·service·contract·integration 묶음, 합성 원고(fixtures/), 골든 스냅샷(golden/)
+scripts/        batch/(배치 검증) · data/(기준 데이터 생성) · probe/(연결 점검) → scripts/README.md
+docs/           구조(ARCHITECTURE), 규약(CONVENTIONS), 작업 절차·분업(WORKFLOW), 변경 기록(CONSISTENCY_REVIEW), 지난 기획(archive/)
 db/, compose.yaml   PostgreSQL 컨테이너 정의(검수 이력, 선택)
 .github/        이슈·PR 템플릿, 라벨, CI(workflows/test.yml)
-결과/ samples/  검수 결과와 실제 원고 표본 — git 제외
+.claude/        오판정 수정 하네스(에이전트·스킬) → CLAUDE.md
+
+git 제외(로컬): samples/(원고 입력) · _batch/(배치 출력) · 결과/(DB 없이 돌린 결과) · _workspace*/(하네스 산출물) → docs/WORKFLOW.md §6
 ```
 
-자세한 흐름과 파일별 로직은 프로젝트 문서 `PoC2_설계_아키텍처_소개및분석_v1-3`, 항목별 구현 현황은 `PoC2_현황_F02_체크항목_구현여부_v1-1`, 개발 규칙은 `PoC2_운영_개발규칙_3인분업_v1-0`을 봅니다.
+자세한 흐름과 파일별 로직은 `docs/ARCHITECTURE.md`, 작업 절차·3인 분업·로컬 폴더 정리는 `docs/WORKFLOW.md`, 항목별 구현 현황은 아래 '검수 범위'를 봅니다.
 
 ### `src/` 패키지별 역할
 

@@ -1,6 +1,6 @@
 # F02 검수 웹앱·Python 패키지
 
-프로젝트 개요·실행법은 `README.md`, 엔진 규약은 `docs/CONVENTIONS.md`, 커밋 메시지 규칙은 `.gitmessage`를 본다.
+프로젝트 개요·실행법은 `README.md`, 구조는 `docs/ARCHITECTURE.md`, 엔진 규약은 `docs/CONVENTIONS.md`, 작업 절차는 `docs/WORKFLOW.md`, 커밋 메시지 규칙은 `.gitmessage`를 본다.
 
 ## 하네스: F02 오판정 수정
 
