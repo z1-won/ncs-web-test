@@ -171,7 +171,7 @@ F02 차례 ①~⑦ 문구와 규칙 코드를 대조한 결과(판정 논리는 
     조회 불가(인증키 없음·네트워크 오류·API 오류)                   → △  (기록하지 않음, 다음에 다시 조회)
 ```
 
-같은 단어는 프로세스·실행을 넘어 한 번만 조회한다(두 목록 파일이 기록). 운용 전에 `scripts/build_action_nouns.py`(단어 / `--from-file` / `--from-plans 개발계획서폴더` / `--from-manuscripts 원고폴더`)로 목록을 채워 검수 중 조회는 예외로 만든다. 스크립트는 검수와 **같은 코드**(`ActionNounLexicon.judge`)를 쓴다. 인증키는 `.env`의 `STDICT_API_KEY`; 웹 서버·CLI도 같은 변수를 읽는다.
+같은 단어는 프로세스·실행을 넘어 한 번만 조회한다(두 목록 파일이 기록). 운용 전에 `scripts/data/build_action_nouns.py`(단어 / `--from-file` / `--from-plans 개발계획서폴더` / `--from-manuscripts 원고폴더`)로 목록을 채워 검수 중 조회는 예외로 만든다. 스크립트는 검수와 **같은 코드**(`ActionNounLexicon.judge`)를 쓴다. 인증키는 `.env`의 `STDICT_API_KEY`; 웹 서버·CLI도 같은 변수를 읽는다.
 
 **결정 사항(2026-11-01, 사용자)**: 사전에 없으면 X로 확정한다(△가 아님). 외래어·전문용어(디버깅·코딩 등 — 사전에 명사만 있고 ‘-하다’ 동사 없음)도 우선 X로 두고, 예외 로직은 나중에 다룬다. 이미 `manual`로 들어간 7단어는 유지. `view.do`는 명사 항목에 ‘-하다’ 파생어가 없어 쓰지 않는다. 복합어 뒷부분 재시도는 넣지 않는다(거짓 O 위험).
 
@@ -230,7 +230,7 @@ AIoT 원본은 개발 이력 표 하나에 '발행일/세분류명'(신규) 블�
 ### 5.14 테스트 원고 배치 1차 (2026-11-03) — 담당 엔진 5개
 
 드라이브 테스트 데이터(AIoT 원본 + 조작본 157개, 전부 hwp)를 `batch_review` → `batch_compare`로 돌린 결과(위치·차례·개요·필요지식·판권):
-기대 행 228건 중 미탐 2(개요 ① 주어 추가), 오탐 후보 0. 기대 표 `scripts/batch_expected_테스트데이터.tsv`는 조작본을 원본과 문단 대조해
+기대 행 228건 중 미탐 2(개요 ① 주어 추가), 오탐 후보 0. 기대 표 `scripts/batch/batch_expected_테스트데이터.tsv`는 조작본을 원본과 문단 대조해
 실제로 바뀐 곳 기준으로 고쳤다(수정사항.md와 다른 조작 4건은 표의 비고에 '테스트 설계 확인 필요').
 
 원본 자체 X 5건과 처리:
@@ -277,7 +277,7 @@ AIoT 원본은 개발 이력 표 하나에 '발행일/세분류명'(신규) 블�
 | 마지막 출력 줄의 ZIP 경로 자리가 DB 저장일 때 `DB 이력 <id>` | 저장된 곳을 그대로 알림 | 출력의 ZIP 경로를 읽던 스크립트는 `--out`을 준다 |
 | 화면의 검수 이력에 CLI 실행이 함께 보임 | 한 곳에서 이력을 본다 | 시험 삼아 돌린 실행도 남는다 — 남기지 않으려면 `--out` |
 
-`scripts/batch_review.py`는 대상이 아니다(체크포인트 형식이 이력과 다르고, 한 번에 수백 건이 이력에 섞인다).
+`scripts/batch/batch_review.py`는 대상이 아니다(체크포인트 형식이 이력과 다르고, 한 번에 수백 건이 이력에 섞인다).
 
 검증: `tests/test_store.py::CliSaveTests`(선택 규칙, 출처·입력 기록, 실패 메시지), `tests/test_service.py`(10개 CLI가 공유 저장을 탐),
 `tests/test_postgres_integration.py::test_cli_without_out_saves_history_only_as_cli_source`(실제 PostgreSQL), 004 상태의 DB에 005만 적용되는 경로와 재실행 무변화를 임시 DB로 확인.

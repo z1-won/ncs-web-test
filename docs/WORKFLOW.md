@@ -24,7 +24,7 @@
 
 1. 재현 — 실제 원고로 현상 확인. 원고는 `samples/`(git 제외)에 두고 저장소에 넣지 않는다.
 2. 규칙·파서 수정 → 단위 테스트 추가(규칙은 `tests/engines/`, 파서·도우미는 `tests/core/`, 서비스·웹은 `tests/service/`).
-3. `pip install -e ".[test]" -q && python -m unittest discover tests`. 골든이 바뀌면 `PYTHONPATH=src python tests/make_golden.py` 후 `git diff tests/golden`에서 **판정 변동이 의도한 것인지** 확인하고 같이 커밋. 문구만 바뀐 골든 갱신은 커밋 메시지에 "문구만"이라고 적는다.
+3. `pip install -e ".[test]" -q && python -m unittest discover tests`. 묶음 하나는 `python -m unittest discover tests/engines -t tests`, 한 파일은 `python -m unittest tests.engines.test_colophon`(루트에서). 골든이 바뀌면 `PYTHONPATH=src python tests/make_golden.py` 후 `git diff tests/golden`에서 **판정 변동이 의도한 것인지** 확인하고 같이 커밋. 문구만 바뀐 골든 갱신은 커밋 메시지에 "문구만"이라고 적는다.
 4. 다문서 배치로 회귀 확인(필요할 때): `python scripts/batch/batch_review.py run --root 원고폴더 --work _batch/<날짜>_<이름> --budget 150` → `xlsx --out …`. 오판정 수정은 `f02-fix-loop` 스킬(`CLAUDE.md`)이 이 절차를 자동으로 돈다.
 5. 커밋 메시지는 `.gitmessage` 형식(TYPE: 무엇을 / 왜). 다른 사람이 수정 중인 파일은 건드리지 않거나 자기 hunk만 스테이징한다.
 6. feature 브랜치(`이름/주제`)에서 작업하고 PR로 main에 올린다. CI(`.github/workflows/test.yml`)가 테스트와 화면 빌드를 돌린다.

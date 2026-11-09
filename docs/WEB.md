@@ -56,7 +56,7 @@ npm run dev
 
 ## PostgreSQL 검수 이력
 
-웹 서버에 `DATABASE_URL`을 설정하면 PostgreSQL에 검수 이력을 저장합니다. 이 모드에서 실행별 JSON·ZIP 폴더는 새로 만들지 않으며, ZIP은 이력 화면의 다운로드 링크를 누를 때 임시로 생성합니다. `DATABASE_URL`이 없으면 기존 파일 저장 방식으로 실행됩니다. 네 CLI의 `--out` 파일 출력은 계속 사용할 수 있으며 DB에는 저장하지 않습니다(`source`는 `web`과 `import` 둘뿐). CLI로 만든 결과 폴더는 아래 `import` 명령으로 이력에 넣습니다.
+웹 서버에 `DATABASE_URL`을 설정하면 PostgreSQL에 검수 이력을 저장합니다. 이 모드에서 실행별 JSON·ZIP 폴더는 새로 만들지 않으며, ZIP은 이력 화면의 다운로드 링크를 누를 때 임시로 생성합니다. `DATABASE_URL`이 없으면 기존 파일 저장 방식으로 실행됩니다. 검수 CLI(`python -m ncs_position …` 등)도 같은 규칙을 따릅니다: `--out`을 주면 그 폴더에 파일로, 안 주면 셸에 `DATABASE_URL`이 있을 때 DB 이력에만(`source`=`cli`, 폴더를 만들지 않음), 없을 때 `결과/` 폴더에 저장합니다. CLI는 `.env`를 자동으로 읽지 않으므로 `set -a; source .env; set +a`로 올린 셸에서만 DB로 갑니다. 파일이 필요하면 `--out`을 지정하세요. 이미 만든 결과 폴더는 아래 `import` 명령으로 이력에 넣습니다.
 
 저장소 루트의 `compose.yaml`은 로컬 PostgreSQL 18을 `127.0.0.1:55432`에서 실행합니다. 데이터는 `ncs-review_postgres_data` Docker 볼륨에 저장되어 컨테이너를 다시 만들어도 유지됩니다. Docker Desktop을 켜고 저장소 루트에서 실행하세요. 새로 복제한 작업 공간이라면 `.env.example`을 `.env`로 복사해 `NCS_DB_PASSWORD`와 `NCS_DB_ADMIN_PASSWORD`를 서로 다른 강한 값으로 바꾸고, `DATABASE_URL`의 비밀번호는 `NCS_DB_PASSWORD`와 같게 입력합니다. 이 작업 공간의 `.env`는 이미 생성되어 있습니다.
 
