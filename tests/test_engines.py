@@ -156,10 +156,11 @@ class EngineContractTests(unittest.TestCase):
         message = re.search(r"check는 (.*?) 중 하나여야 합니다", server).group(1)
         self.assertEqual(set(message.split(" / ")), registered, "server.py 오류 메시지")
         # 화면: 선택 목록 글은 서버 engines로 채우지만, 기본 목록(CHECKS)과 파일 안내(FILE_HINTS)는 모든 엔진을 알아야 한다
-        app = (ROOT / "webapp" / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
-        self.assertEqual(set(re.findall(r'value:\s*"(\w+)"', app)), registered, "App.jsx CHECKS")
-        hints = re.search(r"const FILE_HINTS = \{(.*?)\};", app, re.S).group(1)
-        self.assertEqual(set(re.findall(r"^\s*(\w+):", hints, re.M)), registered, "App.jsx FILE_HINTS")
+        # 두 목록은 webapp/frontend/src/lib/checks.js에 있다(App.jsx에서 옮겨 옴).
+        checks = (ROOT / "webapp" / "frontend" / "src" / "lib" / "checks.js").read_text(encoding="utf-8")
+        self.assertEqual(set(re.findall(r'value:\s*"(\w+)"', checks)), registered, "checks.js CHECKS")
+        hints = re.search(r"const FILE_HINTS = \{(.*?)\};", checks, re.S).group(1)
+        self.assertEqual(set(re.findall(r"^\s*(\w+):", hints, re.M)), registered, "checks.js FILE_HINTS")
 
 
 if __name__ == "__main__":
