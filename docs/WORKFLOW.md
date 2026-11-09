@@ -33,12 +33,12 @@
 
 | 역할 | 담당 | 파일 영역 | 테스트 |
 |---|---|---|---|
-| 총괄 | 코어·서비스·웹, 데이터 파일, 배치, 통합 | `ncs_core`, `ncs_service`, `ncs_web`, `webapp/`, `scripts/`, `tests/golden` | `tests/core`, `tests/service`, `tests/contract` |
+| 총괄 | 코어·서비스·웹, 데이터 파일, 배치, 통합 | `ncs_core`, `ncs_service`, `ncs_web`, `frontend/`, `scripts/`, `tests/golden` | `tests/core`, `tests/service`, `tests/contract` |
 | A | 위치·차례·개요·필요 지식·판권 (문서 앞부분·구조) | `ncs_position`, `ncs_toc`, `ncs_overview`, `ncs_knowledge`, `ncs_colophon` | `tests/engines`의 해당 파일 |
 | B | 수행 내용·교수학습·평가·참고 자료·기타 (본문 뒷부분·AI 후보) | `ncs_perform`, `ncs_teaching`, `ncs_evaluation`, `ncs_references`, `ncs_misc` | 〃 |
 
 - 코어를 고쳐야 하는 변경은 총괄에게 넘기거나 PR로 분리한다(파서 변경은 모든 엔진에 영향).
-- 충돌 지점은 `ncs_core/manuscript/*`(파서), `tests/golden`(결과 스냅샷), `webapp/frontend/src/App.jsx`. 한 사람이 한 번에 하나씩.
+- 충돌 지점은 `ncs_core/manuscript/*`(파서), `tests/golden`(결과 스냅샷), `frontend/src/App.jsx`. 한 사람이 한 번에 하나씩.
 - 결정이 필요한 규칙(무엇을 X로 볼지)은 코드보다 먼저 문서에 적고 합의한다.
 
 ## 5. 운영 체크리스트 (새 세분류 원고를 받았을 때)

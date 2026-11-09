@@ -37,7 +37,7 @@
 
 ## 공개 API (모든 검수 패키지 동일)
 `tests/contract/test_engines.py`가 `ncs_service.registry.ENGINES`에 등록된 모든 엔진에 대해 이 계약을 검사한다(공개 이름, frozen `CheckConfig`, 체크리스트 행 키, 확인서 행이 F02 원문 항목과 일치, `reporting.REPORT_NAME`·`summary()`와 파일 요약 일치, 저장 파일·ZIP, 빈 규칙 목록, 다른 엔진 설정 거절).
-새 구성요소 엔진은 **`ENGINES`에 등록 → `src/ncs_web/server.py`의 `CheckName`·`/api/health`·오류 메시지 → `webapp/frontend/src/lib/checks.js`의 `CHECKS`·`FILE_HINTS`** 세 곳을 같이 고친다. 하나라도 빠지면 같은 테스트가 알려 준다. 화면의 **전체 실행**은 `/api/health`의 `engines` 순서를 그대로 돌리므로 따로 고칠 것이 없다(개발계획서 필요 여부도 `required`에서 읽는다).
+새 구성요소 엔진은 **`ENGINES`에 등록 → `src/ncs_web/server.py`의 `CheckName`·`/api/health`·오류 메시지 → `frontend/src/lib/checks.js`의 `CHECKS`·`FILE_HINTS`** 세 곳을 같이 고친다. 하나라도 빠지면 같은 테스트가 알려 준다. 화면의 **전체 실행**은 `/api/health`의 `engines` 순서를 그대로 돌리므로 따로 고칠 것이 없다(개발계획서 필요 여부도 `required`에서 읽는다).
 ```python
 run_review(paths, *, roles=None, module_code="", config=DEFAULT_CONFIG, rules=DEFAULT_RULES) -> ReviewResult
 prepare_review(manuscript: Document, plan: Document | None, *, module_code="", config=...) -> ReviewContext
@@ -73,7 +73,7 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 각 엔진의 기존 `run_review()` 공개 API는 Python 호출자와의 호환성을 위해 유지한다.
 FastAPI 요청·응답 모델 및 오류 상태 코드는 `src/ncs_web/server.py`에서 관리한다. 기존 `/api/review`의 입력 오류는 400, 저장 I/O 오류 등은 500을 유지한다.
 결과 저장 경로(`--out`)와 정적 화면 경로(`--dist`)는 서버 코드 위치에서 유도하지 않는다. 상대 경로는 앱 생성 시 실행 위치를 기준으로 확정한다. `--out` 기본값은 실행 위치의 `결과/`, `--dist` 생략 시 API 전용이다.
-웹 화면은 `webapp/frontend/src/`에서 수정하고, 프런트엔드 폴더에서 `npm run build`로 `webapp/frontend/dist/`를 생성한다.
+웹 화면은 `frontend/src/`에서 수정하고, 프런트엔드 폴더에서 `npm run build`로 `frontend/dist/`를 생성한다.
 
 ## 변경 검증
 정책을 바꾸지 않는 리팩토링은 `tests/contract/test_golden.py`가 통과함으로써(현재 결과 == `tests/golden/*.json`) 검수 결과가 동일함을 보인다. 이때 `tests/make_golden.py`를 실행하지 않는다.

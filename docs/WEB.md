@@ -1,10 +1,10 @@
-# F02 검수 로컬 웹앱
+# F02 검수 웹앱 — 실행·DB 안내
 
-FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다. **이 폴더에는 화면만 있습니다. 서버 코드는 `src/`, 의존성 목록은 저장소 루트의 `requirements/`에 있습니다.**
+FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다. **화면은 저장소 루트의 `frontend/`, 서버 코드는 `src/ncs_web/`, 의존성 목록은 `requirements/`에 있습니다.** 명령은 모두 저장소 루트에서 실행합니다.
 
 | 무엇 | 어디 |
 |---|---|
-| 화면(React·Vite·KRDS) | `webapp/frontend/` — 소스 `src/`, 빌드 결과 `dist/`(git 제외) |
+| 화면(React·Vite·KRDS) | `frontend/` — 소스 `src/`, 빌드 결과 `dist/`(git 제외) |
 | 웹 의존성 고정 목록 | `requirements/web.txt`·`test.txt`·`dev.txt` — `pyproject.toml`의 `web`·`test` extra가 읽음 |
 | 서버(FastAPI) | `src/ncs_web/server.py` — 파일 업로드·요청 검증·HTTP 응답. 명령은 `ncs-web` |
 | 검수 실행·저장 | `src/ncs_service/` |
@@ -29,7 +29,7 @@ python3 -m venv .venv
 별도 터미널에서 화면을 실행합니다.
 
 ```bash
-cd webapp/frontend
+cd frontend
 npm install
 npm run dev
 ```
@@ -38,7 +38,7 @@ npm run dev
 프런트엔드 폴더에서 `npm run build`를 실행한 뒤, 저장소 루트에서 아래처럼 시작하면 빌드된 화면도 8765에서 제공합니다.
 
 ```bash
-.venv/bin/ncs-web --dist webapp/frontend/dist
+.venv/bin/ncs-web --dist frontend/dist
 ```
 
 ## 저장·화면 경로 분리
@@ -52,7 +52,6 @@ npm run dev
 다른 위치에서 실행할 때는 절대 경로를 지정하면 같은 결과 폴더와 화면 빌드를 계속 사용할 수 있습니다.
 결과 폴더는 첫 저장 때 생성하며, 화면 폴더는 빌드된 파일을 읽는 용도입니다.
 화면 경로가 없거나 지정되지 않으면 `/`는 안내와 함께 404를 반환하고 API·`/docs`는 계속 사용할 수 있습니다.
-예전 안내대로 `--out webapp/결과`로 띄웠다면 결과가 `webapp/결과/`에 따로 쌓여 있습니다. 한 곳으로 모으려면 그 안의 실행 폴더를 루트 `결과/`로 옮기거나 아래 이관 명령으로 DB에 넣습니다.
 `DATABASE_URL`을 설정하지 않으면 기존 JSON·ZIP 파일 저장 방식을 유지합니다.
 
 ## PostgreSQL 검수 이력
@@ -73,7 +72,7 @@ set -a
 source .env
 set +a
 .venv/bin/python -m ncs_service.postgres_cli migrate
-.venv/bin/ncs-web --dist webapp/frontend/dist
+.venv/bin/ncs-web --dist frontend/dist
 ```
 
 앱 전용 데이터베이스와 관리자 권한이 없는 `ncs_app` 계정은 PostgreSQL 볼륨을 처음 만들 때 생성됩니다. `.env`는 저장소에서 제외됩니다. `docker compose stop db`로 중지하고 `docker compose start db`로 다시 시작할 수 있습니다. `docker compose down`은 컨테이너만 제거하고 데이터 볼륨은 유지하지만, `docker compose down -v`는 데이터 볼륨도 삭제합니다. 앱 시작 시와 `postgres_cli migrate`는 `ncs_service/migrations.py`의 `MIGRATIONS`(번호 붙은 SQL 목록) 중 아직 적용되지 않은 것만 순서대로 실행하고 `schema_version` 표에 기록합니다. 스키마를 바꿀 때는 적용된 항목을 수정하지 말고 다음 번호를 뒤에 추가합니다. 코드를 올리고 서버를 재시작하면 DB가 따라옵니다. check 이름의 허용값은 DB 제약이 아니라 `ncs_service.registry.ENGINES`가 검증하므로, 엔진을 추가해도 DB 쪽 작업은 없습니다.

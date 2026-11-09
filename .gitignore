@@ -5,7 +5,6 @@ __pycache__/
 .env
 
 # Generated review reports
-/webapp/결과/
 /결과/
 
 # Python package build artifacts

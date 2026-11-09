@@ -92,11 +92,11 @@ NCS 학습모듈 원고(한글 파일)를 올리면, 한국직업능력연구원
 
 ```
 src/            검수 코드. ncs_core(공통) · 검수 엔진 10개 · ncs_service(실행·저장·CLI) · ncs_web(FastAPI 서버)
-webapp/         화면(frontend/)만. 서버 코드는 src/ncs_web에 있습니다 → webapp/README.md
+frontend/       화면(React·Vite·KRDS). 서버 코드는 src/ncs_web, 웹·DB 실행 안내는 docs/WEB.md
 requirements/   고정 의존성 목록(web·test·dev). pyproject의 web·test extra가 읽습니다
 tests/          core·engines·service·contract·integration 묶음, 합성 원고(fixtures/), 골든 스냅샷(golden/)
 scripts/        batch/(배치 검증) · data/(기준 데이터 생성) · probe/(연결 점검) → scripts/README.md
-docs/           구조(ARCHITECTURE), 규약(CONVENTIONS), 작업 절차·분업(WORKFLOW), 변경 기록(CONSISTENCY_REVIEW), 지난 기획(archive/)
+docs/           구조(ARCHITECTURE), 규약(CONVENTIONS), 작업 절차·분업(WORKFLOW), 웹·DB 실행(WEB), 변경 기록(CONSISTENCY_REVIEW), 지난 기획(archive/)
 db/, compose.yaml   PostgreSQL 컨테이너 정의(검수 이력, 선택)
 .github/        이슈·PR 템플릿, 라벨, CI(workflows/test.yml)
 .claude/        오판정 수정 하네스(에이전트·스킬) → CLAUDE.md
@@ -108,7 +108,7 @@ git 제외(로컬): samples/(원고 입력) · _batch/(배치 출력) · 결과/
 
 ### `src/` 패키지별 역할
 
-호출 흐름은 `webapp(React) → ncs_web → ncs_service → 엔진 10개 → ncs_core`입니다.
+호출 흐름은 `frontend(React) → ncs_web → ncs_service → 엔진 10개 → ncs_core`입니다.
 
 | 패키지 | 역할 | F02 항목 |
 |---|---|---|
@@ -152,10 +152,10 @@ pip install openpyxl               # scripts/batch/batch_review.py xlsx 출력�
 
 ```bash
 set -a; source .env; set +a
-ncs-web --dist webapp/frontend/dist          # API + 빌드된 화면, http://127.0.0.1:8765
+ncs-web --dist frontend/dist          # API + 빌드된 화면, http://127.0.0.1:8765
 ```
 
-화면을 고칠 때는 `cd webapp/frontend && npm install && npm run dev`(개발 서버 5173) 또는 `npm run build` 후 위 명령. `--out 폴더`로 결과 저장 위치를 바꿉니다(기본 `결과/`). API 문서는 `/docs`. 포트가 잡혀 있으면 `lsof -ti :8765 | xargs kill`.
+화면을 고칠 때는 `cd frontend && npm install && npm run dev`(개발 서버 5173) 또는 `npm run build` 후 위 명령. `--out 폴더`로 결과 저장 위치를 바꿉니다(기본 `결과/`). API 문서는 `/docs`. 포트가 잡혀 있으면 `lsof -ti :8765 | xargs kill`.
 
 검수 항목 목록의 마지막 **전체**를 고르면 구성요소 10개를 확인서 순서대로 한 번에 검사합니다(개발계획서가 없으면 '위치'만 건너뜀). 결과는 구성요소별 아코디언으로 열어 보고, 이력에는 한 묶음이 한 줄로 남습니다.
 

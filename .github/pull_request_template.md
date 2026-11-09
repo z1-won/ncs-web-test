@@ -14,7 +14,7 @@
 ## 🎯 영향 범위
 
 - 구성요소·체크 항목: <!-- e.g. 차례 ②, 해당 없음 -->
-- 패키지: <!-- ncs_core / 검수 엔진(ncs_*) / ncs_service / ncs_web / webapp -->
+- 패키지: <!-- ncs_core / 검수 엔진(ncs_*) / ncs_service / ncs_web / frontend -->
 
 ## 🔍 판정 변화
 
@@ -36,7 +36,7 @@
 
 - [ ] `python -m unittest discover tests` 통과 (PR을 열면 CI가 같은 검사를 돌립니다)
 - [ ] (화면) `npm run lint`, `npm run build` 통과
-- [ ] (새 엔진) `ENGINES` → `src/ncs_web/server.py` → `webapp/frontend/src/lib/checks.js` 세 곳 반영
+- [ ] (새 엔진) `ENGINES` → `src/ncs_web/server.py` → `frontend/src/lib/checks.js` 세 곳 반영
 - [ ] (DB) 스키마 변경은 `MIGRATIONS` 뒤에 추가만 함
 - [ ] 원고 원문·내부 자료·API 키가 커밋과 첨부 이미지에 없음
 - [ ] README·docs 갱신 (필요한 경우)

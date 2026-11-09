@@ -34,7 +34,7 @@ assignees: ""
 
 ## 📝 TODO
 
-<!-- 새 검수 엔진이라면 ENGINES → src/ncs_web/server.py → webapp/frontend/src/lib/checks.js 세 곳을 함께 고칩니다 -->
+<!-- 새 검수 엔진이라면 ENGINES → src/ncs_web/server.py → frontend/src/lib/checks.js 세 곳을 함께 고칩니다 -->
 
 - [ ] Task 1
 - [ ] Task 2
