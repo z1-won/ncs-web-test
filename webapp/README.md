@@ -1,8 +1,16 @@
 # F02 검수 로컬 웹앱
 
-FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다.
-`src/ncs_web/server.py`는 파일 업로드·요청 검증·HTTP 응답을, `src/ncs_service/`는 검수 실행·저장 조정을 담당합니다.
-`src/ncs_core/`와 네 검수 패키지는 웹 프레임워크 없이도 실행할 수 있습니다.
+FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다. **이 폴더에는 화면과 웹 의존성 목록만 있고, 서버 코드는 `src/`에 있습니다.**
+
+| 무엇 | 어디 |
+|---|---|
+| 화면(React·Vite·KRDS) | `webapp/frontend/` — 소스 `src/`, 빌드 결과 `dist/`(git 제외) |
+| 웹 의존성 고정 목록 | `webapp/requirements.txt`, `requirements-dev.txt` — `pyproject.toml`의 `web`·`test` extra가 읽음 |
+| 옛 실행 명령 호환 | `webapp/server.py` — `python webapp/server.py`를 `ncs_web.server`로 넘기는 7줄짜리 진입점 |
+| 서버(FastAPI) | `src/ncs_web/server.py` — 파일 업로드·요청 검증·HTTP 응답. 명령은 `ncs-web` |
+| 검수 실행·저장 | `src/ncs_service/` |
+
+`src/ncs_core/`와 검수 패키지 10개는 웹 프레임워크 없이도 실행할 수 있습니다.
 
 ## 설치·실행
 

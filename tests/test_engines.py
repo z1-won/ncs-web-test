@@ -144,6 +144,15 @@ class EngineContractTests(unittest.TestCase):
                 whole = next(p for p in saved.directory.glob("*_전체.json"))
                 self.assertEqual(json.loads(whole.read_text(encoding="utf-8")), execution.result.checklist)
 
+    def test_every_engine_package_has_the_fixed_skeleton_files(self):
+        """뼈대 파일 8개는 모든 검수 패키지가 같은 이름으로 갖는다(docs/CONVENTIONS.md '구조')."""
+        skeleton = ("config.py", "models.py", "registry.py", "pipeline.py", "reporting.py", "sheet.py", "__main__.py", "rules/__init__.py")
+        for check, engine in ENGINES.items():
+            with self.subTest(check=check):
+                folder = ROOT / "src" / engine.package
+                missing = [name for name in skeleton if not (folder / name).is_file()]
+                self.assertEqual(missing, [], f"{engine.package}에 뼈대 파일이 없습니다")
+
     def test_web_server_and_frontend_list_every_engine(self):
         """엔진을 등록하면 src/ncs_web/server.py의 CheckName·health 목록과 화면의 CHECKS도 함께 갱신해야 한다."""
         registered = set(ENGINES)

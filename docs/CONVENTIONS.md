@@ -1,6 +1,6 @@
 # 검수 패키지 공통 규약
 
-네 검수 패키지(`ncs_position`, `ncs_toc`, `ncs_overview`, `ncs_knowledge`)와 앞으로 추가될 F02 항목 패키지는 이 규약을 따른다.
+검수 패키지 10개(`ncs_position`, `ncs_toc`, `ncs_overview`, `ncs_knowledge`, `ncs_perform`, `ncs_teaching`, `ncs_evaluation`, `ncs_references`, `ncs_colophon`, `ncs_misc`)와 앞으로 추가될 F02 항목 패키지는 이 규약을 따른다.
 
 ## 구조
 - 공통 코어 `ncs_core`: 문서 읽기, 문자 정규화·판정, 입력 역할 판별, 모듈 코드, 규칙 실행기, 저장. **판정 정책을 두지 않는다.**
@@ -9,15 +9,31 @@
   임계값은 `ParseConfig`로 받는다. 양식 구조를 읽는 코드는 여기에 두고, 검수 패키지는 자기 항목에만 필요한 추출만 가진다.
 - **계층 규칙**: 검수 패키지는 `ncs_core`만 import한다. 다른 검수 패키지를 import하지 않으며, `ncs_core`는 검수 패키지·`ncs_service`를 모른다.
   `tests/test_layering.py`가 이를 검사한다. 두 패키지가 같은 추출이 필요해지면 `ncs_core.manuscript`로 올린다.
-- 검수 패키지의 파일 구성은 고정이다. 공통 파서로 충분한 파일은 생략한다.
-  `config.py`(양식 가정, frozen dataclass; 공통 파서를 쓰면 `parse_config() -> ParseConfig`) · `patterns.py`(그 패키지 판정에만 쓰는 정규식·라벨) ·
-  `text.py`(`norm, same = make_normalizer(접두 패턴)`; 차례·필요 지식은 `ncs_core.manuscript.names`를 쓰므로 없음) ·
-  `compare.py`(목록 비교 도우미) · `parsers.py`(그 패키지 고유 추출, I/O 없음) · `models.py`(`ReviewContext`) ·
+- 검수 패키지의 **뼈대 파일 8개는 고정**이다. 모든 패키지가 같은 이름으로 갖는다(`tests/test_engines.py`가 검사).
+  `config.py`(양식 가정, frozen dataclass; 공통 파서를 쓰면 `parse_config() -> ParseConfig`) · `models.py`(`ReviewContext`) ·
   `rules/<규칙>.py`(판정, I/O 없음) · `registry.py`(`DEFAULT_RULES`, `ALL_ITEM_IDS`) · `pipeline.py` ·
-  `reporting.py`(`REPORT_NAME`, `ITEM_FILES`, `summary(result)`, `save_results`) · `__main__.py`.
+  `reporting.py`(`REPORT_NAME`, `ITEM_FILES`, `summary(result)`, `save_results`) · `sheet.py`(확인서 항목 `ITEMS`·`COMPONENT`) · `__main__.py`.
+- 필요할 때만 두는 파일: `patterns.py`(그 패키지 판정에만 쓰는 정규식·라벨) · `text.py`(`norm, same = make_normalizer(접두 패턴)`; 공통 `ncs_core.manuscript.names`로 충분하면 없음) · `compare.py`(목록 비교 도우미).
+- 그 패키지 고유의 **추출 모듈**(원고에서 자기 항목에 필요한 구조를 읽는 코드, I/O 없음)은 읽는 대상을 드러내는 이름으로 둔다.
+  지금 있는 것: 위치 `parsers` · 차례 `evaluation`(평가 표) · 필요 지식 `figtab`(그림·표 번호)·`plan`·`structure`(뒤 둘은 코어로 옮긴 파서의 이름 유지용) ·
+  수행·교수학습 `blocks` · 평가 `region` · 참고 자료 `entries`·`templates`(F14 서지 골격) · 판권 `tables`.
+  새 패키지는 추출이 한 덩어리면 `parsers.py`, 대상이 여럿이면 대상별 이름으로 나눈다. 판정(O/X/△를 정하는 코드)은 추출 모듈이 아니라 `rules/`에 둔다.
 - 단어 지식이 필요한 판정(행동명사 등)은 `ncs_core.lexicon`이 한다: 저장 목록(`ncs_core/data/*.txt`) → 없으면 국립국어원 표준국어대사전 API 조회 → 결과를 목록에 기록. 외부 호출은 이 한 곳에만 두고, 조회 불가(인증키 없음·오류)는 X가 아니라 △로 낸다. 운용 전에 `scripts/build_action_nouns.py`로 목록을 채워 검수 중 조회는 예외로 만든다. 목록 파일은 git으로 이력을 남긴다. 테스트는 가짜 resolver를 주입해 네트워크를 쓰지 않는다.
 - 엔진 목록(check 이름)의 원본은 `ncs_service.registry.ENGINES` 하나다. 다른 코드(DB 저장, 이관, SQL 제약)에 엔진 이름을 다시 적지 않고 `ENGINES`를 순회하거나 엔진 `reporting`의 `REPORT_NAME`을 읽는다.
 - 규칙은 `Rule(key, item_prefix, run)`으로 등록한다. `run`은 `ReviewContext` 하나를 받아 체크리스트 행 목록을 돌려주고, 행의 `item_id`는 `item_prefix`로 시작해야 한다.
+
+## `ncs_core` 모듈 지도
+코어는 한 층에 모듈이 많다. 역할로 묶으면 다음과 같고, 새 모듈은 자기 묶음을 정한 뒤 추가한다. (하위 패키지로 나누는 것은 열려 있는 작업들과 import 경로가 충돌하므로 보류 — `docs/CONSISTENCY_REVIEW.md` §6.)
+
+| 묶음 | 모듈 | 하는 일 |
+|---|---|---|
+| 문서 읽기 | `documents` · `hwp` · `hwpx` · `numbering` · `tables` | 파일을 한 번 읽어 `Document`로. 구역 정규화, 자동 번호 복원, 표 도우미 |
+| 원고 구조 | `manuscript/`(`toc` · `overview` · `body` · `units` · `presence` · `plan_table` · `plan_goals` · `names` · `patterns` · `config`) | 차례·개요·본문·꼬리·개발계획서 블록을 읽는 공통 파서 |
+| 입력 확인 | `inputs` · `module_code` | 파일 역할 판별, 모듈 코드 추출·검증 |
+| 판정 도우미 | `text` · `goals` · `sentences` · `notes` | 정규화·비교·`verdict`, 목표 문장 비교, 종결 판정, 비고 문장 틀. 정책은 두지 않는다 |
+| 규칙·결과 | `rules` · `models` · `sheet` · `f02_items` · `reporting` | 규칙 등록·실행, 결과 계약, 확인서 접기, F02 항목 원문, 파일 저장 |
+| 기준 데이터 | `lexicon` · `ncs_catalog` · `data/` | 행동명사 목록, NCS 분류·수준 표, F02 양식 |
+| 외부 호출 | `lexicon`(사전) · `llm` · `ncs_api` | 표준국어대사전, 생성형 AI, 공공데이터포털. 검수 중 호출은 승인·키가 있을 때만, 실패는 △ |
 
 ## 공개 API (모든 검수 패키지 동일)
 `tests/test_engines.py`가 `ncs_service.registry.ENGINES`에 등록된 모든 엔진에 대해 이 계약을 검사한다(공개 이름, frozen `CheckConfig`, 체크리스트 행 키, 확인서 행이 F02 원문 항목과 일치, `reporting.REPORT_NAME`·`summary()`와 파일 요약 일치, 저장 파일·ZIP, 빈 규칙 목록, 다른 엔진 설정 거절).
