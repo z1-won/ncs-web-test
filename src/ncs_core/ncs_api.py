@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import os
 import re
@@ -25,6 +26,11 @@ from dataclasses import dataclass
 BASE_URL = "https://apis.data.go.kr/B490007/ncsInfo"
 PAGE_SIZE = 100
 NUMBERED = re.compile(r"^\d{1,2}\.\s*")
+
+
+def _text(value) -> str:
+    """응답 문자열 정리 — HTML 엔티티(&amp; 등)를 풀고 앞뒤 공백 제거."""
+    return html.unescape(str(value or "")).strip()
 
 
 class NcsApiError(RuntimeError):
@@ -92,8 +98,8 @@ def units(duty: str) -> list[ApiUnit]:
     out = []
     for row in _pages("ncsCompeUnitInfo", {"dutyCd": duty[:8]}):
         level = row.get("compUnitLevel")
-        out.append(ApiUnit(row.get("dutyCd", duty[:8]), row["ncsClCd"], NUMBERED.sub("", row.get("compUnitName", "")).strip(),
-                           int(level) if level not in (None, "") else None, row.get("compUnitDef", "")))
+        out.append(ApiUnit(row.get("dutyCd", duty[:8]), row["ncsClCd"], NUMBERED.sub("", _text(row.get("compUnitName"))),
+                           int(level) if level not in (None, "") else None, _text(row.get("compUnitDef"))))
     return sorted(out, key=lambda u: u.code)
 
 
@@ -102,7 +108,7 @@ def elements(duty: str, unit_no: str | None = None) -> list[dict]:
     params = {"dutyCd": duty[:8]}
     if unit_no:
         params["compUnitCd"] = unit_no
-    return [{"code": r["ncsClCd"], "no": int(r.get("compUnitFactrNo") or 0), "name": NUMBERED.sub("", r.get("compUnitFactrName", "")).strip()}
+    return [{"code": r["ncsClCd"], "no": int(r.get("compUnitFactrNo") or 0), "name": NUMBERED.sub("", _text(r.get("compUnitFactrName")))}
             for r in _pages("ncsCompeUnitFactrInfo", params)]
 
 
@@ -111,8 +117,8 @@ def ksa(duty: str, unit_no: str | None = None) -> list[dict]:
     params = {"dutyCd": duty[:8]}
     if unit_no:
         params["compUnitCd"] = unit_no
-    return [{"code": r["ncsClCd"], "no": int(r.get("compUnitFactrNo") or 0), "name": NUMBERED.sub("", r.get("compUnitFactrName", "")).strip(),
-             "kind": (r.get("gbnName") or "").strip(), "text": NUMBERED.sub("", r.get("gbnVal", "")).strip()}
+    return [{"code": r["ncsClCd"], "no": int(r.get("compUnitFactrNo") or 0), "name": NUMBERED.sub("", _text(r.get("compUnitFactrName"))),
+             "kind": _text(r.get("gbnName")), "text": NUMBERED.sub("", _text(r.get("gbnVal")))}
             for r in _pages("ncsKsaInfo", params)]
 
 
