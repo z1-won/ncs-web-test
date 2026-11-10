@@ -1,8 +1,10 @@
 """개발계획서 점검(ncs_plan): 표 읽기와 ①~⑨ 규칙을 합성 표로 검사한다. 실제 계획서 샘플이 있으면 끝에서 한 번 돌려 본다."""
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from ncs_core.lexicon import ActionNounLexicon
 from ncs_plan.parsers import read_change_table, read_module, read_plan, read_summary_table
@@ -10,6 +12,17 @@ from ncs_plan.rules.front import check_change_table, check_identity, check_requi
 from ncs_plan.rules.module import check_element_codes, check_goal, check_lessons, check_subs, check_targets
 
 CODE = "1203020201_24v3"
+
+
+class RealCatalog(unittest.TestCase):
+    """개발계획서 ①은 NCS 목록과 대조한다. 골든 테스트(tests/golden_cases.py)가 같은 프로세스에서 먼저 불리면
+    NCS_CATALOG_FILE을 없는 파일로 두어 목록을 끄므로, 이 묶음을 도는 동안만 그 설정을 걷어 패키지 기본 목록을 쓴다."""
+
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("NCS_CATALOG_FILE", None)
 C1 = ["1.1 호텔의 객실 유형에 따라 객실 및 부대시설 정보를 구분 할 수 있다.", "1.2 객실 요금 종류에 따라 마켓별 요금을 구분하여 적용할 수 있다."]
 C2 = ["2.1 호텔 객실 운영 시스템(PMS)을 기반으로 예약 가능한 객실 현황을 파악할 수 있다."]
 
@@ -195,7 +208,7 @@ SAMPLE = Path(__file__).resolve().parents[2] / "samples" / "개발계획서_1203
 
 
 @unittest.skipUnless(SAMPLE.is_file(), "실제 개발계획서 샘플이 없음(samples/는 git 제외)")
-class RealSampleTests(unittest.TestCase):
+class RealSampleTests(RealCatalog):
     def test_real_plan_runs_and_finds_known_numbering_errors(self):
         from ncs_plan import run_review
 
@@ -211,7 +224,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class FillTests(unittest.TestCase):
+class FillTests(RealCatalog):
     """자동 입력(fill): 합성 spec → 초안 hwpx → 다시 읽어 NCS 쪽이 그대로이고 점검 ①~⑥·⑧에서 X가 없어야 한다."""
 
     SPEC = {

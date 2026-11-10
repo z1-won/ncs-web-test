@@ -28,7 +28,7 @@ export const CHECKS = [
   { value: "references", label: "참고 자료 ①~③" },
   { value: "colophon", label: "개발 이력 및 판권 ①" },
   { value: "misc", label: "기타 ①·②·⑥·⑦" },
-  { value: "plan", label: "개발계획서 ①~⑨" },
+  { value: "plan", label: "개발계획서 ①~⑩" },
 ].map((c) => ({
   ...c,
   files: FILE_HINTS[c.value] || "원고",

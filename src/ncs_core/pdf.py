@@ -91,7 +91,7 @@ def load_pdf(path, *, band: float = BAND, min_text_ratio: float = MIN_TEXT_RATIO
     """PDF 파일 → PdfDocument. pypdf가 없으면 PdfUnavailable, 글자를 못 뽑으면 ValueError."""
     path = Path(path)
     if not is_pdf(path):
-        raise ValueError(f"PDF 파일이 아닙니다: {path}")
+        raise ValueError(f"PDF 파일이 아닙니다: {path.name}")
     try:
         from pypdf import PdfReader
         from pypdf.errors import PdfReadError
@@ -101,15 +101,15 @@ def load_pdf(path, *, band: float = BAND, min_text_ratio: float = MIN_TEXT_RATIO
         reader = PdfReader(str(path))
         if reader.is_encrypted:
             if reader.decrypt("") == 0:
-                raise ValueError(f"암호가 걸린 PDF는 읽을 수 없습니다: {path}")
+                raise ValueError(f"암호가 걸린 PDF는 읽을 수 없습니다: {path.name}")
         raw_pages = [_read_page(page, band=band) for page in reader.pages]
     except PdfReadError as error:
-        raise ValueError(f"PDF를 읽지 못했습니다: {path} ({error})") from None
+        raise ValueError(f"PDF를 읽지 못했습니다: {path.name} ({error})") from None
     if not raw_pages:
-        raise ValueError(f"쪽이 없는 PDF입니다: {path}")
+        raise ValueError(f"쪽이 없는 PDF입니다: {path.name}")
     ratio = _text_ratio(raw_pages)
     if ratio < min_text_ratio:
-        raise ValueError(f"글자를 추출할 수 없는 PDF입니다(스캔본이거나 글꼴 매핑이 없음): {path}")
+        raise ValueError(f"글자를 추출할 수 없는 PDF입니다(스캔본이거나 글꼴 매핑이 없음): {path.name}")
     pages = _assign_folios(raw_pages)
     return PdfDocument(path, tuple(pages), ratio, _find_module_code(pages))
 

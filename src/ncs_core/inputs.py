@@ -67,12 +67,12 @@ def select_documents(
         seen.add(key)
         if is_pdf(path):
             if overrides.get(key, "print") != "print":
-                raise ValueError(f"PDF는 출력본으로만 받습니다. 원고·개발계획서는 hwp/hwpx로 올리세요: {path}")
+                raise ValueError(f"PDF는 출력본으로만 받습니다. 원고·개발계획서는 hwp/hwpx로 올리세요: {Path(path).name}")
             document = load_pdf(path)
             role = "print"
         else:
             if overrides.get(key) == "print":
-                raise ValueError(f"출력본은 PDF여야 합니다: {path}")
+                raise ValueError(f"출력본은 PDF여야 합니다: {Path(path).name}")
             document = load_document(path)
             role = overrides.get(key, detect_role(document.sections))
         if role not in ROLE_LABELS:

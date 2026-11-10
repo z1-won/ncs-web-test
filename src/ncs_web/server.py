@@ -164,7 +164,7 @@ def create_app(
         return {"ok": True, "checks": list(ENGINES), "engines": describe_engines(), "history": store.supports_history}
 
     @app.get("/api/plan/subclasses")
-    def plan_subclasses(response: Response) -> dict[str, Any]:
+    def plan_subclasses() -> dict[str, Any]:
         """초안을 만들 수 있는 세분류 — 요소·수행준거 표(ncs_elements.tsv)에 받아 둔 것만. 능력단위마다 요소 수를 함께."""
         from ncs_core.ncs_catalog import catalog
 

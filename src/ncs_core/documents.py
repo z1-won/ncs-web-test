@@ -118,7 +118,7 @@ def load_document(path) -> Document:
     path = Path(path)
     fmt = detect_format(path)
     if fmt == "pdf":
-        raise ValueError(f"PDF는 원고로 읽지 않습니다(표·스타일·구역이 없음). 출력본으로 함께 올리면 쪽수 확인에만 씁니다: {path}")
+        raise ValueError(f"PDF는 원고로 읽지 않습니다(표·스타일·구역이 없음). 출력본으로 함께 올리면 쪽수 확인에만 씁니다: {path.name}")
     if fmt == "hwp":
         sections, tables = hwp.load_hwp(path.read_bytes())
         images, table_paragraphs, figures, styles, aside, numbers = [], None, [], None, None, None

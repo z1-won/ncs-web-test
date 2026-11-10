@@ -179,7 +179,7 @@ class WebappTests(unittest.TestCase):
         # engines: 화면 선택 목록의 글이 되는 엔진 설명 — 등록 순서대로, 구현 항목은 확인서 번호
         self.assertEqual([e["check"] for e in body["engines"]], list(PACKAGES))
         self.assertEqual(body["engines"][0]["component"], "NCS-학습모듈의 위치")
-        self.assertTrue(all(e["items"] and all(n in "①②③④⑤⑥⑦⑧" for n in e["items"]) and e["total"] >= len(e["items"]) for e in body["engines"]))
+        self.assertTrue(all(e["items"] and all(n in "①②③④⑤⑥⑦⑧⑨⑩" for n in e["items"]) and e["total"] >= len(e["items"]) for e in body["engines"]))
         self.assertNotIn("access-control-allow-origin", health.headers, "출처 없는 요청에는 CORS 헤더를 내지 않는다")
         self.assertEqual(self.client.get("/docs").status_code, 200)
         schema = self.client.get("/openapi.json").json()
