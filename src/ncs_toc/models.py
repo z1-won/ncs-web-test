@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ncs_core import Document
+from ncs_core.pdf import PdfDocument
 
 from .config import CheckConfig
 
@@ -22,3 +23,6 @@ class ReviewContext:
     body: dict[str, Any]
     presence: dict[str, Any]
     eval_tables: list[tuple[int, str, list[str]]]
+    print_copy: PdfDocument | None = None       # 출력본 PDF(선택). ⑦ 쪽수 비교에만 쓴다
+    headings: dict[str, dict] | None = None     # 출력본에서 찾은 제목 시작 쪽(manuscript.pages.locate_headings)
+    print_error: str | None = None              # 출력본을 받았지만 못 읽은 이유

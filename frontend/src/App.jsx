@@ -206,7 +206,7 @@ export default function App() {
     <main id="container" className="inner page">
       <h1 className="page-title">NCS 학습모듈 검수 확인 (로컬 테스트)</h1>
       <p className="page-desc">
-        원고와 개발계획서(.hwp/.hwpx)를 올리면 검수 패키지를 그대로 실행해 검수 확인서 형식과 결과 JSON을 보여줍니다. 파일 역할은 내용으로 자동 판별합니다.
+        원고와 개발계획서(.hwp/.hwpx)를 올리면 검수 패키지를 그대로 실행해 검수 확인서 형식과 결과 JSON을 보여줍니다. 파일 역할은 내용으로 자동 판별합니다. 원고를 한글에서 PDF로 저장한 출력본을 함께 올리면 차례 ⑦(쪽수)도 확정합니다.
       </p>
 
       <form id="review-run" className="fieldset review-form nav-anchor" onSubmit={submit}>
@@ -225,18 +225,19 @@ export default function App() {
         <div className="form-group">
           <div className="form-tit"><label htmlFor="files">파일</label></div>
           <div className="form-conts">
-            <input ref={fileInput} id="files" type="file" multiple accept=".hwp,.hwpx" className="sr-only" tabIndex={-1} aria-describedby="files-hint"
+            <input ref={fileInput} id="files" type="file" multiple accept=".hwp,.hwpx,.pdf" className="sr-only" tabIndex={-1} aria-describedby="files-hint"
                    onChange={(e) => setFiles(Array.from(e.target.files || []))} />
             {/* 셀렉트·입력칸과 같은 large 높이(--krds-size-height large)로 세 칸의 규격을 맞춘다 */}
             <button type="button" className="krds-btn large tertiary" disabled={busy} onClick={() => fileInput.current?.click()}>파일 선택</button>
           </div>
-          {/* 고른 즉시 서버가 내용으로 역할을 판별해 파일명 뒤에 적어 준다(원고/개발계획서). 실행 전에 '개발계획서 없음'을 알 수 있다 */}
+          {/* 고른 즉시 서버가 내용으로 역할을 판별해 파일명 뒤에 적어 준다(원고/개발계획서/출력본). 실행 전에 '개발계획서 없음'을 알 수 있다 */}
           <p className="form-hint" id="files-hint">
             {!files.length ? "선택된 파일 없음"
               : upload.status === "uploading" ? `${files.map((f) => f.name).join(", ")} — 역할 확인 중…`
               : files.map((f) => {
                 const role = upload.status !== "ready" ? null
-                  : upload.roles?.manuscript === f.name ? "원고" : upload.roles?.plan === f.name ? "개발계획서" : "역할 미판별";
+                  : upload.roles?.manuscript === f.name ? "원고" : upload.roles?.plan === f.name ? "개발계획서"
+                  : upload.roles?.print === f.name ? "출력본 PDF" : "역할 미판별";
                 return role ? `${f.name} (${role})` : f.name;
               }).join(", ")}
           </p>
@@ -246,6 +247,9 @@ export default function App() {
           )}
           {upload.status === "ready" && !upload.roles?.manuscript && (
             <p className="form-hint-invalid">원고를 찾지 못했습니다. 원고 파일을 올리세요.</p>
+          )}
+          {upload.status === "ready" && upload.roles?.manuscript && !upload.roles?.print && (selected.optional || []).includes("print") && (
+            <p className="form-hint">출력본 PDF가 없어 차례 ⑦(쪽수)은 판단불가로 남습니다. 원고를 한글에서 PDF로 저장해 함께 올리면 확정합니다.</p>
           )}
         </div>
 

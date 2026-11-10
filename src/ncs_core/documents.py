@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from . import hwp, hwpx
+from .pdf import PDF_MAGIC
 
 Table = dict[str, Any]
 
@@ -88,7 +89,7 @@ class Document:
 
 
 def detect_format(path) -> str:
-    """파일 내용으로 hwp/hwpx를 판별한다. 둘 다 아니면 ValueError.
+    """파일 내용으로 hwp/hwpx/pdf를 판별한다. 셋 다 아니면 ValueError.
 
     오류 문구에는 파일 이름만 넣는다 — 웹 서버가 이 문구를 400 응답으로 그대로 내보내므로
     서버 임시 폴더 경로(OS·경로 구조)가 사용자에게 보이지 않게 한다.
@@ -96,6 +97,8 @@ def detect_format(path) -> str:
     path = Path(path)
     with path.open("rb") as stream:
         head = stream.read(8)
+    if head[:5] == PDF_MAGIC:
+        return "pdf"
     if head == hwp.OLE_MAGIC:
         if not hwp.is_hwp(path.read_bytes()):
             raise ValueError(f"OLE 파일이지만 HWP 서명이 아님: {path.name}")
@@ -114,6 +117,8 @@ def _clean(text: str) -> str:
 def load_document(path) -> Document:
     path = Path(path)
     fmt = detect_format(path)
+    if fmt == "pdf":
+        raise ValueError(f"PDF는 원고로 읽지 않습니다(표·스타일·구역이 없음). 출력본으로 함께 올리면 쪽수 확인에만 씁니다: {path}")
     if fmt == "hwp":
         sections, tables = hwp.load_hwp(path.read_bytes())
         images, table_paragraphs, figures, styles, aside, numbers = [], None, [], None, None, None

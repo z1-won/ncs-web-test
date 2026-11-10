@@ -19,6 +19,7 @@
   수행·교수학습 `blocks` · 평가 `region` · 참고 자료 `entries`·`templates`(F14 서지 골격) · 판권 `tables`.
   새 패키지는 추출이 한 덩어리면 `parsers.py`, 대상이 여럿이면 대상별 이름으로 나눈다. 판정(O/X/△를 정하는 코드)은 추출 모듈이 아니라 `rules/`에 둔다.
 - 단어 지식이 필요한 판정(행동명사 등)은 `ncs_core.lexicon`이 한다: 저장 목록(`ncs_core/data/*.txt`) → 없으면 국립국어원 표준국어대사전 API 조회 → 결과를 목록에 기록. 외부 호출은 이 한 곳에만 두고, 조회 불가(인증키 없음·오류)는 X가 아니라 △로 낸다. 운용 전에 `scripts/data/build_action_nouns.py`로 목록을 채워 검수 중 조회는 예외로 만든다. 목록 파일은 git으로 이력을 남긴다. 테스트는 가짜 resolver를 주입해 네트워크를 쓰지 않는다.
+- 입력 역할은 셋이다: `manuscript`(hwp/hwpx), `plan`(hwp/hwpx), `print`(PDF 출력본, 선택). PDF는 언제나 `print`이고 원고·계획서가 될 수 없다(`ncs_core.inputs.select_documents`). 선택 입력을 받는 엔진은 `Engine(optional=("print",))`로 선언하고 `prepare_review(manuscript, plan, *, print=None, …)`로 받는다. 선언하지 않은 엔진에는 넘어가지 않는다.
 - 엔진 목록(check 이름)의 원본은 `ncs_service.registry.ENGINES` 하나다. 다른 코드(DB 저장, 이관, SQL 제약)에 엔진 이름을 다시 적지 않고 `ENGINES`를 순회하거나 엔진 `reporting`의 `REPORT_NAME`을 읽는다.
 - 규칙은 `Rule(key, item_prefix, run)`으로 등록한다. `run`은 `ReviewContext` 하나를 받아 체크리스트 행 목록을 돌려주고, 행의 `item_id`는 `item_prefix`로 시작해야 한다.
 
@@ -33,6 +34,7 @@
 | 판정 도우미 | `text` · `goals` · `sentences` · `notes` | 정규화·비교·`verdict`, 목표 문장 비교, 종결 판정, 비고 문장 틀. 정책은 두지 않는다 |
 | 규칙·결과 | `rules` · `models` · `sheet` · `f02_items` · `reporting` | 규칙 등록·실행, 결과 계약, 확인서 접기, F02 항목 원문, 파일 저장 |
 | 기준 데이터 | `lexicon` · `ncs_catalog` · `data/` | 행동명사 목록, NCS 분류·수준 표, F02 양식 |
+| 출력본 | `pdf` · `manuscript/pages` | PDF 쪽별 본문·띠·쪽 번호 읽기, 차례가 가리키는 제목의 실제 시작 쪽 찾기. PDF는 `Document`가 아니라 `PdfDocument`(역할 `print`, 선택 입력) |
 | 외부 호출 | `lexicon`(사전) · `llm` · `ncs_api` | 표준국어대사전, 생성형 AI, 공공데이터포털. 검수 중 호출은 승인·키가 있을 때만, 실패는 △ |
 
 ## 공개 API (모든 검수 패키지 동일)
@@ -60,7 +62,7 @@ python -m <패키지> 경로... [--manuscript 경로] [--plan 경로] [--module-
 항목 꼬리말은 각 패키지 `reporting.ITEM_FILES`에 둔다.
 
 ## 코드 스타일
-- 검수 엔진·실행 조정 계층은 Python 3.10+, 표준 라이브러리만. 웹 계층은 FastAPI·Uvicorn을 사용하며 설치는 `pyproject.toml`로 통일하고 `web` extra는 `requirements/web.txt`, `test` extra는 추가로 `requirements/test.txt`의 고정 버전을 읽는다. 타입 힌트는 공개 함수와 dataclass에 붙인다.
+- 검수 엔진·실행 조정 계층은 Python 3.10+, 표준 라이브러리만. 예외 하나: PDF 읽기(`ncs_core.pdf`)는 선택 extra `pdf`(pypdf)를 함수 안에서 import하며, 없으면 `PdfUnavailable`(ValueError)을 내고 규칙은 △로 처리한다. 웹 계층은 FastAPI·Uvicorn을 사용하며 설치는 `pyproject.toml`로 통일하고 `web` extra는 `requirements/web.txt`, `test` extra는 추가로 `requirements/test.txt`의 고정 버전을 읽는다. 타입 힌트는 공개 함수와 dataclass에 붙인다.
 - black 스타일, 줄 길이 120. 한 줄에 여러 문장(`if …: a; b`) 금지. 한 글자 변수는 짧은 comprehension 안에서만.
 - 모듈 첫 줄은 한국어 docstring 한 문단. 사용자에게 보이는 문자열(비고·오류)은 한국어.
 - 오류는 `ValueError`로 올리고, 웹 서버·CLI가 잡아서 메시지를 보여준다. 규칙·파서는 `print`하지 않는다.

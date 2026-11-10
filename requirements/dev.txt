@@ -1,3 +1,4 @@
 # 개발 전체(웹 + 테스트) 고정 목록. 보통은 pip install -e ".[test]"로 충분하다.
 -r web.txt
 -r test.txt
+-r pdf.txt

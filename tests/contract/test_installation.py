@@ -22,7 +22,7 @@ class InstallationTests(unittest.TestCase):
 
     def test_distribution_separates_optional_dependencies(self):
         dist = importlib.metadata.distribution("ncs-f02-review")
-        self.assertEqual(set(dist.metadata.get_all("Provides-Extra")), {"web", "test"})
+        self.assertEqual(set(dist.metadata.get_all("Provides-Extra")), {"web", "test", "pdf"})
         self.assertTrue(dist.requires)
         self.assertTrue(all("extra ==" in requirement for requirement in dist.requires))
         self.assertEqual({entry.name for entry in dist.entry_points if entry.group == "console_scripts"}, {

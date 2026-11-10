@@ -43,6 +43,7 @@ jobs:
           cache-dependency-path: |
             requirements/web.txt
             requirements/test.txt
+            requirements/pdf.txt
       - name: 설치
         run: pip install -e ".[test]"
       - name: 테스트 (단위·골든·계약·계층·DB 통합)

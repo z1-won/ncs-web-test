@@ -26,7 +26,7 @@ class Upload:
     directory: Path
     files: list[tuple[str, Path]]  # (올린 파일 이름, 저장 경로)
     expires_at: float
-    roles: dict[str, str | None] = field(default_factory=dict)  # {'manuscript': 파일명, 'plan': 파일명|None}
+    roles: dict[str, str | None] = field(default_factory=dict)  # {'manuscript': 파일명, 'plan': 파일명|None, 'print': 출력본 PDF 파일명|None}
 
 
 class UploadStore:

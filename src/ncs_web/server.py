@@ -171,6 +171,7 @@ def create_app(
             upload.roles = {role: by_path.get(str(document.path)) for role, document in documents.items()}
             upload.roles.setdefault("manuscript", None)
             upload.roles.setdefault("plan", None)
+            upload.roles.setdefault("print", None)
             return UploadResponse(upload=upload.token, group=upload.group_id, files=list(names),
                                   roles=upload.roles, expires_in=int(uploads_store.ttl))
         except ValueError as error:

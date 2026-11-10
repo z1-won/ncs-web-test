@@ -11,7 +11,7 @@ TAIL_NAMES = {"참고자료": "참고 자료", "활용서식": "활용 서식", 
 
 
 def parse_toc(sections) -> dict | None:
-    """차례 블록 → {'학습': [{'no','text'}], '내용': [{'no','sub','text','page'}],
+    """차례 블록 → {'학습': [{'no','text','page'}], '내용': [{'no','sub','text','page'}],
     '줄': [{'lesson','kind','page','after'}], '꼬리': {참고 자료: 쪽, ...}, 'span': (s, e),
     '건너뜀': [{'no','text','기대'}] — 번호가 이어지지 않아 학습으로 받지 않은 '학습 N.' 줄,
     '쪽 깨짐': ['2-1', '학습 1 평가', '참고 자료', ...] — 쪽 칸이 숫자 대신 '?'(갱신 안 된 상호 참조)인 줄. 그 줄의 쪽은 None}"""
@@ -40,9 +40,9 @@ def parse_toc(sections) -> dict | None:
 
     for line in lines[start + 1 : end]:
         if m := TOC_LESSON.match(line):
-            page(m.group(4), f"학습 {m.group(1)}")
+            lesson_page = page(m.group(3) or m.group(4), f"학습 {m.group(1)}")
             if int(m.group(1)) == len(toc["학습"]) + 1:
-                toc["학습"].append({"no": int(m.group(1)), "text": m.group(2).strip()})
+                toc["학습"].append({"no": int(m.group(1)), "text": m.group(2).strip(), "page": lesson_page})
             else:
                 # 번호가 이어지지 않는 '학습 N.' 줄. 학습으로 받지 않되 진단에서 알릴 수 있게 남긴다.
                 toc["건너뜀"].append({"no": int(m.group(1)), "text": m.group(2).strip(), "기대": len(toc["학습"]) + 1})

@@ -5,7 +5,7 @@
 // 순서 = F02 검수 확인서의 구성요소 순서(위치 → 차례 → 개요 → 필요 지식 → 수행 내용 → 교수·학습 방법 → 평가 → 참고 자료 → 판권 → 기타)
 export const FILE_HINTS = {
   position: "원고 + 개발계획서 (2개 필수)",
-  toc: "원고 (+ 개발계획서 선택)",
+  toc: "원고 (+ 개발계획서 선택, + 출력본 PDF 선택: ⑦ 쪽수)",
   overview: "원고 (+ 개발계획서 선택)",
   knowledge: "원고 (+ 개발계획서: ⑤에만 필요)",
   perform: "원고 (hwpx 권장)",
@@ -18,7 +18,7 @@ export const FILE_HINTS = {
 
 export const CHECKS = [
   { value: "position", label: "NCS-학습모듈의 위치 ①~⑤" },
-  { value: "toc", label: "차례 ①~⑥" },
+  { value: "toc", label: "차례 ①~⑦" },
   { value: "overview", label: "학습모듈의 개요 ①·②·⑤~⑧" },
   { value: "knowledge", label: "필요 지식 ①~⑧" },
   { value: "perform", label: "수행 내용 ①·④" },
@@ -27,7 +27,8 @@ export const CHECKS = [
   { value: "references", label: "참고 자료 ①~③" },
   { value: "colophon", label: "개발 이력 및 판권 ①" },
   { value: "misc", label: "기타 ①·②·⑥·⑦" },
-].map((c) => ({ ...c, files: FILE_HINTS[c.value] || "원고", required: c.value === "position" ? ["manuscript", "plan"] : ["manuscript"] }));
+].map((c) => ({ ...c, files: FILE_HINTS[c.value] || "원고", required: c.value === "position" ? ["manuscript", "plan"] : ["manuscript"],
+                optional: c.value === "toc" ? ["print"] : [] }));
 
 export const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
 
@@ -54,6 +55,7 @@ export function checksFromEngines(engines) {
     items: e.items,
     total: e.total,
     required: e.required || ["manuscript"],
+    optional: e.optional || [],   // 선택 입력 역할(예: print = 출력본 PDF). 없을 때 화면이 안내만 한다
   }));
 }
 
@@ -65,8 +67,9 @@ export const ALL_CHECK = "all";
 export const ALL_OPTION = {
   value: ALL_CHECK,
   label: "전체 — 구성요소 10개를 차례로 검수",
-  files: "원고 + 개발계획서 (개발계획서가 없으면 '위치'만 건너뛰고 나머지를 실행)",
+  files: "원고 + 개발계획서 (+ 출력본 PDF 선택) — 개발계획서가 없으면 '위치'만 건너뛰고 나머지를 실행",
   all: true,
+  optional: ["print"],
   dividerAfter: true, // 선택 목록 맨 위에 두고, 아래 개별 구성요소와 구분선으로 나눈다
 };
 
