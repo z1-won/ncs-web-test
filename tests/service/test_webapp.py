@@ -163,6 +163,15 @@ class WebappTests(unittest.TestCase):
         self.assertTrue(captured)
         self.assertTrue(all(not Path(path).exists() for path in captured))
 
+    def test_bad_file_error_names_the_file_but_not_the_server_path(self):
+        """400 오류 문구에는 올린 파일 이름만 들어가고 서버 임시 폴더 경로는 들어가지 않는다(에러페이지 정보 노출 방지)."""
+        response = self.client.post("/api/review", data={"check": "toc"}, files=[("files", ("원고_가짜.hwpx", b"this is not a document"))])
+        self.assertEqual(response.status_code, 400)
+        message = response.json()["error"]
+        self.assertIn("원고_가짜.hwpx", message)
+        self.assertNotIn("ncs_upload_", message)
+        self.assertNotRegex(message, r"(^|[\s:])/", "절대 경로가 들어가면 안 된다")
+
     def test_health_docs_and_cors(self):
         health = self.client.get("/api/health")
         body = health.json()
