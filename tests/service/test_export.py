@@ -52,6 +52,22 @@ class XlsxTests(unittest.TestCase):
 
 
 class HwpxTests(unittest.TestCase):
+    def test_manuscript_text_never_becomes_a_formula(self):
+        """원고 문구가 '='로 시작해도 수식이 아닌 문자열로 저장된다(xlsx 수식 주입 방지)."""
+        from openpyxl import load_workbook
+        rows = rows_for("position")
+        rows[0]["체크 항목"] = '=HYPERLINK("http://evil.example","클릭")'
+        rows[0]["검수결과"] = "부적합"
+        rows[0]["비고"] = "=cmd|' /C calc'!A0"
+        wb = load_workbook(io.BytesIO(build_xlsx('=1+1', rows, meta={"세분류명": "+x", "학습모듈명": "-y"})))
+        ws = wb.active
+        for row in ws.iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str):
+                    self.assertNotEqual(cell.data_type, "f", f"{cell.coordinate}: {cell.value!r}")
+        texts = [c.value for row in ws.iter_rows() for c in row if isinstance(c.value, str)]
+        self.assertTrue(any('=HYPERLINK' in t for t in texts))
+
     def test_form_is_filled_and_still_a_valid_hwpx(self):
         content = build_hwpx("LM1203020201_24v3", rows_for("position", "toc"), meta={"세분류명": "객실관리", "학습모듈명": "객실 예약 관리"})
         with zipfile.ZipFile(io.BytesIO(content)) as z:

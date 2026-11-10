@@ -138,7 +138,7 @@ class WebappTests(unittest.TestCase):
         body = self.client.get("/api/health").json()
         self.assertEqual(body["checks"], list(PACKAGES))
         self.assertIs(body["history"], False, "파일 저장소는 이력 API가 없다")
-        self.assertEqual(self.client.get("/api/reviews").status_code, 405, "이력 API 미등록(OPTIONS 전체 경로 핸들러 때문에 404 대신 405)")
+        self.assertEqual(self.client.get("/api/reviews").status_code, 404, "이력 API 미등록")
 
     def test_save_failure_returns_500_and_cleans_uploads(self):
         captured = []
@@ -155,7 +155,11 @@ class WebappTests(unittest.TestCase):
                 ])
         self.assertEqual(response.status_code, 500)
         self.assertIn("저장 실패 테스트", response.json()["error"])
-        self.assertIn("traceback", response.json())
+        self.assertNotIn("traceback", response.json(), "서버 경로·내부 구조가 담긴 traceback은 기본적으로 응답에 싣지 않는다")
+        with patch("ncs_service.store.persist_review", side_effect=fail), patch.dict(os.environ, {"NCS_WEB_DEBUG": "1"}):
+            with TestClient(create_app(out_dir=self.output)) as client:
+                debug = client.post("/api/review", files=[("files", (p.name, p.read_bytes())) for p in (MANUSCRIPT, PLAN)])
+        self.assertIn("저장 실패 테스트", debug.json()["traceback"])
         self.assertTrue(captured)
         self.assertTrue(all(not Path(path).exists() for path in captured))
 
@@ -167,7 +171,7 @@ class WebappTests(unittest.TestCase):
         self.assertEqual([e["check"] for e in body["engines"]], list(PACKAGES))
         self.assertEqual(body["engines"][0]["component"], "NCS-학습모듈의 위치")
         self.assertTrue(all(e["items"] and all(n in "①②③④⑤⑥⑦⑧" for n in e["items"]) and e["total"] >= len(e["items"]) for e in body["engines"]))
-        self.assertEqual(health.headers["access-control-allow-origin"], "*")
+        self.assertNotIn("access-control-allow-origin", health.headers, "출처 없는 요청에는 CORS 헤더를 내지 않는다")
         self.assertEqual(self.client.get("/docs").status_code, 200)
         schema = self.client.get("/openapi.json").json()
         responses = schema["paths"]["/api/review"]["post"]["responses"]
@@ -176,8 +180,17 @@ class WebappTests(unittest.TestCase):
         preflight = self.client.options("/api/review", headers={
             "Origin": "http://localhost:5173", "Access-Control-Request-Method": "POST",
         })
-        self.assertEqual(preflight.status_code, 204)
-        self.assertEqual(preflight.headers["access-control-allow-origin"], "*")
+        self.assertEqual(preflight.status_code, 200)
+        self.assertEqual(preflight.headers["access-control-allow-origin"], "http://localhost:5173")
+        # 허용 목록 밖의 출처(브라우저에서 연 임의의 웹사이트)는 이 로컬 API를 읽거나 지울 수 없어야 한다
+        for method, path in (("GET", "/api/health"), ("DELETE", "/api/uploads/x")):
+            blocked = self.client.options(path, headers={
+                "Origin": "https://evil.example", "Access-Control-Request-Method": method,
+            })
+            self.assertNotEqual(blocked.status_code, 200, f"{method} {path} preflight must be refused")
+            self.assertNotIn("access-control-allow-origin", blocked.headers)
+        foreign = self.client.get("/api/health", headers={"Origin": "https://evil.example"})
+        self.assertNotIn("access-control-allow-origin", foreign.headers, "응답은 가되 다른 출처의 스크립트는 읽지 못한다")
 
     def test_static_files_and_api_routing(self):
         root = self.client.get("/")

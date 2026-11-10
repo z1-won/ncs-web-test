@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -13,6 +14,7 @@ from urllib.parse import quote
 import uvicorn
 from fastapi import FastAPI, File, Form, Query, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -21,7 +23,17 @@ from starlette.exceptions import HTTPException
 from .uploads import UploadStore
 
 CheckName = Literal["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "references", "colophon", "misc"]
-CORS_HEADERS = {"Access-Control-Allow-Origin": "*"}
+# 화면은 같은 출처에서 API를 부른다(빌드본은 이 서버가 함께 내고, Vite dev 서버는 /api를 8765로 프록시한다).
+# 그래서 교차 출처 허용은 Vite dev 서버를 프록시 없이 직접 붙일 때만 필요하며, 아래 목록으로 한정한다.
+# 예전처럼 "*"로 열어 두면 브라우저에서 방문한 임의의 웹사이트가 이 로컬 API로 보관 원고를 읽거나 이력을 지울 수 있다.
+logger = logging.getLogger("ncs_web")
+DEFAULT_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
+
+
+def allowed_origins() -> list[str]:
+    """NCS_WEB_ORIGINS(쉼표 구분)로 출처를 추가할 수 있다. 빈 값이면 기본 목록만 허용한다."""
+    extra = [item.strip() for item in os.getenv("NCS_WEB_ORIGINS", "").split(",") if item.strip()]
+    return list(dict.fromkeys([*DEFAULT_ORIGINS, *extra]))
 
 
 class SavedPaths(BaseModel):
@@ -67,7 +79,7 @@ class UploadResponse(BaseModel):
 
 def error_response(status: int, message: str, **extra: Any) -> JSONResponse:
     # charset을 명시해 브라우저가 JSON을 직접 표시할 때 한국어 메시지가 깨지지 않게 한다.
-    return JSONResponse({"error": message, **extra}, status_code=status, headers=CORS_HEADERS,
+    return JSONResponse({"error": message, **extra}, status_code=status,
                         media_type="application/json; charset=utf-8")
 
 
@@ -85,6 +97,11 @@ def create_app(
     from ncs_service.registry import ENGINES, describe_engines
 
     app = FastAPI(title="F02 검수 API")
+    app.add_middleware(
+        CORSMiddleware, allow_origins=allowed_origins(), allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["Content-Type"],
+        expose_headers=["Content-Disposition", "X-Memo-Summary"],
+    )
     dist = Path(dist_dir).expanduser().resolve() if dist_dir is not None else None
     store = open_store(out_dir=out_dir, database_url=database_url)
     store.prepare()
@@ -109,7 +126,6 @@ def create_app(
             return error_response(400, str(error))
         filename = f"F02_검수확인서_{code}.{format}"
         return Response(content, media_type=media, headers={
-            **CORS_HEADERS,
             "Content-Disposition": f"attachment; filename=F02_sheet_{quote(code)}.{format}; filename*=UTF-8''{quote(filename)}",
         })
 
@@ -131,25 +147,16 @@ def create_app(
         return error_response(error.status_code, str(error.detail))
 
     @app.get("/api/health")
-    def health(response: Response) -> dict[str, Any]:
-        response.headers.update(CORS_HEADERS)
+    def health() -> dict[str, Any]:
         # history: 이력 API(/api/reviews)가 등록되어 있는가. 화면이 이력 영역을 켤지 결정하는 데 쓴다.
         # engines: 검수 항목마다 구성요소 이름과 구현된 확인서 항목 번호 — 화면의 선택 목록 글이 여기서 나온다
         return {"ok": True, "checks": list(ENGINES), "engines": describe_engines(), "history": store.supports_history}
-
-    @app.options("/{path:path}", include_in_schema=False)
-    def options(path: str) -> Response:
-        return Response(status_code=204, headers={
-            **CORS_HEADERS,
-            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-        })
 
     @app.post(
         "/api/uploads", response_model=UploadResponse,
         responses={400: {"model": ErrorResponse}},
     )
-    def create_upload(response: Response, files: Annotated[list[UploadFile], File()]) -> UploadResponse | JSONResponse:
+    def create_upload(files: Annotated[list[UploadFile], File()]) -> UploadResponse | JSONResponse:
         """전체 실행 1단계: 파일을 한 번만 올려 두고 토큰을 받는다. 역할(원고/개발계획서)을 내용으로 판별해 함께 알려 준다."""
         try:
             upload = uploads_store.put([(item.filename or "", item.file.read()) for item in files])
@@ -164,7 +171,6 @@ def create_app(
             upload.roles = {role: by_path.get(str(document.path)) for role, document in documents.items()}
             upload.roles.setdefault("manuscript", None)
             upload.roles.setdefault("plan", None)
-            response.headers.update(CORS_HEADERS)
             return UploadResponse(upload=upload.token, group=upload.group_id, files=list(names),
                                   roles=upload.roles, expires_in=int(uploads_store.ttl))
         except ValueError as error:
@@ -216,7 +222,6 @@ def create_app(
         stem = Path(name).stem
         filename = f"{stem}_검수메모.hwpx"
         return Response(content, media_type="application/hwp+zip", headers={
-            **CORS_HEADERS,
             "Content-Disposition": f"attachment; filename=annotated_{quote(module_code or 'manuscript')}.hwpx; filename*=UTF-8''{quote(filename)}",
             "X-Memo-Summary": json.dumps(summary),
         })
@@ -226,14 +231,13 @@ def create_app(
         """전체 실행이 끝나면 화면이 바로 지운다. 지우지 않아도 만료 시간이 지나면 정리된다."""
         if not uploads_store.release(token):
             raise HTTPException(404, "업로드 토큰이 없거나 만료되었습니다")
-        return Response(status_code=204, headers=CORS_HEADERS)
+        return Response(status_code=204)
 
     @app.post(
         "/api/review", response_model=ReviewResponse,
         responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     )
     def review(
-        response: Response,
         files: Annotated[list[UploadFile] | None, File()] = None,
         check: Annotated[CheckName, Form()] = "position",
         module_code: Annotated[str, Form()] = "",
@@ -276,8 +280,10 @@ def create_app(
         except ValueError as error:
             return error_response(400, str(error))
         except Exception as error:
-            return error_response(500, f"{type(error).__name__}: {error}", traceback=traceback.format_exc())
-        response.headers.update(CORS_HEADERS)
+            # 전체 traceback(서버 경로·내부 구조)은 서버 로그에만 남긴다. 응답에 실어 보내는 것은 NCS_WEB_DEBUG=1일 때뿐.
+            logger.exception("검수 실행 실패: %s", error)
+            debug = {"traceback": traceback.format_exc()} if os.getenv("NCS_WEB_DEBUG") == "1" else {}
+            return error_response(500, f"{type(error).__name__}: {error}", **debug)
         return payload
 
     def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None) -> ReviewResponse:

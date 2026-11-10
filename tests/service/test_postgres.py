@@ -81,7 +81,10 @@ class PostgresModeTests(unittest.TestCase):
         self.assertEqual(missing.status_code, 404)
         self.assertEqual(missing.json()["error"], "검수 이력을 찾을 수 없습니다")
         self.assertEqual([call.args[1] for call in delete.call_args_list], ["run-1", "run-2"])
-        self.assertIn("DELETE", client.options("/api/reviews/run-1").headers["Access-Control-Allow-Methods"])
+        preflight = client.options("/api/reviews/run-1", headers={
+            "Origin": "http://localhost:5173", "Access-Control-Request-Method": "DELETE",
+        })
+        self.assertIn("DELETE", preflight.headers["Access-Control-Allow-Methods"])
 
     def test_existing_folder_can_be_imported_without_mutation(self):
         """파일로 저장된 결과 폴더를 고치지 않고 이관 입력으로 읽는다. 개인 PC의 결과 폴더에 기대지 않도록 여기서 만들어 쓴다."""
