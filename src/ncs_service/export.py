@@ -17,6 +17,7 @@ from importlib import import_module
 from importlib.resources import files
 from xml.etree import ElementTree as ET
 
+from ncs_core.f02_items import F02_ITEMS
 from ncs_core.sheet import NOT_CHECKED
 from ncs_core.text import FAIL, PASS, UNDECIDED
 
@@ -24,6 +25,14 @@ from .registry import ENGINES
 
 FORM_FILE = "F02_검수확인서_양식.hwpx"
 MARK = "✓"
+
+
+def _text(ws, row: int, col: int, value) -> None:
+    """원고에서 온 문구를 셀에 '문자열'로만 쓴다. openpyxl은 '='로 시작하는 문자열을 수식으로 저장하므로
+    원고에 '=HYPERLINK(...)' 같은 글이 있으면 검수자가 확인서를 열 때 실행될 수 있다(수식 주입)."""
+    cell = ws.cell(row, col, value)
+    if isinstance(value, str):
+        cell.data_type = "s"
 HP = "{http://www.hancom.co.kr/hwpml/2011/paragraph}"
 ET.register_namespace("hp", HP[1:-1])
 for prefix, uri in (("hs", "http://www.hancom.co.kr/hwpml/2011/section"), ("hc", "http://www.hancom.co.kr/hwpml/2011/core"),
@@ -47,6 +56,8 @@ def full_sheet(rows: list[dict]) -> list[dict]:
     out = []
     for engine in ENGINES.values():
         sheet = import_module(engine.package + ".sheet")
+        if sheet.COMPONENT not in F02_ITEMS:   # 개발계획서 점검(plan)은 F02 확인서 구성요소가 아니다
+            continue
         for item in sheet.ITEMS:
             found = given.get((_key(sheet.COMPONENT), item.no))
             out.append(found or {"구성요소": sheet.COMPONENT, "번호": item.no, "체크 항목": item.text,
@@ -73,13 +84,13 @@ def build_xlsx(module_code: str, rows: list[dict], *, title: str = "2026년도 N
     comp_fill = PatternFill("solid", fgColor="EEF7EE")
 
     ws.merge_cells("A1:F1")
-    ws["A1"] = title
+    _text(ws, 1, 1, title)
     ws["A1"].font = Font(size=14, bold=True)
     ws["A1"].alignment = center
     ws.row_dimensions[1].height = 28
     info = meta or {}
     ws.merge_cells("A2:F2")
-    ws["A2"] = (f"▶ 세분류명: {info.get('세분류명', '')}    ▶ 학습모듈명: {info.get('학습모듈명', '')}    ▶ 모듈 코드: {module_code}"
+    _text(ws, 2, 1, f"▶ 세분류명: {info.get('세분류명', '')}    ▶ 학습모듈명: {info.get('학습모듈명', '')}    ▶ 모듈 코드: {module_code}"
                 + (f"    ▶ 검수 실행: {info['실행시각']}" if info.get("실행시각") else ""))
     ws["A2"].alignment = left
     ws.merge_cells("A3:F3")
@@ -111,13 +122,13 @@ def build_xlsx(module_code: str, rows: list[dict], *, title: str = "2026년도 N
             if i:
                 ws.merge_cells(start_row=start, start_column=1, end_row=r - 1, end_column=1)
             start = r
-            ws.cell(r, 1, row["구성요소"].replace("및판권", "및 판권"))
-        ws.cell(r, 2, f"{row['번호']} {row['체크 항목']}")
+            _text(ws, r, 1, row["구성요소"].replace("및판권", "및 판권"))
+        _text(ws, r, 2, f"{row['번호']} {row['체크 항목']}")
         verdict = row["검수결과"]
         ws.cell(r, 3, MARK if verdict == PASS else "")
         ws.cell(r, 4, MARK if verdict == FAIL else "")
         ws.cell(r, 5, "△" if verdict == UNDECIDED else "")
-        ws.cell(r, 6, _remark(row))
+        _text(ws, r, 6, _remark(row))
         for c in range(1, 7):
             cell = ws.cell(r, c)
             cell.border = border

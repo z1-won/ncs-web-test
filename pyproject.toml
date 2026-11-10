@@ -33,5 +33,6 @@ include = ["ncs_*"]
 namespaces = false
 
 [tool.setuptools.dynamic.optional-dependencies]
-web = {file = ["webapp/requirements.txt"]}
-test = {file = ["webapp/requirements.txt", "tests/requirements.txt"]}
+pdf = {file = ["requirements/pdf.txt"]}
+web = {file = ["requirements/web.txt"]}
+test = {file = ["requirements/web.txt", "requirements/test.txt", "requirements/pdf.txt"]}

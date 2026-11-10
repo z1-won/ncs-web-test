@@ -1,7 +1,7 @@
 """PostgreSQL 스키마와 번호 마이그레이션 목록. SQL 텍스트만 두고 psycopg를 import하지 않는다.
 
 규칙: 적용된 항목은 수정하지 않고 다음 번호를 뒤에 추가한다. 모든 문장은 IF (NOT) EXISTS로 보호한다.
-check_name의 허용값은 registry.ENGINES가 검증하므로 SQL에 엔진 이름을 적지 않는다 (tests/test_migrations.py).
+check_name의 허용값은 registry.ENGINES가 검증하므로 SQL에 엔진 이름을 적지 않는다 (tests/service/test_migrations.py).
 """
 
 # 001: 최초 스키마. check_name의 허용값은 Python(registry.ENGINES)이 검증하므로 DB 제약으로 두지 않는다 — 엔진을
@@ -58,4 +58,10 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "    byte_size bigint NOT NULL,\n"
      "    created_at timestamptz NOT NULL DEFAULT now()\n"
      ")"),
+    # 005: 실행 출처에 'cli' 추가 — 검수 CLI(ncs-toc 등)도 DATABASE_URL이 있으면 이력에 남긴다. 화면의 이력과 구분하려는 값이다.
+    # CHECK 제약은 값을 늘릴 수 없어 지우고 다시 건다(이름은 PostgreSQL 자동 명명 규칙 <표>_<열>_check).
+    ("005_source_cli",
+     "ALTER TABLE IF EXISTS review_runs DROP CONSTRAINT IF EXISTS review_runs_source_check;\n"
+     "ALTER TABLE IF EXISTS review_runs ADD CONSTRAINT review_runs_source_check "
+     "CHECK (source IN ('web', 'import', 'cli'))"),
 )

@@ -119,7 +119,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     if not context.plan_position["세분류"] and not context.plan_position["능력단위"]:
         warnings.append(f"{basis}에서 세분류·능력단위·학습모듈명 표를 찾지 못했습니다")
     if basis == "개발계획서":
-        warnings.append("NCS 목록에 이 세분류가 없어 개발계획서를 기준으로 비교했습니다 (scripts/build_ncs_catalog.py로 목록 갱신)")
+        warnings.append("NCS 목록에 이 세분류가 없어 개발계획서를 기준으로 비교했습니다 (scripts/data/build_ncs_catalog.py로 목록 갱신)")
     if context.plan_module_name is None:
         warnings.append("개발계획서 학습모듈명을 읽지 못해 ⑤의 해당 행은 모듈 코드 번호로 정합니다")
     elif context.module_name_source != "개발계획서":

@@ -1,4 +1,4 @@
-"""F02 검수 확인서 「차례」 ①~⑦ 표. ⑦은 규칙이 없어(쪽 번호 없음) '미검사'로 둔다."""
+"""F02 검수 확인서 「차례」 ①~⑦ 표. ⑦은 출력본 PDF가 있을 때 확정, 없으면 판단불가."""
 
 from ncs_core.f02_items import item_text
 from ncs_core.sheet import SheetItem, build_sheet
@@ -11,7 +11,7 @@ ITEMS = [
     SheetItem('④', item_text(COMPONENT, '④'), ("F02-차례-④",)),
     SheetItem('⑤', item_text(COMPONENT, '⑤'), ("F02-차례-⑤",)),
     SheetItem('⑥', item_text(COMPONENT, '⑥'), ("F02-차례-⑥",)),
-    SheetItem('⑦', item_text(COMPONENT, '⑦')),
+    SheetItem('⑦', item_text(COMPONENT, '⑦'), ("F02-차례-⑦",)),
 ]
 
 

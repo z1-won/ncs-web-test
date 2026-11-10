@@ -2,7 +2,7 @@
 
 from .models import ExecutedReview, ReviewRequest
 from .service import execute_review, persist_review
-from .store import FileStore, PostgresStore, StoredReview, open_store
+from .store import FileStore, PostgresStore, StoredReview, open_store, save_cli_review, saved_location
 
 __all__ = [
     "ExecutedReview",
@@ -13,4 +13,6 @@ __all__ = [
     "PostgresStore",
     "StoredReview",
     "open_store",
+    "save_cli_review",
+    "saved_location",
 ]

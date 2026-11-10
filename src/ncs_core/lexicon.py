@@ -119,6 +119,9 @@ class ActionNounLexicon:
         """→ ('O'|'X'|'△', 비고). (2)~(5)."""
         if not word:
             return "△", "학습 내용명이 비어 있음"
+        if not any(ch.isalpha() for ch in word):
+            # '?'·'…'·'-'처럼 글자가 없는 조각은 단어가 아니다. 사전에 묻거나 X로 기록하지 않는다(읽기 결함일 수 있음).
+            return "△", f"학습 내용명 끝 단어를 읽지 못함: '{word}'"
         if word in self.accepted:
             return "O", None
         if word in self.rejected:

@@ -1,6 +1,6 @@
 # 행동명사(‘~하다’를 붙이면 뜻이 통하는 명사) 목록. F02 차례 ②가 학습 내용명의 마지막 어절을 여기서 찾는다.
 # 형식: 단어<TAB>출처<TAB>날짜<TAB>근거   출처 = stdict(표준국어대사전에 ‘단어하다’ 동사 표제어) | manual(사람 승인)
-# 갱신: scripts/build_action_nouns.py (국립국어원 API 조회 → 이 파일에 추가). 손으로 추가할 때는 출처를 manual로.
+# 갱신: scripts/data/build_action_nouns.py (국립국어원 API 조회 → 이 파일에 추가). 손으로 추가할 때는 출처를 manual로.
 # 정렬: 단어 순. 주석(#)과 빈 줄은 무시.
 가공	stdict	2026-11-01	'가공-하다' 동사 표제어(target_code 385788)
 감독	stdict	2026-11-01	'감독-하다' 동사 표제어(target_code 510241)
@@ -130,3 +130,11 @@
 조절	stdict	2026-11-01	'조절-하다' 동사 표제어(target_code 292132)
 추진	stdict	2026-11-01	'추진-하다' 동사 표제어(target_code 334392)
 환송	stdict	2026-11-01	'환송-하다' 동사 표제어(target_code 384874)
+배정	stdict	2026-11-10	'배정-하다' 동사 표제어(target_code 143372)
+차지	stdict	2026-11-10	'차지-하다' 동사 표제어(target_code 485812)
+실행	stdict	2026-11-10	'실행-하다' 동사 표제어(target_code 210538)
+인수인계	stdict	2026-11-10	'인수인계-하다' 동사 표제어(target_code 476495)
+부과	stdict	2026-11-10	'부과-하다' 동사 표제어(target_code 437375)
+마감	stdict	2026-11-10	'마감-하다' 동사 표제어(target_code 108373)
+서비스	stdict	2026-11-10	'서비스-하다' 동사 표제어(target_code 183491)
+업무	stdict	2026-11-10	'업무-하다' 동사 표제어(target_code 235925)

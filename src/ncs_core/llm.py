@@ -11,6 +11,7 @@
   LLM_MODEL          기본 gpt-5.4-mini
   LLM_BASE_URL       기본 https://api.openai.com/v1  (OpenAI 호환 서버면 교체 가능)
   LLM_ALLOW_UPLOAD   "1"이어야 원고 텍스트를 전송한다(기관의 외부 전송 승인). 아니면 △ "반출 미승인"
+  LLM_CACHE_TTL_DAYS 캐시 보관 일수(기본 30). 캐시 파일에는 원고 문장이 평문으로 남으므로 지난 것은 호출 때마다 지운다. 0이면 캐시 안 씀
   LLM_CACHE_DIR      기본 <저장소>/.llm_cache (git 제외). 응답 json + usage.jsonl(토큰 사용량)
   LLM_TIMEOUT        초, 기본 60
 """
@@ -49,6 +50,7 @@ class LlmSettings:
     allow_upload: bool
     cache_dir: Path
     timeout: float
+    cache_ttl_days: float = 30.0
 
     @property
     def ready(self) -> bool:
@@ -72,7 +74,25 @@ def settings() -> LlmSettings:
         allow_upload=os.getenv("LLM_ALLOW_UPLOAD", "") == "1",
         cache_dir=Path(os.getenv("LLM_CACHE_DIR") or root / ".llm_cache"),
         timeout=float(os.getenv("LLM_TIMEOUT", "60")),
+        cache_ttl_days=float(os.getenv("LLM_CACHE_TTL_DAYS", "30")),
     )
+
+
+def prune_cache(cfg: LlmSettings | None = None, *, now: float | None = None) -> int:
+    """보관 일수를 넘긴 캐시 파일(원고 문장 포함)을 지운다. 지운 개수를 돌려준다. usage.jsonl(토큰 수만)은 남긴다."""
+    cfg = cfg or settings()
+    if not cfg.cache_dir.is_dir():
+        return 0
+    cutoff = (now if now is not None else time.time()) - cfg.cache_ttl_days * 86400
+    removed = 0
+    for file in cfg.cache_dir.glob("*/*.json"):
+        try:
+            if file.stat().st_mtime < cutoff:
+                file.unlink()
+                removed += 1
+        except OSError:
+            continue
+    return removed
 
 
 @dataclass(frozen=True)
@@ -106,9 +126,10 @@ def ask_json(task: str, system: str, user: str, *, cfg: LlmSettings | None = Non
         raise LlmError(f"LLM 호출이 허용되지 않은 작업: {task} (ncs_core.llm.ALLOWED_TASKS)")
     if not cfg.ready:
         raise LlmError(cfg.why_not)
+    prune_cache(cfg)
     key = _cache_key(cfg.model, system, user)
     cache_file = cfg.cache_dir / task / f"{key}.json"
-    if cache_file.is_file():
+    if cfg.cache_ttl_days > 0 and cache_file.is_file():
         saved = json.loads(cache_file.read_text(encoding="utf-8"))
         return LlmAnswer(saved["data"], saved["model"], True, saved.get("input_tokens", 0), saved.get("output_tokens", 0))
     body = {
@@ -127,9 +148,10 @@ def ask_json(task: str, system: str, user: str, *, cfg: LlmSettings | None = Non
         raise LlmError(f"응답을 JSON으로 읽지 못함: {error}") from None
     answer = LlmAnswer(data, payload.get("model", cfg.model), False, int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0)))
     cache_file.parent.mkdir(parents=True, exist_ok=True)
-    cache_file.write_text(json.dumps({"data": data, "model": answer.model, "input_tokens": answer.input_tokens,
-                                      "output_tokens": answer.output_tokens, "task": task, "at": time.strftime("%Y-%m-%dT%H:%M:%S")},
-                                     ensure_ascii=False, indent=1), encoding="utf-8")
+    if cfg.cache_ttl_days > 0:
+        cache_file.write_text(json.dumps({"data": data, "model": answer.model, "input_tokens": answer.input_tokens,
+                                          "output_tokens": answer.output_tokens, "task": task, "at": time.strftime("%Y-%m-%dT%H:%M:%S")},
+                                         ensure_ascii=False, indent=1), encoding="utf-8")
     with (cfg.cache_dir / "usage.jsonl").open("a", encoding="utf-8") as log:
         log.write(json.dumps({"at": time.strftime("%Y-%m-%dT%H:%M:%S"), "task": task, "model": answer.model,
                               "input_tokens": answer.input_tokens, "output_tokens": answer.output_tokens}, ensure_ascii=False) + "\n")

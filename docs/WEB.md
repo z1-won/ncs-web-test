@@ -1,0 +1,200 @@
+# F02 검수 웹앱 — 실행·DB 안내
+
+FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다. **화면은 저장소 루트의 `frontend/`, 서버 코드는 `src/ncs_web/`, 의존성 목록은 `requirements/`에 있습니다.** 명령은 모두 저장소 루트에서 실행합니다.
+
+| 무엇 | 어디 |
+|---|---|
+| 화면(React·Vite·KRDS) | `frontend/` — 소스 `src/`, 빌드 결과 `dist/`(git 제외) |
+| 웹 의존성 고정 목록 | `requirements/web.txt`·`test.txt`·`dev.txt` — `pyproject.toml`의 `web`·`test` extra가 읽음 |
+| 서버(FastAPI) | `src/ncs_web/server.py` — 파일 업로드·요청 검증·HTTP 응답. 명령은 `ncs-web` |
+| 검수 실행·저장 | `src/ncs_service/` |
+
+`src/ncs_core/`와 검수 패키지 10개는 웹 프레임워크 없이도 실행할 수 있습니다.
+
+## 설치·실행
+
+저장소 루트에서 프로젝트 가상환경을 만들고 프로젝트를 설치합니다. 고정된 웹 의존성은 Python 3.11 이상이 필요하며 Python 3.14.5에서 검증했습니다. 엔진만 설치할 때는 Python 3.10 이상을 지원합니다.
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[web]"
+.venv/bin/ncs-web
+```
+
+기본 주소는 `http://127.0.0.1:8765`입니다. 결과는 저장소 루트의 `결과/` 아래 실행별 폴더에 저장합니다(`DATABASE_URL`이 있으면 폴더 대신 DB 이력). 결과 폴더는 `결과/` 한 곳만 씁니다.
+`--port`, `--out`, `--dist` 옵션을 사용합니다. `--src`는 제거하고 설치된 Python 패키지를 사용하도록 통일했습니다.
+가상환경을 활성화하면 `ncs-web` 또는 `python -m ncs_web`로도 실행할 수 있습니다.
+**패키지는 `.venv` 안에 설치되므로 반드시 그 Python으로 실행합니다.** `python3 -m ncs_web`처럼 시스템 Python으로 실행하면 `ModuleNotFoundError: No module named 'ncs_web'`이 납니다. `.venv/bin/ncs-web`, `.venv/bin/python …`, 또는 `source .venv/bin/activate` 뒤에 실행하세요.
+
+별도 터미널에서 화면을 실행합니다.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+화면은 기본 `http://localhost:5173`이며 `/api` 요청은 8765로 프록시합니다.
+프런트엔드 폴더에서 `npm run build`를 실행한 뒤, 저장소 루트에서 아래처럼 시작하면 빌드된 화면도 8765에서 제공합니다.
+
+```bash
+.venv/bin/ncs-web --dist frontend/dist
+```
+
+## 저장·화면 경로 분리
+
+| 설정 | 생략 시 | 의미 |
+|---|---|---|
+| `--out` / `create_app(out_dir=...)` | 실행 위치의 `결과/` | 검수 JSON·ZIP 저장 경로 |
+| `--dist` / `create_app(dist_dir=...)` | 정적 화면 제공 안 함 | React 빌드 파일 경로 |
+
+두 경로는 서버 파일의 설치 위치에서 계산하지 않습니다. 상대 경로는 앱 생성 시 실행 위치를 기준으로 절대 경로로 확정합니다.
+다른 위치에서 실행할 때는 절대 경로를 지정하면 같은 결과 폴더와 화면 빌드를 계속 사용할 수 있습니다.
+결과 폴더는 첫 저장 때 생성하며, 화면 폴더는 빌드된 파일을 읽는 용도입니다.
+화면 경로가 없거나 지정되지 않으면 `/`는 안내와 함께 404를 반환하고 API·`/docs`는 계속 사용할 수 있습니다.
+`DATABASE_URL`을 설정하지 않으면 기존 JSON·ZIP 파일 저장 방식을 유지합니다.
+
+## PostgreSQL 검수 이력
+
+웹 서버에 `DATABASE_URL`을 설정하면 PostgreSQL에 검수 이력을 저장합니다. 이 모드에서 실행별 JSON·ZIP 폴더는 새로 만들지 않으며, ZIP은 이력 화면의 다운로드 링크를 누를 때 임시로 생성합니다. `DATABASE_URL`이 없으면 기존 파일 저장 방식으로 실행됩니다. 검수 CLI(`python -m ncs_position …` 등)도 같은 규칙을 따릅니다: `--out`을 주면 그 폴더에 파일로, 안 주면 셸에 `DATABASE_URL`이 있을 때 DB 이력에만(`source`=`cli`, 폴더를 만들지 않음), 없을 때 `결과/` 폴더에 저장합니다. CLI는 `.env`를 자동으로 읽지 않으므로 `set -a; source .env; set +a`로 올린 셸에서만 DB로 갑니다. 파일이 필요하면 `--out`을 지정하세요. 이미 만든 결과 폴더는 아래 `import` 명령으로 이력에 넣습니다.
+
+저장소 루트의 `compose.yaml`은 로컬 PostgreSQL 18을 `127.0.0.1:55432`에서 실행합니다. 데이터는 `ncs-review_postgres_data` Docker 볼륨에 저장되어 컨테이너를 다시 만들어도 유지됩니다. Docker Desktop을 켜고 저장소 루트에서 실행하세요. 새로 복제한 작업 공간이라면 `.env.example`을 `.env`로 복사해 `NCS_DB_PASSWORD`와 `NCS_DB_ADMIN_PASSWORD`를 서로 다른 강한 값으로 바꾸고, `DATABASE_URL`의 비밀번호는 `NCS_DB_PASSWORD`와 같게 입력합니다. 이 작업 공간의 `.env`는 이미 생성되어 있습니다.
+
+```bash
+docker compose up -d --wait db
+docker compose ps
+```
+
+앱에서 접속할 때는 같은 터미널에 `.env`를 읽어들입니다. 아래의 스키마 준비와 이관 명령은 다음 단계에서 실행합니다.
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python -m ncs_service.postgres_cli migrate
+.venv/bin/ncs-web --dist frontend/dist
+```
+
+앱 전용 데이터베이스와 관리자 권한이 없는 `ncs_app` 계정은 PostgreSQL 볼륨을 처음 만들 때 생성됩니다. `.env`는 저장소에서 제외됩니다. `docker compose stop db`로 중지하고 `docker compose start db`로 다시 시작할 수 있습니다. `docker compose down`은 컨테이너만 제거하고 데이터 볼륨은 유지하지만, `docker compose down -v`는 데이터 볼륨도 삭제합니다. 앱 시작 시와 `postgres_cli migrate`는 `ncs_service/migrations.py`의 `MIGRATIONS`(번호 붙은 SQL 목록) 중 아직 적용되지 않은 것만 순서대로 실행하고 `schema_version` 표에 기록합니다. 스키마를 바꿀 때는 적용된 항목을 수정하지 말고 다음 번호를 뒤에 추가합니다. 코드를 올리고 서버를 재시작하면 DB가 따라옵니다. check 이름의 허용값은 DB 제약이 아니라 `ncs_service.registry.ENGINES`가 검증하므로, 엔진을 추가해도 DB 쪽 작업은 없습니다.
+
+기존 결과를 가져올 때는 다음 명령을 실행합니다. 재실행하면 이미 가져온 폴더를 건너뛰며 원본 파일은 삭제하지 않습니다. 이관 시각은 요약 JSON의 수정 시각을 사용하고, 과거 입력 원본의 해시·엔진 버전은 복원할 수 없습니다.
+
+```bash
+.venv/bin/python -m ncs_service.postgres_cli import 결과
+```
+
+DB 모드에서는 `GET /api/reviews`(최근 50건, 최대 100건; `module_code`, `check`, `verdict`, `limit`, `offset` 필터), `GET /api/reviews/{id}`(상세), `GET /api/reviews/{id}/zip`(ZIP 다운로드)을 제공합니다. 화면에 최근 검수 이력 목록과 상세 보기·ZIP 다운로드가 표시됩니다. DB 모드의 `POST /api/review` 응답에는 `id`가 들어가고 `저장`은 `null`입니다.
+
+Uvicorn으로 직접 실행할 수도 있습니다. 다음 명령은 저장소 루트에서 실행하며, 기본 설정(API 전용·실행 위치의 `결과/` 저장)을 사용합니다. 경로를 지정할 때는 위의 서버 실행 명령을 사용하세요.
+
+```bash
+.venv/bin/python -m uvicorn ncs_web.server:create_app --factory --host 127.0.0.1 --port 8765
+```
+
+## API
+
+- `GET /api/health`: 서버 상태 및 지원 검수 종류
+- `POST /api/review`: `multipart/form-data` 업로드·검수·저장
+- `GET /docs`: 대화형 API 문서
+- `GET /openapi.json`: OpenAPI 스키마
+
+업로드 필드:
+
+| 필드 | 내용 |
+|---|---|
+| `files` | 원고·개발계획서 `.hwp`/`.hwpx`. 같은 필드명으로 여러 파일 전송 |
+| `check` | `position`(기본), `toc`, `overview`, `knowledge` |
+| `module_code` | 선택. 비우면 원고 파일명에서 추출 |
+
+파일 역할은 내용으로 판별하며 업로드 순서는 무관합니다. 위치 검수는 계획서가 필수입니다.
+업로드는 요청별 임시 폴더에 저장하고 처리 후 제거합니다. 같은 이름의 파일도 개별 하위 폴더에 저장합니다.
+검수는 동기 경로 함수의 스레드풀에서 실행하며, 검사와 저장이 완료된 후 응답합니다.
+
+성공 응답은 기존 화면과 같은 구조입니다.
+
+```text
+{id, check, module_code, 요약, 검수확인서, 진단, 지적사항, 전체, 저장}
+```
+
+- 입력·양식 오류(요청 타입 검증 포함): 400 `{error}`
+- 저장 중 I/O 오류 등 예상하지 못한 오류: 500 `{error, traceback}`
+- 저장 실패 시 검사 결과를 부분 반환하지 않습니다.
+- 파일 모드에서는 ZIP을 로컬 파일로 저장하며 다운로드 API는 제공하지 않습니다.
+- PostgreSQL 모드에서 `id`는 실행 ID, `저장`은 `null`이며 `/api/reviews/{id}/zip`으로 다운로드합니다. 파일 모드에서 `id`는 `null`, `저장`은 `{folder, zip}`입니다.
+- 로컬 테스트 동작을 유지하여 CORS는 `*`, 예외 추적 정보는 오류 응답에 포함합니다.
+
+## 실행 조정 계층
+
+```text
+FastAPI 업로드 → 임시 파일 → execute_review(ReviewRequest)
+                           → store.save(ExecutedReview, uploads)      store = open_store(out_dir, database_url)
+                                FileStore     → persist_review → 실행별 폴더·ZIP   (DATABASE_URL 없음)
+                                PostgresStore → save_review   → 이력 행 + id        (DATABASE_URL 있음)
+                           → 응답 모델 → JSON
+```
+
+`ncs_service`는 표준 라이브러리와 기존 엔진만 사용합니다.
+`execute_review()`는 입력 역할·필수 파일을 확인하고 문서를 읽은 뒤 해당 엔진의 `prepare_review()`와 `evaluate_review()`를 실행합니다.
+`persist_review()`는 같은 검수 종류의 `save_results()`를 호출합니다.
+검수 CLI도 같은 `execute_review()`와 저장소(`save_cli_review()` → `open_store`)를 사용합니다. `--out`을 주면 그 폴더에, 안 주면 `DATABASE_URL`이 있을 때 DB 이력에만(출처 `cli`), 없을 때 `결과/` 폴더에 남깁니다.
+각 검수 패키지의 `run_review()` 공개 API도 Python 호출자와의 호환성을 위해 유지합니다.
+
+### 설정과 규칙 전달
+
+Python 실행 요청에 엔진별 설정과 규칙 목록을 전달할 수 있습니다. 프로젝트를 설치한 가상환경의 Python으로 실행하며 `PYTHONPATH` 설정은 필요하지 않습니다.
+
+```python
+from pathlib import Path
+from ncs_overview import CheckConfig, DEFAULT_RULES
+from ncs_service import ReviewRequest, execute_review, persist_review
+
+request = ReviewRequest(
+    paths=(Path("원고.hwpx"), Path("개발계획서.hwpx")),
+    check="overview",
+    config=CheckConfig(max_prerequisites=3, max_terms=8),
+    rules=DEFAULT_RULES[:2],  # 목표·선수학습 규칙만 실행
+)
+review = execute_review(request)
+saved = persist_review(review, "결과")
+```
+
+- `config=None`: 선택한 엔진의 기본 설정을 사용합니다.
+- `config=CheckConfig(...)`: 해당 엔진의 설정을 그대로 전달합니다. 다른 엔진의 설정 객체는 입력 오류입니다.
+- `rules=None`: 엔진의 기본 규칙을 사용합니다.
+- `rules=목록`: 지정한 규칙만 실행합니다. 중복 key와 item_id 접두는 기존 규칙 실행기가 검증합니다.
+- `rules=()`: 규칙을 실행하지 않습니다. 전체 체크리스트는 비어 있고 확인서 항목은 미검사입니다.
+- `roles`: Python 호출과 CLI에서 원고·계획서 역할을 명시할 수 있습니다.
+
+웹 API의 입력 필드는 기존 그대로입니다. 이 설정·규칙 확장은 Python 서비스 API에 적용되며,
+CLI는 기존 섹션 옵션을 설정 객체로 전달합니다. HTTP로 임의 Python 규칙을 받지 않습니다.
+
+## 테스트
+
+저장소 루트에서 실행합니다.
+
+```bash
+.venv/bin/python -m pip install -e ".[test]"
+.venv/bin/python -m unittest discover tests -v
+```
+
+네 엔진 × 합성 원고 6종의 결과 일치·ZIP 내용, 계획서 필수 조건, 입력 오류,
+저장 실패, 임시 파일 정리, API 문서·CORS·정적 화면 및 HTTP 없는 실행을 검사합니다.
+서비스·CLI 테스트는 엔진별 설정·규칙 전달, 역할·모듈 코드 지정, 섹션을 바꾼 문서 검수,
+빈 규칙 목록, 잘못된 설정, CLI 실행 경로·종료 코드·저장 결과를 검사합니다.
+`pyproject.toml`이 설치 진입점입니다. 기본 설치는 외부 런타임 의존성이 없는 엔진·서비스이며,
+`web` extra는 `requirements/web.txt`, `test` extra는 여기에 `requirements/test.txt`를 합쳐 읽습니다.
+`requirements/dev.txt`는 둘을 합친 목록입니다. 이 파일만 설치하면 프로젝트 자체는 설치되지 않으므로 위의 `pip install -e ".[test]"`를 사용하세요.
+
+## 설치 구조
+
+- `ncs-web`: `ncs_web.server:main`
+- `ncs-position`, `ncs-toc`, `ncs-overview`, `ncs-knowledge`: 각 패키지의 CLI
+- `pip install -e .`: 엔진 전용 개발 설치
+- `pip install -e ".[web]"`: 웹 개발 설치
+- `pip install -e ".[test]"`: 웹·테스트 개발 설치
+- `pip install ".[web]"`: 소스를 복사하는 일반 설치
+
+설치 대상은 `src/ncs_*` 패키지입니다. React 소스·빌드, 테스트 골든 결과, 검수 결과는 Python wheel에 포함되지 않습니다.
+결과와 화면 경로는 위의 `--out`·`--dist` 설정을 사용하며 가상환경 설치 폴더에 자동 저장하지 않습니다.
+공통 엔진·서비스는 FastAPI를 import하지 않습니다. 설치된 패키지의 사용을 검증하기 위해 일반 테스트도 `sys.path`를 주입하지 않습니다.
+골든 테스트(`test_golden.py`·`make_golden.py`)는 공용 모듈 `golden_cases.py`를 찾기 위해 자기 폴더(`tests/`)만 경로에 추가하며, `src`는 주입하지 않습니다.

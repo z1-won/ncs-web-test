@@ -63,8 +63,12 @@ def input_metadata(diagnostics: dict, uploads: list[tuple[str, Path]], *, keep_m
     return result
 
 
-def save_review(dsn: str, review: ExecutedReview, inputs: list[dict], group_id: str | None = None) -> tuple[str, dict]:
-    """한 건을 저장하고 (run_id, 요약)을 돌려준다. group_id는 전체 실행 묶음(uuid 문자열) — 단독 실행이면 None."""
+def save_review(dsn: str, review: ExecutedReview, inputs: list[dict], group_id: str | None = None,
+                *, source: str = "web") -> tuple[str, dict]:
+    """한 건을 저장하고 (run_id, 요약)을 돌려준다. group_id는 전체 실행 묶음(uuid 문자열) — 단독 실행이면 None.
+
+    source는 실행 출처('web' 화면·API, 'cli' 검수 명령). 허용값은 DB 제약(마이그레이션 005)이 검사한다.
+    """
     summary = summary_for(review)
     run_id = str(uuid4())
     if group_id is not None:
@@ -75,9 +79,10 @@ def save_review(dsn: str, review: ExecutedReview, inputs: list[dict], group_id: 
     diagnostics["inputs"] = {role: names.get(role) for role in diagnostics.get("inputs", {})}
     with psycopg.connect(dsn) as connection:
         connection.execute(
-            "INSERT INTO review_runs (id, check_name, module_code, verdict, engine_version, group_id) "
-            "VALUES (%s, %s, %s, %s, %s, %s)",
-            (run_id, review.check, review.result.module_code, summary["검수결과"], version("ncs-f02-review"), group_id),
+            "INSERT INTO review_runs (id, check_name, module_code, verdict, engine_version, group_id, source) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (run_id, review.check, review.result.module_code, summary["검수결과"], version("ncs-f02-review"), group_id,
+             source),
         )
         connection.execute(
             "INSERT INTO review_results (run_id, summary, sheet, diagnostics, findings, checklist) "

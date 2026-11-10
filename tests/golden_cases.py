@@ -1,6 +1,6 @@
 """골든 테스트의 공통 정의: 어떤 입력 조합을 돌리고, 결과에서 무엇을 저장·비교하는가.
 
-사례 = 네 엔진 × 합성 원고 6종 × 개발계획서 유/무 (위치는 계획서 필수이므로 유만) = 42건.
+사례 = 엔진 10개 × 합성 원고 6종 × 개발계획서 유/무 (위치는 계획서 필수이므로 유만) = 114건. 출력본 PDF는 'plan' 사례에, 그 역할을 선언한 엔진(차례)에만 넣는다.
 저장하는 것: 체크리스트·지적사항·검수확인서·진단(입력 경로 제외). 입력 경로는 실행 환경마다 다르므로 뺀다.
 """
 
@@ -23,12 +23,15 @@ GOLDEN = ROOT / "tests" / "golden"
 def cases():
     """(사례 이름, ReviewRequest) 목록. 이름이 골든 파일 이름이 된다."""
     plan = next(FIXTURES.glob("개발계획서_*.hwpx"))
+    print_copy = next(FIXTURES.glob("출력본_*.pdf"), None)   # 출력본은 'plan' 사례에만 함께 넣는다(그 역할을 받는 엔진만 쓴다)
     for manuscript in sorted(FIXTURES.glob("원고_*.hwpx")):
         for check, engine in ENGINES.items():
             for with_plan in (True, False):
                 if "plan" in engine.required and not with_plan:
                     continue
                 paths = (manuscript, plan) if with_plan else (manuscript,)
+                if with_plan and print_copy is not None and "print" in engine.optional:
+                    paths += (print_copy,)
                 yield f"{check}_{manuscript.stem}_{'plan' if with_plan else 'noplan'}", ReviewRequest(paths, check)
 
 

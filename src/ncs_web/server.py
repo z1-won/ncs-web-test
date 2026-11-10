@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -13,6 +14,7 @@ from urllib.parse import quote
 import uvicorn
 from fastapi import FastAPI, File, Form, Query, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -20,8 +22,18 @@ from starlette.exceptions import HTTPException
 
 from .uploads import UploadStore
 
-CheckName = Literal["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "references", "colophon", "misc"]
-CORS_HEADERS = {"Access-Control-Allow-Origin": "*"}
+CheckName = Literal["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "references", "colophon", "misc", "plan"]
+# 화면은 같은 출처에서 API를 부른다(빌드본은 이 서버가 함께 내고, Vite dev 서버는 /api를 8765로 프록시한다).
+# 그래서 교차 출처 허용은 Vite dev 서버를 프록시 없이 직접 붙일 때만 필요하며, 아래 목록으로 한정한다.
+# 예전처럼 "*"로 열어 두면 브라우저에서 방문한 임의의 웹사이트가 이 로컬 API로 보관 원고를 읽거나 이력을 지울 수 있다.
+logger = logging.getLogger("ncs_web")
+DEFAULT_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
+
+
+def allowed_origins() -> list[str]:
+    """NCS_WEB_ORIGINS(쉼표 구분)로 출처를 추가할 수 있다. 빈 값이면 기본 목록만 허용한다."""
+    extra = [item.strip() for item in os.getenv("NCS_WEB_ORIGINS", "").split(",") if item.strip()]
+    return list(dict.fromkeys([*DEFAULT_ORIGINS, *extra]))
 
 
 class SavedPaths(BaseModel):
@@ -55,6 +67,17 @@ class SheetExportRequest(BaseModel):
     created_at: str | None = None
 
 
+class PlanDraftRequest(BaseModel):
+    """개발계획서 초안 만들기 입력(REQ-02-001 '작성'). units를 비우면 세분류의 능력단위 전부."""
+
+    duty: str                                   # 세분류 코드 8자리
+    units: list[str] = []                       # 능력단위 코드(1203020201_24v3) 목록
+    agency: str = ""                            # 개발기관명
+    english: str = ""                           # 영문 세분류명
+    writers: dict[str, str] = {}                # 능력단위 코드 → 담당 집필진
+    reviewers: dict[str, str] = {}              # 능력단위 코드 → 담당 검토진
+
+
 class UploadResponse(BaseModel):
     """전체 실행용 업로드 토큰. upload를 /api/review에 files 대신 넘기면 같은 파일로 검수를 여러 번 돌릴 수 있다."""
 
@@ -67,7 +90,7 @@ class UploadResponse(BaseModel):
 
 def error_response(status: int, message: str, **extra: Any) -> JSONResponse:
     # charset을 명시해 브라우저가 JSON을 직접 표시할 때 한국어 메시지가 깨지지 않게 한다.
-    return JSONResponse({"error": message, **extra}, status_code=status, headers=CORS_HEADERS,
+    return JSONResponse({"error": message, **extra}, status_code=status,
                         media_type="application/json; charset=utf-8")
 
 
@@ -85,6 +108,11 @@ def create_app(
     from ncs_service.registry import ENGINES, describe_engines
 
     app = FastAPI(title="F02 검수 API")
+    app.add_middleware(
+        CORSMiddleware, allow_origins=allowed_origins(), allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["Content-Type"],
+        expose_headers=["Content-Disposition", "X-Memo-Summary", "X-Plan-Check"],
+    )
     dist = Path(dist_dir).expanduser().resolve() if dist_dir is not None else None
     store = open_store(out_dir=out_dir, database_url=database_url)
     store.prepare()
@@ -109,7 +137,6 @@ def create_app(
             return error_response(400, str(error))
         filename = f"F02_검수확인서_{code}.{format}"
         return Response(content, media_type=media, headers={
-            **CORS_HEADERS,
             "Content-Disposition": f"attachment; filename=F02_sheet_{quote(code)}.{format}; filename*=UTF-8''{quote(filename)}",
         })
 
@@ -121,7 +148,7 @@ def create_app(
             if field in ("files", "upload") and detail["type"] == "missing":
                 messages.append("업로드된 파일이 없습니다")
             elif field == "check":
-                messages.append("check는 position / toc / overview / knowledge / perform / teaching / evaluation / references / colophon / misc 중 하나여야 합니다")
+                messages.append("check는 position / toc / overview / knowledge / perform / teaching / evaluation / references / colophon / misc / plan 중 하나여야 합니다")
             else:
                 messages.append(f"{field}: {detail['msg']}")
         return error_response(400, "; ".join(messages))
@@ -131,25 +158,70 @@ def create_app(
         return error_response(error.status_code, str(error.detail))
 
     @app.get("/api/health")
-    def health(response: Response) -> dict[str, Any]:
-        response.headers.update(CORS_HEADERS)
+    def health() -> dict[str, Any]:
         # history: 이력 API(/api/reviews)가 등록되어 있는가. 화면이 이력 영역을 켤지 결정하는 데 쓴다.
         # engines: 검수 항목마다 구성요소 이름과 구현된 확인서 항목 번호 — 화면의 선택 목록 글이 여기서 나온다
         return {"ok": True, "checks": list(ENGINES), "engines": describe_engines(), "history": store.supports_history}
 
-    @app.options("/{path:path}", include_in_schema=False)
-    def options(path: str) -> Response:
-        return Response(status_code=204, headers={
-            **CORS_HEADERS,
-            "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
+    @app.get("/api/plan/subclasses")
+    def plan_subclasses() -> dict[str, Any]:
+        """초안을 만들 수 있는 세분류 — 요소·수행준거 표(ncs_elements.tsv)에 받아 둔 것만. 능력단위마다 요소 수를 함께."""
+        from ncs_core.ncs_catalog import catalog
+
+        cat = catalog()
+        if cat is None:
+            return {"subclasses": [], "warning": "NCS 목록(ncs_units.tsv)이 없습니다"}
+        by_duty: dict[str, list[dict]] = {}
+        for unit in cat.element_units.values():
+            by_duty.setdefault(unit["duty"], []).append(unit)
+        out = []
+        for duty, units in sorted(by_duty.items()):
+            sub = cat.subclass(duty)
+            out.append({
+                "duty": duty,
+                "name": sub.name if sub else duty,
+                "classes": dict(sub.names) if sub else {},
+                "units": [{"code": u["code"], "name": u["name"], "level": u["level"], "elements": len(u["elements"]),
+                           "criteria": sum(len(e["criteria"]) for e in u["elements"])} for u in sorted(units, key=lambda u: u["code"])],
+            })
+        return {"subclasses": out, "build": "scripts/data/build_ncs_elements.py --duty <세분류코드>"}
+
+    @app.post("/api/plan/draft", responses={400: {"model": ErrorResponse}})
+    def plan_draft(body: PlanDraftRequest) -> Response:
+        """개발계획서 초안 hwpx를 만들어 내려 준다. 만든 초안의 ①~⑩ 점검 요약은 X-Plan-Check 헤더(JSON)에."""
+        from ncs_plan import CheckConfig as PlanConfig
+        from ncs_plan import run_review
+        from ncs_plan.fill import build_plan, spec_from_catalog
+
+        try:
+            units = [u[8:10] for u in body.units] or None
+            spec = spec_from_catalog(body.duty, units=units, agency=body.agency)
+            spec["기본"]["영문 세분류명"] = body.english
+            spec["총괄표"] = [{"코드": m["코드"], "명칭": m["명칭"], "LM 코드": f"LM{m['코드']}", "LM 명칭": m["명칭"],
+                            "집필진": body.writers.get(m["코드"], ""), "검토진": body.reviewers.get(m["코드"], "")} for m in spec["모듈"]]
+            content = build_plan(spec)
+        except ValueError as error:
+            return error_response(400, str(error))
+        summary: list[dict[str, Any]] = []
+        with tempfile.TemporaryDirectory(prefix="ncs_plan_draft_") as folder:
+            path = Path(folder) / f"개발계획서_초안_{body.duty}.hwpx"
+            path.write_bytes(content)
+            try:
+                result = run_review([path], config=PlanConfig(stage="draft"))   # 초안은 1차 문서 — 기관 기재 칸은 해당 없음
+                summary = [{k: r.get(k, "") for k in ("구성요소", "번호", "체크 항목", "검수결과", "비고")} for r in result.sheet]
+            except ValueError as error:   # 점검이 실패해도 초안은 준다
+                summary = [{"구성요소": "개발계획서", "번호": "", "체크 항목": "점검 실행", "검수결과": "오류", "비고": str(error)}]
+        filename = f"개발계획서_초안_{body.duty}.hwpx"
+        return Response(content, media_type="application/octet-stream", headers={
+            "Content-Disposition": f"attachment; filename=plan_draft_{body.duty}.hwpx; filename*=UTF-8''{quote(filename)}",
+            "X-Plan-Check": quote(json.dumps(summary, ensure_ascii=False)),
         })
 
     @app.post(
         "/api/uploads", response_model=UploadResponse,
         responses={400: {"model": ErrorResponse}},
     )
-    def create_upload(response: Response, files: Annotated[list[UploadFile], File()]) -> UploadResponse | JSONResponse:
+    def create_upload(files: Annotated[list[UploadFile], File()]) -> UploadResponse | JSONResponse:
         """전체 실행 1단계: 파일을 한 번만 올려 두고 토큰을 받는다. 역할(원고/개발계획서)을 내용으로 판별해 함께 알려 준다."""
         try:
             upload = uploads_store.put([(item.filename or "", item.file.read()) for item in files])
@@ -164,7 +236,7 @@ def create_app(
             upload.roles = {role: by_path.get(str(document.path)) for role, document in documents.items()}
             upload.roles.setdefault("manuscript", None)
             upload.roles.setdefault("plan", None)
-            response.headers.update(CORS_HEADERS)
+            upload.roles.setdefault("print", None)
             return UploadResponse(upload=upload.token, group=upload.group_id, files=list(names),
                                   roles=upload.roles, expires_in=int(uploads_store.ttl))
         except ValueError as error:
@@ -216,7 +288,6 @@ def create_app(
         stem = Path(name).stem
         filename = f"{stem}_검수메모.hwpx"
         return Response(content, media_type="application/hwp+zip", headers={
-            **CORS_HEADERS,
             "Content-Disposition": f"attachment; filename=annotated_{quote(module_code or 'manuscript')}.hwpx; filename*=UTF-8''{quote(filename)}",
             "X-Memo-Summary": json.dumps(summary),
         })
@@ -226,19 +297,19 @@ def create_app(
         """전체 실행이 끝나면 화면이 바로 지운다. 지우지 않아도 만료 시간이 지나면 정리된다."""
         if not uploads_store.release(token):
             raise HTTPException(404, "업로드 토큰이 없거나 만료되었습니다")
-        return Response(status_code=204, headers=CORS_HEADERS)
+        return Response(status_code=204)
 
     @app.post(
         "/api/review", response_model=ReviewResponse,
         responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     )
     def review(
-        response: Response,
         files: Annotated[list[UploadFile] | None, File()] = None,
         check: Annotated[CheckName, Form()] = "position",
         module_code: Annotated[str, Form()] = "",
         upload: Annotated[str, Form()] = "",
         group: Annotated[str, Form()] = "",
+        stage: Annotated[str, Form()] = "",     # 개발계획서 점검(plan) 단계: final / draft. 다른 검수는 무시
     ) -> ReviewResponse | JSONResponse:
         """files로 직접 올리거나, /api/uploads 토큰(upload)으로 올려 둔 파일을 쓴다. group은 이력 묶음 id(토큰 응답의 group)."""
         # 동기 엔진은 일반 def 경로 함수의 스레드풀에서 실행한다.
@@ -250,7 +321,7 @@ def create_app(
                 if group and group != kept.group_id:
                     raise ValueError("group이 업로드 토큰의 묶음 id와 다릅니다")
                 # group을 보내지 않으면 단독 실행(묶음 없음) — 화면이 파일을 미리 올려 두고 토큰만으로 1건 돌리는 경우
-                payload = _run(kept.files, check, module_code, group or None)
+                payload = _run(kept.files, check, module_code, group or None, stage=stage)
             else:
                 if group:
                     raise ValueError("group은 upload 토큰과 함께만 쓸 수 있습니다")
@@ -272,17 +343,24 @@ def create_app(
                             saved.append((name, path))
                     if not saved:
                         raise ValueError("업로드된 파일이 없습니다")
-                    payload = _run(saved, check, module_code, None)
+                    payload = _run(saved, check, module_code, None, stage=stage)
         except ValueError as error:
             return error_response(400, str(error))
         except Exception as error:
-            return error_response(500, f"{type(error).__name__}: {error}", traceback=traceback.format_exc())
-        response.headers.update(CORS_HEADERS)
+            # 전체 traceback(서버 경로·내부 구조)은 서버 로그에만 남긴다. 응답에 실어 보내는 것은 NCS_WEB_DEBUG=1일 때뿐.
+            logger.exception("검수 실행 실패: %s", error)
+            debug = {"traceback": traceback.format_exc()} if os.getenv("NCS_WEB_DEBUG") == "1" else {}
+            return error_response(500, f"{type(error).__name__}: {error}", **debug)
         return payload
 
-    def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None) -> ReviewResponse:
+    def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None, *, stage: str = "") -> ReviewResponse:
         paths = tuple(path for _, path in saved)
-        execution = execute_review(ReviewRequest(paths, check, module_code.strip()))
+        config = None
+        if check == "plan" and stage:
+            from ncs_plan import CheckConfig as PlanConfig
+
+            config = PlanConfig(stage=stage)
+        execution = execute_review(ReviewRequest(paths, check, module_code.strip(), config=config))
         result = execution.result
         stored = store.save(execution, saved, group_id=group_id)
         saved_paths = (
@@ -343,7 +421,7 @@ def create_app(
                 raise HTTPException(404, "검수 이력을 찾을 수 없습니다")
             content, filename = exported
             return Response(content, media_type="application/zip", headers={
-                "Content-Disposition": f"attachment; filename=review-{run_id}.zip; filename*=UTF-8''{quote(filename)}",
+                "Content-Disposition": f"attachment; filename=review-{quote(run_id)}.zip; filename*=UTF-8''{quote(filename)}",
             })
 
     # FastAPI가 자동 추가하는 422 대신 기존 프런트엔드와 호환되는 400을 문서화한다.
@@ -357,6 +435,18 @@ def create_app(
 
     app.openapi = openapi
     if dist is not None and dist.is_dir():
+        index_html = dist / "index.html"
+
+        @app.exception_handler(404)
+        async def spa_fallback(request: Request, error: HTTPException) -> Response:
+            # 화면은 react-router(BrowserRouter)라 /plan 같은 경로를 새로 고침해도 index.html을 줘야 한다.
+            # API 404와 파일처럼 생긴 경로(마지막 조각에 '.'이 있는 /결과/x.zip 등)는 그대로 404.
+            path = request.url.path
+            if (request.method == "GET" and not path.startswith("/api/") and "." not in path.rsplit("/", 1)[-1]
+                    and index_html.is_file()):
+                return Response(index_html.read_bytes(), media_type="text/html")
+            return error_response(404, str(error.detail) if isinstance(error, HTTPException) else "없는 경로입니다")
+
         app.mount("/", StaticFiles(directory=str(dist), html=True), name="frontend")
     else:
         @app.get("/", include_in_schema=False)

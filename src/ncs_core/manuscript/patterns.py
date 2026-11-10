@@ -3,10 +3,14 @@
 import re
 
 # 차례 면
-TOC_LESSON = re.compile(r"^학습\s*(\d+)\.\s*(.+?)(?:\s+\d+)?$")  # 학습 1. 명 [쪽]
-TOC_SUB = re.compile(r"^(\d+)-(\d+)\.\s*(.+?)(?:\s*(\d+))?$")  # 1-1. 명 [쪽]  ('• 평가52' 처럼 붙은 쪽수도)
-TOC_LINE = re.compile(r"^[•·]\s*(교수\s*\W{0,3}\s*학습\s*방법|평가)\s*(\d+)?$")
-TOC_TAIL = re.compile(r"^(참고\s*자료|활용\s*서식|부\s*록)\s*(?:[.·ㆍ…⋯‥．。]\s*)*(\d+)?$")
+# 쪽 칸은 숫자이거나, 상호 참조 필드가 갱신되지 않아 한글이 '?'로 표시한 줄 끝의 단독 '?'다.
+# 점선 탭은 글자를 내지 않으므로 '?'가 내용명에 공백 없이 붙어 읽히기도 한다('명?'). '??'는 쪽 칸으로 보지 않는다.
+TOC_BROKEN_PAGE = "?"
+_BROKEN = r"(?<!\?)\?"
+TOC_LESSON = re.compile(rf"^학습\s*(\d+)\.\s*(.+?)(?:\s+(\d+)|\s*({_BROKEN}))?$")  # 학습 1. 명 [쪽]
+TOC_SUB = re.compile(rf"^(\d+)-(\d+)\.\s*(.+?)(?:\s*(\d+|{_BROKEN}))?$")  # 1-1. 명 [쪽]  ('• 평가52' 처럼 붙은 쪽수도)
+TOC_LINE = re.compile(rf"^[•·]\s*(교수\s*\W{{0,3}}\s*학습\s*방법|평가)\s*(\d+|{_BROKEN})?$")
+TOC_TAIL = re.compile(rf"^(참고\s*자료|활용\s*서식|부\s*록)\s*(?:[.·ㆍ…⋯‥．。]\s*)*(\d+|{_BROKEN})?$")
 
 # 학습모듈의 개요
 HEAD_OVERVIEW = re.compile(r"학습모듈의\s*개요$")

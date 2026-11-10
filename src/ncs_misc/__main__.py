@@ -1,46 +1,10 @@
 """python -m ncs_misc 원고.hwpx [--module-code LM...] [--out 결과]"""
 
-import argparse
-import json
-from pathlib import Path
-
-from ncs_service import ReviewRequest, execute_review, persist_review
-
-from . import CheckConfig
+from ncs_service.cli import run_cli
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="F02 기타 ①②⑥⑦ 검수")
-    parser.add_argument("paths", nargs="+", help="원고와 (선택) 개발계획서. 순서 무관, 내용으로 역할 판별")
-    parser.add_argument("--manuscript", help="자동 역할 판별 대신 원고로 지정할 입력 경로")
-    parser.add_argument("--plan", help="자동 역할 판별 대신 개발계획서로 지정할 입력 경로")
-    parser.add_argument("--module-code", default="", help="비우면 원고 파일명에서 추출")
-    parser.add_argument("--front-section", type=int, default=0)
-    parser.add_argument("--body-section", type=int, default=1)
-    parser.add_argument("--out", default="결과")
-    args = parser.parse_args()
-    roles = {}
-    if args.manuscript:
-        roles[args.manuscript] = "manuscript"
-    if args.plan:
-        roles[args.plan] = "plan"
-    try:
-        config = CheckConfig(front_section=args.front_section, body_section=args.body_section)
-        execution = execute_review(
-            ReviewRequest(
-                paths=tuple(Path(path) for path in args.paths),
-                check="misc",
-                roles=roles,
-                module_code=args.module_code,
-                config=config,
-            )
-        )
-        result = execution.result
-        saved = persist_review(execution, args.out)
-    except (OSError, ValueError) as error:
-        parser.exit(2, f"검수 실행 실패: {error}\n")
-    print(json.dumps({"요약": saved.summary, "진단": result.diagnostics}, ensure_ascii=False, indent=2))
-    print(f"지적사항 {len(result.findings)}건 · {saved.zip_path}")
+    run_cli("misc", "F02 기타 ①②⑥⑦ 검수")
 
 
 if __name__ == "__main__":

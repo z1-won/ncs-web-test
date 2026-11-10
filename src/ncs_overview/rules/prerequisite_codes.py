@@ -78,7 +78,7 @@ def check_prerequisite_codes(overview: dict, module_code: str) -> list[dict]:
         shown.append(entry)
     flat = {k: lines(v) for k, v in notes.items() if v}
     if not cat:
-        flat.setdefault("③ 코드 유효(NCS 목록)", "NCS 목록(ncs_units.tsv)이 없어 코드·명칭 대조를 확인하지 못함 (scripts/build_ncs_catalog.py로 생성)")
+        flat.setdefault("③ 코드 유효(NCS 목록)", "NCS 목록(ncs_units.tsv)이 없어 코드·명칭 대조를 확인하지 못함 (scripts/data/build_ncs_catalog.py로 생성)")
     # 수정 제안: 코드가 빠진 항목은 붙여 적을 꼴을 그대로 보여 주고, 나머지는 일반 문장. " / "로 이으면 확인서가 "→" 줄로 나눈다
     advice = []
     if with_code:
@@ -119,7 +119,7 @@ def check_prerequisite_levels(overview: dict, module_code: str) -> list[dict]:
     cat = catalog()
     if cat is None or not cat.levels:
         return [_level_row(block["items"], {label: TRI},
-                           {label: "NCS 능력단위 수준 표(ncs_levels.tsv)가 없어 수준 대조를 확인하지 못함 (scripts/build_ncs_levels.py로 생성)"}, None)]
+                           {label: "NCS 능력단위 수준 표(ncs_levels.tsv)가 없어 수준 대조를 확인하지 못함 (scripts/data/build_ncs_levels.py로 생성)"}, None)]
     own = cat.level(module_code)
     if own is None:
         return [_level_row(block["items"], {label: TRI}, {label: f"이 학습모듈({module_code})의 수준을 수준 표에서 찾지 못함"}, None)]

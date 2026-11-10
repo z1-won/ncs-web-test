@@ -11,6 +11,8 @@ from typing import Any
 
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
 from ncs_core.manuscript import parse_body, parse_overview, parse_plan_toc, parse_toc, section_presence
+from ncs_core.manuscript.pages import locate_headings
+from ncs_core.pdf import PdfDocument
 from ncs_core.text import flatten
 
 from .config import DEFAULT_CONFIG, CheckConfig
@@ -27,6 +29,7 @@ def prepare_review(
     *,
     module_code: str = "",
     config: CheckConfig = DEFAULT_CONFIG,
+    print_copy: PdfDocument | None = None,
 ) -> ReviewContext:
     code = resolve_module_code(manuscript.path, module_code)
     if max(config.front_section, config.body_section) >= len(manuscript.sections):
@@ -51,7 +54,14 @@ def prepare_review(
         styles=manuscript.section_styles(config.body_section),
     )
     eval_tables = evaluation_tables(manuscript.section_tables(config.body_section))
-    return ReviewContext(manuscript, plan, code, config, toc, overview, plan_toc, body, presence, eval_tables)
+    headings = print_error = None
+    if print_copy is not None:
+        try:
+            headings = locate_headings(print_copy)
+        except ValueError as error:  # 출력본은 선택 입력이라 검수를 멈추지 않고 ⑦만 판단불가로 둔다
+            print_error = f"출력본을 읽지 못함 ({error})"
+    return ReviewContext(manuscript, plan, code, config, toc, overview, plan_toc, body, presence, eval_tables,
+                         print_copy, headings, print_error)
 
 
 def _actual_sections(value: Any, config: CheckConfig) -> Any:
@@ -77,6 +87,11 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
             f"차례에서 '학습 {skipped['no']}. {skipped['text']}' 줄을 학습으로 받지 않았습니다"
             f"(학습 {skipped['기대']}을 기대). 번호가 건너뛰었거나 중복됐습니다. 이후 학습이 누락될 수 있습니다"
         )
+    if broken := context.toc.get("쪽 깨짐"):
+        warnings.append(
+            f"차례 쪽 번호가 '?'(상호 참조 미갱신)인 줄 {len(broken)}개({', '.join(broken)}) — "
+            "한글에서 필드 갱신(F9 등) 후 다시 검수하세요"
+        )
     if not context.plan_toc:
         warnings.append("개발계획서가 없거나 해당 모듈 블록을 읽지 못했습니다")
     elif not context.plan_toc["학습명"] or not context.plan_toc["내용명"]:
@@ -85,12 +100,19 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         warnings.append("본문 학습 구간을 읽지 못했습니다. 평가 대조와 ④ 교수·학습 방법/평가 위치는 판단불가입니다")
     if not context.eval_tables:
         warnings.append("평가 표 셀 정보가 없어 문단 휴리스틱으로 비교합니다")
+    if context.print_copy is None:
+        warnings.append("출력본 PDF가 없어 ⑦ 차례 쪽수는 판단불가입니다. 원고를 한글에서 PDF로 저장해 함께 올리면 확정합니다")
+    elif context.print_error:
+        warnings.append(context.print_error)
+    elif context.print_copy.module_code and context.print_copy.module_code != context.module_code:
+        warnings.append(f"출력본의 모듈 코드({context.print_copy.module_code})가 원고와 다릅니다")
     if len(manuscript.sections) > 2:
         warnings.append("선택한 차례/개요 및 본문 섹션만 검사합니다. 다른 섹션에 이어진 본문은 검사하지 않습니다")
     implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
-        "inputs": {"manuscript": str(manuscript.path), "plan": str(plan.path) if plan else None},
+        "inputs": {"manuscript": str(manuscript.path), "plan": str(plan.path) if plan else None,
+                   "print": str(context.print_copy.path) if context.print_copy else None},
         "format": manuscript.format,
         "sections": {"front": config.front_section, "body": config.body_section},
         "counts": {
@@ -98,6 +120,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
             "contents": len(context.toc["내용"]),
             "navigator_runs": len(context.body["nav_runs"]),
             "evaluation_tables": len(context.eval_tables),
+            "print_pages": len(context.print_copy.pages) if context.print_copy else None,
         },
         "implemented": sorted(implemented),
         "not_implemented": [item for item in ALL_ITEM_IDS if item not in implemented],
@@ -115,7 +138,7 @@ def evaluate_review(context: ReviewContext, *, rules: Sequence[Rule] = DEFAULT_R
         if row["item_id"] == "F02-차례-⑤":
             row["원고"] = _actual_sections(row["원고"], config)
     diagnostics = _diagnostics(context, rules)
-    # ②에서 목록에 없어 △로 남은 머리어. scripts/build_action_nouns.py --from-results 가 이 키를 읽는다.
+    # ②에서 목록에 없어 △로 남은 머리어. scripts/data/build_action_nouns.py --from-results 가 이 키를 읽는다.
     diagnostics["행동명사 미확인"] = unknown_words(checklist)
     return ReviewResult(context.module_code, checklist, flatten(checklist), diagnostics, context, sheet(checklist))
 
@@ -128,8 +151,8 @@ def run_review(
     config: CheckConfig = DEFAULT_CONFIG,
     rules: Sequence[Rule] = DEFAULT_RULES,
 ) -> ReviewResult:
-    """paths: 원고 1개 + 선택적 개발계획서 1개. roles={경로: 'manuscript'|'plan'}로 역할을 지정할 수 있다."""
+    """paths: 원고 1개 + 선택적 개발계획서 1개 + 선택적 출력본 PDF 1개. roles={경로: 'manuscript'|'plan'}로 역할을 지정할 수 있다."""
     documents = select_documents(paths, roles, required=("manuscript",))
     manuscript, plan = documents["manuscript"], documents.get("plan")
-    context = prepare_review(manuscript, plan, module_code=module_code, config=config)
+    context = prepare_review(manuscript, plan, module_code=module_code, config=config, print_copy=documents.get("print"))
     return evaluate_review(context, rules=rules)
