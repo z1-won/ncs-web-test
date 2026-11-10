@@ -145,8 +145,13 @@ pip install openpyxl               # scripts/batch/batch_review.py xlsx 출력�
 | `NCS_API_KEY` | 공공데이터포털 B490007/ncsInfo — 수준 표 갱신 스크립트만 사용(검수 서버는 호출하지 않음) |
 | `LLM_API_KEY`(또는 `OPENAI_API_KEY`), `LLM_MODEL`(기본 gpt-5.4-mini), `LLM_ALLOW_UPLOAD=1` | 수행 ② LLM 후보. 키와 반출 승인 스위치가 **둘 다** 있어야 원고 문장을 전송. `LLM_ALLOWED_TASKS`로 더 좁힐 수 있음 |
 | `DATABASE_URL`, `NCS_DB_*` | PostgreSQL 검수 이력(선택). `DATABASE_URL`이 있으면 웹 서버와 검수 CLI가 결과를 DB에 남기고, 없으면 파일로만 저장 |
+| `LLM_CACHE_TTL_DAYS` | LLM 응답 캐시(`.llm_cache/`, 원고 문장이 평문으로 들어 있음) 보관 일수. 기본 30, 지난 파일은 호출 때마다 삭제. `0`이면 캐시 안 씀 |
+| `NCS_WEB_ORIGINS` | 웹 API에 교차 출처 접근을 허용할 출처(쉼표 구분). 기본은 Vite dev 서버(`http://localhost:5173`, `http://127.0.0.1:5173`)뿐. 화면은 같은 출처(빌드본은 서버가 함께 냄, dev 서버는 `/api` 프록시)로 부르므로 보통 비워 둠 |
+| `NCS_WEB_DEBUG=1` | 검수 실행이 500으로 끝났을 때 응답에 traceback을 실음(개발용). 기본은 서버 로그에만 남김 |
 
 키 값은 저장소·문서·채팅에 적지 않습니다.
+
+보안 메모: API는 `127.0.0.1`에만 열리고 허용 목록 밖 출처에는 CORS 헤더를 내지 않으므로, 브라우저에서 연 다른 사이트의 스크립트가 이 서버의 보관 원고를 읽거나 이력을 지울 수 없습니다. 확인서 xlsx는 원고 문구를 문자열로만 써서 `=`로 시작하는 글이 수식이 되지 않습니다. DB 앱 계정(`ncs_app`)은 DB 소유자가 아니라 접속·`public` 스키마 권한만 가집니다 — `db/init/`은 빈 볼륨에만 적용되므로 이미 만든 DB에는 `ncs_admin`으로 `ALTER DATABASE ncs_review OWNER TO ncs_admin; GRANT USAGE, CREATE ON SCHEMA public TO ncs_app;`를 한 번 실행합니다.
 
 ## 웹 실행
 

@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -51,6 +52,21 @@ class AskJsonTests(unittest.TestCase):
         self.assertTrue(second.cached)
         self.assertEqual(llm.usage_summary()["calls"], 1)
         self.assertTrue(list((Path(self.tmp.name) / "perform2_brands").glob("*.json")))
+
+    def test_expired_cache_is_pruned_and_zero_ttl_disables_cache(self):
+        payload = {"model": "m", "choices": [{"message": {"content": "{}"}}], "usage": {}}
+        with mock.patch.object(llm, "_post", return_value=payload):
+            llm.ask_json("perform2_brands", "sys", "old")
+        cached = next((Path(self.tmp.name) / "perform2_brands").glob("*.json"))
+        old = time.time() - 31 * 86400
+        os.utime(cached, (old, old))
+        self.assertEqual(llm.prune_cache(), 1, "기본 30일을 넘긴 캐시(원고 문장 포함)는 지운다")
+        self.assertFalse(cached.exists())
+        with mock.patch.dict(os.environ, {"LLM_CACHE_TTL_DAYS": "0"}), mock.patch.object(llm, "_post", return_value=payload) as post:
+            llm.ask_json("perform2_brands", "sys", "new")
+            llm.ask_json("perform2_brands", "sys", "new")
+            self.assertEqual(post.call_count, 2, "TTL 0이면 캐시를 쓰지도 남기지도 않는다")
+        self.assertFalse(list((Path(self.tmp.name) / "perform2_brands").glob("*.json")))
 
     def test_bad_json_is_an_error(self):
         payload = {"choices": [{"message": {"content": "not json"}}]}
