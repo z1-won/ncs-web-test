@@ -236,12 +236,23 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 /* 개인정보처리방침 — 연결할 페이지가 아직 없어 링크 없이 표시(가이드: 빈 링크 금지) */
 #krds-footer .f-menu span.point { cursor: default; }
 
-/* ── 메인 메뉴 ── KRDS는 1023px 이하에서 PC 메뉴를 숨기고 전체메뉴 레이어(#mobile-nav)를 쓴다. 이 서비스는 메뉴가 3개뿐이라 레이어 대신 같은 메뉴를 가로 스크롤로 유지한다 */
+/* ── 메인 메뉴 ── KRDS는 1023px 이하에서 PC 메뉴를 숨기고 전체메뉴 레이어(#mobile-nav)를 쓴다. 이 서비스는 메뉴가 2개뿐이라 레이어 대신 같은 메뉴를 가로 스크롤로 유지한다 */
 @media (max-width: 1023px) {
   #krds-header .krds-main-menu { display: block; }
   #krds-header .krds-main-menu .gnb-menu { overflow-x: auto; flex-wrap: nowrap; }
   #krds-header .krds-main-menu .gnb-menu .gnb-main-trigger { height: var(--krds-size-height-7); white-space: nowrap; }
 }
+
+/* ── 하위 메뉴(.page-subnav) ── 메인 메뉴 아래 한 단. 현재 페이지 안 영역(앵커) 이동. 메인 메뉴와 같은 .inner 폭, 항목 간격·높이는 메인 메뉴보다 한 단계 작게(#10) */
+#krds-header .page-subnav { border-top: 1px solid var(--krds-light-color-border-gray-light); background: var(--krds-light-color-surface-secondary-subtler); }
+#krds-header .page-subnav .subnav-menu { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: var(--krds-gap-2); margin: 0; padding: 0; list-style: none; }
+#krds-header .page-subnav .subnav-trigger {
+  display: flex; align-items: center; position: relative; height: var(--krds-size-height-7); padding: 0 var(--krds-padding-3); white-space: nowrap;
+  font-size: var(--krds-pc-font-size-body-medium); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-basic); text-decoration: none; transition: var(--krds-transition-base);
+}
+#krds-header .page-subnav .subnav-trigger:hover { color: var(--krds-light-color-text-primary); }
+#krds-header .page-subnav .subnav-trigger.active { font-weight: var(--krds-font-weight-bold); color: var(--krds-light-color-text-primary); }
+#krds-header .page-subnav .subnav-trigger.active::after { content: ""; position: absolute; left: var(--krds-padding-3); right: var(--krds-padding-3); bottom: 0; height: 2px; background: var(--krds-light-color-border-primary); }
 
 /* 결과를 이력보다 위에 둔다(주 동선). 이력은 기본 최근 5건, 제목 줄 오른쪽의 '더 보기'로 전체 */
 .result-placeholder { margin-top: var(--krds-gap-9); }
