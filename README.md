@@ -99,7 +99,7 @@ scripts/        batch/(배치 검증) · data/(기준 데이터 생성) · probe
 docs/           구조(ARCHITECTURE), 규약(CONVENTIONS), 작업 절차·분업(WORKFLOW), 웹·DB 실행(WEB), 변경 기록(CONSISTENCY_REVIEW), 지난 기획(archive/)
 db/, compose.yaml   PostgreSQL 컨테이너 정의(검수 이력, 선택)
 .github/        이슈·PR 템플릿, 라벨, CI(workflows/test.yml)
-.claude/        오판정 수정 하네스(에이전트·스킬) → CLAUDE.md
+.claude/        오판정 수정 하네스(에이전트·스킬·안내문) → .claude/CLAUDE.md
 
 git 제외(로컬): samples/(원고 입력) · _batch/(배치 출력) · 결과/(DB 없이 돌린 결과) · _workspace*/(하네스 산출물) → docs/WORKFLOW.md §6
 ```
