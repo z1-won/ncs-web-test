@@ -137,5 +137,76 @@ class BrandRuleTests(unittest.TestCase):
         self.assertIn("429", row["비고"][CHECK])
 
 
+class FieldPromptTests(unittest.TestCase):
+    """수행 ② 프롬프트가 원고 분야(세분류)에 맞는 공용 명칭을 담는가 — 연회관리 예시가 다른 분야로 새지 않게."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        terms = Path(self.tmp.name) / "terms.tsv"
+        terms.write_text("# 주석\n*\tSOP\n12\t여행 일정표\n1203\tPMS\n120302\tBEO\n12030204\t연회 계약서\n"
+                         "2001\tMQTT\n99\t잘못된 코드도 대분류로 읽음\nabc\t무시\n", encoding="utf-8")
+        self.env = mock.patch.dict(os.environ, {"NCS_FIELD_TERMS_FILE": str(terms)}, clear=False)
+        self.env.start()
+        # 테스트 실행 중에는 NCS 목록이 꺼져 있으므로(golden_cases) 두 세분류만 가진 가짜 목록을 넣는다
+        names = {"12030204": ("이용·숙박·여행·오락·스포츠", "관광·레저", "숙박서비스", "연회관리"),
+                 "20010217": ("정보통신", "정보기술", "정보기술개발", "AIoT운영플랫폼구축")}
+
+        class FakeCatalog:
+            def subclass(self, code):
+                found = names.get(code.replace("LM", "")[:8])
+                return mock.Mock(names=dict(zip(("대분류", "중분류", "소분류", "세분류"), found))) if found else None
+
+        self.catalog = mock.patch("ncs_core.field_terms.catalog", return_value=FakeCatalog())
+        self.catalog.start()
+
+    def tearDown(self):
+        self.catalog.stop()
+        self.env.stop()
+        self.tmp.cleanup()
+
+    def test_terms_follow_code_prefixes_from_broad_to_narrow(self):
+        from ncs_core.field_terms import field_of
+        self.assertEqual(field_of("LM1203020401_23v3").terms, ("SOP", "여행 일정표", "PMS", "BEO", "연회 계약서"))
+        self.assertEqual(field_of("12030101").terms, ("SOP", "여행 일정표", "PMS"))  # 숙박서비스(120302) 밖의 관광·레저
+        self.assertEqual(field_of("LM2001021701_25v1").terms, ("SOP", "MQTT"))
+        self.assertEqual(field_of("").terms, ("SOP",))
+
+    def test_prompt_names_the_field_and_keeps_other_fields_out(self):
+        from ncs_perform.rules.brands import system_prompt
+        banquet = system_prompt("LM1203020401_23v3")
+        aiot = system_prompt("LM2001021701_25v1")
+        self.assertIn("연회관리", banquet)
+        self.assertIn("BEO", banquet)
+        self.assertIn("AIoT운영플랫폼구축", aiot)
+        self.assertIn("MQTT", aiot)
+        self.assertNotIn("BEO", aiot)
+        self.assertNotIn("MQTT", banquet)
+        self.assertNotIn("원고 분야", system_prompt(""))  # 코드를 모르면 분야 줄 없음
+
+    def test_prompt_without_catalog_still_uses_terms(self):
+        from ncs_perform.rules.brands import system_prompt
+        with mock.patch("ncs_core.field_terms.catalog", return_value=None):
+            prompt = system_prompt("LM1203020401_23v3")
+        self.assertNotIn("원고 분야", prompt)
+        self.assertIn("BEO", prompt)
+
+    def test_rule_sends_the_field_prompt(self):
+        from ncs_perform.rules import brands
+        seen = []
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": "k", "LLM_ALLOW_UPLOAD": "1"}, clear=False), \
+                mock.patch.object(brands, "ask_json", side_effect=lambda task, system, user: seen.append(system) or
+                                  llm.LlmAnswer({"findings": []}, "m", False, 0, 0)):
+            [row] = check_brands([block(["생수"], ["노트북"])], module_code="LM2001021701_25v1")
+        self.assertEqual(row["판정"], "적합")
+        self.assertIn("AIoT운영플랫폼구축", seen[0])
+        self.assertIn("MQTT", seen[0])
+
+    def test_real_terms_file_is_readable(self):
+        from ncs_core.field_terms import _read
+        rows = _read(str(Path(__file__).resolve().parents[2] / "src" / "ncs_core" / "data" / "field_terms.tsv"))
+        self.assertTrue(rows)
+        self.assertTrue(all(p == "*" or (p.isdigit() and len(p) in (2, 4, 6, 8)) for p, _ in rows))
+
+
 if __name__ == "__main__":
     unittest.main()

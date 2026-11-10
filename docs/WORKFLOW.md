@@ -16,6 +16,7 @@
 |---|---|---|
 | `ncs_units.tsv` | NCS 포털 학습모듈 분류보기 24개 내려받기 → `python scripts/data/build_ncs_catalog.py 폴더` | 사업 시작 시, NCS 개정 공지 시 |
 | `ncs_levels.tsv` | `python scripts/data/build_ncs_levels.py --from-csv 능력단위목록.csv` 또는 세분류 코드(API) | 〃 |
+| `field_terms.tsv` | 손으로 추가(분야 코드 앞자리 + 용어). 수행 ② LLM이 그 분야의 일반 명칭을 상표로 잡을 때 | 새 세분류 원고 받을 때, 오탐이 나올 때 |
 | `action_nouns.txt` / `_rejected.txt` | `set -a; source .env; set +a; python scripts/data/build_action_nouns.py --from-manuscripts 원고…` | 새 세분류 원고 받을 때 |
 
 환경 변수(`.env`, git 제외, 값은 채팅·문서에 적지 않음): `STDICT_API_KEY`, `NCS_API_KEY`, `LLM_*`, DB 변수. 검수 서버는 외부 API를 호출하지 않는다 — 조회 결과는 모두 위 파일로 들어와야 한다(LLM은 예외, 캐시 사용).

@@ -90,6 +90,7 @@
 - **`ncs_catalog.py`** — `data/ncs_units.tsv`(세분류별 분류 명칭·능력단위) + `data/ncs_levels.tsv`(전 능력단위 수준). `NCS_CATALOG_FILE`로 교체·비활성화(합성 원고 테스트).
 - **`ncs_api.py`** — 공공데이터포털 B490007/ncsInfo 호출. 운용 전 표 갱신용. 검수 서버는 호출하지 않는다.
 - **`llm.py`** — 생성형 AI 호출(수행 ②). 응답은 `.llm_cache/`(git 제외)에 캐시한다.
+- **`field_terms.py`** — 모듈 코드 → 분야(NCS 분류 이름)와 `data/field_terms.tsv`의 공용 명칭. 수행 ② 프롬프트가 분야별 '상표로 보지 않을 것'을 담는 데 쓴다.
 - **`f02_items.py`** — F02 확인서 54항목 원문 문구(확인서 표의 '체크 항목' 열).
 
 ### 3.4 실행·결과
@@ -119,7 +120,7 @@
 - `rules/navigator.py` ①②③: 내비게이터 학습명에 코드 없음, '~하기', 차례·내용체계와 일치, 묶음 간 일치. `contents.py` ④: 본문 `N-M.` 제목 = 차례 = 내용체계. `goals.py` ⑤: 학습 목표 = 계획서(순서 무시, 어절 차이 표시). `numbering.py` ⑥: 번호 체계 󰊱〉1.〉(1)〉(가)〉1)〉가)〉①. `figtab.py`(추출)·`rules/figures.py` ⑦: 그림·표 번호 연속, 괄호, 기호 글꼴. `sources.py` ⑧: 그림·표 출처 줄과 F14 14종 골격.
 
 ### `ncs_perform` 수행 내용 ①②④
-`blocks.py`가 본문을 '수행 내용' 블록(제목·재료·안전·수행 순서)으로 자르고, `rules/title.py` ①: 제목 '~하기', `rules/sentences.py` ④: 수행 순서 '~한다.' 종결. ②는 LLM 후보(△), ③은 미구현.
+`blocks.py`가 본문을 '수행 내용' 블록(제목·재료·안전·수행 순서)으로 자르고, `rules/title.py` ①: 제목 '~하기', `rules/sentences.py` ④: 수행 순서 '~한다.' 종결. ②는 `rules/brands.py`가 재료·기기 줄만 LLM에 보내 상표·상품·제조사명 후보(△)를 받는다. 시스템 프롬프트는 `system_prompt(module_code)`가 원고 분야와 그 분야의 공용 명칭으로 만든다. ③은 미구현.
 
 ### `ncs_teaching` 교수·학습 방법 ①~④
 `blocks.py`가 학습마다 교수 방법/학습 방법 글머리 목록을 자르고, `rules/counts.py` ①③: 각 3개 이상, `rules/sentences.py` ②④: 행동동사(-ㄴ다) 종결.

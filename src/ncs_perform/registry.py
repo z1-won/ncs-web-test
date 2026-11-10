@@ -8,7 +8,7 @@ from .rules.title import check_perform_title
 
 DEFAULT_RULES = (
     Rule("title", "F02-수행-①", lambda c: check_perform_title(c.blocks)),
-    Rule("brands", "F02-수행-②", lambda c: check_brands(c.blocks)),
+    Rule("brands", "F02-수행-②", lambda c: check_brands(c.blocks, module_code=c.module_code)),
     Rule("sentences", "F02-수행-④", lambda c: check_perform_sentences(c.blocks, has_styles=c.has_styles)),
 )
 

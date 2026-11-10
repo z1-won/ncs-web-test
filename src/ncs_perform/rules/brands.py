@@ -1,6 +1,8 @@
 """F02 수행 내용 ②: 재료·기기 항목에 상표명·상품명·제조사명(특정 모델명)이 노출되지 않았는가 — 블록당 1행.
 
 규칙으로는 고유명사를 알 수 없어 LLM에 묻는다(ncs_core.llm). 보내는 것은 블록의 '재료·자료'와 '기기(장비·공구)' 줄뿐이다.
+프롬프트에는 원고 분야(모듈 코드의 세분류, NCS 목록)와 그 분야의 공용 명칭(`ncs_core/data/field_terms.tsv`)을 넣어
+분야마다 다른 업계 약어·문서명을 상표로 잡지 않게 한다.
 결과는 사람 확인(△) 후보: 모델이 찾은 항목을 줄 번호·근거와 함께 보여 주고, 아무것도 못 찾으면 O(비고에 모델 이름).
 LLM 키·반출 승인이 없으면 △ "LLM 미설정/미승인"으로 남기고 다른 항목은 평소대로 돈다.
 """
@@ -10,26 +12,39 @@ from __future__ import annotations
 import json
 
 from ncs_core import NA, O, PASS, TRI, verdict, visible
+from ncs_core.field_terms import field_of
 from ncs_core.llm import LlmError, ask_json, settings
 
 ITEM_ID = "F02-수행-②"
 CHECK = "② 상표·상품·제조사명 노출 없음"
 TASK = "perform2_brands"
 
-SYSTEM = """당신은 NCS 학습모듈 원고의 검수 보조자입니다. 아래 '재료·자료'와 '기기(장비·공구)' 목록에서
+BASE_SYSTEM = """당신은 NCS 학습모듈 원고의 검수 보조자입니다. 아래 '재료·자료'와 '기기(장비·공구)' 목록에서
 특정 회사가 소유한 상표명·상품명(브랜드), 제조사명, 특정 모델명·제품 코드가 드러난 항목만 찾습니다.
-- 찾을 것: 특정 회사의 제품·서비스 이름(예: 특정 오피스 제품, 특정 클라우드 서비스, 특정 생성형 AI 서비스, 특정 제조사의 장비명),
+{field}- 찾을 것: 특정 회사의 제품·서비스 이름(예: 특정 회사의 소프트웨어·클라우드 서비스·생성형 AI 서비스, 특정 제조사의 장비·기기 모델명),
   오픈소스 프로젝트의 고유 제품명도 포함(확인용)
 - 찾지 않을 것(영문 표기라는 이유만으로 잡지 말 것):
-  · 일반 명사·보통 명칭과 그 영문 병기(노트북, POS 시스템, 커피 머신, table cloth, guest invoice, customer database)
-  · 업계 공용 약어·문서명·보고서명(BEO, PMS, POS, SOP, Aging Report, Daily Exchange Rate, Event Schedule, floor plan, layout)
+  · 일반 명사·보통 명칭과 그 영문 병기(노트북, 프린터, 계산기, 작업 지시서)
+  · 그 분야에서 통용되는 약어·문서명·보고서명·장비의 보통 명칭{terms}
   · 공공 표준·법령·규격 이름, 일반화된 기술 용어(관계형 데이터베이스, 웹 브라우저, 디지털카메라)
   · 오탈자·띄어쓰기·표기 오류(이 검사의 대상이 아님)
 - 특정 회사의 제품인지 확신할 수 없는 영문 표현은 넣지 않습니다. 넣는 항목은 "어느 회사의 무엇"인지 말할 수 있어야 합니다.
 반드시 JSON 객체 하나만 출력합니다:
-{"findings": [{"line": <입력 줄 번호(정수)>, "text": "<노출된 표현 그대로>", "kind": "상표|상품명|제조사명|모델명",
-               "generic": "<대체할 일반 명칭 제안>", "confidence": "high|medium|low", "reason": "<어느 회사의 무엇인지 한 문장>"}]}
-노출이 없으면 {"findings": []}."""
+{{"findings": [{{"line": <입력 줄 번호(정수)>, "text": "<노출된 표현 그대로>", "kind": "상표|상품명|제조사명|모델명",
+               "generic": "<대체할 일반 명칭 제안>", "confidence": "high|medium|low", "reason": "<어느 회사의 무엇인지 한 문장>"}}]}}
+노출이 없으면 {{"findings": []}}."""
+
+
+def system_prompt(module_code: str = "") -> str:
+    """원고 분야(NCS 분류)와 그 분야의 공용 명칭을 넣은 시스템 프롬프트. 분야를 모르면 분야 줄 없이 공통 용어만."""
+    found = field_of(module_code)
+    field = f"- 원고 분야: {found.label}. 이 분야의 실무 용어 감각으로 판단합니다.\n" if found.path else ""
+    terms = f"(예: {', '.join(found.terms)})" if found.terms else ""
+    return BASE_SYSTEM.format(field=field, terms=terms)
+
+
+# 분야를 모를 때의 프롬프트(점검 스크립트·테스트용). 실제 검수는 check_brands가 모듈 코드로 만든다.
+SYSTEM = system_prompt()
 
 MIN_CONFIDENCE = ("high", "medium")  # low는 후보로 세지 않고 상세에만 '참고'로 남긴다
 
@@ -49,15 +64,21 @@ def _is_heading(text: str) -> bool:
     return text in ("재료·자료", "재료 · 자료", "재료", "기기(장비·공구)", "기기(장비 · 공구)", "기기") or len(text) <= 1
 
 
-def _ask(lines: list[tuple[int, str, str]]) -> dict:
+def _ask(lines: list[tuple[int, str, str]], system: str = SYSTEM) -> dict:
     user = "\n".join(f"{no}. [{name}] {text}" for no, name, text in lines)
-    return ask_json(TASK, SYSTEM, user).__dict__
+    return ask_json(TASK, system, user).__dict__
 
 
-def check_brands(blocks: list[dict], *, asker=_ask) -> list[dict]:
-    """asker: 테스트에서 LLM 대신 넣는 함수((줄 목록) → LlmAnswer.__dict__ 꼴 dict)."""
+def check_brands(blocks: list[dict], *, module_code: str = "", asker=None) -> list[dict]:
+    """module_code: 원고 분야를 프롬프트에 넣는 데 쓴다(LM1203020401_23v3 → 연회관리).
+    asker: 테스트에서 LLM 대신 넣는 함수((줄 목록) → LlmAnswer.__dict__ 꼴 dict)."""
     rows = []
     cfg = settings()
+    if asker is None:
+        system = system_prompt(module_code)
+
+        def asker(lines):
+            return _ask(lines, system)
     for block in blocks:
         lines = _lines(block)
         region = f"section1 > 학습 {block.get('lesson')} > {block.get('unit') or ''} > 수행 내용 {block.get('perform_no') or ''}".replace("  ", " ")
