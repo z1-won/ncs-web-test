@@ -17,6 +17,7 @@ from importlib import import_module
 from importlib.resources import files
 from xml.etree import ElementTree as ET
 
+from ncs_core.f02_items import F02_ITEMS
 from ncs_core.sheet import NOT_CHECKED
 from ncs_core.text import FAIL, PASS, UNDECIDED
 
@@ -55,6 +56,8 @@ def full_sheet(rows: list[dict]) -> list[dict]:
     out = []
     for engine in ENGINES.values():
         sheet = import_module(engine.package + ".sheet")
+        if sheet.COMPONENT not in F02_ITEMS:   # 개발계획서 점검(plan)은 F02 확인서 구성요소가 아니다
+            continue
         for item in sheet.ITEMS:
             found = given.get((_key(sheet.COMPONENT), item.no))
             out.append(found or {"구성요소": sheet.COMPONENT, "번호": item.no, "체크 항목": item.text,

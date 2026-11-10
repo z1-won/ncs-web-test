@@ -14,6 +14,7 @@ export const FILE_HINTS = {
   references: "원고",
   colophon: "원고 (hwpx 권장)",
   misc: "원고 (hwpx 권장)",
+  plan: "개발계획서 (원고 불필요)",
 };
 
 export const CHECKS = [
@@ -27,8 +28,13 @@ export const CHECKS = [
   { value: "references", label: "참고 자료 ①~③" },
   { value: "colophon", label: "개발 이력 및 판권 ①" },
   { value: "misc", label: "기타 ①·②·⑥·⑦" },
-].map((c) => ({ ...c, files: FILE_HINTS[c.value] || "원고", required: c.value === "position" ? ["manuscript", "plan"] : ["manuscript"],
-                optional: c.value === "toc" ? ["print"] : [] }));
+  { value: "plan", label: "개발계획서 ①~⑨" },
+].map((c) => ({
+  ...c,
+  files: FILE_HINTS[c.value] || "원고",
+  required: c.value === "position" ? ["manuscript", "plan"] : c.value === "plan" ? ["plan"] : ["manuscript"],
+  optional: c.value === "toc" ? ["print"] : [],
+}));
 
 export const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
 

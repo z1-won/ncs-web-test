@@ -19,7 +19,7 @@ from ncs_web import server
 FIXTURES = ROOT / "tests" / "fixtures"
 PLAN = FIXTURES / "개발계획서_LM1203020201_24v3.hwpx"
 MANUSCRIPT = FIXTURES / "원고_ok_LM1203020201_24v3.hwpx"
-PACKAGES = {"position": "ncs_position", "toc": "ncs_toc", "overview": "ncs_overview", "knowledge": "ncs_knowledge", "perform": "ncs_perform", "teaching": "ncs_teaching", "evaluation": "ncs_evaluation", "references": "ncs_references", "colophon": "ncs_colophon", "misc": "ncs_misc"}
+PACKAGES = {"position": "ncs_position", "toc": "ncs_toc", "overview": "ncs_overview", "knowledge": "ncs_knowledge", "perform": "ncs_perform", "teaching": "ncs_teaching", "evaluation": "ncs_evaluation", "references": "ncs_references", "colophon": "ncs_colophon", "misc": "ncs_misc", "plan": "ncs_plan"}
 
 
 class WebappTests(unittest.TestCase):

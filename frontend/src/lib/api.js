@@ -56,15 +56,17 @@ export async function download(path, body, filename) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   const summary = response.headers.get("x-memo-summary");
-  return { ok: true, summary: summary ? JSON.parse(summary) : null };
+  const check = response.headers.get("x-plan-check");   // 개발계획서 초안 — 함께 돌린 ①~⑩ 점검 요약(URL 인코딩 JSON)
+  return { ok: true, summary: summary ? JSON.parse(summary) : null, check: check ? JSON.parse(decodeURIComponent(check)) : null };
 }
 
 export const api = {
   health: () => request("/api/health"),
   // 검수 1건: files로 직접 올리거나 upload(토큰)+group으로 올려 둔 파일을 쓴다
   // signal: AbortController.signal — 취소 버튼
-  review: ({ check, moduleCode, files = [], upload, group, signal }) =>
-    request("/api/review", { method: "POST", body: multipart({ check, module_code: moduleCode, upload, group }, files), signal }),
+  // stage: 개발계획서 점검(plan)만 — "final" 최종본(기본) / "draft" 직능연 1차본(기관 기재 칸은 해당 없음)
+  review: ({ check, moduleCode, files = [], upload, group, stage, signal }) =>
+    request("/api/review", { method: "POST", body: multipart({ check, module_code: moduleCode, upload, group, stage: check === "plan" ? stage : undefined }, files), signal }),
   uploads: {
     create: (files, signal) => request("/api/uploads", { method: "POST", body: multipart({}, files), signal }),
     remove: (token) => request(`/api/uploads/${token}`, { method: "DELETE" }),
@@ -84,6 +86,11 @@ export const api = {
   exportAnnotated: ({ moduleCode, upload, runId, rows, createdAt }) =>
     download("/api/export/annotated", multipart({ upload: upload || "", run_id: runId || "", rows: JSON.stringify(rows), module_code: moduleCode, created_at: createdAt || "" }),
              `원고_검수메모_${moduleCode || "모듈"}.hwpx`),
+  // 개발계획서 작성(REQ-02-001): 초안을 만들 수 있는 세분류와 초안 내려받기
+  plan: {
+    subclasses: () => request("/api/plan/subclasses"),
+    draft: (body) => download("/api/plan/draft", body, `개발계획서_초안_${body.duty}.hwpx`),
+  },
   groups: {
     list: () => request("/api/groups"),
     get: (id) => request(`/api/groups/${id}`),

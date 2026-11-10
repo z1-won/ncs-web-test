@@ -80,7 +80,7 @@ export function SheetTable({ sheet, findings }) {
                 </tr>
                 {open && (
                   <tr className="sheet-detail" id={`sheet-detail-${key}`}>
-                    <td colSpan={5}><FindingsList findings={own} /></td>
+                    <td colSpan={5}><FindingsList findings={own} note={row.비고} /></td>
                   </tr>
                 )}
               </React.Fragment>
@@ -93,23 +93,33 @@ export function SheetTable({ sheet, findings }) {
 }
 
 // 확인서 행 아래에 펼쳐지는 지적사항 — 표 안의 표 대신 "행에 딸린 상세 목록". 지적사항마다 판정 배지 + 체크명, 그 아래 위치/사유/수정 제안을 레이블-값으로
-export function FindingsList({ findings }) {
+// note(확인서 비고)에 같은 문장이 이미 있으면 그 줄은 생략한다 — 확인서 비고는 제출본 원문이라 그대로 두고, 상세 블록은 비고에 없는 것(위치, 비고가 요약한 나머지)만 보탠다.
+const squash = (text) => String(text ?? "").replace(/\s+/g, "");
+const inNote = (note, text) => { const t = squash(text); return !!t && squash(note).includes(t); };
+
+export function FindingsList({ findings, note = "" }) {
   if (!findings.length) return <p className="empty">지적사항이 없습니다.</p>;
   return (
     <ul className="findings-list">
-      {findings.map((f, i) => (
-        <li key={`${f.item_id}|${f.check}|${f.region_path}|${i}`} className="finding">
-          <div className="finding-head">
-            <Badge value={f.verdict} />
-            <strong className="finding-check">{f.check}</strong>
-          </div>
-          <dl className="finding-body">
-            {f.region_path && <><dt>위치</dt><dd className="path">{f.region_path}</dd></>}
-            {f.reason && <><dt>사유</dt><dd>{withBoxNumbers(f.reason)}</dd></>}
-            {f.suggestion && <><dt>수정 제안</dt><dd>{asText(f.suggestion)}</dd></>}
-          </dl>
-        </li>
-      ))}
+      {findings.map((f, i) => {
+        const showReason = f.reason && !inNote(note, f.reason);
+        const suggestion = asText(f.suggestion);
+        const showSuggestion = suggestion && !inNote(note, suggestion);
+        return (
+          <li key={`${f.item_id}|${f.check}|${f.region_path}|${i}`} className="finding">
+            <div className="finding-head">
+              <Badge value={f.verdict} />
+              <strong className="finding-check">{f.check}</strong>
+              {!showReason && !showSuggestion && <span className="meta">사유·수정 제안은 비고와 같음</span>}
+            </div>
+            <dl className="finding-body">
+              {f.region_path && <><dt>위치</dt><dd className="path">{f.region_path}</dd></>}
+              {showReason && <><dt>사유</dt><dd>{withBoxNumbers(f.reason)}</dd></>}
+              {showSuggestion && <><dt>수정 제안</dt><dd>{suggestion}</dd></>}
+            </dl>
+          </li>
+        );
+      })}
     </ul>
   );
 }

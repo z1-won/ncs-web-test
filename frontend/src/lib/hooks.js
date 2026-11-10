@@ -31,3 +31,13 @@ export function useCssHeightVar(ref, name) {
     return () => { observer.disconnect(); document.documentElement.style.removeProperty(name); };
   }, [ref, name]);
 }
+
+// 라우트별 탭 제목. index.html의 <title>은 하나라 화면마다 여기서 바꾼다. 서비스명은 뒤에 붙인다.
+export const SERVICE_NAME = "NCS 학습모듈 검수";
+export function usePageTitle(title) {
+  useEffect(() => {
+    const prev = document.title;
+    document.title = title ? `${title} — ${SERVICE_NAME}` : SERVICE_NAME;
+    return () => { document.title = prev; };
+  }, [title]);
+}

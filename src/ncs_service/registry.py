@@ -27,6 +27,8 @@ ENGINES = {
     "references": Engine("ncs_references"),
     "colophon": Engine("ncs_colophon"),
     "misc": Engine("ncs_misc"),
+    # 개발계획서 점검(REQ-02-001): 원고 없이 계획서만으로 돈다. 확인서 구성요소는 F02가 아니라 '개발계획서'(ncs_core.plan_items)
+    "plan": Engine("ncs_plan", ("plan",)),
 }
 
 

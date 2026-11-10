@@ -1,5 +1,6 @@
 // 페이지 틀 — KRDS 헤더(건너뛰기 링크·로고·메인 메뉴), 맨 위로 버튼, 푸터.
 import React, { useMemo, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
 
 import { useCssHeightVar, useScrollY } from "../lib/hooks.js";
 
@@ -31,10 +32,17 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
   { id: "review-history", label: "검수 이력" },
 ];
 
-export function Header({ hasHistory, hasResult }) {
+/* 페이지 메뉴 — 라우트 단위. 화면이 둘(원고 검수 / 개발계획서 작성)이라 1Depth 링크형 */
+export const PAGES = [
+  { path: "/", label: "원고 검수" },
+  { path: "/plan", label: "개발계획서 작성" },
+];
+
+export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
+  const location = useLocation();
   const items = useMemo(
-    () => NAV_ITEMS.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" ? hasResult : true)),
-    [hasHistory, hasResult],
+    () => anchors.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" ? hasResult : true)),
+    [anchors, hasHistory, hasResult],
   );
   const header = useRef(null);
   useCssHeightVar(header, "--header-height");   // app.css의 앵커 scroll-margin-top이 이 값을 읽는다
@@ -66,15 +74,21 @@ export function Header({ hasHistory, hasResult }) {
             <div className="inner">
               <div className="header-branding">
                 <h2 className="logo">
-                  <a href="/"><span className="sr-only">NCS 학습모듈 검수 — 동국대학교</span></a>
+                  <Link to="/"><span className="sr-only">NCS 학습모듈 검수 — 동국대학교</span></Link>
                 </h2>
               </div>
             </div>
           </div>
-          {/* 메인 메뉴 — KRDS .krds-main-menu. 하위 메뉴가 없어 1Depth 링크형(.is-link)만 */}
+          {/* 메인 메뉴 — KRDS .krds-main-menu, 1Depth 링크형(.is-link). 앞은 페이지 이동(라우터), 뒤는 현재 페이지 안 영역 이동(앵커) */}
           <nav className="krds-main-menu" aria-label="주요 영역">
             <div className="inner">
               <ul className="gnb-menu">
+                {PAGES.map((page) => (
+                  <li key={page.path}>
+                    <Link to={page.path} className={`gnb-main-trigger is-link page-link${location.pathname === page.path ? " active" : ""}`}
+                          aria-current={location.pathname === page.path ? "page" : undefined}>{page.label}</Link>
+                  </li>
+                ))}
                 {items.map((item) => (
                   <li key={item.id}>
                     <a href={`#${item.id}`} className={`gnb-main-trigger is-link${current === item.id ? " active" : ""}`}
@@ -115,8 +129,7 @@ export function Footer() {
         <div className="f-btm">
           <div className="f-btm-text">
             <div className="f-menu">
-              {/* TODO: 개인정보처리방침 페이지가 생기면 <a href="..." className="point">로 교체 */}
-              <span className="point">개인정보처리방침</span>
+              <Link to="/privacy" className="point">개인정보처리방침</Link>
             </div>
             <p className="f-copy">© 2026 동국대학교 종합설계1 프로토콜 팀. All rights reserved.</p>
           </div>

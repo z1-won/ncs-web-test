@@ -1,6 +1,6 @@
 # 검수 패키지 공통 규약
 
-검수 패키지 10개(`ncs_position`, `ncs_toc`, `ncs_overview`, `ncs_knowledge`, `ncs_perform`, `ncs_teaching`, `ncs_evaluation`, `ncs_references`, `ncs_colophon`, `ncs_misc`)와 앞으로 추가될 F02 항목 패키지는 이 규약을 따른다.
+검수 패키지 11개(F02 구성요소 10개 `ncs_position`, `ncs_toc`, `ncs_overview`, `ncs_knowledge`, `ncs_perform`, `ncs_teaching`, `ncs_evaluation`, `ncs_references`, `ncs_colophon`, `ncs_misc`와 개발계획서 점검 `ncs_plan`)과 앞으로 추가될 패키지는 이 규약을 따른다.
 
 ## 구조
 - 공통 코어 `ncs_core`: 문서 읽기, 문자 정규화·판정, 입력 역할 판별, 모듈 코드, 규칙 실행기, 저장. **판정 정책을 두지 않는다.**
@@ -19,6 +19,7 @@
   수행·교수학습 `blocks` · 평가 `region` · 참고 자료 `entries`·`templates`(F14 서지 골격) · 판권 `tables`.
   새 패키지는 추출이 한 덩어리면 `parsers.py`, 대상이 여럿이면 대상별 이름으로 나눈다. 판정(O/X/△를 정하는 코드)은 추출 모듈이 아니라 `rules/`에 둔다.
 - 단어 지식이 필요한 판정(행동명사 등)은 `ncs_core.lexicon`이 한다: 저장 목록(`ncs_core/data/*.txt`) → 없으면 국립국어원 표준국어대사전 API 조회 → 결과를 목록에 기록. 외부 호출은 이 한 곳에만 두고, 조회 불가(인증키 없음·오류)는 X가 아니라 △로 낸다. 운용 전에 `scripts/data/build_action_nouns.py`로 목록을 채워 검수 중 조회는 예외로 만든다. 목록 파일은 git으로 이력을 남긴다. 테스트는 가짜 resolver를 주입해 네트워크를 쓰지 않는다.
+- **원고 없이 도는 엔진**: `ncs_plan`(REQ-02-001 개발계획서 점검)은 `Engine("ncs_plan", ("plan",))`로 등록해 계획서만 필수다. `prepare_review(manuscript, plan, …)`의 첫 인자는 `None`일 수 있다(`ncs_service.service`가 `documents.get("manuscript")`를 넘긴다). 확인서 구성요소는 F02가 아니라 `ncs_core.plan_items.PLAN_ITEMS`("개발계획서" ①~⑩)이며, F02 확인서 내보내기(`ncs_service.export.full_sheet`)는 이 구성요소를 건너뛴다. 계획서 표 읽기는 `ncs_plan.parsers`(1~3쪽 기본 정보·대조표·총괄표·위치, 모듈 표 NCS 수정 금지 ⇰ NCS학습모듈)에 있고, 원고 엔진이 쓰는 `ncs_core.manuscript.plan_table`과는 별개다(합칠 때는 코어로 올린다).
 - 입력 역할은 셋이다: `manuscript`(hwp/hwpx), `plan`(hwp/hwpx), `print`(PDF 출력본, 선택). PDF는 언제나 `print`이고 원고·계획서가 될 수 없다(`ncs_core.inputs.select_documents`). 선택 입력을 받는 엔진은 `Engine(optional=("print",))`로 선언하고 `prepare_review(manuscript, plan, *, print=None, …)`로 받는다. 선언하지 않은 엔진에는 넘어가지 않는다.
 - 엔진 목록(check 이름)의 원본은 `ncs_service.registry.ENGINES` 하나다. 다른 코드(DB 저장, 이관, SQL 제약)에 엔진 이름을 다시 적지 않고 `ENGINES`를 순회하거나 엔진 `reporting`의 `REPORT_NAME`을 읽는다.
 - 규칙은 `Rule(key, item_prefix, run)`으로 등록한다. `run`은 `ReviewContext` 하나를 받아 체크리스트 행 목록을 돌려주고, 행의 `item_id`는 `item_prefix`로 시작해야 한다.

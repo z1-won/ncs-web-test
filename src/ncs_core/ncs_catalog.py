@@ -11,12 +11,15 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 CATALOG_FILE = "ncs_units.tsv"
 LEVELS_FILE = "ncs_levels.tsv"   # 세분류코드  능력단위코드  능력단위명  수준  훈련시간 (scripts/data/build_ncs_levels.py)
+ELEMENTS_FILE = "ncs_elements.tsv"   # 세분류코드 능력단위코드 능력단위명 수준 정의 요소코드 요소명 수행준거(‖ 구분) (scripts/data/build_ncs_elements.py)
+CRITERIA_SEP = " ‖ "
 CLASS_LABELS = ("대분류", "중분류", "소분류")
 
 
@@ -52,6 +55,26 @@ class Subclass:
         return self.code[:6]
 
 
+def read_elements(path: Path) -> dict[str, dict]:
+    """ncs_elements.tsv → {능력단위 10자리: {'duty','code','name','level','definition','elements':[{'code','no','name','criteria':[…]}]}}."""
+    out: dict[str, dict] = {}
+    rows: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        if re.match(r"^\d{8}\t", line) or not rows:
+            rows.append(line)
+        else:   # 문장 안 줄바꿈으로 쪼개진 조각 — 앞 행에 붙인다
+            rows[-1] += " " + line.strip()
+    for line in rows:
+        duty, code, name, level, definition, element_code, element_name, criteria = (line.split("\t") + [""] * 8)[:8]
+        unit = out.setdefault(code[:10], {"duty": duty, "code": code, "name": name, "level": int(level) if level.strip() else None,
+                                          "definition": definition, "elements": []})
+        unit["elements"].append({"code": element_code, "no": int(element_code.rsplit(".", 1)[-1] or 0), "name": element_name,
+                                 "criteria": [c for c in criteria.split(CRITERIA_SEP) if c]})
+    return out
+
+
 def read_levels(path: Path) -> dict[str, dict]:
     """ncs_levels.tsv → {능력단위 10자리: {'duty','code','name','level','hours'}}."""
     out: dict[str, dict] = {}
@@ -72,6 +95,8 @@ class Catalog:
         self._units: dict[str, Unit] = {}        # 10자리 → Unit
         levels_path = levels_path if levels_path is not None else path.with_name(LEVELS_FILE)
         self.levels: dict[str, dict] = read_levels(levels_path) if levels_path.is_file() else {}
+        elements_path = path.with_name(ELEMENTS_FILE)
+        self.element_units: dict[str, dict] = read_elements(elements_path) if elements_path.is_file() else {}
         rows: dict[str, list] = {}
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line or line.startswith("#"):
@@ -103,6 +128,13 @@ class Catalog:
         """능력단위 수준(1~8). 수준 표가 없거나 코드가 없으면 None."""
         row = self.levels.get(code.replace("LM", "")[:10])
         return row["level"] if row else None
+
+    def unit_detail(self, code: str) -> dict | None:
+        """요소·수행준거 표의 능력단위(정의·요소·수행준거). 표에 없으면 None — scripts/data/build_ncs_elements.py로 받아 둔다."""
+        return self.element_units.get(code.replace("LM", "")[:10])
+
+    def units_with_detail(self, duty: str) -> list[dict]:
+        return sorted((u for u in self.element_units.values() if u["duty"] == duty[:8]), key=lambda u: u["code"])
 
     def level_row(self, code: str) -> dict | None:
         """수준 표의 행(능력단위 목록에 없는 능력단위도 수준 표에는 있을 수 있다)."""

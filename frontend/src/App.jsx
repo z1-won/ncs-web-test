@@ -11,14 +11,19 @@ import { KrdsSelect } from "./components/KrdsSelect.jsx";
 import { RawJson } from "./components/RawJson.jsx";
 import { ResultHead } from "./components/ResultHead.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
+import { PageAlert } from "./components/PageAlert.jsx";
+import { Pagination } from "./components/Pagination.jsx";
+import { usePageTitle } from "./lib/hooks.js";
 
-const HISTORY_PREVIEW = 5;
+const HISTORY_PAGE = 10;   // 이력 표 한 쪽 행 수(KRDS 페이지네이션)
 
 export default function App() {
+  usePageTitle("원고 검수");
   const [check, setCheck] = useState(ALL_CHECK); // 기본은 전체 검수
   const [checks, setChecks] = useState(CHECKS);
   const [files, setFiles] = useState([]);
   const [moduleCode, setModuleCode] = useState("");
+  const [planStage, setPlanStage] = useState("final");   // 개발계획서 점검 단계(final/draft) — check === "plan"일 때만 보인다
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);   // 성공 안내(메모 원고 요약 등)
@@ -33,7 +38,11 @@ export default function App() {
   const aborter = useRef(null);      // 진행 중 요청의 AbortController — 취소 버튼
   const fileInput = useRef(null);    // 숨긴 <input type=file> — 진짜 <button>이 대신 열어 키보드(Enter/Space)로도 동작
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
-  const [historyExpanded, setHistoryExpanded] = useState(false); // 이력은 기본 최근 5건만, '더 보기'로 전체
+  const [historyPage, setHistoryPage] = useState(1);   // 이력 표 현재 쪽
+  useEffect(() => {
+    const pages = Math.max(1, Math.ceil((history?.length || 0) / HISTORY_PAGE));
+    if (historyPage > pages) setHistoryPage(pages);
+  }, [history, historyPage]);
   const [deleting, setDeleting] = useState(false);
 
   async function refreshHistory() {
@@ -106,12 +115,12 @@ export default function App() {
     const controller = new AbortController();
     aborter.current = controller;
     let kept = await ensureUpload(controller.signal);
-    let answer = kept ? await api.review({ check, moduleCode, upload: kept.token, signal: controller.signal }) : null;
+    let answer = kept ? await api.review({ check, moduleCode, upload: kept.token, stage: planStage, signal: controller.signal }) : null;
     if (answer && !answer.ok && answer.status === 400 && /만료/.test(answer.error)) {
       setUpload({ status: "idle" });
       uploadRef.current = { status: "idle" };
       kept = await ensureUpload(controller.signal);
-      answer = kept ? await api.review({ check, moduleCode, upload: kept.token, signal: controller.signal }) : null;
+      answer = kept ? await api.review({ check, moduleCode, upload: kept.token, stage: planStage, signal: controller.signal }) : null;
     }
     if (answer && !answer.aborted) {
       if (!answer.ok) setError(answer.error);
@@ -154,7 +163,7 @@ export default function App() {
       if (items[value].status === "skipped") continue;
       if (cancelled) { update(value, { status: "cancelled" }); continue; }
       update(value, { status: "running" });
-      const { ok, data, error: message, aborted } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group, signal: controller.signal });
+      const { ok, data, error: message, aborted } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group, stage: planStage, signal: controller.signal });
       if (aborted) { cancelled = true; update(value, { status: "cancelled" }); continue; }
       update(value, ok ? { status: "done", data } : { status: "error", error: message });
     }
@@ -261,6 +270,21 @@ export default function App() {
           <p className="form-hint">비우면 원고 파일명에서 추출</p>
         </div>
 
+        {check === "plan" && (
+          <div className="form-group">
+            <div className="form-tit"><span id="plan-stage-label">점검 단계</span></div>
+            <div className="form-conts plan-stage" role="radiogroup" aria-labelledby="plan-stage-label">
+              {[["final", "최종본 (개발기관)"], ["draft", "1차본 (직능연)"]].map(([value, label]) => (
+                <div className="krds-form-check" key={value}>
+                  <input type="radio" id={`plan-stage-${value}`} name="plan-stage" value={value} checked={planStage === value} onChange={() => setPlanStage(value)} />
+                  <label htmlFor={`plan-stage-${value}`}>{label}</label>
+                </div>
+              ))}
+            </div>
+            <p className="form-hint">1차본은 학습모듈명·영문명·기관명·집필진·학습 내용명이 비어 있어도 부적합으로 보지 않습니다(최종 단계에서 기관 기재)</p>
+          </div>
+        )}
+
         <div className="form-group form-actions">
           {/* 다른 칸의 레이블(form-tit) 높이만큼 빈 자리 — 같은 줄의 입력칸과 버튼 윗선·높이가 맞게 */}
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
@@ -271,10 +295,8 @@ export default function App() {
             {busy && <button className="krds-btn tertiary large" type="button" onClick={cancel}>취소</button>}
           </div>
           {/* 실행·이력 열기 오류는 버튼 바로 아래에 — 검수 이력 표보다 먼저 보이도록 */}
-          {error && (
-            <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error}</p>
-          )}
-          {notice && !error && <p className="form-hint-success" role="status">{notice}</p>}
+          {error && <PageAlert kind="danger">{error}</PageAlert>}
+          {notice && !error && <PageAlert kind="success">{notice}</PageAlert>}
         </div>
       </form>
 
@@ -290,7 +312,7 @@ export default function App() {
                              uploadToken={upload.status === "ready" ? upload.token : null} />}
 
       {result && (
-        <section>
+        <section aria-live="polite">
           <ResultHead
             status={<Badge value={result.요약.검수결과} large />}
             meta={`${result.module_code} · ${checks.find((item) => item.value === result.check)?.label || result.check}${result.created_at ? ` · ${formatDate(result.created_at)}` : ""}`}
@@ -318,13 +340,7 @@ export default function App() {
       {history && (
         <section id="review-history" className="nav-anchor history">
           <div className="section-head">
-            <h2 className="section-title">검수 이력 <span className="meta">({history.length}건)</span></h2>
-            {history.length > HISTORY_PREVIEW && (
-              <button type="button" className="krds-btn small text" aria-expanded={historyExpanded} aria-controls="history-table"
-                      onClick={() => setHistoryExpanded((v) => !v)}>
-                {historyExpanded ? "최근 5건만 보기" : `더 보기 (${history.length - HISTORY_PREVIEW}건 더)`}
-              </button>
-            )}
+            <h2 className="section-title">검수 이력 <span className="meta">({history.length}건{history.length > HISTORY_PAGE ? ` · ${historyPage}/${Math.ceil(history.length / HISTORY_PAGE)}쪽` : ""})</span></h2>
           </div>
           {history.length === 0 ? <p className="empty">저장된 검수 이력이 없습니다.</p> : (
             <div className="krds-table-wrap" id="history-table">
@@ -341,7 +357,7 @@ export default function App() {
                   <col className="col-action" />
                 </colgroup>
                 <thead><tr><th scope="col">실행 시각</th><th scope="col">모듈</th><th scope="col">검수</th><th scope="col">판정</th><th scope="col">열기</th><th scope="col">삭제</th></tr></thead>
-                <tbody>{(historyExpanded ? history : history.slice(0, HISTORY_PREVIEW)).map((row) => (
+                <tbody>{history.slice((historyPage - 1) * HISTORY_PAGE, historyPage * HISTORY_PAGE).map((row) => (
                   <tr key={row.id} className={row.id === result?.id || row.id === allRun?.group ? "is-open" : undefined}>
                     <td className="when">{formatDateLines(row.created_at).map((line, i) => <span key={i}>{line}</span>)}</td>
                     <td>{row.module_code}</td>
@@ -360,6 +376,7 @@ export default function App() {
               </table>
             </div>
           )}
+          <Pagination page={historyPage} total={Math.ceil(history.length / HISTORY_PAGE)} onChange={setHistoryPage} label="검수 이력 쪽" />
         </section>
       )}
 

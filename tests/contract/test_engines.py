@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 from ncs_core import Rule, ReviewResult, SavedReport, VERDICTS, flatten, visible
 from ncs_core.f02_items import F02_ITEMS
+from ncs_core.plan_items import PLAN_ITEMS
 from ncs_core.sheet import NOT_CHECKED
 from ncs_service import ReviewRequest, execute_review, persist_review
 from ncs_service.registry import ENGINES
@@ -31,6 +32,7 @@ PUBLIC_API = ("CheckConfig", "DEFAULT_RULES", "prepare_review", "evaluate_review
 ROW_KEYS = {"item_id", "region_path", "원고", "체크", "판정", "비고", "수정 제안"}
 SHEET_KEYS = {"구성요소", "번호", "체크 항목", "검수결과", "적합", "부적합", "비고"}
 CHECK_VALUES = {"O", "X", "△", "-"}
+SHEET_ITEMS = {**F02_ITEMS, **PLAN_ITEMS}   # 확인서 구성요소: F02 10개 + 개발계획서(REQ-02-001)
 
 
 def engines():
@@ -44,7 +46,7 @@ class EngineContractTests(unittest.TestCase):
             with self.subTest(check=check):
                 self.assertTrue(re.fullmatch(r"[a-z]+", check), "check 이름은 소문자 영문이어야 합니다")
                 self.assertEqual(module.__name__, engine.package)
-                self.assertIn("manuscript", engine.required)
+                self.assertTrue({"manuscript", "plan"} & set(engine.required), "원고 또는 개발계획서 중 하나는 필수여야 합니다")
                 self.assertLessEqual(set(engine.required), {"manuscript", "plan"})
 
     def test_report_names_are_unique(self):
@@ -94,13 +96,13 @@ class EngineContractTests(unittest.TestCase):
                 components = {row["구성요소"] for row in result.sheet}
                 self.assertEqual(len(components), 1, "엔진 하나는 확인서 구성요소 하나를 맡습니다")
                 component = components.pop()
-                self.assertIn(component, F02_ITEMS, "확인서 구성요소 이름은 F02 원문과 같아야 합니다")
-                self.assertEqual([row["번호"] for row in result.sheet], list(F02_ITEMS[component]),
+                self.assertIn(component, SHEET_ITEMS, "확인서 구성요소 이름은 F02 원문(또는 개발계획서 항목)과 같아야 합니다")
+                self.assertEqual([row["번호"] for row in result.sheet], list(SHEET_ITEMS[component]),
                                  "확인서 행은 해당 구성요소의 모든 항목 번호를 원문 순서로 가져야 합니다")
                 for row in result.sheet:
                     self.assertLessEqual(SHEET_KEYS, row.keys())
                     # 확인서 문구는 원문을 visible()로 표시 변환한 것(기호 글꼴의 네모 번호 → [1])
-                    self.assertEqual(row["체크 항목"], visible(F02_ITEMS[component][row["번호"]]))
+                    self.assertEqual(row["체크 항목"], visible(SHEET_ITEMS[component][row["번호"]]))
                     self.assertIn(row["검수결과"], set(VERDICTS) | {NOT_CHECKED})
                 for key in ("module_code", "implemented", "not_implemented", "warnings"):
                     self.assertIn(key, result.diagnostics)
