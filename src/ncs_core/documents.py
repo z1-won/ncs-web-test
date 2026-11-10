@@ -88,19 +88,23 @@ class Document:
 
 
 def detect_format(path) -> str:
-    """파일 내용으로 hwp/hwpx를 판별한다. 둘 다 아니면 ValueError."""
+    """파일 내용으로 hwp/hwpx를 판별한다. 둘 다 아니면 ValueError.
+
+    오류 문구에는 파일 이름만 넣는다 — 웹 서버가 이 문구를 400 응답으로 그대로 내보내므로
+    서버 임시 폴더 경로(OS·경로 구조)가 사용자에게 보이지 않게 한다.
+    """
     path = Path(path)
     with path.open("rb") as stream:
         head = stream.read(8)
     if head == hwp.OLE_MAGIC:
         if not hwp.is_hwp(path.read_bytes()):
-            raise ValueError(f"OLE 파일이지만 HWP 서명이 아님: {path}")
+            raise ValueError(f"OLE 파일이지만 HWP 서명이 아님: {path.name}")
         return "hwp"
     if head[:2] == b"PK":
         if hwpx.is_hwpx(path):
             return "hwpx"
-        raise ValueError(f"zip이지만 hwpx가 아님: {path}")
-    raise ValueError(f"hwp/hwpx 둘 다 아님 (머리 바이트 {head!r}): {path}")
+        raise ValueError(f"zip이지만 hwpx가 아님: {path.name}")
+    raise ValueError(f"hwp/hwpx 둘 다 아님 (머리 바이트 {head!r}): {path.name}")
 
 
 def _clean(text: str) -> str:
@@ -121,7 +125,7 @@ def load_document(path) -> Document:
     for table in tables:
         table["cells"] = {key: _clean(value) for key, value in table["cells"].items()}
     if not any(line for section in sections for line in section):
-        raise ValueError(f"문단 텍스트를 추출하지 못했습니다: {path}")
+        raise ValueError(f"문단 텍스트를 추출하지 못했습니다: {path.name}")
     document = Document(path, fmt, sections, tables, images, table_paragraphs, figures, styles, aside, numbers,
                         page_breaks, pictures, binary_items)
     return normalize_sections(document)

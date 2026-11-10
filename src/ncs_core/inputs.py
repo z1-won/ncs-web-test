@@ -35,9 +35,9 @@ def validate_distinct(paths: dict[str, str | Path]) -> None:
             raise ValueError(f"{label} 파일 경로를 지정하세요")
         path = Path(path)
         if not path.is_file():
-            raise ValueError(f"{label} 파일을 찾을 수 없습니다: {path}")
+            raise ValueError(f"{label} 파일을 찾을 수 없습니다: {Path(path).name}")
         if path.stat().st_size == 0:
-            raise ValueError(f"{label} 파일이 비어 있습니다: {path}")
+            raise ValueError(f"{label} 파일이 비어 있습니다: {Path(path).name}")
     digests = {role: file_digest(path) for role, path in paths.items()}
     if len(set(digests.values())) != len(digests):
         raise ValueError("입력 파일들의 내용이 동일합니다. 실제 원고와 개발계획서를 각각 선택하세요")
@@ -62,7 +62,7 @@ def select_documents(
     for path in paths:
         key = str(Path(path).resolve())
         if key in seen:
-            raise ValueError(f"같은 입력 파일이 중복 지정되었습니다: {path}")
+            raise ValueError(f"같은 입력 파일이 중복 지정되었습니다: {Path(path).name}")
         seen.add(key)
         document = load_document(path)
         role = overrides.get(key, detect_role(document.sections))

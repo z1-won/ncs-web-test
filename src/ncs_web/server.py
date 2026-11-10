@@ -349,7 +349,7 @@ def create_app(
                 raise HTTPException(404, "검수 이력을 찾을 수 없습니다")
             content, filename = exported
             return Response(content, media_type="application/zip", headers={
-                "Content-Disposition": f"attachment; filename=review-{run_id}.zip; filename*=UTF-8''{quote(filename)}",
+                "Content-Disposition": f"attachment; filename=review-{quote(run_id)}.zip; filename*=UTF-8''{quote(filename)}",
             })
 
     # FastAPI가 자동 추가하는 422 대신 기존 프런트엔드와 호환되는 400을 문서화한다.
