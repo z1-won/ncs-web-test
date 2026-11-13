@@ -71,6 +71,13 @@ class UploadStore:
         with self._lock:
             return self._items.get(token)
 
+    def touch(self, token: str) -> Upload | None:
+        """get과 같고, 있으면 만료 시각을 지금부터 ttl 뒤로 미룬다 — 그림을 한 장씩 업스케일하는 동안 토큰이 끊기지 않게."""
+        upload = self.get(token)
+        if upload is not None:
+            upload.expires_at = time.monotonic() + self.ttl
+        return upload
+
     def release(self, token: str) -> bool:
         with self._lock:
             upload = self._items.pop(token, None)

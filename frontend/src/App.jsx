@@ -8,6 +8,7 @@ import { Badge, Spinner } from "./components/Badge.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
 import { ExportButtons } from "./components/ExportButtons.jsx";
 import { KrdsSelect } from "./components/KrdsSelect.jsx";
+import { UpscalePanel } from "./components/UpscalePanel.jsx";
 import { RawJson } from "./components/RawJson.jsx";
 import { ResultHead } from "./components/ResultHead.jsx";
 import { Footer, Header, TopButton } from "./components/Layout.jsx";
@@ -335,6 +336,11 @@ export default function App() {
 
           <RawJson data={result} title="원본 JSON (요약·진단·검수확인서·지적사항·전체)" />
         </section>
+      )}
+
+      {/* 그림 업스케일: 원고(hwpx)를 올리면 검사와 따로 쓸 수 있다 — 토큰이 바뀌면(파일 다시 고름) 새로 읽는다 */}
+      {upload.status === "ready" && /\.hwpx$/i.test(upload.roles?.manuscript || "") && (
+        <UpscalePanel key={upload.token} token={upload.token} manuscriptName={upload.roles.manuscript} moduleCode={moduleCode} />
       )}
 
       {history && (

@@ -329,3 +329,24 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 
 /* 개발계획서 점검 단계 라디오 — 입력칸과 같은 줄 높이 */
 .plan-stage { display: flex; gap: 1.5rem; align-items: center; min-height: var(--krds-size-height-7, 3.5rem); }
+
+/* 그림 해상도·업스케일 (UpscalePanel) — 원본·결과를 나란히, 좁은 화면에서는 위아래로 */
+.upscale-panel { margin-top: var(--krds-gap-9); }
+.upscale-list { display: flex; flex-direction: column; gap: var(--krds-gap-5); margin: var(--krds-gap-5) 0 0; padding: 0; list-style: none; }
+.upscale-card {
+  padding: var(--krds-padding-6);
+  border: var(--krds-light-border-width-static-regular) solid var(--krds-light-color-divider-gray-light);
+  border-left: 4px solid var(--krds-light-color-divider-gray-light);
+  border-radius: var(--krds-radius-medium2);
+  background: var(--krds-light-color-background-white);
+}
+.upscale-card.is-done { border-left-color: var(--krds-light-color-border-success); }
+.upscale-card.is-failed { border-left-color: var(--krds-light-color-border-danger); }
+.upscale-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--krds-gap-3); }
+.upscale-card .meta { margin: var(--krds-gap-2) 0 var(--krds-gap-4); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+.upscale-pair { display: flex; flex-wrap: wrap; gap: var(--krds-gap-5); }
+.upscale-pair figure { flex: 1 1 28rem; min-width: 0; margin: 0; }
+.upscale-pair img { display: block; width: 100%; height: auto; border: 1px solid var(--krds-light-color-divider-gray-light); background: #fff; }
+.upscale-pair figcaption { margin-top: var(--krds-gap-1); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-xsmall); }
+.upscale-actions { display: flex; flex-wrap: wrap; gap: var(--krds-gap-2); margin-top: var(--krds-gap-4); }
+.upscale-foot { margin-top: var(--krds-gap-7); }
