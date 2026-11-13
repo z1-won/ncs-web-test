@@ -1,21 +1,28 @@
 // 개발계획서 작성(REQ-02-001) — 세분류를 고르고 능력단위를 체크하면 T01 양식에 NCS 정보를 채운 초안 hwpx를 내려받는다.
 // 초안은 서버가 바로 ①~⑩ 점검(ncs_plan)을 돌려 요약을 함께 준다(X-Plan-Check). 요소·수행준거 표(ncs_elements.tsv)에 있는 세분류만 고를 수 있다.
-import React, { useEffect, useMemo, useState } from "react";
+// 이어서 작성한 개발계획서 파일의 점검(①~⑩, 최종본/1차본)도 이 페이지에서만 한다 — 원고 검수 페이지의 선택 목록에는 없다.
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
+import { ComponentResult } from "../components/AllResults.jsx";
 import { Badge, Spinner } from "../components/Badge.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
+import { RawJson } from "../components/RawJson.jsx";
 import { SheetTable } from "../components/Tables.jsx";
 import { usePageTitle } from "../lib/hooks.js";
-import { overallVerdict } from "../lib/checks.js";
+import { PLAN_CHECK, overallVerdict } from "../lib/checks.js";
+import { formatDate } from "../lib/format.jsx";
 
 const ANCHORS = [
   { id: "plan-form", label: "초안 만들기" },
   { id: "plan-check", label: "초안 점검" },
+  { id: "plan-review", label: "개발계획서 점검" },
 ];
+
+const STAGES = [["final", "최종본 (개발기관)"], ["draft", "1차본 (직능연)"]];
 
 export default function PlanDraftPage() {
   usePageTitle("개발계획서 작성");
@@ -30,6 +37,14 @@ export default function PlanDraftPage() {
   const [error, setError] = useState(null);
   const [check, setCheck] = useState(null);          // 초안 점검 요약 [{번호, 검수결과, 비고}]
   const [made, setMade] = useState(null);            // 마지막으로 만든 세분류·개수
+  // 개발계획서 점검 — 작성한(또는 받은) 개발계획서 파일 하나를 올려 ①~⑩을 점검한다
+  const [reviewFile, setReviewFile] = useState(null);
+  const [stage, setStage] = useState("final");       // 점검 단계: final 최종본 / draft 1차본
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState(null);
+  const [review, setReview] = useState(null);        // { data: /api/review 응답(check=plan), stage: 그때 고른 단계 }
+  const reviewInput = useRef(null);                  // 숨긴 <input type=file> — 진짜 <button>이 대신 연다
+  const aborter = useRef(null);                      // 진행 중 점검의 AbortController — 취소 버튼
 
   useEffect(() => {
     api.plan.subclasses().then(({ ok, data, error: message }) => {
@@ -68,6 +83,21 @@ export default function PlanDraftPage() {
     setTimeout(() => document.getElementById("plan-check")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
+  async function runReview(e) {
+    e.preventDefault();
+    if (!reviewFile) { setReviewError("점검할 개발계획서 파일(.hwp/.hwpx)을 선택하세요."); return; }
+    setReviewing(true); setReviewError(null); setReview(null);
+    const controller = new AbortController();
+    aborter.current = controller;
+    const { ok, data, error: message, aborted } = await api.review({ check: PLAN_CHECK, files: [reviewFile], stage, signal: controller.signal });
+    aborter.current = null;
+    setReviewing(false);
+    if (aborted) return;
+    if (!ok) { setReviewError(message); return; }
+    setReview({ data, stage });
+    setTimeout(() => document.getElementById("plan-review-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
   const allPicked = !!subclass && chosen.length === subclass.units.length;
   const somePicked = chosen.length > 0 && !allPicked;
   function pickAll(on) {
@@ -93,6 +123,7 @@ export default function PlanDraftPage() {
       <p className="page-desc">
         세분류를 고르면 NCS 능력단위·요소·수행준거를 개발계획서 양식(T01)에 자동으로 채운 초안(.hwpx)을 내려받습니다.
         학습 내용명·선수학습 등 집필자가 정할 칸은 비워 두며, 초안은 바로 개발계획서 점검 ①~⑩을 거칩니다.
+        이어서 작성한 개발계획서는 아래 ‘개발계획서 점검’에 올려 다시 점검합니다.
       </p>
 
       <PageAlert kind="danger">{loadError}</PageAlert>
@@ -205,10 +236,70 @@ export default function PlanDraftPage() {
             }
           />
           <h2 className="section-title">개발계획서 점검 확인서</h2>
-          <p className="meta section-desc">1차본(직능연) 기준 점검입니다 — 학습 내용명·영문명·집필진 등 기관 기재 칸은 해당 없음으로 둡니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하고, 완성본은 원고 검수 페이지에서 ‘최종본’으로 다시 점검하세요.</p>
+          <p className="meta section-desc">1차본(직능연) 기준 점검입니다 — 학습 내용명·영문명·집필진 등 기관 기재 칸은 해당 없음으로 둡니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하고, 완성본은 아래 ‘개발계획서 점검’에서 ‘최종본’으로 다시 점검하세요.</p>
           <SheetTable sheet={check} findings={[]} />
         </section>
       )}
+      {/* ── 개발계획서 점검 ── 작성한 파일을 올려 ①~⑩ 점검. 예전에는 원고 검수 페이지의 선택 목록에 있었다 */}
+      <section id="plan-review" className="nav-anchor plan-review">
+        <h2 className="section-title">개발계획서 점검</h2>
+        <p className="meta section-desc">작성한 개발계획서(.hwp/.hwpx)를 올리면 점검 ①~⑩을 실행합니다. 원고는 필요하지 않습니다.</p>
+        <form className="fieldset review-form" onSubmit={runReview}>
+          <div className="form-group">
+            <div className="form-tit"><label htmlFor="plan-file">개발계획서 파일 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></label></div>
+            <div className="form-conts">
+              <input ref={reviewInput} id="plan-file" type="file" accept=".hwp,.hwpx" className="sr-only" tabIndex={-1} aria-describedby="plan-file-hint"
+                     onChange={(e) => { setReviewFile(e.target.files?.[0] || null); setReviewError(null); }} />
+              <button type="button" className="krds-btn large tertiary" disabled={reviewing} onClick={() => reviewInput.current?.click()}>파일 선택</button>
+            </div>
+            <p className="form-hint" id="plan-file-hint">{reviewFile ? reviewFile.name : "선택된 파일 없음"}</p>
+          </div>
+
+          <div className="form-group">
+            <div className="form-tit"><span id="plan-stage-label">점검 단계</span></div>
+            <div className="form-conts plan-stage" role="radiogroup" aria-labelledby="plan-stage-label">
+              {STAGES.map(([value, label]) => (
+                <div className="krds-form-check" key={value}>
+                  <input type="radio" id={`plan-stage-${value}`} name="plan-stage" value={value} checked={stage === value} onChange={() => setStage(value)} />
+                  <label htmlFor={`plan-stage-${value}`}>{label}</label>
+                </div>
+              ))}
+            </div>
+            <p className="form-hint">1차본은 학습모듈명·영문명·기관명·집필진·학습 내용명이 비어 있어도 부적합으로 보지 않습니다(최종 단계에서 기관 기재)</p>
+          </div>
+
+          <div className="form-group form-actions">
+            <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
+            <div className="run-buttons">
+              <button className="krds-btn primary large" type="submit" disabled={reviewing || !reviewFile}>
+                {reviewing ? "점검 중…" : "점검 실행"}
+              </button>
+              {reviewing && <button className="krds-btn tertiary large" type="button" onClick={() => aborter.current?.abort()}>취소</button>}
+            </div>
+            <PageAlert kind="danger">{reviewError}</PageAlert>
+          </div>
+        </form>
+
+        <div id="plan-review-result" className="results-anchor nav-anchor" />
+        {reviewing && <ResultHead status={<Spinner label="개발계획서를 점검하는 중" />} />}
+        {!reviewing && !review && <p className="empty result-placeholder">점검을 실행하면 결과가 여기에 표시됩니다.</p>}
+        {review && (
+          <section aria-live="polite">
+            <ResultHead
+              status={<Badge value={review.data.요약.검수결과} large />}
+              meta={[review.data.module_code, "개발계획서 점검 ①~⑩", STAGES.find(([value]) => value === review.stage)?.[1],
+                     review.data.created_at && formatDate(review.data.created_at)].filter(Boolean).join(" · ")}
+              downloads={review.data.id
+                ? <a href={api.reviews.zipUrl(review.data.id)} className="krds-btn small tertiary" title="결과 JSON 묶음">ZIP</a>
+                : review.data.저장?.zip ? <span className="meta">저장: {review.data.저장.zip}</span> : null}
+            />
+            <h3 className="section-title">개발계획서 점검 확인서</h3>
+            <ComponentResult result={review.data} showSave={false} />
+            <RawJson data={review.data} title="원본 JSON (요약·진단·검수확인서·지적사항·전체)" />
+          </section>
+        )}
+      </section>
+
       <TopButton />
     </main>
     <Footer />

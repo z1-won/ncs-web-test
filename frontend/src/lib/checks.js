@@ -36,6 +36,11 @@ export const CHECKS = [
   optional: c.value === "toc" ? ["print"] : [],
 }));
 
+// 개발계획서 점검(plan)은 원고 검수 화면에 두지 않는다 — '개발계획서 작성' 페이지에서만 실행한다.
+// CHECKS·서버 engines에는 그대로 있고(이력 표의 이름 표시, 계약 테스트), 원고 검수의 선택 목록·전체 실행에서만 뺀다.
+export const PLAN_CHECK = "plan";
+export const manuscriptChecks = (checks) => checks.filter((c) => c.value !== PLAN_CHECK);
+
 export const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
 
 // 구현된 항목 번호 목록 → "①~③·⑤" (연속 3개 이상은 범위로)
@@ -65,7 +70,7 @@ export function checksFromEngines(engines) {
   }));
 }
 
-// ───────────────────────── 전체 실행(구성요소 10개를 차례로) ─────────────────────────
+// ───────────────────────── 전체 실행(원고 구성요소 10개를 차례로) ─────────────────────────
 // 선택 목록의 첫 항목(기본값). 서버의 check 값이 아니라 화면이 처리한다: 파일을 /api/uploads에 한 번 올려 토큰을 받고,
 // 엔진 순서대로 /api/review를 upload=토큰으로 부른다. 결과는 구성요소별 아코디언(KRDS krds-accordion)에 하나씩 채워진다.
 export const ALL_CHECK = "all";
