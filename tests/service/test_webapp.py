@@ -112,6 +112,45 @@ class WebappTests(unittest.TestCase):
         self.assertEqual(expired.status_code, 400)
         self.assertIn("만료", expired.json()["error"])
 
+    def test_upload_roles_assign_files_instead_of_detecting(self):
+        """화면의 업로드 칸이 정한 역할(roles)은 내용 판별보다 우선하고, 그 토큰으로 돌리는 검수에도 그대로 쓰인다."""
+        def post(paths, roles):
+            return self.client.post("/api/uploads", data={"roles": json.dumps(roles)}, files=[
+                ("files", (p.name, p.read_bytes(), "application/octet-stream")) for p in paths
+            ])
+        # 내용으로는 개발계획서인 파일을 원고 칸에 올리면 원고로 받는다(판별했다면 plan)
+        swapped = post([PLAN], ["manuscript"])
+        self.assertEqual(swapped.status_code, 200, swapped.text)
+        self.assertEqual(swapped.json()["roles"], {"manuscript": PLAN.name, "plan": None, "print": None})
+        # 내용으로는 원고 둘이라 판별만으로는 '원고 파일이 둘 이상' — 칸이 역할을 나누면 받는다
+        other = FIXTURES / "원고_pos_LM1203020201_24v3.hwpx"
+        self.assertEqual(self.client.post("/api/uploads", files=[("files", (p.name, p.read_bytes())) for p in (MANUSCRIPT, other)]).status_code, 400)
+        both = post([MANUSCRIPT, other], ["manuscript", "plan"])
+        self.assertEqual(both.status_code, 200, both.text)
+        self.assertEqual(both.json()["roles"], {"manuscript": MANUSCRIPT.name, "plan": other.name, "print": None})
+        # 토큰으로 돌린 검수는 지정한 역할을 쓴다: 진단의 입력 경로가 칸대로 나뉜다
+        token = post([MANUSCRIPT, PLAN], ["manuscript", "plan"]).json()
+        via_token = self.client.post("/api/review", data={"check": "position", "upload": token["upload"]})
+        self.assertEqual(via_token.status_code, 200, via_token.text)
+        self.assertEqual(via_token.json()["검수확인서"], self.upload("position").json()["검수확인서"])
+        self.assertEqual(self.client.post("/api/review", data={"check": "toc", "upload": token["upload"], "roles": '["manuscript"]'}).status_code, 400)
+        # files로 직접 올릴 때도 roles를 받는다(개발계획서 작성 페이지의 점검이 이렇게 보낸다)
+        direct = self.client.post("/api/review", data={"check": "plan", "roles": '["plan"]'}, files=[("files", (PLAN.name, PLAN.read_bytes()))])
+        self.assertEqual(direct.status_code, 200, direct.text)
+        # 잘못된 roles: 같은 역할 둘, 개수 불일치, 모르는 역할, 배열 아님, PDF 아닌 출력본
+        for paths, roles, word in (
+            ([MANUSCRIPT, PLAN], ["manuscript", "manuscript"], "둘 이상"),
+            ([MANUSCRIPT, PLAN], ["manuscript"], "개수"),
+            ([MANUSCRIPT], ["draft"], "roles"),
+            ([MANUSCRIPT], {"manuscript": 0}, "JSON 배열"),
+            ([MANUSCRIPT], ["print"], "PDF"),
+        ):
+            with self.subTest(roles=roles):
+                response = post(paths, roles)
+                self.assertEqual(response.status_code, 400, response.text)
+                self.assertIn(word, response.json()["error"])
+        self.assertEqual(len(self.client.app.state.uploads), 3, "거부된 업로드는 보관함에 남지 않는다")
+
     def test_upload_token_reports_missing_plan_and_rejects_bad_input(self):
         only_manuscript = self.client.post("/api/uploads", files=[("files", (MANUSCRIPT.name, MANUSCRIPT.read_bytes()))]).json()
         self.assertEqual(only_manuscript["roles"], {"manuscript": MANUSCRIPT.name, "plan": None, "print": None})

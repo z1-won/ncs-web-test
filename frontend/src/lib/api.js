@@ -26,6 +26,7 @@ export async function request(path, options = {}) {
   return { ok: false, status: response.status, data, error: message + (data?.traceback ? "\n\n" + data.traceback : "") };
 }
 
+// roles: files와 같은 순서의 역할 배열(["manuscript", "plan", "print"]) — 업로드 칸이 정한 역할. 주면 서버가 내용 판별 대신 그대로 쓴다.
 function multipart(fields, files = []) {
   const form = new FormData();
   Object.entries(fields).forEach(([key, value]) => { if (value != null) form.append(key, value); });
@@ -67,10 +68,11 @@ export const api = {
   // 검수 1건: files로 직접 올리거나 upload(토큰)+group으로 올려 둔 파일을 쓴다
   // signal: AbortController.signal — 취소 버튼
   // stage: 개발계획서 점검(plan)만 — "final" 최종본(기본) / "draft" 직능연 1차본(기관 기재 칸은 해당 없음)
-  review: ({ check, moduleCode, files = [], upload, group, stage, signal }) =>
-    request("/api/review", { method: "POST", body: multipart({ check, module_code: moduleCode, upload, group, stage: check === "plan" ? stage : undefined }, files), signal }),
+  review: ({ check, moduleCode, files = [], roles, upload, group, stage, signal }) =>
+    request("/api/review", { method: "POST", body: multipart({ check, module_code: moduleCode, upload, group, stage: check === "plan" ? stage : undefined,
+                                                              roles: roles ? JSON.stringify(roles) : undefined }, files), signal }),
   uploads: {
-    create: (files, signal) => request("/api/uploads", { method: "POST", body: multipart({}, files), signal }),
+    create: (files, signal, roles) => request("/api/uploads", { method: "POST", body: multipart({ roles: roles ? JSON.stringify(roles) : undefined }, files), signal }),
     remove: (token) => request(`/api/uploads/${token}`, { method: "DELETE" }),
   },
   reviews: {

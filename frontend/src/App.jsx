@@ -19,13 +19,12 @@ import { usePageTitle } from "./lib/hooks.js";
 
 const HISTORY_PAGE = 10;   // 이력 표 한 쪽 행 수(KRDS 페이지네이션)
 
-// 업로드 칸 셋(#13) — 칸 이름은 서버가 내용으로 판별해 돌려주는 역할(roles)의 키와 같다
+// 업로드 칸 셋(#13) — 칸이 곧 역할이다. 올릴 때 칸 이름을 역할(roles)로 함께 보내 서버가 내용 판별 대신 그대로 쓴다
 const SLOTS = [
   { role: "manuscript", label: "원고", accept: ".hwp,.hwpx", required: true },
   { role: "plan", label: "개발계획서", accept: ".hwp,.hwpx" },
   { role: "print", label: "출력본 PDF", accept: ".pdf" },
 ];
-const ROLE_LABEL = Object.fromEntries(SLOTS.map((slot) => [slot.role, slot.label]));
 
 export default function App() {
   usePageTitle("원고 검수");
@@ -33,7 +32,9 @@ export default function App() {
   const [checks, setChecks] = useState(CHECKS);
   // 원고·개발계획서·출력본 PDF를 칸마다 따로 고른다(#13). 서버에는 고른 것만 모아 한 번에 올린다(files).
   const [slots, setSlots] = useState({ manuscript: null, plan: null, print: null });
-  const files = useMemo(() => SLOTS.map((slot) => slots[slot.role]).filter(Boolean), [slots]);
+  const filled = useMemo(() => SLOTS.filter((slot) => slots[slot.role]), [slots]);
+  const files = useMemo(() => filled.map((slot) => slots[slot.role]), [filled, slots]);
+  const fileRoles = useMemo(() => filled.map((slot) => slot.role), [filled]);   // files와 같은 순서의 역할
   const [tried, setTried] = useState(false);   // 실행을 한 번 눌렀는가 — 그 뒤부터 빈 필수 칸에 오류 문구를 보인다
   const [moduleCode, setModuleCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -72,18 +73,18 @@ export default function App() {
     if (!files.length) { setUpload({ status: "idle" }); return undefined; }
     const controller = new AbortController();
     setUpload({ status: "uploading" });
-    api.uploads.create(files, controller.signal).then(({ ok, data, error: message, aborted }) => {
+    api.uploads.create(files, controller.signal, fileRoles).then(({ ok, data, error: message, aborted }) => {
       if (aborted) return;
       setUpload(ok ? { status: "ready", token: data.upload, group: data.group, roles: data.roles } : { status: "error", error: message });
     });
     return () => controller.abort();
-  }, [files]);
+  }, [files, fileRoles]);
 
   // 실행에 쓸 토큰. 미리 올린 것이 없거나(오류) 만료됐으면 지금 다시 올린다. 실패하면 null(오류는 setError).
   async function ensureUpload(signal) {
     const current = uploadRef.current;
     if (current.status === "ready") return current;
-    const { ok, data, error: message, aborted } = await api.uploads.create(files, signal);
+    const { ok, data, error: message, aborted } = await api.uploads.create(files, signal, fileRoles);
     if (aborted) return null;
     if (!ok) { setError(message); return null; }
     const fresh = { status: "ready", token: data.upload, group: data.group, roles: data.roles };
@@ -117,16 +118,6 @@ export default function App() {
   const options = [ALL_OPTION, ...reviewChecks];
   const selected = options.find((c) => c.value === check) || options[0];
 
-  // 칸에 넣은 파일을 서버가 다른 역할로 판별했으면 그 칸의 오류로 알린다(예: 원고 칸에 개발계획서). 판별 전이면 null.
-  function slotMismatch(role) {
-    const file = slots[role];
-    if (!file || upload.status !== "ready") return null;
-    const detected = Object.keys(ROLE_LABEL).filter((key) => upload.roles?.[key] === file.name);
-    if (detected.includes(role)) return null;
-    return detected.length
-      ? `이 파일은 내용상 ${ROLE_LABEL[detected[0]]}로 판별됩니다. ‘${ROLE_LABEL[detected[0]]}’ 칸에 올리세요.`
-      : `${ROLE_LABEL[role]}로 판별하지 못했습니다. 파일을 확인하세요.`;
-  }
   const needsPlan = (selected.required || []).includes("plan");
   const usesPrint = (selected.optional || []).includes("print");
 
@@ -134,8 +125,6 @@ export default function App() {
   function missingInput() {
     if (!slots.manuscript) return "원고 파일이 없습니다. ‘원고’ 칸에 원고(.hwp/.hwpx)를 올리세요.";
     if (needsPlan && !slots.plan) return `${selected.label} 검수는 개발계획서가 필요합니다. ‘개발계획서’ 칸에 파일을 올리세요.`;
-    const wrong = SLOTS.find((slot) => slotMismatch(slot.role));
-    if (wrong) return `‘${wrong.label}’ 칸의 파일을 확인하세요 — ${slotMismatch(wrong.role)}`;
     return null;
   }
 
@@ -180,7 +169,7 @@ export default function App() {
     const controller = new AbortController();
     aborter.current = controller;
     // 미리 올린 토큰은 단독 실행용. 전체 실행은 이력 묶음 id가 실행마다 달라야 해서 새 토큰(새 묶음)을 만든다.
-    const created = await api.uploads.create(files, controller.signal);
+    const created = await api.uploads.create(files, controller.signal, fileRoles);
     if (!created.ok) {
       if (!created.aborted) setError(created.error);
       aborter.current = null;
@@ -258,15 +247,14 @@ export default function App() {
 
       <form id="review-run" className="fieldset review-form nav-anchor" onSubmit={submit}>
         {/* 업로드 칸 셋(#13): 원고(필수) / 개발계획서 / 출력본 PDF. 칸마다 따로 고르고 지울 수 있어, 개발계획서는 두고 원고만 바꿔 올릴 수 있다.
-            고른 즉시 서버가 내용으로 역할을 판별하므로(upload.roles) 칸과 내용이 다르면 그 칸에 알린다 */}
+            역할은 칸이 정한다 — 서버는 내용으로 판별하지 않고 칸 이름을 그대로 쓴다. 고른 즉시 올려 읽을 수 있는 파일인지 확인한다 */}
         {SLOTS.map((slot) => (
           <FileSlot key={slot.role} id={`file-${slot.role}`} label={slot.label} required={slot.required} accept={slot.accept}
                     file={slots[slot.role]} disabled={busy}
                     onChange={(file) => { setSlots((prev) => ({ ...prev, [slot.role]: file })); setError(null); }}
                     uploading={upload.status === "uploading"}
                     invalid={
-                      slotMismatch(slot.role)
-                      || (slot.role === "manuscript" && upload.status === "error" ? upload.error : null)
+                      (slot.role === "manuscript" && upload.status === "error" ? upload.error : null)
                       || (slot.role === "manuscript" && tried && !slots.manuscript ? "원고 파일이 없습니다. 원고(.hwp/.hwpx)를 올리세요." : null)
                       || (slot.role === "plan" && !slots.plan && needsPlan ? "이 구성요소는 개발계획서가 필요합니다. 개발계획서를 올리세요." : null)
                     }

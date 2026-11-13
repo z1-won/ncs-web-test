@@ -85,8 +85,23 @@ class UploadResponse(BaseModel):
     upload: str
     group: str                    # 이 토큰으로 실행한 검수들의 이력 묶음 id
     files: list[str]
-    roles: dict[str, str | None]  # 내용으로 판별한 역할 → 파일 이름. plan이 None이면 개발계획서 없음
+    roles: dict[str, str | None]  # 역할 → 파일 이름(요청의 roles로 지정했으면 그대로, 아니면 내용으로 판별). plan이 None이면 개발계획서 없음
     expires_in: int               # 초
+
+
+def parse_roles(text: str, count: int) -> list[str] | None:
+    """업로드 칸이 정한 역할 목록(JSON 배열, files와 같은 순서·개수). 비어 있으면 None(내용으로 판별)."""
+    if not text:
+        return None
+    try:
+        roles = json.loads(text)
+    except ValueError:
+        roles = None
+    if not isinstance(roles, list) or not all(isinstance(role, str) for role in roles):
+        raise ValueError('roles는 ["manuscript", "plan", "print"]처럼 역할 이름의 JSON 배열이어야 합니다')
+    if len(roles) != count:
+        raise ValueError(f"roles({len(roles)}개)와 files({count}개)의 개수가 다릅니다")
+    return roles
 
 
 def error_response(status: int, message: str, **extra: Any) -> JSONResponse:
@@ -222,13 +237,23 @@ def create_app(
         "/api/uploads", response_model=UploadResponse,
         responses={400: {"model": ErrorResponse}},
     )
-    def create_upload(files: Annotated[list[UploadFile], File()]) -> UploadResponse | JSONResponse:
-        """전체 실행 1단계: 파일을 한 번만 올려 두고 토큰을 받는다. 역할(원고/개발계획서)을 내용으로 판별해 함께 알려 준다."""
+    def create_upload(
+        files: Annotated[list[UploadFile], File()],
+        roles: Annotated[str, Form()] = "",   # 업로드 칸이 정한 역할: files와 같은 순서의 JSON 배열. 없으면 내용으로 판별
+    ) -> UploadResponse | JSONResponse:
+        """전체 실행 1단계: 파일을 한 번만 올려 두고 토큰을 받는다. 역할(원고/개발계획서/출력본)은 roles로 지정한 대로,
+        지정하지 않으면 내용으로 판별해 함께 알려 준다. 지정한 역할은 이 토큰으로 돌리는 검수에도 그대로 쓴다."""
         try:
-            upload = uploads_store.put([(item.filename or "", item.file.read()) for item in files])
+            named = [item for item in files if item.filename]   # 파일을 고르지 않은 빈 입력 칸은 역할 개수에 세지 않는다
+            given = parse_roles(roles, len(named))
+            upload = uploads_store.put([(item.filename or "", item.file.read()) for item in named])
             try:
+                if given is not None:
+                    if len(upload.files) != len(given):
+                        raise ValueError("빈 파일이 있어 역할을 맞출 수 없습니다. 파일을 확인하세요")
+                    upload.assigned = {str(path): role for (_, path), role in zip(upload.files, given)}
                 # 역할을 미리 확인해 두면 화면이 '개발계획서 없음 → 위치 건너뜀'을 실행 전에 알 수 있다
-                documents = select_documents([path for _, path in upload.files], required=())
+                documents = select_documents([path for _, path in upload.files], upload.assigned or None, required=())
             except ValueError:
                 uploads_store.release(upload.token)
                 raise
@@ -268,7 +293,11 @@ def create_app(
         kept = uploads_store.get(upload) if upload else None
         if kept is not None:
             for file_name, path in kept.files:
-                if file_name.lower().endswith(".hwpx") and detect_role(load_document(path).sections) == "manuscript":
+                if not file_name.lower().endswith(".hwpx"):
+                    continue
+                # 업로드 칸이 역할을 정했으면 그대로, 아니면 내용으로 판별
+                role = kept.assigned.get(str(path)) or detect_role(load_document(path).sections)
+                if role == "manuscript":
                     name, source = file_name, path.read_bytes()
                     break
             if source is None:
@@ -409,8 +438,10 @@ def create_app(
         upload: Annotated[str, Form()] = "",
         group: Annotated[str, Form()] = "",
         stage: Annotated[str, Form()] = "",     # 개발계획서 점검(plan) 단계: final / draft. 다른 검수는 무시
+        roles: Annotated[str, Form()] = "",     # files로 직접 올릴 때만: files와 같은 순서의 역할 JSON 배열. 없으면 내용으로 판별
     ) -> ReviewResponse | JSONResponse:
-        """files로 직접 올리거나, /api/uploads 토큰(upload)으로 올려 둔 파일을 쓴다. group은 이력 묶음 id(토큰 응답의 group)."""
+        """files로 직접 올리거나, /api/uploads 토큰(upload)으로 올려 둔 파일을 쓴다. group은 이력 묶음 id(토큰 응답의 group).
+        토큰으로 실행하면 업로드 때 정한 역할을 그대로 쓴다."""
         # 동기 엔진은 일반 def 경로 함수의 스레드풀에서 실행한다.
         try:
             if upload:
@@ -420,15 +451,18 @@ def create_app(
                 if group and group != kept.group_id:
                     raise ValueError("group이 업로드 토큰의 묶음 id와 다릅니다")
                 # group을 보내지 않으면 단독 실행(묶음 없음) — 화면이 파일을 미리 올려 두고 토큰만으로 1건 돌리는 경우
-                payload = _run(kept.files, check, module_code, group or None, stage=stage)
+                if roles:
+                    raise ValueError("roles는 업로드할 때 지정합니다. upload 토큰과 함께 보낼 수 없습니다")
+                payload = _run(kept.files, check, module_code, group or None, stage=stage, roles=kept.assigned or None)
             else:
                 if group:
                     raise ValueError("group은 upload 토큰과 함께만 쓸 수 있습니다")
                 with tempfile.TemporaryDirectory(prefix="ncs_upload_") as folder:
                     saved = []
-                    for index, item in enumerate(files or []):
-                        if not item.filename:
-                            continue
+                    named = [item for item in files or [] if item.filename]
+                    given = parse_roles(roles, len(named))
+                    assigned: dict[str, str] = {}
+                    for index, item in enumerate(named):
                         name = Path(item.filename).name
                         if name in ("", ".", ".."):
                             raise ValueError("유효하지 않은 업로드 파일명입니다")
@@ -440,9 +474,11 @@ def create_app(
                             shutil.copyfileobj(item.file, target)
                         if path.stat().st_size:
                             saved.append((name, path))
+                            if given is not None:
+                                assigned[str(path)] = given[index]
                     if not saved:
                         raise ValueError("업로드된 파일이 없습니다")
-                    payload = _run(saved, check, module_code, None, stage=stage)
+                    payload = _run(saved, check, module_code, None, stage=stage, roles=assigned or None)
         except ValueError as error:
             return error_response(400, str(error))
         except Exception as error:
@@ -452,14 +488,15 @@ def create_app(
             return error_response(500, f"{type(error).__name__}: {error}", **debug)
         return payload
 
-    def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None, *, stage: str = "") -> ReviewResponse:
+    def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None, *, stage: str = "",
+             roles: dict[str, str] | None = None) -> ReviewResponse:
         paths = tuple(path for _, path in saved)
         config = None
         if check == "plan" and stage:
             from ncs_plan import CheckConfig as PlanConfig
 
             config = PlanConfig(stage=stage)
-        execution = execute_review(ReviewRequest(paths, check, module_code.strip(), config=config))
+        execution = execute_review(ReviewRequest(paths, check, module_code.strip(), roles=roles, config=config))
         result = execution.result
         stored = store.save(execution, saved, group_id=group_id)
         saved_paths = (

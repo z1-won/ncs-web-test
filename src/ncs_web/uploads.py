@@ -27,6 +27,7 @@ class Upload:
     files: list[tuple[str, Path]]  # (올린 파일 이름, 저장 경로)
     expires_at: float
     roles: dict[str, str | None] = field(default_factory=dict)  # {'manuscript': 파일명, 'plan': 파일명|None, 'print': 출력본 PDF 파일명|None}
+    assigned: dict[str, str] = field(default_factory=dict)      # {저장 경로: 역할} — 화면의 업로드 칸이 정한 역할. 비어 있으면 내용으로 판별
 
 
 class UploadStore:

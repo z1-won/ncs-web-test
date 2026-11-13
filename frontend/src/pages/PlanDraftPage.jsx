@@ -89,7 +89,7 @@ export default function PlanDraftPage() {
     setReviewing(true); setReviewError(null); setReview(null);
     const controller = new AbortController();
     aborter.current = controller;
-    const { ok, data, error: message, aborted } = await api.review({ check: PLAN_CHECK, files: [reviewFile], stage, signal: controller.signal });
+    const { ok, data, error: message, aborted } = await api.review({ check: PLAN_CHECK, files: [reviewFile], roles: [PLAN_CHECK], stage, signal: controller.signal });
     aborter.current = null;
     setReviewing(false);
     if (aborted) return;
