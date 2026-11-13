@@ -34,11 +34,13 @@ html { scrollbar-gutter: stable; }
 /* 실행 버튼은 입력칸·셀렉트(large = size-height-8)와 같은 높이 */
 .review-form .run-buttons .krds-btn.large { height: var(--krds-size-height-8); }
 .review-form .krds-btn { width: 100%; }
-/* 업로드 칸(FileSlot, #13): '파일 선택'이 칸을 채우고 '지우기'는 글자 폭만 */
-.review-form .file-slot { flex-direction: row; align-items: center; gap: var(--krds-gap-3); }   /* KRDS .form-conts는 세로 쌓기 — 이 칸만 가로 */
-.review-form .file-slot .krds-btn.tertiary { flex: 1; min-width: 0; }
-.review-form .file-slot .file-slot-clear { width: auto; flex: none; white-space: nowrap; }
-.review-form .form-group .form-hint { overflow-wrap: anywhere; }
+/* 업로드 칸(FileSlot, #13): KRDS 파일 업로드(.krds-file-upload)의 파일 목록을 폼 한 칸 폭에 맞춘다 — 간격·안쪽 여백만 한 단계 작은 KRDS 토큰으로 */
+.review-form .file-slot { --krds-file-upload--gap: var(--krds-gap-3); --krds-file-upload--list-padding: var(--krds-padding-4) var(--krds-padding-5); }
+.review-form .file-slot .file-upload-btn-wrap { width: 100%; }
+.review-form .file-slot .upload-list .krds-btn { width: auto; white-space: nowrap; }
+.review-form .file-slot .file-info { gap: var(--krds-gap-3); }
+.review-form .file-slot .file-name { min-width: 0; font-size: var(--krds-pc-font-size-body-small); word-break: break-all; }   /* 파일명은 띄어쓰기가 없어 낱말 단위로는 한 줄 말줄임이 첫 토막에서 끊긴다 */
+.review-form .file-slot .file-hint-invalid { font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
 .selected-files { margin-top: var(--krds-gap-7); }
 /* 결과 머리글(ResultHead): 1줄 판정·설명, 2줄 액션 바. 어떤 검수든 버튼 자리가 같다 */
 .result-head { display: flex; flex-direction: column; gap: var(--krds-gap-4); margin-top: var(--krds-gap-9); }

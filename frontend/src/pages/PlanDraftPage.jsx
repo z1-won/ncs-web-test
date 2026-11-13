@@ -235,7 +235,7 @@ export default function PlanDraftPage() {
               </>
             }
           />
-          <h2 className="section-title">개발계획서 점검 확인서</h2>
+          <h2 className="section-title">초안 점검 확인서</h2>
           <p className="meta section-desc">1차본(직능연) 기준 점검입니다 — 학습 내용명·영문명·집필진 등 기관 기재 칸은 해당 없음으로 둡니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하고, 완성본은 아래 ‘개발계획서 점검’에서 ‘최종본’으로 다시 점검하세요.</p>
           <SheetTable sheet={check} findings={[]} />
         </section>

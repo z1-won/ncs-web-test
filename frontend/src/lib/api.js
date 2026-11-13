@@ -17,6 +17,8 @@ export async function request(path, options = {}) {
   try {
     data = await response.json();
   } catch {
+    // 응답 머리는 왔는데 본문을 읽는 중에 취소되면(파일을 연달아 바꿀 때) 여기로 온다 — 빈 성공(ok, data=null)이 아니라 취소로 돌려준다
+    if (options.signal?.aborted) return { ok: false, status: 0, data: null, error: "취소됨", aborted: true };
     data = null;
   }
   if (response.ok) return { ok: true, status: response.status, data, error: null };

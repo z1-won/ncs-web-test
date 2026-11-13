@@ -263,7 +263,7 @@ export default function App() {
           <FileSlot key={slot.role} id={`file-${slot.role}`} label={slot.label} required={slot.required} accept={slot.accept}
                     file={slots[slot.role]} disabled={busy}
                     onChange={(file) => { setSlots((prev) => ({ ...prev, [slot.role]: file })); setError(null); }}
-                    status={upload.status === "uploading" ? "역할 확인 중…" : null}
+                    uploading={upload.status === "uploading"}
                     invalid={
                       slotMismatch(slot.role)
                       || (slot.role === "manuscript" && upload.status === "error" ? upload.error : null)
