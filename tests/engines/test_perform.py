@@ -7,7 +7,7 @@ from ncs_perform.blocks import split_perform_blocks
 from ncs_perform.rules.sentences import check_perform_sentences, judge_sentence
 from ncs_perform.rules.title import check_perform_title
 
-BOX = "\U000F02B1"  # 󰊱
+BOX = "\U000F02B1"  # 네모 번호 [1] (한컴 기호 글꼴의 보조 평면 사용자 영역 글자)
 
 
 def manuscript():
@@ -88,6 +88,19 @@ class BlockSplitTests(unittest.TestCase):
         blocks = split_perform_blocks(texts, styles=None, table_paragraphs=tables, aside_paragraphs=aside)
         self.assertEqual(sum(1 for s in blocks[0]["수행순서"] if s["level1"]), 2)
 
+    def test_hwp_split_surrogates_are_joined(self):
+        """hwp 본문은 UTF-16 단위로 읽혀 네모 번호가 서로게이트 두 개(U+DB80 U+DEB1)로 온다 → 합쳐서 첫 글자로 수준 1을 찾는다."""
+        split = "".join(chr(c) for c in (0xDB80, 0xDEB1))
+        texts, _, tables, aside = manuscript()
+        hwp_texts = [t.replace(BOX, split) for t in texts]
+        self.assertNotIn(BOX, "".join(hwp_texts))
+        blocks = split_perform_blocks(hwp_texts, styles=None, table_paragraphs=tables, aside_paragraphs=aside)
+        self.assertEqual([s["text"] for s in blocks[0]["수행순서"] if s["level1"]],
+                         [BOX + " 전화 수신 시 기본 응대 절차를 숙지한다.", BOX + " 예약 정보를 기록한다"])
+        rows = check_perform_sentences(blocks, has_styles=False)
+        self.assertEqual([r["판정"] for r in rows][:1], ["부적합"], "네모 번호를 찾았으니 '~한다.' 종결을 판정한다(마침표 없음 X)")
+        self.assertNotIn("\udb80", str(rows))
+
 
 class TitleRuleTests(unittest.TestCase):
     def test_hagi_ending_and_numbering(self):
@@ -111,7 +124,7 @@ class VisibleGlyphTests(unittest.TestCase):
         self.assertEqual(visible("객실\uf09e부대시설"), "객실⟨U+F09E⟩부대시설", "기본 평면 PUA 표기는 그대로")
 
     def test_sheet_item_text_has_no_raw_box_glyph(self):
-        """확인서 원문(f02_items)의 󰊱도 표로 나갈 때는 읽을 수 있는 표기로 바뀐다."""
+        """확인서 원문(f02_items)의 네모 번호(U+F02B1)도 표로 나갈 때는 읽을 수 있는 표기로 바뀐다."""
         from ncs_perform.sheet import sheet
         text = next(row["체크 항목"] for row in sheet([]) if row["번호"] == "④")
         self.assertNotIn(BOX, text)
@@ -134,6 +147,9 @@ class SentenceRuleTests(unittest.TestCase):
         self.assertEqual(judge_sentence(BOX + " 사용법을 가르친다.")[0], "O")
         self.assertEqual(judge_sentence(BOX + " 객실이 크다.")[0], "X")  # 형용사
         self.assertEqual(judge_sentence(BOX + " 참고 사항이다.")[0], "△")
+        # 수행 목표를 적는 '~할 수 있다.'는 다른 표현이 마땅치 않고 최종본(0401·0407)에도 있어 △
+        self.assertEqual(judge_sentence(BOX + " 개발 일정을 수립할 수 있다.")[0], "△")
+        self.assertEqual(judge_sentence(BOX + " 필요한 자원이 없다.")[0], "△")
         self.assertEqual(judge_sentence(BOX + " 기록한다")[0], "X")
         self.assertEqual(judge_sentence(BOX + " 응대한다,")[0], "X")
         self.assertEqual(judge_sentence(BOX + " 예약 접수")[0], "X")
