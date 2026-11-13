@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "./lib/api.js";
 import { ALL_CHECK, ALL_OPTION, CHECKS, checksFromEngines, manuscriptChecks } from "./lib/checks.js";
@@ -7,6 +7,7 @@ import { AllResults, ComponentResult } from "./components/AllResults.jsx";
 import { Badge, Spinner } from "./components/Badge.jsx";
 import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
 import { ExportButtons } from "./components/ExportButtons.jsx";
+import { FileSlot } from "./components/FileSlot.jsx";
 import { KrdsSelect } from "./components/KrdsSelect.jsx";
 import { UpscalePanel } from "./components/UpscalePanel.jsx";
 import { RawJson } from "./components/RawJson.jsx";
@@ -18,11 +19,22 @@ import { usePageTitle } from "./lib/hooks.js";
 
 const HISTORY_PAGE = 10;   // 이력 표 한 쪽 행 수(KRDS 페이지네이션)
 
+// 업로드 칸 셋(#13) — 칸 이름은 서버가 내용으로 판별해 돌려주는 역할(roles)의 키와 같다
+const SLOTS = [
+  { role: "manuscript", label: "원고", accept: ".hwp,.hwpx", required: true },
+  { role: "plan", label: "개발계획서", accept: ".hwp,.hwpx" },
+  { role: "print", label: "출력본 PDF", accept: ".pdf" },
+];
+const ROLE_LABEL = Object.fromEntries(SLOTS.map((slot) => [slot.role, slot.label]));
+
 export default function App() {
   usePageTitle("원고 검수");
   const [check, setCheck] = useState(ALL_CHECK); // 기본은 전체 검수
   const [checks, setChecks] = useState(CHECKS);
-  const [files, setFiles] = useState([]);
+  // 원고·개발계획서·출력본 PDF를 칸마다 따로 고른다(#13). 서버에는 고른 것만 모아 한 번에 올린다(files).
+  const [slots, setSlots] = useState({ manuscript: null, plan: null, print: null });
+  const files = useMemo(() => SLOTS.map((slot) => slots[slot.role]).filter(Boolean), [slots]);
+  const [tried, setTried] = useState(false);   // 실행을 한 번 눌렀는가 — 그 뒤부터 빈 필수 칸에 오류 문구를 보인다
   const [moduleCode, setModuleCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -36,7 +48,6 @@ export default function App() {
   const uploadRef = useRef(upload);
   uploadRef.current = upload;
   const aborter = useRef(null);      // 진행 중 요청의 AbortController — 취소 버튼
-  const fileInput = useRef(null);    // 숨긴 <input type=file> — 진짜 <button>이 대신 열어 키보드(Enter/Space)로도 동작
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
   const [historyPage, setHistoryPage] = useState(1);   // 이력 표 현재 쪽
   useEffect(() => {
@@ -106,8 +117,33 @@ export default function App() {
   const options = [ALL_OPTION, ...reviewChecks];
   const selected = options.find((c) => c.value === check) || options[0];
 
+  // 칸에 넣은 파일을 서버가 다른 역할로 판별했으면 그 칸의 오류로 알린다(예: 원고 칸에 개발계획서). 판별 전이면 null.
+  function slotMismatch(role) {
+    const file = slots[role];
+    if (!file || upload.status !== "ready") return null;
+    const detected = Object.keys(ROLE_LABEL).filter((key) => upload.roles?.[key] === file.name);
+    if (detected.includes(role)) return null;
+    return detected.length
+      ? `이 파일은 내용상 ${ROLE_LABEL[detected[0]]}로 판별됩니다. ‘${ROLE_LABEL[detected[0]]}’ 칸에 올리세요.`
+      : `${ROLE_LABEL[role]}로 판별하지 못했습니다. 파일을 확인하세요.`;
+  }
+  const needsPlan = (selected.required || []).includes("plan");
+  const usesPrint = (selected.optional || []).includes("print");
+
+  // 실행 전 확인: 원고가 없거나, 개발계획서가 필요한 구성요소인데 없으면 실행하지 않고 오류 문구를 보인다(#13). 통과하면 null.
+  function missingInput() {
+    if (!slots.manuscript) return "원고 파일이 없습니다. ‘원고’ 칸에 원고(.hwp/.hwpx)를 올리세요.";
+    if (needsPlan && !slots.plan) return `${selected.label} 검수는 개발계획서가 필요합니다. ‘개발계획서’ 칸에 파일을 올리세요.`;
+    const wrong = SLOTS.find((slot) => slotMismatch(slot.role));
+    if (wrong) return `‘${wrong.label}’ 칸의 파일을 확인하세요 — ${slotMismatch(wrong.role)}`;
+    return null;
+  }
+
   async function submit(event) {
     event.preventDefault();
+    setTried(true);
+    const missing = missingInput();
+    if (missing) { setError(missing); setNotice(null); return undefined; }
     if (check === ALL_CHECK) return runAll();
     setBusy(true);
     setError(null);
@@ -217,10 +253,33 @@ export default function App() {
     <main id="container" className="inner page">
       <h1 className="page-title">NCS 학습모듈 검수 확인 (로컬 테스트)</h1>
       <p className="page-desc">
-        원고와 개발계획서(.hwp/.hwpx)를 올리면 검수 패키지를 그대로 실행해 검수 확인서 형식과 결과 JSON을 보여줍니다. 파일 역할은 내용으로 자동 판별합니다. 원고를 한글에서 PDF로 저장한 출력본을 함께 올리면 차례 ⑦(쪽수)도 확정합니다.
+        원고(.hwp/.hwpx)를 올리면 검수 패키지를 그대로 실행해 검수 확인서 형식과 결과 JSON을 보여줍니다. 개발계획서와 출력본 PDF는 각자의 칸에 따로 올립니다 — 개발계획서가 있으면 ‘위치’와 대조 항목을, 원고를 한글에서 PDF로 저장한 출력본이 있으면 차례 ⑦(쪽수)을 확정합니다.
       </p>
 
       <form id="review-run" className="fieldset review-form nav-anchor" onSubmit={submit}>
+        {/* 업로드 칸 셋(#13): 원고(필수) / 개발계획서 / 출력본 PDF. 칸마다 따로 고르고 지울 수 있어, 개발계획서는 두고 원고만 바꿔 올릴 수 있다.
+            고른 즉시 서버가 내용으로 역할을 판별하므로(upload.roles) 칸과 내용이 다르면 그 칸에 알린다 */}
+        {SLOTS.map((slot) => (
+          <FileSlot key={slot.role} id={`file-${slot.role}`} label={slot.label} required={slot.required} accept={slot.accept}
+                    file={slots[slot.role]} disabled={busy}
+                    onChange={(file) => { setSlots((prev) => ({ ...prev, [slot.role]: file })); setError(null); }}
+                    status={upload.status === "uploading" ? "역할 확인 중…" : null}
+                    invalid={
+                      slotMismatch(slot.role)
+                      || (slot.role === "manuscript" && upload.status === "error" ? upload.error : null)
+                      || (slot.role === "manuscript" && tried && !slots.manuscript ? "원고 파일이 없습니다. 원고(.hwp/.hwpx)를 올리세요." : null)
+                      || (slot.role === "plan" && !slots.plan && needsPlan ? "이 구성요소는 개발계획서가 필요합니다. 개발계획서를 올리세요." : null)
+                    }
+                    hint={
+                      slot.role === "plan" && !slots.plan && !needsPlan
+                        ? (check === ALL_CHECK ? "없어도 실행됩니다 — ‘위치’만 건너뛰고, 개발계획서와 대조하는 항목은 판단불가로 남습니다." : "없어도 실행됩니다 — 개발계획서와 대조하는 항목은 판단불가로 남습니다.")
+                      : slot.role === "print" && !slots.print
+                        ? (usesPrint ? "없어도 모든 검수가 실행됩니다. 다만 출력본 PDF가 없으면 차례 ⑦(쪽수)은 검수할 수 없어 판단불가로 남습니다. 원고를 한글에서 PDF로 저장해 올리세요."
+                                     : "없어도 됩니다 — 이 구성요소는 출력본 PDF를 쓰지 않습니다(차례 ⑦ 쪽수 확인에만 씁니다).")
+                      : null
+                    } />
+        ))}
+
         <div className="form-group">
           <div className="form-tit"><label htmlFor="check">검수 구성요소</label></div>
           <div className="form-conts">
@@ -231,37 +290,6 @@ export default function App() {
             필요한 파일: {selected.files}
             {selected.items && selected.total ? ` · 확인서 항목 ${selected.total}개 중 ${selected.items.length}개 검사` : ""}
           </p>
-        </div>
-
-        <div className="form-group">
-          <div className="form-tit"><label htmlFor="files">파일</label></div>
-          <div className="form-conts">
-            <input ref={fileInput} id="files" type="file" multiple accept=".hwp,.hwpx,.pdf" className="sr-only" tabIndex={-1} aria-describedby="files-hint"
-                   onChange={(e) => setFiles(Array.from(e.target.files || []))} />
-            {/* 셀렉트·입력칸과 같은 large 높이(--krds-size-height large)로 세 칸의 규격을 맞춘다 */}
-            <button type="button" className="krds-btn large tertiary" disabled={busy} onClick={() => fileInput.current?.click()}>파일 선택</button>
-          </div>
-          {/* 고른 즉시 서버가 내용으로 역할을 판별해 파일명 뒤에 적어 준다(원고/개발계획서/출력본). 실행 전에 '개발계획서 없음'을 알 수 있다 */}
-          <p className="form-hint" id="files-hint">
-            {!files.length ? "선택된 파일 없음"
-              : upload.status === "uploading" ? `${files.map((f) => f.name).join(", ")} — 역할 확인 중…`
-              : files.map((f) => {
-                const role = upload.status !== "ready" ? null
-                  : upload.roles?.manuscript === f.name ? "원고" : upload.roles?.plan === f.name ? "개발계획서"
-                  : upload.roles?.print === f.name ? "출력본 PDF" : "역할 미판별";
-                return role ? `${f.name} (${role})` : f.name;
-              }).join(", ")}
-          </p>
-          {upload.status === "error" && <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{upload.error}</p>}
-          {upload.status === "ready" && !upload.roles?.plan && (selected.required || []).includes("plan") && (
-            <p className="form-hint-invalid">이 구성요소는 개발계획서가 필요합니다. 개발계획서를 함께 올리세요.</p>
-          )}
-          {upload.status === "ready" && !upload.roles?.manuscript && (
-            <p className="form-hint-invalid">원고를 찾지 못했습니다. 원고 파일을 올리세요.</p>
-          )}
-          {upload.status === "ready" && upload.roles?.manuscript && !upload.roles?.print && (selected.optional || []).includes("print") && (
-            <p className="form-hint">출력본 PDF가 없어 차례 ⑦(쪽수)은 판단불가로 남습니다. 원고를 한글에서 PDF로 저장해 함께 올리면 확정합니다.</p>
-          )}
         </div>
 
         <div className="form-group">
@@ -276,7 +304,7 @@ export default function App() {
           {/* 다른 칸의 레이블(form-tit) 높이만큼 빈 자리 — 같은 줄의 입력칸과 버튼 윗선·높이가 맞게 */}
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
-            <button className="krds-btn primary large" type="submit" disabled={busy || files.length === 0 || upload.status === "uploading"}>
+            <button className="krds-btn primary large" type="submit" disabled={busy || upload.status === "uploading"}>
               {busy ? "검사 중…" : check === ALL_CHECK ? "전체 검사 실행" : "검사 실행"}
             </button>
             {busy && <button className="krds-btn tertiary large" type="button" onClick={cancel}>취소</button>}

@@ -56,6 +56,8 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken }) {
         badges={
           <>
             {run.roles && !run.roles.plan && <span className="krds-badge bg-light-warning">개발계획서 없음 — 위치 미실행</span>}
+            {/* 방금 실행한 묶음만(roles.print가 null). 이력에서 연 묶음은 출력본 유무를 모른다(키 없음) */}
+            {run.roles && run.roles.print === null && <span className="krds-badge bg-light-warning">출력본 PDF 없음 — 차례 ⑦ 판단불가</span>}
             {run.cancelled && <span className="krds-badge bg-light-gray">중간에 취소됨</span>}
           </>
         }

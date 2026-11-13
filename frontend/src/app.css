@@ -34,6 +34,11 @@ html { scrollbar-gutter: stable; }
 /* 실행 버튼은 입력칸·셀렉트(large = size-height-8)와 같은 높이 */
 .review-form .run-buttons .krds-btn.large { height: var(--krds-size-height-8); }
 .review-form .krds-btn { width: 100%; }
+/* 업로드 칸(FileSlot, #13): '파일 선택'이 칸을 채우고 '지우기'는 글자 폭만 */
+.review-form .file-slot { flex-direction: row; align-items: center; gap: var(--krds-gap-3); }   /* KRDS .form-conts는 세로 쌓기 — 이 칸만 가로 */
+.review-form .file-slot .krds-btn.tertiary { flex: 1; min-width: 0; }
+.review-form .file-slot .file-slot-clear { width: auto; flex: none; white-space: nowrap; }
+.review-form .form-group .form-hint { overflow-wrap: anywhere; }
 .selected-files { margin-top: var(--krds-gap-7); }
 /* 결과 머리글(ResultHead): 1줄 판정·설명, 2줄 액션 바. 어떤 검수든 버튼 자리가 같다 */
 .result-head { display: flex; flex-direction: column; gap: var(--krds-gap-4); margin-top: var(--krds-gap-9); }
