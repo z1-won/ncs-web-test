@@ -16,6 +16,11 @@ HEADS = (  # (이름, 머리 문단을 찾는 정규식)
     ("평가", re.compile(r"^평\s*가$")),
 )
 OVERVIEW = re.compile(r"^학습\s*모듈의\s*개요$")
+CRITERIA = re.compile(r"^평가\s*준거$")
+# 참고 자료·활용 서식·부록 머리는 코어 section_presence가 준 위치('k')를 그대로 쓴다.
+# 제목이 그림이라 코어가 위치를 추정한 원고(근거에 '제목은 텍스트가 아님')는 그 위치가 실제 머리보다 뒤일 수 있어
+# '새 쪽 아님' X가 날 수 있다(SW제품기획 최종본 0405·0409). 위로 올라가 보정하던 코드는 참고 자료 엔진과
+# 같은 정규식을 복사해 써야 해서 '둘 이상이 쓰는 코드는 ncs_core로' 규칙에 따라 뺐다 — 보정은 코어 몫.
 
 
 def starts_new_page(index: int, paragraphs: list[str], page_breaks: frozenset[int], table_paragraphs=frozenset()) -> bool:
@@ -54,6 +59,14 @@ def check_page_starts(context) -> list[dict]:
         a, b = lesson["raw_span"]
         for name, pattern in HEADS:
             hits = [i for i in range(a, b) if pattern.match((body[i] or "").strip())]
+            if name == "평가" and len(hits) > 1:
+                # '평가'만 적힌 문단이 여럿(표 머리 칸 등)이면 뒤에 '평가 준거'가 오는 것만 진짜 머리
+                # (SW제품기획 0407: 표 칸 '평가'를 머리로 보아 '새 쪽 아님' X — 평가 엔진 region.eval_head와 같은 기준)
+                # 다음 후보 전까지만 본다 — 앞의 가짜 머리가 뒤 진짜 머리의 '평가 준거'를 제 것으로 세지 않게
+                real = [i for n, i in enumerate(hits)
+                        if any(CRITERIA.match((body[j] or "").strip())
+                               for j in range(i + 1, min([len(body), i + 40] + hits[n + 1:n + 2])))]
+                hits = real or hits
             for i in hits:
                 targets.append((name, body_section, i, f"학습 {lesson['no']}"))
     for name in ("참고 자료", "활용 서식", "부록"):
