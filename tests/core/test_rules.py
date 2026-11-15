@@ -48,6 +48,17 @@ class RuleIsolationTests(unittest.TestCase):
         rows = run_rules(None, (Rule("shared", "X-", broken, failure_item_ids=("X-①", "X-②")),))
         self.assertEqual([r["item_id"] for r in rows], ["X-①", "X-②"])
 
+    def test_rule_without_rows_is_undecided_not_unimplemented(self):
+        """규칙이 행을 내지 않으면 판단불가 — '미검사(규칙 미구현)'는 규칙이 없는 항목에만 쓴다."""
+        from ncs_core.rules import NO_TARGET_CHECK
+
+        rows = run_rules(None, (Rule("empty", "X-①", lambda c: []),))
+        self.assertEqual([(r["item_id"], r["판정"], r["체크"]) for r in rows], [("X-①", "판단불가", {NO_TARGET_CHECK: "△"})])
+        items = [SheetItem("①", "항목 ①", ("X-①",)), SheetItem("②", "규칙 없는 항목", ())]
+        self.assertEqual([r["검수결과"] for r in build_sheet(rows, items, "시험")], ["판단불가", "미검사"])
+        # 규칙을 돌리지 않으면(rules=()) 여전히 미검사다
+        self.assertEqual([r["검수결과"] for r in build_sheet(run_rules(None, ()), items, "시험")], ["미검사", "미검사"])
+
     def test_wrong_item_id_is_still_a_programming_error(self):
         with self.assertRaises(ValueError):
             run_rules(None, (Rule("first", "X-①", lambda c: [good_row("Y-①")]),))

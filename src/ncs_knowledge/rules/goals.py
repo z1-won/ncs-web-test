@@ -7,7 +7,7 @@
 평가 ②(평가 준거의 학습 목표)도 같은 함수를 쓴다.
 """
 
-from ncs_core import NA, O, X, visible
+from ncs_core import O, TRI, X, visible
 from ncs_core.goals import compare_lists, difference, normalize
 
 from .common import row
@@ -23,7 +23,9 @@ def check_goals(plan: dict | None, units: list[dict]) -> list[dict]:
         actual = unit["goal"]
         shown = [visible(a) for a in actual]
         if not plan:
-            rows.append(row("⑤", region, shown, {"개발계획서 학습 목표 일치": NA}, {"개발계획서": "개발계획서를 읽지 못해 대조 생략"}))
+            # 계획서와 대조하는 항목이라 계획서가 없으면 확정할 수 없다 — 해당 없음(-)으로 두면 확인서에서 적합으로 접힌다
+            rows.append(row("⑤", region, shown, {"개발계획서 학습 목표 일치": TRI},
+                            {"개발계획서 학습 목표 일치": "개발계획서가 없어 학습 목표를 대조하지 못함"}, "개발계획서를 함께 올려 다시 검수"))
             continue
         checks, notes = {}, {}
         if unit["goal_k"] is None:

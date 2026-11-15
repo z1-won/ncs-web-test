@@ -54,9 +54,12 @@ class CheckGoalsTests(unittest.TestCase):
     def unit(self, goals, goal_k=5):
         return {"no": 1, "sub": 1, "text": "호텔정보 구분", "lesson": 1, "goal": goals, "goal_k": goal_k}
 
-    def test_no_plan_is_not_applicable(self):
+    def test_no_plan_is_undecided(self):
+        """계획서와 대조하는 항목은 계획서가 없으면 판단불가 — 해당 없음(-)이면 확인서에서 적합으로 접힌다."""
         [row] = check_goals(None, [self.unit(["•" + A])])
-        self.assertEqual(row["체크"], {"개발계획서 학습 목표 일치": "-"})
+        self.assertEqual(row["체크"], {"개발계획서 학습 목표 일치": "△"})
+        self.assertEqual(row["판정"], "판단불가")
+        self.assertIn("개발계획서가 없어", row["비고"]["개발계획서 학습 목표 일치"])
 
     def test_pass_and_fail_with_unit_key_in_note(self):
         plan = {"내용": {(1, 1): {"text": "호텔정보 구분", "goals": ["1.1 " + A, "1.2 " + B]}}}

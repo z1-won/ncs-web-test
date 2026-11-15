@@ -88,7 +88,7 @@ class CriteriaGoalsTests(unittest.TestCase):
         [row] = check_criteria_goals([region()], PLAN)
         self.assertEqual((row["판정"], row["비고"]["② 평가 준거 학습 목표 계획서 일치"]), ("부적합", "평가 준거 표(학습 내용 | 학습 목표)를 찾지 못함"))
         [row] = check_criteria_goals([region(criteria=[self.units()[:1]], criteria_tables=1)], None)
-        self.assertEqual(row["체크"], {"② 평가 준거 학습 목표 계획서 일치": "-"})
+        self.assertEqual(row["체크"], {"② 평가 준거 학습 목표 계획서 일치": "△"})   # 계획서 없음 → 판단불가(적합으로 접히지 않게)
         [row] = check_criteria_goals([region(found=False, notes=["평가 머리를 찾지 못함"])], PLAN)
         self.assertEqual(row["판정"], "판단불가")
 

@@ -6,7 +6,7 @@
 
 import re
 
-from ncs_core import NA, O, TRI, X, verdict, visible
+from ncs_core import O, TRI, X, verdict, visible
 from ncs_core.goals import compare_lists, normalize
 
 ITEM_ID = "F02-평가-②"
@@ -54,7 +54,7 @@ def check_criteria_goals(regions: list[dict], plan_goals: dict | None) -> list[d
             for units in region["criteria"]:
                 for unit in units:
                     rows.append(_row(lesson, f"{base} > {unit['name']}", [visible(g) for g in unit["goals"]],
-                                     {CHECK: NA}, {CHECK: "개발계획서를 읽지 못해 대조 생략"}))
+                                     {CHECK: TRI}, {CHECK: "개발계획서가 없어 학습 목표를 대조하지 못함"}, "개발계획서를 함께 올려 다시 검수"))
             continue
         own = {key: value for key, value in plan_goals["내용"].items() if key[0] == lesson}
         by_name = {}
