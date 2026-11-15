@@ -63,8 +63,7 @@ export default function UpscalePage() {
       </div>
 
       {upload.status === "ready"
-        ? <UpscalePanel key={`${upload.token}-${targetDpi}`} token={upload.token} manuscriptName={upload.name} moduleCode="" targetDpi={Number(targetDpi)} />
-        : <p className="empty">원고를 올리면 해상도가 낮은 그림 목록이 여기에 표시됩니다.</p>}
+        && <UpscalePanel key={`${upload.token}-${targetDpi}`} token={upload.token} manuscriptName={upload.name} moduleCode="" targetDpi={Number(targetDpi)} />}
       <TopButton />
     </main>
     <Footer />
