@@ -59,6 +59,8 @@ def full_sheet(rows: list[dict]) -> list[dict]:
         if sheet.COMPONENT not in F02_ITEMS:   # 개발계획서 점검(plan)은 F02 확인서 구성요소가 아니다
             continue
         for item in sheet.ITEMS:
+            if item.no not in F02_ITEMS[sheet.COMPONENT]:   # F02에 없는 추가 항목(기타 '편집')은 확인서 파일에 넣지 않는다
+                continue
             found = given.get((_key(sheet.COMPONENT), item.no))
             out.append(found or {"구성요소": sheet.COMPONENT, "번호": item.no, "체크 항목": item.text,
                                  "검수결과": NOT_CHECKED, "비고": "미검사 — 이 구성요소는 실행하지 않음"})

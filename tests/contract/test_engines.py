@@ -97,12 +97,18 @@ class EngineContractTests(unittest.TestCase):
                 self.assertEqual(len(components), 1, "엔진 하나는 확인서 구성요소 하나를 맡습니다")
                 component = components.pop()
                 self.assertIn(component, SHEET_ITEMS, "확인서 구성요소 이름은 F02 원문(또는 개발계획서 항목)과 같아야 합니다")
-                self.assertEqual([row["번호"] for row in result.sheet], list(SHEET_ITEMS[component]),
+                # F02에 없는 추가 항목(기타 '편집' — 편집 체계)은 F02 항목 뒤에만 올 수 있고 확인서 파일에는 들어가지 않는다
+                extra = [row for row in result.sheet if row["번호"] not in SHEET_ITEMS[component]]
+                self.assertEqual([row["번호"] for row in extra], ["편집"] if check == "misc" else [])
+                self.assertEqual(result.sheet[len(result.sheet) - len(extra):], extra)
+                f02_rows = [row for row in result.sheet if row not in extra]
+                self.assertEqual([row["번호"] for row in f02_rows], list(SHEET_ITEMS[component]),
                                  "확인서 행은 해당 구성요소의 모든 항목 번호를 원문 순서로 가져야 합니다")
                 for row in result.sheet:
                     self.assertLessEqual(SHEET_KEYS, row.keys())
                     # 확인서 문구는 원문을 visible()로 표시 변환한 것(기호 글꼴의 네모 번호 → [1])
-                    self.assertEqual(row["체크 항목"], visible(SHEET_ITEMS[component][row["번호"]]))
+                    if row not in extra:
+                        self.assertEqual(row["체크 항목"], visible(SHEET_ITEMS[component][row["번호"]]))
                     self.assertIn(row["검수결과"], set(VERDICTS) | {NOT_CHECKED})
                 for key in ("module_code", "implemented", "not_implemented", "warnings"):
                     self.assertIn(key, result.diagnostics)

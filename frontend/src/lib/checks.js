@@ -27,7 +27,7 @@ export const CHECKS = [
   { value: "evaluation", label: "평가 ①~③·⑤" },
   { value: "references", label: "참고 자료 ①~③" },
   { value: "colophon", label: "개발 이력 및 판권 ①" },
-  { value: "misc", label: "기타 ①·②·⑥·⑦" },
+  { value: "misc", label: "기타 ①~⑧ + 편집 체계" },
   { value: "plan", label: "개발계획서 ①~⑩" },
 ].map((c) => ({
   ...c,

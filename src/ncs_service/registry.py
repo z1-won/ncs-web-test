@@ -38,16 +38,20 @@ def get_engine(check: str) -> Engine:
     return ENGINES[check]
 
 
+CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩"
+
+
 def describe_engines() -> list[dict]:
     """화면·API용 엔진 설명 — [{'check', 'component', 'items': ['①', …](구현된 확인서 항목), 'required', 'optional'}]. 확인서 순서."""
     out = []
     for check, engine in ENGINES.items():
         sheet = import_module(engine.package + ".sheet")
+        numbered = [item for item in sheet.ITEMS if item.no in CIRCLED]   # 확인서 번호가 붙은 항목만 — 기타의 '편집'(F02에 없는 추가 항목)은 세지 않는다
         out.append({
             "check": check,
             "component": sheet.COMPONENT,
-            "items": [item.no for item in sheet.ITEMS if item.item_ids],
-            "total": len(sheet.ITEMS),
+            "items": [item.no for item in numbered if item.item_ids],
+            "total": len(numbered),
             "required": list(engine.required),
             "optional": list(engine.optional),
         })
