@@ -58,14 +58,23 @@ def visible(text: str | None) -> str:
     return PUA_SUPPLEMENTARY.sub(_show_supplementary, shown)
 
 
+MARK_VERDICT = {X: FAIL, TRI: UNDECIDED, O: PASS}   # 체크 표시 → 검수결과
+SEVERITY = (FAIL, UNDECIDED, PASS)                  # 종합할 때 이기는 순서
+
+
+def worst(values: Iterable[str]) -> str:
+    """판정 종합의 단 하나의 구현 — 부적합이 하나라도 있으면 부적합, 없고 판단불가가 있으면 판단불가, 나머지는 적합.
+
+    체크 표시(O/X/△)와 검수결과(적합/부적합/판단불가) 어느 쪽을 줘도 된다. '-'(해당 없음)와 모르는 값은 무시하고, 빈 목록은 적합이다.
+    행 판정(verdict), 확인서 항목(sheet.build_sheet), 요약(reporting.overall_verdict)이 모두 이 함수를 쓴다 — 우선순위를 바꿀 때 한 곳만 고친다.
+    """
+    seen = {MARK_VERDICT.get(value, value) for value in values}
+    return next((v for v in SEVERITY if v in seen), PASS)
+
+
 def verdict(checks: dict[str, str]) -> str:
-    """X가 있으면 부적합, X 없이 △가 있으면 판단불가, 나머지는 적합. '-'는 무시."""
-    values = [v for v in checks.values() if v != NA]
-    if X in values:
-        return FAIL
-    if TRI in values:
-        return UNDECIDED
-    return PASS
+    """한 행의 체크들 → 검수결과. X가 있으면 부적합, X 없이 △가 있으면 판단불가, 나머지는 적합. '-'는 무시."""
+    return worst(checks.values())
 
 
 def flatten(checklist: Iterable[dict]) -> list[dict]:

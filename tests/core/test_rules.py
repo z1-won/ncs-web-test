@@ -53,5 +53,20 @@ class RuleIsolationTests(unittest.TestCase):
             run_rules(None, (Rule("first", "X-①", lambda c: [good_row("Y-①")]),))
 
 
+class WorstTests(unittest.TestCase):
+    def test_one_precedence_for_marks_and_verdicts(self):
+        """판정 종합은 text.worst 하나 — 체크 표시와 검수결과 어느 쪽이든 부적합 > 판단불가 > 적합."""
+        from ncs_core import verdict, worst
+        from ncs_core.reporting import overall_verdict
+
+        self.assertEqual(worst(["O", "△", "X"]), "부적합")
+        self.assertEqual(worst(["O", "△", "-"]), "판단불가")
+        self.assertEqual(worst(["O", "-"]), "적합")
+        self.assertEqual(worst([]), "적합")
+        self.assertEqual(worst(["적합", "판단불가", "부적합"]), "부적합")
+        self.assertEqual(verdict({"a": "O", "b": "△"}), "판단불가")
+        self.assertEqual(overall_verdict(["적합", "판단불가"]), "판단불가")
+
+
 if __name__ == "__main__":
     unittest.main()

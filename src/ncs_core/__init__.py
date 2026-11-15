@@ -14,7 +14,7 @@ from .reporting import report_summary, save_report
 from .rules import Rule, run_rules
 from .goals import compare_lists, difference, normalize
 from .sentences import judge_action_sentence
-from .text import FAIL, NA, O, PASS, PUA, TRI, UNDECIDED, VERDICTS, X, flatten, make_normalizer, verdict, visible
+from .text import FAIL, NA, O, PASS, PUA, TRI, UNDECIDED, VERDICTS, X, flatten, make_normalizer, verdict, visible, worst
 
 __all__ = [
     "Document",
@@ -47,5 +47,6 @@ __all__ = [
     "make_normalizer",
     "verdict",
     "visible",
+    "worst",
 ]
 __version__ = "1.0.0"

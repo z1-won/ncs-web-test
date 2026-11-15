@@ -7,7 +7,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from .text import FAIL, PASS, TRI, UNDECIDED, X, visible
+from .text import FAIL, PASS, TRI, X, visible, worst
 
 NOT_CHECKED = "미검사"
 
@@ -110,14 +110,8 @@ def build_sheet(checklist: list[dict], items: list[SheetItem], component: str) -
     for item in items:
         checks = _item_checks(checklist, item)
         values = [v for _, v, _, _, _ in checks]
-        if not item.item_ids or not checks:
-            verdict = NOT_CHECKED
-        elif X in values:
-            verdict = FAIL
-        elif TRI in values:
-            verdict = UNDECIDED
-        else:
-            verdict = PASS
+        # 규칙이 없거나 이 항목의 행이 하나도 없으면 미검사, 있으면 행들의 체크를 종합한다(text.worst)
+        verdict = NOT_CHECKED if not item.item_ids or not checks else worst(values)
         remarks = summarize_remarks(checks)
         sheet.append(
             {

@@ -19,17 +19,12 @@ from pathlib import Path
 
 from .models import ReviewResult, SavedReport
 from .module_code import validate_module_code
-from .text import FAIL, PASS, UNDECIDED, VERDICTS
+from .text import VERDICTS, worst
 
 
 def overall_verdict(verdicts) -> str:
     """행 판정들의 종합: 부적합이 하나라도 있으면 부적합, 없고 판단불가가 있으면 판단불가, 나머지는 적합."""
-    verdicts = list(verdicts)
-    if FAIL in verdicts:
-        return FAIL
-    if UNDECIDED in verdicts:
-        return UNDECIDED
-    return PASS
+    return worst(verdicts)
 
 
 def _buckets(result: ReviewResult, item_files: Sequence[tuple[str, str]], other_tail: str) -> dict[str, list]:
