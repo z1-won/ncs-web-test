@@ -39,7 +39,25 @@ class LayoutTests(unittest.TestCase):
 
     def test_usual_two_sections_untouched(self):
         d = doc([FRONT, BODY], styles=[["바탕글"] * 6, BODY_STYLES])
-        self.assertIs(normalize_sections(d), d)
+        out = normalize_sections(d)
+        self.assertEqual(out.sections, d.sections)
+        self.assertEqual(out.layout["결과"], "그대로")
+
+    def test_layout_records_what_was_done_or_why_it_failed(self):
+        """구역 맞춤 기록(Document.layout) — 진단과 오류 문구가 이 값을 쓴다."""
+        split = normalize_sections(doc([FRONT + BODY], styles=[["바탕글"] * 6 + BODY_STYLES]))
+        self.assertEqual(split.layout["결과"], "나눔")
+        self.assertIn("6번째 문단", split.layout["설명"])
+        merged = normalize_sections(doc([["표지"], FRONT, BODY], styles=[["바탕글"], ["바탕글"] * 6, BODY_STYLES]))
+        self.assertEqual((merged.layout["결과"], merged.layout["원래 구역 수"]), ("합침", 3))
+        # 구역이 하나뿐인데 본문 시작을 못 찾으면 실패 — 무엇이 없어서인지 적는다
+        no_toc = normalize_sections(doc([["표지", "본문 한 줄"]], styles=[["바탕글"] * 2]))
+        self.assertEqual(no_toc.layout["결과"], "실패")
+        self.assertIn("차례", no_toc.layout["설명"])
+        no_navigator = normalize_sections(doc([FRONT + ["본문 한 줄"]], styles=[["바탕글"] * 7]))
+        self.assertEqual(no_navigator.layout["결과"], "실패")
+        self.assertIn("큰학습", no_navigator.layout["설명"])
+        self.assertEqual(no_navigator.sections, [FRONT + ["본문 한 줄"]], "실패하면 원래 구역 그대로")
 
     def test_body_start_skips_cover_navigator_style(self):
         """표지의 큰학습 스타일 문단은 본문 시작이 아니다 — 차례·개요 뒤의 첫 큰학습을 찾는다."""

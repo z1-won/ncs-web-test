@@ -25,10 +25,19 @@ def execute_review(request: ReviewRequest) -> ExecutedReview:
     for role in engine.optional:  # 선택 입력(출력본 PDF 등)은 그 역할을 받겠다고 선언한 엔진에만 넘긴다
         if role in documents:
             prepare_options[OPTIONAL_KWARGS.get(role, role)] = documents[role]
-    context = module.prepare_review(
-        documents.get("manuscript"), documents.get("plan"), **prepare_options
-    )
-    return ExecutedReview(request.check, module.evaluate_review(context, **evaluate_options))
+    manuscript = documents.get("manuscript")
+    layout = getattr(manuscript, "layout", None) or {}
+    try:
+        context = module.prepare_review(manuscript, documents.get("plan"), **prepare_options)
+    except ValueError as error:
+        # 구역을 못 나눈 원고는 엔진이 '차례를 읽지 못했습니다' 같은 다른 오류를 낸다 — 진짜 원인을 함께 알린다
+        if layout.get("결과") in ("실패", "확인 못 함"):
+            raise ValueError(f"{error} (원고의 구역을 나누지 못했습니다: {layout['설명']})") from error
+        raise
+    result = module.evaluate_review(context, **evaluate_options)
+    if layout:
+        result.diagnostics["구역 맞춤"] = dict(layout)   # 앞부분/본문을 어떻게 나눴는지(실패했으면 그 이유) — 판정이 이상할 때 먼저 볼 곳
+    return ExecutedReview(request.check, result)
 
 
 def persist_review(review: ExecutedReview, out_dir: str | Path) -> SavedReport:

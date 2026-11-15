@@ -34,7 +34,9 @@ class SplitTests(unittest.TestCase):
 
     def test_two_section_document_is_untouched(self):
         d = Document(Path("x.hwpx"), "hwpx", [["앞"], ["뒤"]])
-        self.assertIs(normalize_sections(d), d)
+        out = normalize_sections(d)
+        self.assertEqual(out.sections, d.sections)
+        self.assertEqual(out.layout["결과"], "확인 못 함")   # 차례·본문 표식이 없는 두 구역 — 그대로 쓰되 확인은 못 했다
 
 
 class PatternTests(unittest.TestCase):

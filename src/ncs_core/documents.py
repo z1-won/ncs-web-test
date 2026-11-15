@@ -1,7 +1,7 @@
 """문서를 한 번 읽어 Document로 만든다. 검수 정책이나 사용자 인터페이스에 의존하지 않는다."""
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,9 @@ class Document:
               텍스트에 번호가 없는 문단의 "보이는 번호"다. hwp는 None.
     page_breaks: 섹션별 새 쪽 시작 문단 인덱스 — '쪽 나누기' 표식이 있거나, 저장된 배치 정보상 쪽 맨 위에서 시작하는 최상위 문단. hwp는 None.
     pictures: 모든 그림의 (섹션, 문단, BinData id). binaries: {BinData id: {'href', 'bytes'}} — 그림 파일 유실 확인용. hwpx만.
+    layout:   구역 맞춤(normalize_sections) 기록 — {'결과': '그대로'|'나눔'|'합침'|'확인 못 함'|'실패', '설명', '원래 구역 수'}.
+              '확인 못 함'은 본문 시작을 찾지 못해 원래 구역 나눔을 그대로 쓴 것, '실패'는 구역이 하나뿐인데 나누지 못한 것이다
+              (엔진이 차례·본문을 못 읽을 수 있음). 진단과 오류 문구에 쓴다.
     """
 
     path: Path
@@ -41,6 +44,7 @@ class Document:
     page_breaks: list[frozenset[int]] | None = None
     pictures: list[tuple[int, int, str | None]] = field(default_factory=list)
     binaries: dict[str, dict] = field(default_factory=dict)
+    layout: dict[str, Any] = field(default_factory=dict)
 
     @property
     def has_styles(self) -> bool:
@@ -201,6 +205,20 @@ def _looks_like_body(document: "Document", section: int, head: int = 80) -> bool
     return any(BODY_START_TEXT.match(t) for t in document.sections[section][:head])
 
 
+def _boundary_problem(document: "Document", section: int, has_toc: bool) -> str:
+    """본문 시작을 못 찾은 이유 — 검수자가 원고의 어디를 볼지 알 수 있게 한 문장으로."""
+    paragraphs = document.sections[section]
+    if not has_toc:
+        return "'차례' 제목을 찾지 못함 — 앞부분(위치·차례·개요)과 본문을 나눌 기준이 없음"
+    if not any(FRONT_END_TEXT.match(t) for t in paragraphs):
+        if document.has_styles:
+            return "차례 뒤에 '큰학습' 스타일의 내비게이터가 없고, 개요의 '핵심 용어'·'학습모듈의 내용 체계' 제목도 없어 본문 시작을 찾지 못함"
+        return "개요의 '핵심 용어'·'학습모듈의 내용 체계' 제목이 없어 본문 시작을 찾지 못함(hwp는 스타일을 읽지 못해 이 제목 뒤의 '학습 1' 줄로만 찾는다)"
+    if document.has_styles:
+        return "개요 뒤에 '큰학습' 스타일의 내비게이터도, 단독 '학습 1' 줄도 없어 본문 시작을 찾지 못함"
+    return "개요 뒤에 단독 '학습 1' 줄이 없어 본문 시작을 찾지 못함(hwp는 스타일을 읽지 못한다 — hwpx로 저장하면 내비게이터 스타일로 찾는다)"
+
+
 def normalize_sections(document: "Document") -> "Document":
     """모든 엔진이 가정하는 '구역 0 = 앞부분(위치·차례·개요), 구역 1 = 본문' 배치로 맞춘다.
 
@@ -213,17 +231,22 @@ def normalize_sections(document: "Document") -> "Document":
     문단 인덱스는 새 구역 기준으로 다시 매기고, 표·그림·스타일·번호·쪽 나누기·메모도 같이 옮긴다.
     """
     sections = document.sections
-    k = toc_section(document)
-    if k is None:
-        k = 0
+    found = toc_section(document)
+    k = 0 if found is None else found
+
+    def noted(result: str, text: str, target: "Document" = document) -> "Document":
+        return replace(target, layout={"결과": result, "설명": text, "원래 구역 수": len(sections)})
+
     if k + 1 < len(sections) and _looks_like_body(document, k + 1):
         if k == 0:
-            return document  # (b)
+            return noted("그대로", "앞부분과 본문이 이미 두 구역으로 나뉘어 있음")  # (b)
         at = len(sections[k])  # (d): 차례 구역 전체가 앞부분, 다음 구역이 본문
     else:
         at = body_start(document, k)  # (a)·(c)
         if not at:
-            return document  # 경계를 못 찾음
+            # 경계를 못 찾음. 구역이 하나뿐이면 본문 구역이 없어 엔진이 돌지 못한다(실패).
+            # 둘 이상이면 원래 구역 나눔을 그대로 쓰되, 다음 구역이 본문인지는 확인하지 못한 상태다.
+            return noted("실패" if len(sections) == 1 else "확인 못 함", _boundary_problem(document, k, found is not None))
     offsets = [sum(len(sections[j]) for j in range(s)) for s in range(len(sections))]
     split = at < len(sections[k])  # 차례 구역을 둘로 나누는가(a·c), 통째로 앞부분에 두는가(d)
     new_count = 1 + int(split) + (len(sections) - k - 1)
@@ -260,7 +283,11 @@ def normalize_sections(document: "Document") -> "Document":
         tables.append({**table, "section": section, "paragraph": paragraph})
     new_sections = move_lists(sections)
     if not new_sections[1]:
-        return document  # 본문이 비면 원래 배치를 유지한다
+        return noted("실패" if len(sections) == 1 else "확인 못 함", "본문 시작 뒤에 문단이 없음 — 원래 구역을 그대로 둠")  # 본문이 비면 원래 배치를 유지한다
+    where = f"구역 {k}의 {at}번째 문단에서 본문 시작"
+    done = "나눔" if split else "합침"
+    text = (f"{where} — 그 앞을 앞부분(구역 0), 뒤를 본문(구역 1)으로 나눔" if split
+            else f"구역 0~{k}를 앞부분(구역 0)으로 합치고 다음 구역을 본문(구역 1)으로 둠")
     return Document(
         document.path, document.format, new_sections, tables,
         [(*move(s, p), name) for s, p, name in document.images],
@@ -269,5 +296,6 @@ def normalize_sections(document: "Document") -> "Document":
         move_lists(document.styles), move_sets(document.aside_paragraphs), move_lists(document.numbers),
         move_sets(document.page_breaks),
         [(*move(s, p), b) for s, p, b in document.pictures], document.binaries,
+        layout={"결과": done, "설명": text, "원래 구역 수": len(sections)},
     )
 

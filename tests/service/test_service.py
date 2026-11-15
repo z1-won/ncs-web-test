@@ -47,6 +47,18 @@ class ServiceTests(unittest.TestCase):
             options["body_section"] = 0
         return engine.CheckConfig(**options)
 
+    def test_unsplit_manuscript_error_names_the_real_cause(self):
+        """구역을 못 나눈 원고는 엔진이 다른 오류(섹션 없음·차례 못 읽음)를 낸다 — 서비스가 진짜 원인(구역 맞춤 실패 사유)을 붙인다."""
+        from ncs_core.documents import Document, normalize_sections
+
+        unsplit = normalize_sections(Document(Path("LM1203020201_24v3.hwpx"), "hwpx", [["표지", "본문 한 줄"]], styles=[["바탕글"] * 2]))
+        self.assertEqual(unsplit.layout["결과"], "실패")
+        with patch("ncs_service.service.select_documents", return_value={"manuscript": unsplit}):
+            with self.assertRaises(ValueError) as caught:
+                execute_review(ReviewRequest((Path("LM1203020201_24v3.hwpx"),), "toc"))
+        self.assertIn("구역을 나누지 못했습니다", str(caught.exception))
+        self.assertIn("차례", str(caught.exception))
+
     def test_config_roles_and_module_override_reach_each_engine(self):
         roles = {str(self.swapped): "manuscript", str(PLAN): "plan"}
         for check in CHECKS:
@@ -60,7 +72,9 @@ class ServiceTests(unittest.TestCase):
                 self.assertEqual(actual.checklist, expected.checklist)
                 self.assertEqual(actual.findings, expected.findings)
                 self.assertEqual(actual.sheet, expected.sheet)
-                self.assertEqual(actual.diagnostics, expected.diagnostics)
+                # 서비스는 엔진 진단에 '구역 맞춤'(앞부분/본문을 어떻게 나눴는지)을 더한다
+                self.assertIn("구역 맞춤", actual.diagnostics)
+                self.assertEqual({k: v for k, v in actual.diagnostics.items() if k != "구역 맞춤"}, expected.diagnostics)
                 self.assertEqual(actual.diagnostics["sections"]["front"], 1)
                 self.assertEqual(actual.module_code, CODE)
 

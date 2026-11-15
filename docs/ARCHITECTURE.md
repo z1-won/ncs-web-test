@@ -163,7 +163,7 @@
 
 | 하고 싶은 것 | 보는 곳 |
 |---|---|
-| 원고가 안 읽힘 / 구역 오류 | `ncs_core/documents.py` (`normalize_sections`), `hwpx.py`·`hwp.py` |
+| 원고가 안 읽힘 / 구역 오류 | 먼저 결과의 진단 `구역 맞춤`(앞부분/본문을 어떻게 나눴는지, 못 나눴으면 이유)을 본다 → `ncs_core/documents.py` (`normalize_sections`), `hwpx.py`·`hwp.py` |
 | 차례·개요·본문 구조를 잘못 잡음 | `ncs_core/manuscript/` (`toc.py`, `overview.py`, `body.py`, `units.py`, `presence.py`) |
 | 개발계획서를 잘못 읽음 | `ncs_core/manuscript/plan_table.py`(표) → `overview.parse_plan`, `toc.parse_plan_toc`, `plan_goals` |
 | 어떤 항목의 판정 기준 | 해당 엔진 `rules/<항목>.py` (정책은 여기에만) |
