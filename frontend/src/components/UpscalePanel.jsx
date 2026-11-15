@@ -11,6 +11,11 @@ function fileStem(name) {
   return (name || "원고").replace(/\.[^.]+$/, "");
 }
 
+// 서버는 그림 이름을 검수 비고 규칙대로 「캡션」으로 감싸 보낸다(원고에서 따온 문구 표시). 목록 제목·파일 이름에서는 인용 표시가 필요 없어 뗀다
+function plainLabel(label) {
+  return (label || "").replace(/^「([\s\S]*)」$/, "$1");
+}
+
 // DPI → KRDS 배지 색: 목표 이상 success, 최소 기준 이상 warning, 그 아래 danger
 function dpiTone(dpi, target, min) {
   return dpi >= target ? "bg-light-success" : dpi >= min ? "bg-light-warning" : "bg-light-danger";
@@ -210,13 +215,14 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
               const open = opened.has(p.bin_id);
               const headId = `upscale-head-${p.bin_id}`;
               const bodyId = `upscale-body-${p.bin_id}`;
+              const name = plainLabel(p.label);
               return (
                 <div key={p.bin_id} className="upscale-row">
                   <div className="krds-check-area">
                     <div className="krds-form-check">
                       <input type="checkbox" id={`upscale-pick-${p.bin_id}`} checked={picked.has(p.bin_id)} disabled={working}
                              onChange={() => toggle(picked, setPicked, p.bin_id)} />
-                      <label htmlFor={`upscale-pick-${p.bin_id}`}><span className="sr-only">{p.label} 선택</span></label>
+                      <label htmlFor={`upscale-pick-${p.bin_id}`}><span className="sr-only">{name} 선택</span></label>
                     </div>
                   </div>
                   <div className={`accordion-item${open ? " active" : ""}`}>
@@ -225,7 +231,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
                               onClick={() => toggle(opened, setOpened, p.bin_id)}>
                         <span className="acc-title">
                           <img className="thumb" src={api.pictures.originalUrl(token, p.bin_id)} alt="" loading="lazy" />
-                          <span className="acc-name">{p.label}</span>
+                          <span className="acc-name">{name}</span>
                           <span className="item-status">
                             {running ? <Spinner label="업스케일 중" />
                               : result?.status === "실패" ? <span className="state failed">실패</span>
@@ -246,12 +252,12 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
                           </p>
                           <div className="upscale-pair">
                             <figure>
-                              <img src={api.pictures.originalUrl(token, p.bin_id)} alt={`${p.label} 원본`} loading="lazy" />
+                              <img src={api.pictures.originalUrl(token, p.bin_id)} alt={`${name} 원본`} loading="lazy" />
                               <figcaption>원본 {p.px[0]}×{p.px[1]}px</figcaption>
                             </figure>
                             {done && (
                               <figure>
-                                <img src={api.pictures.upscaledUrl(token, p.bin_id, result.v)} alt={`${p.label} 업스케일`} loading="lazy" />
+                                <img src={api.pictures.upscaledUrl(token, p.bin_id, result.v)} alt={`${name} 업스케일`} loading="lazy" />
                                 <figcaption>업스케일 {result.out_px[0]}×{result.out_px[1]}px · {result.out_dpi} DPI · {result.seconds}초</figcaption>
                               </figure>
                             )}
@@ -262,7 +268,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
                               {running ? "업스케일 중…" : done ? "다시 업스케일링" : "이 그림만 업스케일링"}
                             </button>
                             {done && (
-                              <a className="krds-btn small tertiary" href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${p.label}_업스케일`)} download>
+                              <a className="krds-btn small tertiary" href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${name}_업스케일`)} download>
                                 결과 받기
                               </a>
                             )}
