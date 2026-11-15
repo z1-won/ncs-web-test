@@ -139,8 +139,6 @@ export default function PlanDraftPage() {
           </div>
           <p className="form-hint" id="duty-hint">
             {subclass ? `${subclass.classes?.대분류 || ""} › ${subclass.classes?.중분류 || ""} › ${subclass.classes?.소분류 || ""} › ${subclass.name}` : "요소·수행준거 표에 받아 둔 세분류만 보입니다"}
-            <br />목록에는 능력단위요소·수행준거를 미리 받아 둔 세분류 {catalog?.subclasses?.length ?? 0}개만 나옵니다. 다른 세분류는 관리자에게 추가를 요청하세요.
-            <br />초안은 ‘신규 개발’ 양식으로만 만듭니다. 개선 과제는 내려받은 뒤 신규/개선 칸과 NCS 변경 전·후 대조표를 직접 고쳐 주세요.
           </p>
         </div>
 
