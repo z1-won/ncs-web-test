@@ -33,7 +33,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware, allow_origins=allowed_origins(), allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["Content-Type"],
-        expose_headers=["Content-Disposition", "X-Memo-Summary", "X-Plan-Check", "X-Upscale-Summary"],
+        expose_headers=["Content-Disposition", "X-Memo-Summary", "X-Upscale-Summary"],
     )
     dist = Path(dist_dir).expanduser().resolve() if dist_dir is not None else None
     store = open_store(out_dir=out_dir, database_url=database_url)

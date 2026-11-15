@@ -36,6 +36,26 @@ class WebappTests(unittest.TestCase):
             ("files", (p.name, p.read_bytes(), "application/octet-stream")) for p in paths
         ])
 
+    def test_plan_draft_returns_file_and_check_in_body(self):
+        """초안 점검 요약은 10KB를 넘을 수 있어 응답 헤더가 아니라 본문에 싣는다."""
+        import base64
+        import os
+        from unittest import mock
+
+        patcher = mock.patch.dict(os.environ)   # 골든 테스트가 NCS 목록을 꺼 두었을 수 있다 — 이 테스트 동안만 기본 목록을 쓴다
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("NCS_CATALOG_FILE", None)
+        duty = self.client.get("/api/plan/subclasses").json()["subclasses"][0]["duty"]
+        response = self.client.post("/api/plan/draft", json={"duty": duty})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertNotIn("x-plan-check", response.headers)
+        body = response.json()
+        self.assertTrue(body["filename"].endswith(".hwpx"))
+        self.assertEqual(base64.b64decode(body["content"])[:2], b"PK")
+        self.assertEqual([row["번호"] for row in body["check"]], list("①②③④⑤⑥⑦⑧⑨⑩"))
+        self.assertEqual(self.client.post("/api/plan/draft", json={"duty": "99999999"}).status_code, 400)
+
     def test_all_engines_match_direct_results_and_save(self):
         for check, package in PACKAGES.items():
             engine = importlib.import_module(package)

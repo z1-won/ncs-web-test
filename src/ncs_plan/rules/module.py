@@ -1,8 +1,10 @@
 """모듈 표 규칙 — ③ 학습모듈의 목표, ④ 학습명·요소 배정, ⑤ 요소 코드, ⑥ 학습 목표 = 수행준거, ⑦ 학습 내용명.
 
 판정 기준(F04 NCS 준용 집필 기본 지침 2026.8.7, 양식 작성 안내):
-- 학습명은 요소명 준용 '~하기'. 기호·띄어쓰기 차이는 같은 것으로 보고, 글자가 다르면 △(윤문 범위인지 직능연 협의 여부 확인).
-- 학습 목표는 수행준거 문장 그대로. 누락·추가는 X. 띄어쓰기만 다른 것은 O(허용), 글자가 다르면 △(명백한 오타 정정인지 확인).
+- 학습명은 요소명 준용 '~하기'. 기호·띄어쓰기 차이는 같은 것으로 보고, 글자가 다르면 △(윤문 범위인지 직능연 협의 여부 확인 —
+  얼마나 다른지는 내용 판단이라 X로 올리지 않는다). 요소명을 그대로 쓴 학습명이 '~하기'가 아니면 NCS 원문이라 △(직능연 협의).
+- 학습 목표는 수행준거 문장 그대로. 누락·추가는 X. 띄어쓰기 하나만 달라도 X(원고 검수 필요 지식 ⑤·평가 ②와 같은 기준, 안내서 A-01).
+  기호만 다른 것은 O, 글자가 다르면 △(명백한 오타 정정인지 확인).
 - 요소 통합은 같은 능력단위 안에서만. 요소가 어느 학습에도 없으면 X, 학습에 요소가 없으면 X.
 """
 
@@ -13,10 +15,10 @@ from ncs_core.goals import normalize
 from ncs_core.lexicon import ActionNounLexicon
 
 from ..patterns import DEFINITION_END, DEFINITION_SUBJECT, GOAL_END, LESSON_END, SEPARATOR, TRAILING_NOTE
-from .common import compact, pair, row, same_loose, same_text, similarity
+from .common import compact, pair, row, same_loose, similarity
 
 SIMILARITY_MIN = 0.85        # ③ 정의↔목표
-NAME_SIMILARITY_MIN = 0.6    # ④ 요소명↔학습명: 이 이상이면 윤문(△), 미만이면 다른 이름(X)
+
 
 
 def _region(module: dict, tail: str = "") -> str:
@@ -84,10 +86,13 @@ def check_lessons(module: dict) -> list[dict]:
     for lesson in module["학습"]:
         checks, notes = {}, {}
         name = lesson["명칭"]
-        checks[label_end] = O if LESSON_END.search(TRAILING_NOTE.sub("", name).strip()) else X
-        if checks[label_end] == X:
-            notes[label_end] = f"「{name}」 — '~하기'로 끝나지 않음" if name else "학습명이 비어 있음"
         own = [elements[c] for c in lesson["요소"] if c in elements]
+        checks[label_end] = O if LESSON_END.search(TRAILING_NOTE.sub("", name).strip()) else X
+        if checks[label_end] == X and name and any(same_loose(e["명칭"], name) for e in own):
+            checks[label_end] = TRI   # 요소명을 그대로 쓴 것 — NCS 원문이라 집필자가 고칠 수 없다
+            notes[label_end] = f"「{name}」 — '~하기'로 끝나지 않지만 능력단위요소명(NCS 원문) 그대로임. 직능연과 협의"
+        elif checks[label_end] == X:
+            notes[label_end] = f"「{name}」 — '~하기'로 끝나지 않음" if name else "학습명이 비어 있음"
         assigned.update(lesson["요소"])
         if not own:
             checks[label_assign] = X
@@ -105,12 +110,10 @@ def check_lessons(module: dict) -> list[dict]:
                 elif not name:
                     checks[label_name] = X
                     notes[label_name] = f"학습명이 비어 있음 — 능력단위요소명 「{element_name}」 준용"
-                elif similarity(element_name, name) >= NAME_SIMILARITY_MIN:
-                    checks[label_name] = TRI   # 용어·표기 윤문(F04 2-1·2-4 허용 범위) — 협의 여부는 사람이 확인
-                    notes[label_name] = pair(element_name, name, "학습명", "능력단위요소명") + " — 윤문 범위인지, 직능연과 협의했는지 확인"
                 else:
-                    checks[label_name] = X
-                    notes[label_name] = pair(element_name, name, "학습명", "능력단위요소명")
+                    checks[label_name] = TRI   # 윤문(F04 2-1·2-4 허용 범위)인지 다른 이름인지는 내용 판단 — 사람이 확인
+                    notes[label_name] = (pair(element_name, name, "학습명", "능력단위요소명")
+                                         + f" (글자 유사도 {similarity(element_name, name):.2f}) — 윤문 범위인지, 직능연과 협의했는지 확인")
             else:
                 checks[label_name] = TRI
                 notes[label_name] = f"요소 {len(own)}개를 통합한 학습 — 학습명이 요소명(" + " / ".join(e["명칭"] for e in own) + ")을 아우르는지 확인"
@@ -149,7 +152,7 @@ def check_element_codes(module: dict) -> list[dict]:
 # ── ⑥ 학습 목표 = 수행준거 ────────────────────────────────────────────────────────
 
 def _match(sentence: str, pool: list[str]) -> tuple[str | None, str]:
-    """pool에서 sentence와 같은 문장을 찾는다 → (짝, 'same'|'space'|'punct'|'near'|'none')."""
+    """pool에서 sentence와 같은 문장을 찾는다 → (짝, 'same'|'space'(띄어쓰기만 다름)|'punct'(기호만 다름)|'near'|'none')."""
     target = normalize(sentence)
     for p in pool:
         if normalize(p) == target:
@@ -183,7 +186,7 @@ def check_targets(module: dict) -> list[dict]:
             rows.append(row("⑥", _region(module, f"학습 {lesson['번호']}"), f"학습 {lesson['번호']}", None, checks, notes))
             continue
         remaining = list(goals)
-        missing, changed = [], []
+        missing, changed, spaced = [], [], []
         for criterion in criteria:
             match, how = _match(criterion, remaining)
             if match is None:
@@ -192,15 +195,21 @@ def check_targets(module: dict) -> list[dict]:
             remaining.remove(match)
             if how == "near":
                 changed.append(pair(criterion, match, "학습 목표", "수행준거"))
+            elif how == "space":
+                spaced.append(pair(criterion, match, "학습 목표", "수행준거"))
         checks[label_cover] = X if missing else O
         if missing:
             notes[label_cover] = "학습 목표에 없는 수행준거: " + " / ".join(f"「{m}」" for m in missing[:3]) + (f" 외 {len(missing) - 3}건" if len(missing) > 3 else "")
         checks[label_extra] = X if remaining else O
         if remaining:
             notes[label_extra] = "수행준거에 없는 학습 목표: " + " / ".join(f"「{normalize(g)}」" for g in remaining[:3]) + (f" 외 {len(remaining) - 3}건" if len(remaining) > 3 else "")
-        checks[label_text] = TRI if changed else O
+        checks[label_text] = X if spaced else TRI if changed else O
+        parts = []
+        if spaced:
+            parts.append("\n".join(spaced) + "\n— 띄어쓰기도 수행준거와 같아야 함")
         if changed:
-            notes[label_text] = "\n".join(changed) + "\n— 명백한 오타·띄어쓰기 정정인지, 직능연과 협의한 변경인지 확인"
+            parts.append("\n".join(changed) + "\n— 명백한 오타 정정인지, 직능연과 협의한 변경인지 확인")
+        notes[label_text] = "\n".join(parts)
         rows.append(row("⑥", _region(module, f"학습 {lesson['번호']}"), f"학습 {lesson['번호']}", f"수행준거 {len(criteria)}개 / 학습 목표 {len(goals)}개", checks, notes,
                         "수행준거 문장을 빠짐없이, 고치지 않고 학습 목표에 나누어 담을 것" if X in checks.values() else None))
     if not rows:

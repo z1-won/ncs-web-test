@@ -1,12 +1,11 @@
 """개발계획서 작성(REQ-02-001) — 초안을 만들 수 있는 세분류 목록과 초안 hwpx."""
 
-import json
+import base64
 import tempfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI
 
 from ..common import Services, error_response
 from ..schemas import ErrorResponse, PlanDraftRequest
@@ -37,8 +36,9 @@ def register(app: FastAPI, services: Services) -> None:
         return {"subclasses": out, "build": "scripts/data/build_ncs_elements.py --duty <세분류코드>"}
 
     @app.post("/api/plan/draft", responses={400: {"model": ErrorResponse}})
-    def plan_draft(body: PlanDraftRequest) -> Response:
-        """개발계획서 초안 hwpx를 만들어 내려 준다. 만든 초안의 ①~⑩ 점검 요약은 X-Plan-Check 헤더(JSON)에."""
+    def plan_draft(body: PlanDraftRequest) -> Any:
+        """개발계획서 초안 hwpx와 그 초안의 ①~⑩ 점검 요약을 함께 준다: {filename, content(base64 hwpx), check}.
+        요약은 능력단위가 많으면 10KB를 넘어 응답 헤더에 실을 수 없다(프록시의 헤더 한도) — 본문으로 보낸다."""
         from ncs_plan import CheckConfig as PlanConfig
         from ncs_plan import run_review
         from ncs_plan.fill import build_plan, spec_from_catalog
@@ -61,8 +61,4 @@ def register(app: FastAPI, services: Services) -> None:
                 summary = [{k: r.get(k, "") for k in ("구성요소", "번호", "체크 항목", "검수결과", "비고")} for r in result.sheet]
             except ValueError as error:   # 점검이 실패해도 초안은 준다
                 summary = [{"구성요소": "개발계획서", "번호": "", "체크 항목": "점검 실행", "검수결과": "오류", "비고": str(error)}]
-        filename = f"개발계획서_초안_{body.duty}.hwpx"
-        return Response(content, media_type="application/octet-stream", headers={
-            "Content-Disposition": f"attachment; filename=plan_draft_{body.duty}.hwpx; filename*=UTF-8''{quote(filename)}",
-            "X-Plan-Check": quote(json.dumps(summary, ensure_ascii=False)),
-        })
+        return {"filename": f"개발계획서_초안_{body.duty}.hwpx", "content": base64.b64encode(content).decode("ascii"), "check": summary}

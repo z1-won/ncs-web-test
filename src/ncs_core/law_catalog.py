@@ -51,6 +51,11 @@ def extract_law_names(text: str) -> list[tuple[str, bool]]:
                 words = words[1:]
             else:
                 break
+        if "관한" not in words:   # '…에 관한 법률'은 이름 안에 조사·어미로 끝나는 어절이 있다
+            # 이름 앞에 문장이 두 어절 이상 붙은 경우('제공하기 위해 식품위생법') — 조사·어미로 끝나는 마지막 어절까지 떼어 낸다
+            cut = next((i for i in range(len(words) - 2, -1, -1) if NOT_NAME_WORD.search(words[i])), None)
+            if cut is not None:
+                words = words[cut + 1:]
         candidates.append(" ".join(words))
         for candidate in candidates:
             tail_word = candidate.split()[-1]

@@ -1,5 +1,5 @@
 // 개발계획서 작성(REQ-02-001) — 세분류를 고르고 능력단위를 체크하면 T01 양식에 NCS 정보를 채운 초안 hwpx를 내려받는다.
-// 초안은 서버가 바로 ①~⑩ 점검(ncs_plan)을 돌려 요약을 함께 준다(X-Plan-Check). 요소·수행준거 표(ncs_elements.tsv)에 있는 세분류만 고를 수 있다.
+// 초안은 서버가 바로 ①~⑩ 점검(ncs_plan)을 돌려 요약을 함께 준다(응답 본문의 check). 요소·수행준거 표(ncs_elements.tsv)에 있는 세분류만 고를 수 있다.
 // 이어서 작성한 개발계획서 파일의 점검(①~⑩, 최종본/1차본)도 이 페이지에서만 한다 — 원고 검수 페이지의 선택 목록에는 없다.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
@@ -139,6 +139,8 @@ export default function PlanDraftPage() {
           </div>
           <p className="form-hint" id="duty-hint">
             {subclass ? `${subclass.classes?.대분류 || ""} › ${subclass.classes?.중분류 || ""} › ${subclass.classes?.소분류 || ""} › ${subclass.name}` : "요소·수행준거 표에 받아 둔 세분류만 보입니다"}
+            <br />목록에는 능력단위요소·수행준거를 미리 받아 둔 세분류 {catalog?.subclasses?.length ?? 0}개만 나옵니다. 다른 세분류는 관리자에게 추가를 요청하세요.
+            <br />초안은 ‘신규 개발’ 양식으로만 만듭니다. 개선 과제는 내려받은 뒤 신규/개선 칸과 NCS 변경 전·후 대조표를 직접 고쳐 주세요.
           </p>
         </div>
 

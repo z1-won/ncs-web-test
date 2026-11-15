@@ -49,7 +49,12 @@ export async function download(path, body, filename) {
     const data = await response.json().catch(() => null);
     return { ok: false, error: data?.error || `${response.status} ${response.statusText}` };
   }
-  const blob = await response.blob();
+  saveBlob(await response.blob(), filename);
+  const summary = response.headers.get("x-memo-summary") || response.headers.get("x-upscale-summary");
+  return { ok: true, summary: summary ? JSON.parse(summary) : null };
+}
+
+function saveBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -58,9 +63,15 @@ export async function download(path, body, filename) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  const summary = response.headers.get("x-memo-summary") || response.headers.get("x-upscale-summary");
-  const check = response.headers.get("x-plan-check");   // 개발계획서 초안 — 함께 돌린 ①~⑩ 점검 요약(URL 인코딩 JSON)
-  return { ok: true, summary: summary ? JSON.parse(summary) : null, check: check ? JSON.parse(decodeURIComponent(check)) : null };
+}
+
+// 개발계획서 초안: 응답 본문 {filename, content(base64 hwpx), check(①~⑩ 점검 요약)} — 파일을 저장하고 요약을 돌려준다
+async function planDraft(body) {
+  const { ok, data, error } = await request("/api/plan/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!ok) return { ok, error };
+  const bytes = Uint8Array.from(atob(data.content), (c) => c.charCodeAt(0));
+  saveBlob(new Blob([bytes], { type: "application/octet-stream" }), data.filename || `개발계획서_초안_${body.duty}.hwpx`);
+  return { ok: true, check: data.check || null };
 }
 
 export const api = {
@@ -95,7 +106,7 @@ export const api = {
   // 개발계획서 작성(REQ-02-001): 초안을 만들 수 있는 세분류와 초안 내려받기
   plan: {
     subclasses: () => request("/api/plan/subclasses"),
-    draft: (body) => download("/api/plan/draft", body, `개발계획서_초안_${body.duty}.hwpx`),
+    draft: planDraft,
   },
   // 그림 업스케일: 업로드 토큰의 원고 그림 목록 → 원본 보기 → 한 장씩 업스케일(20~40초) → 업스케일한 그림으로 제안본 hwpx
   pictures: {

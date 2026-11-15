@@ -143,6 +143,21 @@ class ModuleRuleTests(unittest.TestCase):
         self.assertEqual(first["체크"]["④ 요소명 준용"], "△")
         self.assertIn("능력단위요소명", first["비고"]["④ 요소명 준용"])
 
+    def test_far_lesson_name_is_still_undecided(self):
+        """요소명과 많이 다른 학습명도 X가 아니라 △ — 윤문인지 다른 이름인지는 내용 판단(안내서: 후보 제시)."""
+        m = read_module(module_table([([0], "1. 고객 응대하기", [("1-1. 호텔정보 구분", C1)]), ([1], "2. 예약 현황 확인하기", [("2-1. 조회", C2)])]))
+        [first, *_] = check_lessons(m)
+        self.assertEqual((first["체크"]["④ 요소명 준용"], first["판정"]), ("△", "판단불가"))
+
+    def test_ncs_element_name_without_haki_is_undecided(self):
+        """NCS 요소명 자체가 '~하기'가 아니면(예: 메뉴 주문받기) 그대로 쓴 학습명은 X가 아니라 △ — 집필자가 고칠 수 없다."""
+        elements = ((f"{CODE}.1", "메뉴 주문받기", C1), (f"{CODE}.2", "예약 현황 확인하기", C2))
+        m = read_module(module_table([([0], "1. 메뉴 주문받기", [("1-1. 구분", C1)]), ([1], "2. 예약 현황 확인하기", [("2-1. 조회", C2)])], elements=elements))
+        first, second = check_lessons(m)
+        self.assertEqual((first["체크"]["④ '~하기' 종결"], first["체크"]["④ 요소명 준용"], first["판정"]), ("△", "O", "판단불가"))
+        self.assertIn("NCS 원문", first["비고"]["④ '~하기' 종결"])
+        self.assertEqual(second["판정"], "적합")
+
     def test_element_code_sequence(self):
         elements = ((f"{CODE}.1", "a하기", C1), ("1203020299_24v3.2", "b하기", C2))
         m = read_module(module_table([([0], "1. a하기", [("1-1. 구분", C1)]), ([1], "2. b하기", [("2-1. 조회", C2)])], elements=elements))
@@ -151,13 +166,14 @@ class ModuleRuleTests(unittest.TestCase):
         self.assertIn("1203020299_24v3.2", row["비고"]["⑤ 요소 코드 연번"])
 
     def test_targets_missing_extra_space_and_changed(self):
-        spaced = C1[0].replace("구분 할 수", "구분할 수")                    # 띄어쓰기만 → 허용
+        spaced = C1[0].replace("구분 할 수", "구분할 수")                    # 띄어쓰기만 → X(원고 검수와 같은 기준)
         changed = C2[0].replace("파악할", "확인할")                        # 글자 다름 → △
         m = read_module(module_table([([0], "1. a하기", [("1-1. 구분", [spaced, "1.3 수행준거에 없는 문장을 쓸 수 있다."])]),
                                       ([1], "2. b하기", [("2-1. 조회", [changed])])]))
         first, second = check_targets(m)
-        self.assertEqual(first["체크"], {"⑥ 수행준거 누락 없음": "X", "⑥ 수행준거 외 문장 없음": "X", "⑥ 문장 수정 없음": "O"})
+        self.assertEqual(first["체크"], {"⑥ 수행준거 누락 없음": "X", "⑥ 수행준거 외 문장 없음": "X", "⑥ 문장 수정 없음": "X"})
         self.assertIn("마켓별 요금", first["비고"]["⑥ 수행준거 누락 없음"])
+        self.assertIn("띄어쓰기도 수행준거와 같아야 함", first["비고"]["⑥ 문장 수정 없음"])
         self.assertEqual(second["체크"]["⑥ 문장 수정 없음"], "△")
         self.assertIn("수행준거 「", second["비고"]["⑥ 문장 수정 없음"])
 
@@ -291,6 +307,11 @@ class LawTests(unittest.TestCase):
         self.assertEqual(extract_law_names("규정에 따라 산업안전보건법을 지킨다"), [("산업안전보건법", False)])
         self.assertEqual(extract_law_names("화학물질관리법 시행규칙에 따른다"), [("화학물질관리법 시행규칙", False)])
         self.assertEqual(extract_law_names("작업 방법과 분석 기법, 법인 설립의 법적 근거"), [])
+        # 이름 앞에 문장이 두 어절 이상 붙어도 법령명만 남긴다
+        self.assertEqual(extract_law_names("안전한 음식을 제공하기 위해 식품위생법을 준수할 수 있다."), [("식품위생법", False)])
+        self.assertEqual(extract_law_names("고객 정보를 지키기 위하여 개인정보 보호법을 따른다"), [("개인정보 보호법", False)])
+        # '…에 관한 법률'은 이름 안의 어절('등에')에서 자르지 않는다
+        self.assertEqual(extract_law_names("부정청탁 및 금품등 수수의 금지에 관한 법률을 지킨다"), [("금품등 수수의 금지에 관한 법률", False)])
 
     def test_rule_with_table(self):
         from ncs_core.law_catalog import LawCatalog
