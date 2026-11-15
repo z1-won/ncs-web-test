@@ -179,7 +179,7 @@ ncs-web --dist frontend/dist          # API + 빌드된 화면, http://127.0.0.1
 ## CLI 실행
 
 ```bash
-ncs-position 원고.hwpx 개발계획서.hwp --out 결과      # 개발계획서 필수
+ncs-position 원고.hwpx 개발계획서.hwp --out 결과      # 개발계획서 필수. 넣은 순서가 역할(원고 먼저)
 ncs-toc 원고.hwpx [개발계획서.hwp] --out 결과          # 나머지는 선택(있으면 대조 항목이 확정 판정)
 ncs-overview / ncs-knowledge / ncs-perform / ncs-teaching / ncs-evaluation / ncs-references / ncs-colophon / ncs-misc
 ```

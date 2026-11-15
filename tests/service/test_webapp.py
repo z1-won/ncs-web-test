@@ -112,19 +112,25 @@ class WebappTests(unittest.TestCase):
         self.assertEqual(expired.status_code, 400)
         self.assertIn("만료", expired.json()["error"])
 
-    def test_upload_roles_assign_files_instead_of_detecting(self):
-        """화면의 업로드 칸이 정한 역할(roles)은 내용 판별보다 우선하고, 그 토큰으로 돌리는 검수에도 그대로 쓰인다."""
+    def test_upload_roles_come_from_slots_or_order(self):
+        """역할은 화면의 업로드 칸(roles)이 정하고, 없으면 넣은 순서(원고 → 개발계획서)다. 내용으로 추측하지 않으며, 그 토큰으로 돌리는 검수에도 그대로 쓰인다."""
         def post(paths, roles):
             return self.client.post("/api/uploads", data={"roles": json.dumps(roles)}, files=[
                 ("files", (p.name, p.read_bytes(), "application/octet-stream")) for p in paths
             ])
-        # 내용으로는 개발계획서인 파일을 원고 칸에 올리면 원고로 받는다(판별했다면 plan)
+        # 내용으로는 개발계획서인 파일도 원고 칸에 올리면 원고로 받는다
         swapped = post([PLAN], ["manuscript"])
         self.assertEqual(swapped.status_code, 200, swapped.text)
         self.assertEqual(swapped.json()["roles"], {"manuscript": PLAN.name, "plan": None, "print": None})
-        # 내용으로는 원고 둘이라 판별만으로는 '원고 파일이 둘 이상' — 칸이 역할을 나누면 받는다
+        # roles가 없으면 넣은 순서가 역할: 첫 파일 원고, 둘째 개발계획서. 셋째 hwp/hwpx는 맡을 역할이 없어 거절
         other = FIXTURES / "원고_pos_LM1203020201_24v3.hwpx"
-        self.assertEqual(self.client.post("/api/uploads", files=[("files", (p.name, p.read_bytes())) for p in (MANUSCRIPT, other)]).status_code, 400)
+        ordered = self.client.post("/api/uploads", files=[("files", (p.name, p.read_bytes())) for p in (MANUSCRIPT, other)])
+        self.assertEqual(ordered.status_code, 200, ordered.text)
+        self.assertEqual(ordered.json()["roles"], {"manuscript": MANUSCRIPT.name, "plan": other.name, "print": None})
+        third = FIXTURES / "원고_eval_LM1203020201_24v3.hwpx"
+        extra = self.client.post("/api/uploads", files=[("files", (p.name, p.read_bytes())) for p in (MANUSCRIPT, other, third)])
+        self.assertEqual(extra.status_code, 400)
+        self.assertIn(third.name, extra.json()["error"])
         both = post([MANUSCRIPT, other], ["manuscript", "plan"])
         self.assertEqual(both.status_code, 200, both.text)
         self.assertEqual(both.json()["roles"], {"manuscript": MANUSCRIPT.name, "plan": other.name, "print": None})
@@ -149,7 +155,7 @@ class WebappTests(unittest.TestCase):
                 response = post(paths, roles)
                 self.assertEqual(response.status_code, 400, response.text)
                 self.assertIn(word, response.json()["error"])
-        self.assertEqual(len(self.client.app.state.uploads), 3, "거부된 업로드는 보관함에 남지 않는다")
+        self.assertEqual(len(self.client.app.state.uploads), 4, "거부된 업로드는 보관함에 남지 않는다")   # 받은 것: swapped·ordered·both·token
 
     def test_upload_token_reports_missing_plan_and_rejects_bad_input(self):
         only_manuscript = self.client.post("/api/uploads", files=[("files", (MANUSCRIPT.name, MANUSCRIPT.read_bytes()))]).json()

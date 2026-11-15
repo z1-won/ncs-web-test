@@ -55,5 +55,5 @@ class UploadResponse(BaseModel):
     upload: str
     group: str                    # 이 토큰으로 실행한 검수들의 이력 묶음 id
     files: list[str]
-    roles: dict[str, str | None]  # 역할 → 파일 이름(요청의 roles로 지정했으면 그대로, 아니면 내용으로 판별). plan이 None이면 개발계획서 없음
+    roles: dict[str, str | None]  # 역할 → 파일 이름(요청의 roles로 지정했으면 그대로, 아니면 넣은 순서). plan이 None이면 개발계획서 없음
     expires_in: int               # 초

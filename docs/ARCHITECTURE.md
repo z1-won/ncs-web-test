@@ -63,7 +63,7 @@
 - **`hwp.py`** — 바이너리 hwp의 CFB 컨테이너를 직접 읽는다. 디렉터리 트리를 따라 `BodyText/Section*`만 읽는다(`ViewText/`의 배포용 사본은 읽지 않음). 문단 텍스트와 표 셀만 얻고 스타일·번호·그림은 없다 → 관련 항목은 △.
 - **`numbering.py`** — hwpx의 문단 번호 정의(`^1.` `(^2)` 같은 서식, 수준별 카운터)를 해석해 화면에 보이는 번호 문자열("1.", "(가)", "①")을 문단마다 되살린다. 필요 지식 ⑥이 쓴다.
 - **`documents.py`** — 위 둘을 `Document`(path, format, sections, tables, images, figures, styles, aside_paragraphs, numbers, page_breaks, pictures, binaries)로 묶고 공백을 정리한 뒤 **`normalize_sections`**를 적용한다. 차례 제목이 있는 구역을 찾아 (a) 구역 하나짜리면 본문 시작에서 둘로, (c) 표지/차례+개요+본문이면 표지와 앞부분을 합치고 본문에서, (d) 표지/차례+개요/본문이면 앞 둘을 합친다. 본문 시작은 차례·개요 **뒤**의 첫 `큰학습` 스타일 또는 개요 뒤 첫 "학습 1" 줄. 표·그림·스타일·번호·쪽나눔 인덱스를 함께 옮긴다.
-- **`inputs.py`** — 업로드된 파일이 원고인지 개발계획서인지를 머리 60문단으로 판별(`detect_role`), 같은 파일 중복·빈 파일을 막는다. PDF는 내용과 상관없이 세 번째 역할 `print`(출력본, 선택)로 읽어 `select_documents`가 `{'manuscript','plan','print'}`를 돌려준다. `ncs_service`는 `Engine.optional`에 `print`를 선언한 엔진에만 넘긴다.
+- **`inputs.py`** — 파일을 역할별로 읽는다. 역할은 호출자가 정하고(화면의 업로드 칸 `roles`, CLI의 `--manuscript`/`--plan`) 지정이 없으면 넣은 순서(원고 → 개발계획서)이며, 내용으로 추측하지 않는다. 같은 파일 중복·빈 파일을 막는다. PDF는 내용과 상관없이 세 번째 역할 `print`(출력본, 선택)로 읽어 `select_documents`가 `{'manuscript','plan','print'}`를 돌려준다. `ncs_service`는 `Engine.optional`에 `print`를 선언한 엔진에만 넘긴다.
 - **`module_code.py`** — `LM1203020408_23v3` 꼴 검증과 파일명에서 추출.
 - **`pdf.py`** — PDF 출력본·매뉴얼 읽기(선택 extra `pdf` = pypdf). 글자 y좌표로 위·아래 8 % 띠를 머리말·꼬리말로 분리하고(달리는 머리말의 학습명이 본문 검색에 걸리지 않게), 꼬리말에서 인쇄된 쪽 번호를 읽어 못 읽은 쪽은 다수결 offset으로 '추정'한다. 표·스타일·구역이 없으므로 `Document`가 아니라 `PdfDocument`(쪽별 body/header/footer/folio)다. 스캔본처럼 글자를 못 뽑으면 ValueError.
 
@@ -94,7 +94,7 @@
 - **`f02_items.py`** — F02 확인서 54항목 원문 문구(확인서 표의 '체크 항목' 열).
 
 ### 3.4 실행·결과
-- **`rules.py`** — `Rule(name, item_prefix, fn)`과 `run_rules(context, rules)`: 규칙을 순서대로 돌려 행을 모은다.
+- **`rules.py`** — `Rule(name, item_prefix, fn)`과 `run_rules(context, rules)`: 규칙을 순서대로 돌려 행을 모은다. 규칙 하나가 예외로 끝나면 검수를 멈추지 않고 그 규칙의 항목만 판단불가 한 행(체크 이름 `규칙 실행`)으로 남긴다 — 상세는 서버 로그(`ncs_core.rules`).
 - **`models.py`** — `ReviewResult(module_code, checklist, findings, diagnostics, context, sheet)`, `SavedReport`.
 - **`sheet.py`** — `SheetItem(no, text, item_ids, check_prefix)`로 "확인서 항목 ①에 속하는 행"을 모아 적합/부적합/판단불가/미검사를 정하고, `summarize_remarks`가 체크 이름당 머리 줄 + 사례 줄 + `→ 수정 제안` 줄로 비고를 접는다.
 - **`reporting.py`** — 항목별 JSON·확인서·지적사항을 `<코드>_<시각>_<이름>_xxxx/` 폴더와 zip으로 저장. 파일 이름 규칙은 엔진의 `ITEM_FILES`.

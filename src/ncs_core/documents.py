@@ -271,7 +271,3 @@ def normalize_sections(document: "Document") -> "Document":
         [(*move(s, p), b) for s, p, b in document.pictures], document.binaries,
     )
 
-
-def split_single_section(document: "Document") -> "Document":
-    """이전 이름. normalize_sections를 쓴다."""
-    return normalize_sections(document)

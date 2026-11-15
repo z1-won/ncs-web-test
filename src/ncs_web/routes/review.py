@@ -34,10 +34,10 @@ def register(app: FastAPI, services: Services) -> None:
     )
     def create_upload(
         files: Annotated[list[UploadFile], File()],
-        roles: Annotated[str, Form()] = "",   # 업로드 칸이 정한 역할: files와 같은 순서의 JSON 배열. 없으면 내용으로 판별
+        roles: Annotated[str, Form()] = "",   # 업로드 칸이 정한 역할: files와 같은 순서의 JSON 배열. 없으면 넣은 순서(원고 → 개발계획서)
     ) -> UploadResponse | JSONResponse:
         """전체 실행 1단계: 파일을 한 번만 올려 두고 토큰을 받는다. 역할(원고/개발계획서/출력본)은 roles로 지정한 대로,
-        지정하지 않으면 내용으로 판별해 함께 알려 준다. 지정한 역할은 이 토큰으로 돌리는 검수에도 그대로 쓴다."""
+        지정하지 않으면 넣은 순서(원고 → 개발계획서)로 정해 함께 알려 준다. 지정한 역할은 이 토큰으로 돌리는 검수에도 그대로 쓴다."""
         try:
             named = [item for item in files if item.filename]   # 파일을 고르지 않은 빈 입력 칸은 역할 개수에 세지 않는다
             given = parse_roles(roles, len(named))
@@ -81,7 +81,7 @@ def register(app: FastAPI, services: Services) -> None:
         upload: Annotated[str, Form()] = "",
         group: Annotated[str, Form()] = "",
         stage: Annotated[str, Form()] = "",     # 개발계획서 점검(plan) 단계: final / draft. 다른 검수는 무시
-        roles: Annotated[str, Form()] = "",     # files로 직접 올릴 때만: files와 같은 순서의 역할 JSON 배열. 없으면 내용으로 판별
+        roles: Annotated[str, Form()] = "",     # files로 직접 올릴 때만: files와 같은 순서의 역할 JSON 배열. 없으면 넣은 순서(검수 종류의 필수 역할 먼저)
     ) -> ReviewResponse | JSONResponse:
         """files로 직접 올리거나, /api/uploads 토큰(upload)으로 올려 둔 파일을 쓴다. group은 이력 묶음 id(토큰 응답의 group).
         토큰으로 실행하면 업로드 때 정한 역할을 그대로 쓴다."""

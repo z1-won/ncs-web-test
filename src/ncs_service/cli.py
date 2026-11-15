@@ -26,9 +26,9 @@ def run_cli(check: str, description: str, argv: list[str] | None = None) -> None
     plan_help = "원고와 개발계획서" if "plan" in engine.required else "원고와 (선택) 개발계획서"
 
     parser = argparse.ArgumentParser(prog=f"python -m {engine.package}", description=description)
-    parser.add_argument("paths", nargs="+", help=f"{plan_help}. 순서 무관, 내용으로 역할 판별")
-    parser.add_argument("--manuscript", help="자동 역할 판별 대신 원고로 지정할 입력 경로")
-    parser.add_argument("--plan", help="자동 역할 판별 대신 개발계획서로 지정할 입력 경로")
+    parser.add_argument("paths", nargs="+", help=f"{plan_help}. 넣은 순서가 역할이다(개발계획서 점검은 파일 하나가 개발계획서). 출력본 PDF는 어디에 둬도 된다")
+    parser.add_argument("--manuscript", help="순서와 상관없이 원고로 지정할 입력 경로")
+    parser.add_argument("--plan", help="순서와 상관없이 개발계획서로 지정할 입력 경로")
     parser.add_argument("--module-code", default="", help="비우면 원고 파일명에서 추출")
     parser.add_argument("--front-section", type=int, default=0)
     if has_body:

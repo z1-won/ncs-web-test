@@ -1,13 +1,13 @@
 """F02 검수 공통 코어 (Python 3.10+, 추가 설치 패키지 없음).
 
-네 검수 패키지(ncs_position, ncs_toc, ncs_overview, ncs_knowledge)가 공유하는 부분:
-문서 읽기, 문자 정규화·판정, 입력 역할 판별, 모듈 코드, 규칙 실행, 결과 저장,
-그리고 원고·개발계획서 구조 파서(하위 패키지 ncs_core.manuscript — 명시적으로 import한다).
-검수 정책(무엇을 X로 볼지)은 여기에 두지 않는다.
+검수 엔진 10개(ncs_position … ncs_misc)와 기능 패키지(ncs_plan 개발계획서, ncs_upscale 그림 업스케일)가 함께 쓰는 부분:
+문서 읽기(hwp·hwpx·pdf·그림), 문자 정규화·판정, 입력 역할별 읽기, 모듈 코드, 규칙 실행, 확인서 접기, 결과 저장,
+기준 데이터(NCS 목록·행동명사·법령명), 그리고 원고·개발계획서 구조 파서(하위 패키지 ncs_core.manuscript — 명시적으로 import한다).
+검수 정책(무엇을 X로 볼지)은 여기에 두지 않는다 — 각 패키지의 rules/에 둔다.
 """
 
 from .documents import Document, Table, load_document
-from .inputs import detect_role, select_documents, validate_distinct
+from .inputs import select_documents, validate_distinct
 from .models import ReviewResult, SavedReport
 from .module_code import resolve_module_code, validate_module_code
 from .reporting import report_summary, save_report
@@ -20,7 +20,6 @@ __all__ = [
     "Document",
     "Table",
     "load_document",
-    "detect_role",
     "select_documents",
     "validate_distinct",
     "ReviewResult",
@@ -31,6 +30,9 @@ __all__ = [
     "save_report",
     "Rule",
     "run_rules",
+    "compare_lists",
+    "difference",
+    "normalize",
     "judge_action_sentence",
     "NA",
     "PASS",

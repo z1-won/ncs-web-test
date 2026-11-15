@@ -32,7 +32,7 @@ class Services:
 
 
 def parse_roles(text: str, count: int) -> list[str] | None:
-    """업로드 칸이 정한 역할 목록(JSON 배열, files와 같은 순서·개수). 비어 있으면 None(내용으로 판별)."""
+    """업로드 칸이 정한 역할 목록(JSON 배열, files와 같은 순서·개수). 비어 있으면 None(넣은 순서가 역할)."""
     if not text:
         return None
     try:

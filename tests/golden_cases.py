@@ -32,7 +32,9 @@ def cases():
                 paths = (manuscript, plan) if with_plan else (manuscript,)
                 if with_plan and print_copy is not None and "print" in engine.optional:
                     paths += (print_copy,)
-                yield f"{check}_{manuscript.stem}_{'plan' if with_plan else 'noplan'}", ReviewRequest(paths, check)
+                # 역할은 내용으로 추측하지 않으므로 명시한다(개발계획서 점검은 넣은 순서로는 첫 파일이 개발계획서가 된다)
+                roles = {manuscript: "manuscript", plan: "plan"} if with_plan else {manuscript: "manuscript"}
+                yield f"{check}_{manuscript.stem}_{'plan' if with_plan else 'noplan'}", ReviewRequest(paths, check, roles=roles)
 
 
 def observe(request: ReviewRequest) -> dict:

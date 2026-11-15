@@ -46,7 +46,6 @@ def register(app: FastAPI, services: Services) -> None:
         """원고 hwpx에 지적사항을 한글 메모로 단 파일. 원고는 둘 중 하나로 찾는다 — upload=업로드 토큰(방금 올린 원고),
         run_id=이력 실행 id(실행과 함께 보관된 원고; PostgreSQL 이력에서만). rows=체크리스트 행 JSON 배열,
         created_at=검사 실행 시각(ISO, 메모 날짜로 쓴다. 없으면 내보내는 시각)."""
-        from ncs_core import detect_role, load_document
         from ncs_service.annotate import annotate_hwpx
 
         try:
@@ -59,12 +58,10 @@ def register(app: FastAPI, services: Services) -> None:
         name, source = None, None
         kept = uploads_store.get(upload) if upload else None
         if kept is not None:
+            # 업로드 때 정해 둔 역할(칸 이름 또는 넣은 순서)의 원고를 쓴다
+            wanted = (kept.roles or {}).get("manuscript")
             for file_name, path in kept.files:
-                if not file_name.lower().endswith(".hwpx"):
-                    continue
-                # 업로드 칸이 역할을 정했으면 그대로, 아니면 내용으로 판별
-                role = kept.assigned.get(str(path)) or detect_role(load_document(path).sections)
-                if role == "manuscript":
+                if file_name == wanted and file_name.lower().endswith(".hwpx"):
                     name, source = file_name, path.read_bytes()
                     break
             if source is None:

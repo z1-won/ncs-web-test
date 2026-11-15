@@ -1,4 +1,4 @@
-"""입력 파일의 역할 판별과 검증. 사용자 인터페이스와 독립적이다."""
+"""입력 파일을 역할(원고·개발계획서·출력본)별로 읽고 검증한다. 역할은 호출자가 정하며 내용으로 추측하지 않는다. 사용자 인터페이스와 독립적이다."""
 
 import hashlib
 from pathlib import Path
@@ -7,17 +7,7 @@ from .documents import Document, load_document
 from .pdf import PdfDocument, is_pdf, load_pdf
 
 ROLE_LABELS = {"manuscript": "원고", "plan": "개발계획서", "print": "출력본"}  # print: 원고를 한글에서 PDF로 저장한 것(쪽수 확인용, 선택)
-MANUSCRIPT_MARKERS = ("차 례", "차례", "학습모듈의 개요", "NCS-학습모듈의 위치")
-
-
-def detect_role(sections: list[list[str]], head_lines: int = 60) -> str:
-    """첫 섹션 머리 문단으로 역할을 판별한다: 'plan' / 'manuscript' / 'unknown'."""
-    head = " ".join(sections[0][:head_lines]) if sections else ""
-    if "개발계획서" in head:
-        return "plan"
-    if any(marker in head for marker in MANUSCRIPT_MARKERS):
-        return "manuscript"
-    return "unknown"
+DOCUMENT_ROLES = ("manuscript", "plan")   # hwp/hwpx가 맡는 역할. 역할을 지정하지 않은 파일은 이 순서로 채운다
 
 
 def file_digest(path) -> bytes:
@@ -52,12 +42,18 @@ def select_documents(
 ) -> dict[str, Document | PdfDocument]:
     """경로 목록을 읽어 {'manuscript': Document, 'plan': Document, 'print': PdfDocument}로 나눈다.
 
-    roles={경로: 'plan'|'manuscript'}로 자동 판별을 덮어쓴다. PDF는 언제나 'print'(출력본)이며 다른 역할을 줄 수 없다.
+    역할은 호출자가 정한다 — 파일 내용을 보고 추측하지 않는다.
+    - roles={경로: 'manuscript'|'plan'|'print'}로 지정한 파일은 그 역할(화면의 업로드 칸, CLI의 --manuscript/--plan).
+    - 지정하지 않은 hwp/hwpx는 넣은 순서대로 남은 역할을 맡는다: required에 있는 역할 먼저, 그다음 원고 → 개발계획서.
+      (원고 검수는 '원고, 개발계획서' 순, 개발계획서 점검은 required=('plan',)이라 파일 하나가 곧 개발계획서.)
+    - PDF는 언제나 'print'(출력본)이며 다른 역할을 줄 수 없다.
     required에 있는 역할이 없거나, 한 역할에 파일이 둘 이상이면 ValueError.
     """
     overrides = {str(Path(p).resolve()): r for p, r in (roles or {}).items()}
     if set(overrides.values()) - set(ROLE_LABELS):
         raise ValueError("roles 값은 'manuscript', 'plan', 'print' 중 하나여야 합니다")
+    order = [r for r in required if r in DOCUMENT_ROLES] + [r for r in DOCUMENT_ROLES if r not in required]
+    open_roles = [r for r in order if r not in overrides.values()]   # 순서대로 채울, 아직 주인이 없는 역할
     documents: dict[str, Document | PdfDocument] = {}
     seen: set[str] = set()
     for path in paths:
@@ -74,15 +70,18 @@ def select_documents(
             if overrides.get(key) == "print":
                 raise ValueError(f"출력본은 PDF여야 합니다: {Path(path).name}")
             document = load_document(path)
-            role = overrides.get(key, detect_role(document.sections))
-        if role not in ROLE_LABELS:
-            raise ValueError(f"파일 역할을 판단하지 못했습니다: {path}. roles로 역할을 지정하세요")
+            if key in overrides:
+                role = overrides[key]
+            elif open_roles:
+                role = open_roles.pop(0)
+            else:
+                raise ValueError(f"원고·개발계획서는 역할마다 한 개씩만 받습니다. 남는 파일: {Path(path).name}")
         if role in documents:
             raise ValueError(f"{ROLE_LABELS[role]} 파일이 둘 이상입니다. 역할마다 한 개씩 선택하세요")
         documents[role] = document
     unused = overrides.keys() - seen
     if unused:
-        raise ValueError(f"roles에 입력 목록에 없는 경로가 있습니다: {sorted(unused)}")
+        raise ValueError(f"roles에 입력 목록에 없는 경로가 있습니다: {sorted(Path(p).name for p in unused)}")
     for role in required:
         if role not in documents:
             raise ValueError(f"{ROLE_LABELS[role]} 파일이 필요합니다")

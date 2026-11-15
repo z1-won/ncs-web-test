@@ -3,7 +3,7 @@
 import unittest
 from pathlib import Path
 
-from ncs_core.documents import Document, body_start, split_single_section
+from ncs_core.documents import Document, body_start, normalize_sections
 from ncs_core.manuscript import parse_plan_toc
 from ncs_core.manuscript.patterns import PLAN_SUB, TOC_TAIL
 
@@ -24,7 +24,7 @@ class SplitTests(unittest.TestCase):
         self.assertEqual(body_start(single_section(styles=False)), 6)  # '핵심 용어' 뒤 첫 '학습 1'
 
     def test_everything_is_reindexed(self):
-        d = split_single_section(single_section())
+        d = normalize_sections(single_section())
         self.assertEqual([len(s) for s in d.sections], [6, 5])
         self.assertEqual(d.sections[1][0], "학습 1")
         self.assertEqual([(t["section"], t["paragraph"]) for t in d.tables], [(0, 1), (1, 3)])
@@ -34,7 +34,7 @@ class SplitTests(unittest.TestCase):
 
     def test_two_section_document_is_untouched(self):
         d = Document(Path("x.hwpx"), "hwpx", [["앞"], ["뒤"]])
-        self.assertIs(split_single_section(d), d)
+        self.assertIs(normalize_sections(d), d)
 
 
 class PatternTests(unittest.TestCase):

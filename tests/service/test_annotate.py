@@ -162,7 +162,8 @@ class WebAnnotateTests(unittest.TestCase):
             self.assertIn("placed", json.loads(response.headers["x-memo-summary"]))
             self.assertEqual(client.post("/api/export/annotated", data={"upload": "nope", "rows": "[]"}).status_code, 400)
             self.assertEqual(client.post("/api/export/annotated", data={"upload": token["upload"], "rows": "{}"}).status_code, 400)
-            plan_only = client.post("/api/uploads", files=[("files", (PLAN.name, PLAN.read_bytes()))]).json()
+            # 개발계획서 칸에만 올린 업로드에는 메모를 달 원고가 없다
+            plan_only = client.post("/api/uploads", data={"roles": json.dumps(["plan"])}, files=[("files", (PLAN.name, PLAN.read_bytes()))]).json()
             self.assertEqual(client.post("/api/export/annotated", data={"upload": plan_only["upload"], "rows": "[]"}).status_code, 400)
 
 
