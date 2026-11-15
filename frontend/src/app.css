@@ -198,7 +198,6 @@ details.raw pre {
 /* 대기·검사 중 칸은 아직 펼칠 내용이 없다 — 눌리지 않는 모양 */
 .all-results .btn-accordion:disabled { cursor: default; opacity: .75; }
 .all-results .btn-accordion:disabled::after { opacity: .3; }
-.all-results .accordion-item.status-running .btn-accordion { border-left: 3px solid var(--krds-light-color-border-primary); }
 /* KRDS 기본은 펼친 높이를 100vh로 제한한다 — 확인서 표가 길어도 잘리지 않게 푼다 */
 .all-results .accordion-item.active .accordion-collapse { max-height: none; }
 .all-results .accordion-body > .component-result { padding-top: var(--krds-padding-3); }
