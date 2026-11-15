@@ -1,20 +1,21 @@
+// 원고 검수 — 원고·개발계획서·출력본 PDF를 올려 구성요소 하나 또는 전체(10개)를 검사하고, 결과·확인서 내려받기·검수 이력을 한 화면에서 본다.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-import { api } from "./lib/api.js";
-import { ALL_CHECK, ALL_OPTION, CHECKS, checksFromEngines, manuscriptChecks } from "./lib/checks.js";
-import { formatDate, formatDateLines } from "./lib/format.jsx";
-import { AllResults, ComponentResult } from "./components/AllResults.jsx";
-import { Badge, Spinner } from "./components/Badge.jsx";
-import { ConfirmDialog } from "./components/ConfirmDialog.jsx";
-import { ExportButtons } from "./components/ExportButtons.jsx";
-import { FileSlot } from "./components/FileSlot.jsx";
-import { KrdsSelect } from "./components/KrdsSelect.jsx";
-import { RawJson } from "./components/RawJson.jsx";
-import { ResultHead } from "./components/ResultHead.jsx";
-import { Footer, Header, TopButton } from "./components/Layout.jsx";
-import { PageAlert } from "./components/PageAlert.jsx";
-import { Pagination } from "./components/Pagination.jsx";
-import { usePageTitle } from "./lib/hooks.js";
+import { api } from "../lib/api.js";
+import { ALL_CHECK, ALL_OPTION, CHECKS, checksFromEngines, manuscriptChecks } from "../lib/checks.js";
+import { formatDate, formatDateLines } from "../lib/format.jsx";
+import { AllResults, ComponentResult } from "../components/AllResults.jsx";
+import { Badge, Spinner } from "../components/Badge.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
+import { ExportButtons } from "../components/ExportButtons.jsx";
+import { FileSlot } from "../components/FileSlot.jsx";
+import { KrdsSelect } from "../components/KrdsSelect.jsx";
+import { RawJson } from "../components/RawJson.jsx";
+import { ResultHead } from "../components/ResultHead.jsx";
+import { Footer, Header, TopButton } from "../components/Layout.jsx";
+import { PageAlert } from "../components/PageAlert.jsx";
+import { Pagination } from "../components/Pagination.jsx";
+import { usePageTitle } from "../lib/hooks.js";
 
 const HISTORY_PAGE = 10;   // 이력 표 한 쪽 행 수(KRDS 페이지네이션)
 
@@ -25,7 +26,7 @@ const SLOTS = [
   { role: "print", label: "출력본 PDF", accept: ".pdf" },
 ];
 
-export default function App() {
+export default function ReviewPage() {
   usePageTitle("원고 검수");
   const [check, setCheck] = useState(ALL_CHECK); // 기본은 전체 검수
   const [checks, setChecks] = useState(CHECKS);

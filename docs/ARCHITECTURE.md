@@ -147,7 +147,7 @@
 - **`store.py` / `postgres.py` / `migrations.py` / `postgres_cli.py`** — 결과 zip 파일 저장소와 PostgreSQL 이력(`review_runs`·`review_results`·`review_inputs`·`review_files`). `postgres_cli import 결과`로 과거 결과 폴더를 이력으로 이관. DSN·비밀번호는 `.env`.
 - **`ncs_web/server.py`** — 앱 조립: 미들웨어, 오류 응답, 정적 `--dist`로 프런트 제공. 경로는 `routes/`의 모듈이 `register(app, services)`로 붙인다.
 - **`ncs_web/routes/`** — `review.py`(`POST /api/review`, `/api/uploads`, `GET /api/health`) · `history.py`(`/api/reviews`, `/api/groups`) · `export.py`(확인서·수정 메모 원고) · `plan.py`(개발계획서 작성) · `upscale.py`(그림 업스케일). 요청·응답 모델은 `schemas.py`, 함께 쓰는 도우미는 `common.py`.
-- **`frontend/src/`** — `App.jsx`(화면 조립), `components/`(표·셀렉트·모달), `lib/checks.js`(`CHECKS`·`FILE_HINTS` — 서버 엔진 목록과 테스트가 일치를 검사), `lib/api.js`.
+- **`frontend/src/`** — `main.jsx`(경로 등록), `pages/`(페이지: `ReviewPage` 원고 검수 · `PlanDraftPage` 개발계획서 작성 · `UpscalePage` 업스케일링 · `PrivacyPage`), `components/`(표·셀렉트·모달), `lib/checks.js`(`CHECKS`·`FILE_HINTS` — 서버 엔진 목록과 테스트가 일치를 검사), `lib/api.js`.
 
 ---
 

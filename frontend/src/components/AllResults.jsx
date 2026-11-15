@@ -1,4 +1,4 @@
-// 전체 실행 결과 — 구성요소별 KRDS 아코디언. 실행 자체(업로드 토큰·순차 호출)는 App.runAll이 하고 여기는 run 상태를 그린다.
+// 전체 실행 결과 — 구성요소별 KRDS 아코디언. 실행 자체(업로드 토큰·순차 호출)는 ReviewPage.runAll이 하고 여기는 run 상태를 그린다.
 import React, { useState } from "react";
 import { Badge, Spinner } from "./Badge.jsx";
 import { ExportButtons } from "./ExportButtons.jsx";
