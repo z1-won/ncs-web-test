@@ -1,6 +1,8 @@
 """평가 ③: 평가 방법은 2개 이상 필수적으로 제시하였는가? 학습당 1행.
 
 '평가 방법' 소제목 아래 글머리 항목(서술형 시험, 평가자 질문, 역할 연기 …)을 세고, 방법별 표(학습 내용 | 평가 항목) 수와 대조한다.
+판정 원칙: 체크리스트(방법 2개 이상)에 어긋나면 X, 체크리스트에는 없지만 최종본에 있는 것은 △.
+방법별 표의 머리 칸이 '평가 항목'이 아니라 '평가'인 것은 체크리스트 ③과 무관하고 최종본(0407 학습 5)에도 있어 △.
 """
 
 from ncs_core import O, TRI, X, verdict
@@ -29,6 +31,12 @@ def check_methods(regions: list[dict], *, min_methods: int = 2) -> list[dict]:
             if names and region["method_tables"] and region["method_tables"] != len(names):
                 checks["방법별 표 수"] = X
                 notes["방법별 표 수"] = f"평가 방법 {len(names)}개({', '.join(names)})인데 평가 항목 표는 {region['method_tables']}개"
+            odd = region.get("odd_method_heads") or []
+            if odd:
+                # 표는 평가 방법 표로 세되(표 수 비교는 정상), 머리 칸 표기는 체크리스트 ③ 밖이고 최종본에도 있어 △
+                checks["방법별 표 머리"] = TRI
+                notes["방법별 표 머리"] = (f"평가 방법 표 {len(odd)}개의 머리 칸이 '평가 항목'이 아니라 '평가'(문단 {', '.join(map(str, odd))}) "
+                                       "— 체크리스트 ③과는 무관하나 양식은 '평가 항목'이라 사람 확인")
         result = verdict(checks)
         rows.append({"item_id": ITEM_ID, "region_path": f"section1 > 학습 {lesson} > 평가 > 평가 방법", "위치": f"학습 {lesson}",
                      "원고": {"개수": len(names), "방법": names, "표": region["method_tables"]}, "체크": checks, "판정": result,

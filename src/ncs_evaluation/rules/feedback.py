@@ -1,7 +1,8 @@
 """평가 ⑤: 평가 방법별로 피드백을 제시하였는가 — 학습당 1행.
 
 확정: 피드백 블록('N. 방법명') 수와 이름 = 평가 방법 목록(③이 읽은 글머리). 다르면 X.
-휴리스틱: 블록마다 보충 학습(성취 낮은 경우)과 심화 학습(성취 높은 경우) 문구가 있는가 — 낱말로 찾고, 없으면 △(사람 확인).
+휴리스틱: 블록마다 보충 학습(성취 낮은 경우)과 심화 학습(성취 높은 경우) 문구가 있는가 — 낱말로 찾는다.
+  둘 다 없으면 X(체크리스트가 심화·보충 제시를 직접 요구), 하나만 없으면 △(낱말로 찾은 것이라 다른 표현일 수 있어 사람 확인).
 """
 
 import re
@@ -12,8 +13,11 @@ from ncs_core.notes import lines
 ITEM_ID = "F02-평가-⑤"
 COUNT = "⑤ 방법별 피드백 개수·이름 일치"
 BOTH = "⑤ 심화·보충 학습 각각 제시"
-REMEDIAL = re.compile(r"보충|미흡|낮은|낮을|보완|다시\s*설명|재학습|부족")
-ENRICHMENT = re.compile(r"심화|우수|높은|높을|정확히\s*(이해|수행|파악)한\s*경우|향상|응용|확장|추가\s*과제")
+# 낱말 목록은 SW제품기획 최종본 10종의 실제 피드백 문장으로 보강했다(2026-11-05).
+#  보충: '이해가 어려운 부분에 대해서는 사례를 제시', '…에 어려움을 느끼는 경우', '일정 점수 이하인 학생들은 추가 학습 후 재시험'
+#  심화: '…을 잘 수행하는 경우' — 심화가 실제로 없는 피드백(낮은 학생 설명만 있음, 61건)은 그대로 △(체크리스트가 심화를 직접 요구)
+REMEDIAL = re.compile(r"보충|미흡|낮은|낮을|보완|다시\s*설명|재학습|부족|어려운\s*부분|어려움을\s*느[끼낄]|일정\s*점수\s*이하|추가\s*학습|재시험")
+ENRICHMENT = re.compile(r"심화|우수|높은|높을|정확히\s*(이해|수행|파악)한\s*경우|향상|응용|확장|추가\s*과제|잘\s*\S{1,6}하는\s*경우")
 
 
 def _norm(text: str) -> str:
@@ -53,13 +57,16 @@ def check_feedback(regions: list[dict]) -> list[dict]:
                     if extra:
                         parts.append("방법 목록에 없는 피드백: " + ", ".join(extra))
                     notes[COUNT] = " · ".join(parts)
-            lacking = []
+            lacking, none = [], False
             for b in blocks:
                 text = b["text"]
                 need = [n for n, p in (("보충", REMEDIAL), ("심화", ENRICHMENT)) if not p.search(text)]
-                if need:
-                    lacking.append(f"학습 {lesson} 피드백 「{b['name']}」에 '{'·'.join(need)}' 문구 없음 (낱말로 찾음, 사람 확인)")
-            checks[BOTH] = TRI if lacking else O
+                if len(need) == 2:
+                    none = True
+                    lacking.append(f"학습 {lesson} 피드백 「{b['name']}」에 보충·심화 문구가 모두 없음")
+                elif need:
+                    lacking.append(f"학습 {lesson} 피드백 「{b['name']}」에 '{need[0]}' 문구 없음 (낱말로 찾음, 사람 확인)")
+            checks[BOTH] = X if none else TRI if lacking else O
             if lacking:
                 notes[BOTH] = lines(lacking)
         result = verdict(checks)
