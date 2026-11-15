@@ -281,7 +281,6 @@ export default function PlanDraftPage() {
 
         <div id="plan-review-result" className="results-anchor nav-anchor" />
         {reviewing && <ResultHead status={<Spinner label="개발계획서를 점검하는 중" />} />}
-        {!reviewing && !review && <p className="empty result-placeholder">점검을 실행하면 결과가 여기에 표시됩니다.</p>}
         {review && (
           <section aria-live="polite">
             <ResultHead
