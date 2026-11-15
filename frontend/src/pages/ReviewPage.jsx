@@ -322,9 +322,6 @@ export default function ReviewPage() {
       {busy && !allRun && (
         <ResultHead status={<Spinner label={`검사 중 — ${selected.label}`} />} />
       )}
-      {!allRun && !result && !busy && (
-        <p className="empty result-placeholder">검사를 실행하면 결과가 여기에 표시됩니다{history?.length ? " — 아래 검수 이력에서 이전 결과를 열 수도 있습니다" : ""}.</p>
-      )}
       {allRun && <AllResults run={allRun} checks={reviewChecks} onError={setError} onNotice={setNotice}
                              uploadToken={upload.status === "ready" ? upload.token : null} />}
 
