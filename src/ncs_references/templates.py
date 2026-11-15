@@ -40,27 +40,77 @@ def match_template(text: str, script: str):
     return None
 
 
+def _search_date_hint(text: str) -> str:
+    """URL이 있는 국문 항목에서 'YYYY. MM. DD. 검색.'이 맞지 않는 이유를 구분한다.
+
+    날짜가 아예 없는 것과, 날짜는 있는데 '검색' 앞에 다른 말이 낀 것('2026. 8. 2. AIoT 검색.')은 고칠 곳이 다르다.
+    """
+    dated = re.search(rf"({DATE})\s*(.*?)\s*검색", text)
+    if dated and dated.group(2):
+        return f"검색 연월일({dated.group(1)})과 '검색' 사이에 「{dated.group(2)}」이(가) 있음 — 'YYYY. MM. DD. 검색.' 꼴"
+    if re.search(DATE, text):
+        return "검색 연월일 뒤에 '검색.'이 없음 — 'YYYY. MM. DD. 검색.' 꼴"
+    return "URL이 있는데 검색 연월일(YYYY. MM. DD. 검색.)이 없음"
+
+
 def hints(text: str, script: str) -> list[str]:
     """골격이 맞지 않을 때 흔한 위반을 짚어 준다."""
     out = []
     if script == "국문" and re.match(r"^[^()]+\s\(", text):
         out.append("국문 저자와 연도 괄호 사이를 띄움(붙여 씀)")
     if not re.search(rf"\({YEAR}\)|\({DATE}\)", text):
-        out.append("연도 괄호 (YYYY) 없음")
+        # '(2021. 1)', '(2013.12)'는 연도가 있는데 월까지 적은 것 — '연도 없음'이라 하면 엉뚱하다(최종본 0405)
+        if re.search(r"\(\d{4}\.\s?\d{1,2}\.?\)", text):
+            out.append("연도 괄호에 월까지 적음 — 연도만 '(YYYY)'")
+        else:
+            out.append("연도 괄호 (YYYY) 없음")
     elif not re.search(rf"\((?:{YEAR}|{DATE})\)\.", text):
         out.append("연도 괄호 뒤 마침표 없음")
     if re.search(r"\)\s*,", text) or re.search(r"[』」]\s*,", text):
         out.append("쉼표로 구분한 곳이 있음(마침표로 구분)")
     if re.search(r"[《》]", text):
         out.append("《 》 사용(학술지·책명은 『 』)")
-    if re.search(r"[』」\)]\s*[가-힣A-Za-z]", text) and script == "국문":
+    # 제목 괄호는 『 』·「 」만 본다 — ')'까지 보면 URL 괄호 뒤 '에서', 코드 괄호 '(2001020417_20v1) 능력단위'에도 걸려
+    # 엉뚱한 이유를 적는다(테스트 데이터 원본 참고 자료 3~9번)
+    if re.search(r"[』」]\s*[가-힣A-Za-z]", text) and script == "국문":
         out.append("제목 괄호 뒤 마침표 없이 바로 이어짐")
     if not text.rstrip().endswith((".", "」", "』")) and not re.search(URL + r"$", text):
         out.append("끝에 마침표 없음")
+    if script == "국문" and re.search(rf"\((?:{YEAR})\)\.\s*\(\s*{URL}", text):
+        out.append("연도 뒤에 자료명·홈페이지명 없이 바로 (URL)이 옴 — '자료명(연도). 홈페이지명(URL)에서 …'")
     if re.search(URL, text) and not re.search(rf"{DATE}\s*(검색|스크린\s*숏)", text) and script == "국문":
-        out.append("URL이 있는데 검색 연월일(YYYY. MM. DD. 검색.)이 없음")
+        out.append(_search_date_hint(text))
     if script == "영문" and re.search(URL, text) and not re.search(r"Retrie?ved\s+from", text):
         out.append("국외 전자 자료는 '… Retrieved from(URL).' 꼴")
     if script == "영문" and re.search(r"[“\"].+?[”\"]", text):
         out.append("국외 자료 제목에 따옴표를 쓰지 않음")
+    out.extend(_shape_hints(text, script))
+    if not out:  # 이유 칸이 비면 검수자가 어디를 고칠지 모른다 — 아는 위반에 안 맞아도 무엇을 볼지는 적는다
+        out.append("F14 서지 양식 22종 중 맞는 꼴이 없음 — 자료 유형(단행본·보고서·학술지 논문·전자 자료 등)의 꼴과 대조 필요")
+    return out
+
+
+def _shape_hints(text: str, script: str) -> list[str]:
+    """자료 유형별 골격에서 빠진 부분 — 최종본 10종에서 이유 없이 '골격이 다름'만 나오던 28건을 유형으로 나눈 것."""
+    out = []
+    year = re.search(rf"^(?P<author>.*?)\((?:{YEAR})\)\.\s*(?P<rest>.*)$", text)
+    author, rest = (year.group("author"), year.group("rest").strip()) if year else ("", "")
+    if script == "국문":
+        if re.search(r"\([^()]*역\)\s*\(", text):
+            out.append("번역서 꼴은 '저자([원서 연도] 번역 연도). 『번역서명(원서명)』. 번역자(역). 출판사.' — 역자는 저자 뒤가 아니라 책명 뒤")
+        if "," in author:
+            out.append("국문 공동 저자는 쉼표가 아니라 가운뎃점(·)으로 잇는다")
+        if re.search(r"『.+?』\.?\s*\d+\s*권", text):
+            out.append("학술지 권·호는 숫자만 '12(2).' 꼴(권·호 글자 없이)")
+        if re.search(r"「.+?」\.\s*『.+?』", text) and not re.search(r"\d+\s*[-–~]\s*\d+\.?\s*$", text):
+            out.append("학술지 논문의 쪽수 없음 — '「제목」. 『학술지명』. 권(호). 쪽수.'")
+        if year and re.fullmatch(r"『.+?』\.?", rest):
+            out.append("책명 뒤 출판사 없음 — '저자(연도). 『책명』. 출판사.'")
+        if year and rest and not re.search(rf"[『』「」]|{URL}", rest) and re.fullmatch(r"[^.]+\.?", rest):
+            out.append("제목 뒤 발행 기관 없음 — 보고서·자료집은 '저자(연도). 제목. 발행 기관.'")
+    elif script == "영문":
+        if re.search(rf"\S\((?:{YEAR})\)", text):  # 연도 괄호 앞이 붙어 있을 때만 — URL 괄호('Inc(https://…)')는 아니다
+            out.append("국외 자료는 저자와 연도 괄호 사이를 띄움 — '저자 (연도).'")
+        if year and rest and not re.search(URL, rest) and re.fullmatch(r"[^.]+\.?", rest):
+            out.append("제목 뒤 발행처·출판사 없음")
     return out
