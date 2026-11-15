@@ -383,4 +383,13 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .upscale-pair img { display: block; width: 100%; height: auto; border: 1px solid var(--krds-light-color-divider-gray-light); background: #fff; }
 .upscale-pair figcaption { margin-top: var(--krds-gap-1); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-xsmall); }
 .upscale-actions { display: flex; flex-wrap: wrap; gap: var(--krds-gap-2); margin-top: var(--krds-gap-4); }
-.upscale-foot { margin-top: var(--krds-gap-7); }
+/* 실행 바 — 패널 안에서 화면 아래에 붙는다(sticky). 왼쪽 진행 수, 오른쪽 주 버튼 */
+.upscale-bar {
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-4);
+  margin-top: var(--krds-gap-7); padding: var(--krds-padding-5) 0;
+  border-top: 1px solid var(--krds-light-color-border-gray-light);
+  background: var(--krds-light-color-background-white);
+}
+.upscale-bar .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-medium); }
+.upscale-bar .bar-actions { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3); }

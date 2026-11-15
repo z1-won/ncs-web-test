@@ -1,5 +1,5 @@
 // 그림 해상도·업스케일: 원고(hwpx)의 목표 DPI 미만 그림을 원본 그대로 보여 주고, 사람이 고른 그림만 한 장씩 업스케일한다.
-// [업스케일링] → 서버가 그림을 키움(엔진·GPU에 따라 수 초~수십 초) → 원본·결과를 나란히 보여 주고 결과 파일을 내려받는다.
+// [업스케일링] → 서버가 그림을 키움(엔진·GPU에 따라 수 초~수십 초) → 원본·결과를 나란히 보여 준다. 결과 그림은 [결과 받기]로만 내려받는다.
 // 업스케일한 그림이 있으면 [제안본 hwpx 받기]로 그 그림들만 같은 자리에 넣은 원고 사본을 받는다(본문·그림 크기·위치는 그대로).
 import React, { useEffect, useState } from "react";
 
@@ -11,16 +11,6 @@ const GRADE = { O: "bg-light-success", "△": "bg-light-warning", X: "bg-light-d
 
 function fileStem(name) {
   return (name || "원고").replace(/\.[^.]+$/, "");
-}
-
-// 브라우저 다운로드(같은 출처 GET 링크)
-function saveFrom(url) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
 }
 
 export function UpscalePanel({ token, manuscriptName, moduleCode }) {
@@ -56,8 +46,8 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
     const { ok, data, error: message } = await api.pictures.upscale(token, picture.bin_id);
     setBusy(null);
     if (!ok) { setError(message); return; }
+    // 결과 그림은 자동으로 내려받지 않는다 — 보통은 제안본 하나만 필요하고, 그림 파일이 필요하면 [결과 받기]를 누른다
     setResults((prev) => ({ ...prev, [picture.bin_id]: { ...data, v: Date.now() } }));
-    if (data.status === "완료") saveFrom(api.pictures.downloadUrl(token, picture.bin_id, `${base}_${picture.label}_업스케일`));
   }
 
   async function proposal() {
@@ -150,7 +140,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
                 </button>
                 {result?.status === "완료" && (
                   <a className="krds-btn small tertiary" href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${p.label}_업스케일`)} download>
-                    결과 다시 받기
+                    결과 받기
                   </a>
                 )}
               </div>
@@ -159,16 +149,18 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
         })}
       </ul>
 
+      {error && <PageAlert kind="danger">{error}</PageAlert>}
+      {notice && !error && <PageAlert kind="success">{notice}</PageAlert>}
+      {/* 실행 바 — 목록이 길어도 화면 아래에 붙어 있어, 끝까지 내리지 않고 제안본을 받는다 */}
       {data.pictures.length > 0 && (
-        <div className="upscale-foot">
-          <button type="button" className="krds-btn medium secondary" disabled={!ready || busy !== null} onClick={proposal}
+        <div className="upscale-bar">
+          <span className="meta">업스케일 완료 <strong>{ready}</strong> / {data.pictures.length}개</span>
+          <button type="button" className="krds-btn medium primary" disabled={!ready || busy !== null} onClick={proposal}
                   title="업스케일한 그림만 원고의 같은 자리에 넣은 사본(hwpx). 본문·그림 크기·위치는 그대로">
-            {busy === "proposal" ? "만드는 중…" : `업스케일한 그림 ${ready}장으로 제안본 hwpx 받기`}
+            {busy === "proposal" ? "만드는 중…" : `제안본 hwpx 받기 (그림 ${ready}장)`}
           </button>
         </div>
       )}
-      {error && <PageAlert kind="danger">{error}</PageAlert>}
-      {notice && !error && <PageAlert kind="success">{notice}</PageAlert>}
     </section>
   );
 }
