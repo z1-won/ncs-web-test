@@ -5,6 +5,7 @@
 
 from collections.abc import Sequence
 
+from ncs_core.rules import coverage
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
 from ncs_core.text import flatten
 
@@ -51,7 +52,6 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         warnings.append("소속 학습 내용(N-M.)을 찾지 못한 수행 내용: " + ", ".join(unknown_unit[:5]))
     if len(manuscript.sections) > 2:
         warnings.append("선택한 본문 섹션만 검사합니다. 다른 섹션에 이어진 본문은 검사하지 않습니다")
-    implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
         "inputs": {"manuscript": str(manuscript.path), "plan": str(context.plan.path) if context.plan else None},
@@ -62,8 +62,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
             "units": len({b["unit"] for b in context.blocks if b["unit"]}),
             "level1_lines": sum(1 for b in context.blocks for s in b["수행순서"] if s.get("level1")),
         },
-        "implemented": sorted(implemented),
-        "not_implemented": [item for item in ALL_ITEM_IDS if item not in implemented],
+        **coverage(rules, ALL_ITEM_IDS),
         "warnings": warnings,
     }
 

@@ -50,6 +50,12 @@ def failure_rows(rule: Rule, error: Exception) -> list[dict]:
                            f"자동 검사가 오류로 끝나 이 항목을 판정하지 못했습니다 — 사람이 확인하세요 (규칙 {rule.key}, {type(error).__name__})")
 
 
+def coverage(rules: Sequence[Rule], all_item_ids: Sequence[str]) -> dict:
+    """진단의 'implemented / not_implemented' — 등록된 규칙의 항목과, 규칙이 없는 항목."""
+    implemented = {rule.item_prefix for rule in rules}
+    return {"implemented": sorted(implemented), "not_implemented": [item for item in all_item_ids if item not in implemented]}
+
+
 def run_rules(context: Any, rules: Sequence[Rule]) -> list[dict]:
     keys = [rule.key for rule in rules]
     if len(keys) != len(set(keys)):

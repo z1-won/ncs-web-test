@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from ncs_core.rules import coverage
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
 from ncs_core.manuscript import parse_body, parse_toc, section_presence, unit_regions
 from ncs_core.text import flatten
@@ -39,7 +40,6 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         warnings.append("hwp 원고는 쪽 나누기·그림 개체를 읽을 수 없어 ①②④⑤⑧과 ③의 그림 부분이 판단불가입니다. hwpx를 권장합니다")
     if not context.units:
         warnings.append("학습 내용(N-M) 구간을 찾지 못해 ⑥은 판단불가입니다")
-    implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
         "inputs": {"manuscript": str(manuscript.path), "plan": str(context.plan.path) if context.plan else None},
@@ -49,8 +49,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
                    "pictures": len(manuscript.section_pictures(context.config.body_section)),
                    "page_breaks": len(manuscript.section_page_breaks(context.config.body_section) or ())},
         "presence": {name: bool((context.presence.get(name) or {}).get("있음")) for name in ("참고 자료", "활용 서식", "부록")},
-        "implemented": sorted(implemented),
-        "not_implemented": [item for item in ALL_ITEM_IDS if item not in implemented],
+        **coverage(rules, ALL_ITEM_IDS),
         "warnings": warnings,
     }
 

@@ -7,13 +7,11 @@
   그림·표 캡션:            ncs_knowledge.figtab.collect_labels
 """
 
-import re
 from collections.abc import Sequence
-from typing import Any
 
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
 from ncs_core.manuscript import parse_body, parse_overview, parse_toc, section_presence
-from ncs_core.text import flatten
+from ncs_core.text import actual_sections, flatten
 
 from .config import DEFAULT_CONFIG, CheckConfig
 from .figtab import _flatten, collect_labels
@@ -61,16 +59,6 @@ def prepare_review(
     ]
     labels = {"flat": flat, "caps": caps, "refs": refs, "bare": bare, "lesson_spans": lesson_spans}
     return ReviewContext(manuscript, plan, code, config, toc, overview, body, units, plan_goals, table_paragraphs, labels)
-
-
-def _actual_sections(value: Any, config: CheckConfig) -> Any:
-    if isinstance(value, str):
-        return re.sub(r"section([01])\b", lambda m: "section" + str(config.front_section if m[1] == "0" else config.body_section), value)
-    if isinstance(value, dict):
-        return {k: _actual_sections(v, config) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_actual_sections(v, config) for v in value]
-    return value
 
 
 def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
@@ -124,8 +112,8 @@ def evaluate_review(context: ReviewContext, *, rules: Sequence[Rule] = DEFAULT_R
     config = context.config
     checklist = run_rules(context, rules)
     for row in checklist:
-        row["region_path"] = _actual_sections(row["region_path"], config)
-        row["비고"] = _actual_sections(row["비고"], config)
+        row["region_path"] = actual_sections(row["region_path"], front=config.front_section, body=config.body_section)
+        row["비고"] = actual_sections(row["비고"], front=config.front_section, body=config.body_section)
     diagnostics = _diagnostics(context, rules)
     return ReviewResult(context.module_code, checklist, flatten(checklist), diagnostics, context, sheet(checklist))
 

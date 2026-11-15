@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from ncs_core.rules import coverage
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
 from ncs_core.text import flatten
 
@@ -39,7 +40,6 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     odd = [b["block_id"] for b in context.blocks if b["lesson_line"] is not None and b["lesson_line"] != b["lesson"]]
     if odd:
         warnings.append("블록 순번과 본문의 '학습 N' 줄이 다른 교수·학습 방법 블록(순번을 학습 번호로 썼음): " + ", ".join(odd[:5]))
-    implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
         "inputs": {"manuscript": str(manuscript.path), "plan": str(context.plan.path) if context.plan else None},
@@ -48,8 +48,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         "counts": {"blocks": len(context.blocks),
                    "teach_items": sum(len(b["교수"]) for b in context.blocks),
                    "learn_items": sum(len(b["학습"]) for b in context.blocks)},
-        "implemented": sorted(implemented),
-        "not_implemented": [item for item in ALL_ITEM_IDS if item not in implemented],
+        **coverage(rules, ALL_ITEM_IDS),
         "warnings": warnings,
     }
 

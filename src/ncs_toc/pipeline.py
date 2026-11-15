@@ -5,15 +5,14 @@ evaluate_review: 규칙을 실행해 ReviewResult를 만든다.
 run_review: 둘을 이어 붙인 편의 함수.
 """
 
-import re
 from collections.abc import Sequence
-from typing import Any
 
+from ncs_core.rules import coverage
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
 from ncs_core.manuscript import parse_body, parse_overview, parse_plan_toc, parse_toc, section_presence
 from ncs_core.manuscript.pages import locate_headings
 from ncs_core.pdf import PdfDocument
-from ncs_core.text import flatten
+from ncs_core.text import actual_sections, flatten
 
 from .config import DEFAULT_CONFIG, CheckConfig
 from .evaluation import evaluation_tables
@@ -64,21 +63,6 @@ def prepare_review(
                          print_copy, headings, print_error)
 
 
-def _actual_sections(value: Any, config: CheckConfig) -> Any:
-    """결과의 'section0/section1' 표기를 실제 입력 섹션 번호로 바꾼다."""
-    if isinstance(value, str):
-        return re.sub(
-            r"section([01])\b",
-            lambda m: "section" + str(config.front_section if m[1] == "0" else config.body_section),
-            value,
-        )
-    if isinstance(value, dict):
-        return {k: _actual_sections(v, config) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_actual_sections(v, config) for v in value]
-    return value
-
-
 def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     manuscript, plan, config = context.manuscript, context.plan, context.config
     warnings = []
@@ -108,7 +92,6 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         warnings.append(f"출력본의 모듈 코드({context.print_copy.module_code})가 원고와 다릅니다")
     if len(manuscript.sections) > 2:
         warnings.append("선택한 차례/개요 및 본문 섹션만 검사합니다. 다른 섹션에 이어진 본문은 검사하지 않습니다")
-    implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
         "inputs": {"manuscript": str(manuscript.path), "plan": str(plan.path) if plan else None,
@@ -122,8 +105,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
             "evaluation_tables": len(context.eval_tables),
             "print_pages": len(context.print_copy.pages) if context.print_copy else None,
         },
-        "implemented": sorted(implemented),
-        "not_implemented": [item for item in ALL_ITEM_IDS if item not in implemented],
+        **coverage(rules, ALL_ITEM_IDS),
         "warnings": warnings,
     }
 
@@ -133,10 +115,10 @@ def evaluate_review(context: ReviewContext, *, rules: Sequence[Rule] = DEFAULT_R
     config = context.config
     checklist = run_rules(context, rules)
     for row in checklist:
-        row["region_path"] = _actual_sections(row["region_path"], config)
-        row["비고"] = _actual_sections(row["비고"], config)
+        row["region_path"] = actual_sections(row["region_path"], front=config.front_section, body=config.body_section)
+        row["비고"] = actual_sections(row["비고"], front=config.front_section, body=config.body_section)
         if row["item_id"] == "F02-차례-⑤":
-            row["원고"] = _actual_sections(row["원고"], config)
+            row["원고"] = actual_sections(row["원고"], front=config.front_section, body=config.body_section)
     diagnostics = _diagnostics(context, rules)
     # ②에서 목록에 없어 △로 남은 머리어. scripts/data/build_action_nouns.py --from-results 가 이 키를 읽는다.
     diagnostics["행동명사 미확인"] = unknown_words(checklist)

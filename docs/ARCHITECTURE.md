@@ -85,7 +85,8 @@
 - **`text.py`** — `O X △ -`, `적합/부적합/판단불가`, `make_normalizer(prefix)`(머리 번호 제거·PUA 기호→가운뎃점·NFC), `verdict(checks)`(X 있으면 부적합, △ 있으면 판단불가), `flatten`(행 → 지적사항), `visible`(기호 글꼴 문자를 읽을 수 있게).
 - **`goals.py`** — 문장 목록 비교. `normalize`, `compare_lists`(순서 무시, 가장 비슷한 문장을 짝지어 어절 차이만 보여 줌), `difference`, **`explain_pair`**(두 이름을 문서 이름 붙여 나란히 + 띄어쓰기만/기호만/글자 다름).
 - **`notes.py`** — 비고 문구 틀 함수(대조·누락·꼴·개수·판단불가 등). 규칙은 이 틀로 비고를 만든다.
-- **`sentences.py`** — 행동 문장 종결 판정(`~한다`: '다' 앞 음절 받침 ㄴ이면 O, 이다/있다/없다 △).
+- **`sentences.py`** — 행동 문장 종결 판정(`~한다`: '다' 앞 음절 받침 ㄴ이면 O, 이다/있다/없다 X, '~할 수 있다'는 `allow_can`으로 호출자가 정함 — 수행 ④만 O).
+- **`brands.py`** — 상호·상품명·프로그램명 사전과 `find_brands(문단)`. 수행 ②(재료·기기 줄)와 기타 ③(본문)이 함께 쓴다.
 - **`lexicon.py`** — 행동명사 사전(`data/action_nouns.txt`) + 표준국어대사전 API(`W하다` 동사 표제어). 조회 결과를 파일에 바로 덧붙인다. 키 없으면 △.
 - **`ncs_catalog.py`** — `data/ncs_units.tsv`(세분류별 분류 명칭·능력단위) + `data/ncs_levels.tsv`(전 능력단위 수준). `NCS_CATALOG_FILE`로 교체·비활성화(합성 원고 테스트).
 - **`ncs_api.py`** — 공공데이터포털 B490007/ncsInfo 호출. 운용 전 표 갱신용. 검수 서버는 호출하지 않는다.
@@ -120,7 +121,7 @@
 - `rules/navigator.py` ①②③: 내비게이터 학습명에 코드 없음, '~하기', 차례·내용체계와 일치, 묶음 간 일치. `contents.py` ④: 본문 `N-M.` 제목 = 차례 = 내용체계. `goals.py` ⑤: 학습 목표 = 계획서(순서 무시, 어절 차이 표시). `numbering.py` ⑥: 번호 체계 󰊱〉1.〉(1)〉(가)〉1)〉가)〉①. `figtab.py`(추출)·`rules/figures.py` ⑦: 그림·표 번호 연속, 괄호, 기호 글꼴. `sources.py` ⑧: 그림·표 출처 줄과 F14 14종 골격.
 
 ### `ncs_perform` 수행 내용 ①②④
-`blocks.py`가 본문을 '수행 내용' 블록(제목·재료·안전·수행 순서)으로 자르고, `rules/title.py` ①: 제목 '~하기', `rules/sentences.py` ④: 수행 순서 '~한다.' 종결. ②는 `rules/brands.py`가 재료·기기 줄만 LLM에 보내 상표·상품·제조사명 후보(△)를 받는다. 시스템 프롬프트는 `system_prompt(module_code)`가 원고 분야와 그 분야의 공용 명칭으로 만든다. ③은 미구현.
+`blocks.py`가 본문을 '수행 내용' 블록(제목·재료·안전·수행 순서)으로 자르고, `rules/title.py` ①: 제목 '~하기', `rules/sentences.py` ④: 수행 순서 '~한다.' 종결. ②는 `rules/brands.py`가 재료·기기 줄을 먼저 사전(`ncs_core.brands`)으로 보고(명확한 이름 X), 같은 줄만 LLM에 보내 사전에 없는 상표·상품·제조사명 후보(△)를 받는다. 시스템 프롬프트는 `system_prompt(module_code)`가 원고 분야와 그 분야의 공용 명칭으로 만든다. ③은 미구현.
 
 ### `ncs_teaching` 교수·학습 방법 ①~④
 `blocks.py`가 학습마다 교수 방법/학습 방법 글머리 목록을 자르고, `rules/counts.py` ①③: 각 3개 이상, `rules/sentences.py` ②④: 행동동사(-ㄴ다) 종결.

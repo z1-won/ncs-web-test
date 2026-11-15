@@ -4,9 +4,9 @@ import logging
 import unittest
 
 from ncs_core import Rule, run_rules
-from ncs_core.rules import RULE_ERROR_CHECK
+from ncs_core.rules import RULE_ERROR_CHECK, coverage
 from ncs_core.sheet import SheetItem, build_sheet
-from ncs_core.text import flatten
+from ncs_core.text import actual_sections, flatten
 
 
 def good_row(item_id):
@@ -77,6 +77,21 @@ class WorstTests(unittest.TestCase):
         self.assertEqual(worst(["적합", "판단불가", "부적합"]), "부적합")
         self.assertEqual(verdict({"a": "O", "b": "△"}), "판단불가")
         self.assertEqual(overall_verdict(["적합", "판단불가"]), "판단불가")
+
+
+
+class SharedHelperTests(unittest.TestCase):
+    """엔진마다 따로 있던 도우미를 코어 하나로 모은 것(구역 표기 맞춤, 진단의 규칙 범위)."""
+
+    def test_actual_sections_maps_nested_values_and_keeps_unset(self):
+        value = {"a": "section0 > 표", "b": ["section1 > 문단 3", 7], "c": "section10"}
+        self.assertEqual(actual_sections(value, front=2, body=5), {"a": "section2 > 표", "b": ["section5 > 문단 3", 7], "c": "section10"})
+        self.assertEqual(actual_sections("section0 / section1", front=3), "section3 / section1")   # body를 주지 않으면 그대로
+
+    def test_coverage_lists_items_without_rules(self):
+        rules = [Rule("b", "F02-가-②", lambda c: []), Rule("a", "F02-가-①", lambda c: [])]
+        self.assertEqual(coverage(rules, ["F02-가-①", "F02-가-②", "F02-가-③"]),
+                         {"implemented": ["F02-가-①", "F02-가-②"], "not_implemented": ["F02-가-③"]})
 
 
 if __name__ == "__main__":

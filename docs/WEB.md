@@ -43,7 +43,7 @@ npm run dev
 
 ## 업스케일링 페이지
 
-메인 메뉴의 **업스케일링**(`/upscale`)은 원고 검수와 따로 쓰는 페이지입니다. 원고(hwpx)를 이 페이지에서 올리면 목표 DPI(기본 300) 미만 그림을 원고에 나오는 순서로 보여 주고, 고른 그림만 한 장씩 키웁니다. 화면은 `frontend/src/pages/UpscalePage.jsx`, 그림 목록·결과는 `components/UpscalePanel.jsx`, 서버는 `/api/uploads/{token}/pictures…` 경로와 `src/ncs_upscale/`입니다.
+메인 메뉴의 **업스케일링**(`/upscale`)은 원고 검수와 따로 쓰는 페이지입니다. 원고(hwpx)를 이 페이지에서 올리면 고른 해상도 기준(300 또는 150 DPI, 기본 300 — `?target_dpi=`) 미만 그림을 원고에 나오는 순서로 보여 주고, 고른 그림만 한 장씩 키웁니다. 화면은 `frontend/src/pages/UpscalePage.jsx`, 그림 목록·결과는 `components/UpscalePanel.jsx`, 서버는 `/api/uploads/{token}/pictures…` 경로와 `src/ncs_upscale/`입니다.
 
 업스케일은 외부 실행 파일(기본 `waifu2x-ncnn-vulkan`)을 부릅니다. 실행 파일은 저장소에 없으므로 따로 내려받아 도구 폴더에 둡니다. 도구 폴더는 환경 변수 `NCS_UPSCALE_TOOLS`로 지정하고, 없으면 저장소 바로 위 폴더의 `tools/`를 봅니다. 엔진을 찾지 못하면 그림 목록과 원본 보기는 되고 업스케일 버튼만 꺼집니다. 지금 코드는 실행 파일 이름을 `waifu2x-ncnn-vulkan.exe`로 찾습니다(`src/ncs_upscale/engine.py`).
 
@@ -111,6 +111,7 @@ Uvicorn으로 직접 실행할 수도 있습니다. 다음 명령은 저장소 �
 | `files` | 원고·개발계획서 `.hwp`/`.hwpx`. 같은 필드명으로 여러 파일 전송 |
 | `check` | `position`(기본), `toc`, `overview`, `knowledge` |
 | `module_code` | 선택. 비우면 원고 파일명에서 추출 |
+| `image_dpi` | 선택. 그림 해상도 기준 `300`(기본) 또는 `150`. `check=misc`(기타 ⑤⑧)에만 쓰인다. 다른 값은 400. 선택지는 `GET /api/health`의 `image_dpi` |
 | `roles` | 선택. `files`와 같은 순서·개수의 역할 JSON 배열(`["manuscript", "plan", "print"]`). `POST /api/uploads`와, `files`를 직접 올리는 `POST /api/review`가 받는다 |
 
 `roles`를 주면 그 역할로 받고(화면의 업로드 칸이 이렇게 보냅니다 — 칸이 곧 역할), 주지 않으면 넣은 순서가 역할입니다(첫 hwp/hwpx가 원고, 둘째가 개발계획서. 개발계획서 점검은 첫 파일이 개발계획서). 내용으로 추측하지 않습니다. 업로드 토큰으로 실행하는 검수는 업로드 때 정한 역할을 그대로 씁니다. PDF는 출력본으로만, 출력본은 PDF로만 받습니다. 위치 검수는 계획서가 필수입니다.

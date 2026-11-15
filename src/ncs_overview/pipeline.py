@@ -1,12 +1,11 @@
 """입력 선택 → 추출 → 규칙 실행. 저장과 화면 출력은 호출자가 결정한다. (ncs_toc.pipeline과 같은 구조)"""
 
-import re
 from collections.abc import Sequence
-from typing import Any
 
+from ncs_core.rules import coverage
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
 from ncs_core.manuscript import parse_overview, parse_plan
-from ncs_core.text import flatten
+from ncs_core.text import actual_sections, flatten
 
 from .config import DEFAULT_CONFIG, CheckConfig
 from .models import ReviewContext
@@ -31,16 +30,6 @@ def prepare_review(
     return ReviewContext(manuscript, plan, code, config, overview, plan_info)
 
 
-def _actual_sections(value: Any, config: CheckConfig) -> Any:
-    if isinstance(value, str):
-        return re.sub(r"section0\b", f"section{config.front_section}", value)
-    if isinstance(value, dict):
-        return {k: _actual_sections(v, config) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_actual_sections(v, config) for v in value]
-    return value
-
-
 def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     manuscript, plan, overview = context.manuscript, context.plan, context.overview
     warnings = []
@@ -53,7 +42,6 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     for key in ("목표", "선수학습", "내용체계", "핵심 용어"):
         if not overview.get(key):
             warnings.append(f"개요의 '{key}' 블록을 읽지 못했습니다")
-    implemented = {rule.item_prefix for rule in rules}
     structure = overview.get("내용체계") or {}
     return {
         "module_code": context.module_code,
@@ -67,8 +55,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
             "elements": len(structure.get("요소", [])),
             "terms": len(overview["핵심 용어"]["items"]) if overview.get("핵심 용어") else 0,
         },
-        "implemented": sorted(implemented),
-        "not_implemented": [item for item in ALL_ITEM_IDS if item not in implemented],
+        **coverage(rules, ALL_ITEM_IDS),
         "warnings": warnings,
     }
 
@@ -77,8 +64,8 @@ def evaluate_review(context: ReviewContext, *, rules: Sequence[Rule] = DEFAULT_R
     config = context.config
     checklist = run_rules(context, rules)
     for row in checklist:
-        row["region_path"] = _actual_sections(row["region_path"], config)
-        row["비고"] = _actual_sections(row["비고"], config)
+        row["region_path"] = actual_sections(row["region_path"], front=config.front_section)
+        row["비고"] = actual_sections(row["비고"], front=config.front_section)
     diagnostics = _diagnostics(context, rules)
     return ReviewResult(context.module_code, checklist, flatten(checklist), diagnostics, context, sheet(checklist))
 

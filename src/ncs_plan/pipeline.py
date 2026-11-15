@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from ncs_core.rules import coverage
 from ncs_core import Document, ReviewResult, Rule, run_rules, select_documents, validate_module_code
 from ncs_core.law_catalog import law_catalog
 from ncs_core.lexicon import default_lexicon
@@ -62,7 +63,6 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         warnings.append("NCS 목록을 읽지 못해 ①은 판단불가입니다")
     if context.laws is None:
         warnings.append("법령명 표(law_names.tsv)가 없어 ⑩은 판단불가입니다 — scripts/data/build_law_names.py")
-    implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
         "stage": context.config.stage,
@@ -73,8 +73,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
                    "change_rows": len(data["대조표"] or []),
                    "elements": sum(len(m["요소"]) for m in data["모듈"]), "lessons": sum(len(m["학습"]) for m in data["모듈"])},
         "modules": [{"코드": m["코드"], "명칭": m["명칭"], "요소": len(m["요소"]), "학습": len(m["학습"])} for m in data["모듈"]],
-        "implemented": sorted(implemented),
-        "not_implemented": [item for item in ALL_ITEM_IDS if item not in implemented],
+        **coverage(rules, ALL_ITEM_IDS),
         "warnings": warnings,
     }
 

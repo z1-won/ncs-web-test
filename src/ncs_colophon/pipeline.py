@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from ncs_core.rules import coverage
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
 from ncs_core.text import flatten
 
@@ -29,7 +30,6 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         warnings.append("판권 표를 찾지 못했습니다")
     if context.manuscript.format != "hwpx":
         warnings.append("hwp는 표 셀 구조를 읽지 못할 수 있습니다. hwpx를 권장합니다")
-    implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
         "inputs": {"manuscript": str(context.manuscript.path), "plan": str(context.plan.path) if context.plan else None},
@@ -37,8 +37,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         "sections": {"front": context.config.front_section, "body": context.config.body_section},
         "counts": {"history_tables": len(context.histories), "colophon_tables": len(context.colophons),
                    "history_blocks": sum(len(h["blocks"]) for h in context.histories)},
-        "implemented": sorted(implemented),
-        "not_implemented": [item for item in ALL_ITEM_IDS if item not in implemented],
+        **coverage(rules, ALL_ITEM_IDS),
         "warnings": warnings,
     }
 

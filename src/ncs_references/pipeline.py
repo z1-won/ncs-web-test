@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from ncs_core.rules import coverage
 from ncs_core import Document, ReviewResult, Rule, resolve_module_code, run_rules, select_documents
 from ncs_core.manuscript import section_presence
 from ncs_core.text import flatten
@@ -42,7 +43,6 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
     unreadable = [e["n"] for e in context.entries if e["key"] is None]
     if unreadable:
         warnings.append("저자(연도) 꼴을 읽지 못한 참고 자료 항목: " + ", ".join(f"{n}번" for n in unreadable[:8]))
-    implemented = {rule.item_prefix for rule in rules}
     return {
         "module_code": context.module_code,
         "inputs": {"manuscript": str(context.manuscript.path), "plan": str(context.plan.path) if context.plan else None},
@@ -51,8 +51,7 @@ def _diagnostics(context: ReviewContext, rules: Sequence[Rule]) -> dict:
         "counts": {"entries": len(context.entries), "citations": len(context.citations),
                    "literature_citations": sum(1 for c in context.citations if c["literature"])},
         "reference_section": {"있음": found.get("있음"), "근거": found.get("근거"), "k": found.get("k"), "end": found.get("end")},
-        "implemented": sorted(implemented),
-        "not_implemented": [item for item in ALL_ITEM_IDS if item not in implemented],
+        **coverage(rules, ALL_ITEM_IDS),
         "warnings": warnings,
     }
 

@@ -98,3 +98,17 @@ def flatten(checklist: Iterable[dict]) -> list[dict]:
                 }
             )
     return findings
+
+
+def actual_sections(value, *, front: int | None = None, body: int | None = None):
+    """결과(문자열·dict·list)의 'section0/section1' 표기를 실제 입력 구역 번호로 바꾼다.
+    엔진은 구역 0 = 앞부분, 구역 1 = 본문으로 적고, 설정으로 다른 구역을 받았을 때만 이 함수가 표기를 맞춘다.
+    front/body가 None이면 그 표기는 그대로 둔다."""
+    if isinstance(value, str):
+        actual = {"0": front, "1": body}
+        return re.sub(r"section([01])\b", lambda m: m[0] if actual[m[1]] is None else f"section{actual[m[1]]}", value)
+    if isinstance(value, dict):
+        return {k: actual_sections(v, front=front, body=body) for k, v in value.items()}
+    if isinstance(value, list):
+        return [actual_sections(v, front=front, body=body) for v in value]
+    return value
