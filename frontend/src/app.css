@@ -320,7 +320,7 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .page-alert {
   display: flex; align-items: flex-start; gap: var(--krds-gap-3);
   margin-top: var(--krds-gap-5); padding: var(--krds-padding-5) var(--krds-padding-6);
-  border-left: 0.3rem solid; border-radius: 0 var(--krds-radius-medium1) var(--krds-radius-medium1) 0;
+  border: var(--krds-light-border-width-static-regular) solid; border-radius: var(--krds-radius-medium2);   /* KRDS 상자 규격: 사방 1px 테두리 + 같은 모서리(업로드 칸·요약 칸과 같음). 왼쪽 굵은 선은 KRDS에 없는 모양이라 쓰지 않는다 */
   font-size: var(--krds-pc-font-size-body-small); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .page-alert .svg-icon { flex: none; width: var(--krds-icon--size-medium); height: var(--krds-icon--size-medium); margin-top: 0.1em; background-color: currentColor;
@@ -398,12 +398,19 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 /* 실행 바 — 패널 안에서 화면 아래에 붙는다(sticky). 왼쪽 진행 수, 오른쪽 주 버튼 */
 .upscale-bar {
   position: sticky; bottom: 0; z-index: 5;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-4);
   margin-top: var(--krds-gap-7); padding: var(--krds-padding-5) 0;
   border-top: 1px solid var(--krds-light-color-border-gray-light);
   background: var(--krds-light-color-background-white);
 }
+.upscale-bar .bar-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-4); }
+.upscale-bar .page-alert { margin: 0 0 var(--krds-gap-4); }
 .upscale-bar .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-medium); }
 /* 맨 위로 버튼이 실행 바의 버튼을 가리지 않게 바 위로 올린다 */
-.upscale-page .krds-btn-top { bottom: calc(var(--krds-btn-top--offset) + 8rem); }
-.upscale-bar .bar-actions { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3); }
+.upscale-page .krds-btn-top { bottom: calc(var(--krds-btn-top--offset) + 16rem); }   /* 바 안에 알림이 한 줄 더 떠도 가리지 않는 높이 */
+/* 버튼 묶음은 줄어들지 않는다 — 폭이 모자라면 바가 줄바꿈해 버튼 묶음이 통째로 아랫줄로 간다(버튼끼리 겹치지 않게) */
+.upscale-bar .bar-actions { flex: none; display: flex; flex-wrap: nowrap; gap: var(--krds-gap-3); max-width: 100%; }
+.upscale-bar .bar-actions .krds-btn { flex: none; min-width: max-content; white-space: nowrap; }
+@media (max-width: 599px) {
+  .upscale-bar .bar-actions { flex: 1 1 100%; flex-wrap: wrap; }
+  .upscale-bar .bar-actions .krds-btn { flex: 1 1 100%; min-width: 0; white-space: normal; }
+}

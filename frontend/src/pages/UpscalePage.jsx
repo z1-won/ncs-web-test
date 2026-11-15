@@ -41,8 +41,9 @@ export default function UpscalePage() {
     <main id="container" className="inner page upscale-page">
       <h1 className="page-title">업스케일링</h1>
       <p className="page-desc">
-        원고(.hwpx)를 올리면 쪽에 출력되는 크기에 비해 해상도가 낮은 그림을 찾아 보여 줍니다. 그림을 골라 한 장씩 키우고,
-        결과 그림이나 그 그림들을 같은 자리에 넣은 제안본 hwpx를 내려받습니다. 원고 본문은 바꾸지 않습니다.
+        원고(.hwpx)를 올리면 쪽에 출력되는 크기에 비해 해상도가 낮은 그림을 찾아 보여 줍니다. 그림을 골라 키운 뒤,
+        그 그림만 같은 자리에 바꿔 넣은 제안본 hwpx를 내려받습니다. 제안본은 그림 화질만 다르고 글·표와 그림의 크기·위치는 원고와 같습니다.
+        올린 원고 파일은 바뀌지 않습니다.
       </p>
 
       <div className="fieldset review-form">

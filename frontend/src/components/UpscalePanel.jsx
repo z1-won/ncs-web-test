@@ -278,11 +278,13 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
         </>
       )}
 
-      {error && <PageAlert kind="danger">{error}</PageAlert>}
-      {notice && !error && <PageAlert kind="success">{notice}</PageAlert>}
-      {/* 실행 바 — 목록이 길어도 화면 아래에 붙어 있다. 왼쪽 진행 상황, 오른쪽 선택 실행 → 제안본 */}
+      {/* 실행 바 — 목록이 길어도 화면 아래에 붙어 있다. 실행 결과 알림도 바 안에 둬 목록 어디에 있든 보인다. 왼쪽 진행 상황, 오른쪽 선택 실행 → 제안본 */}
+      {pictures.length === 0 && error && <PageAlert kind="danger">{error}</PageAlert>}
       {pictures.length > 0 && (
         <div className="upscale-bar">
+          {error && <PageAlert kind="danger">{error}</PageAlert>}
+          {notice && !error && <PageAlert kind="success">{notice}</PageAlert>}
+          <div className="bar-row">
           <span className="meta" role="status">
             {batch ? <>업스케일 중 <strong>{batch.done + 1}</strong> / {batch.total}장</>
               : <>선택 <strong>{picked.size}</strong>장 · 업스케일 완료 <strong>{ready}</strong> / {pictures.length}개</>}
@@ -297,6 +299,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
                     title="업스케일한 그림만 원고의 같은 자리에 넣은 사본(hwpx). 본문·그림 크기·위치는 그대로">
               {busy === "proposal" ? "만드는 중…" : `제안본 hwpx 받기 (그림 ${ready}장)`}
             </button>
+          </div>
           </div>
         </div>
       )}
