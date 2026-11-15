@@ -354,12 +354,9 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .upscale-card {
   padding: var(--krds-padding-6);
   border: var(--krds-light-border-width-static-regular) solid var(--krds-light-color-divider-gray-light);
-  border-left: 4px solid var(--krds-light-color-divider-gray-light);
   border-radius: var(--krds-radius-medium2);
   background: var(--krds-light-color-background-white);
 }
-.upscale-card.is-done { border-left-color: var(--krds-light-color-border-success); }
-.upscale-card.is-failed { border-left-color: var(--krds-light-color-border-danger); }
 .upscale-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--krds-gap-3); }
 .upscale-card .meta { margin: var(--krds-gap-2) 0 var(--krds-gap-4); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
 .upscale-pair { display: flex; flex-wrap: wrap; gap: var(--krds-gap-5); }
