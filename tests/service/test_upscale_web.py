@@ -113,7 +113,8 @@ class UpscaleWebTests(unittest.TestCase):
         body = listing.json()
         self.assertEqual([p["bin_id"] for p in body["pictures"]], ["image1"])      # 300 DPI인 image2는 대상 아님
         first = body["pictures"][0]
-        self.assertEqual((first["dpi"], first["grade"], first["scale"], first["caption"]), (100, "X", 2, "[그림 1-1] 시험 도표"))
+        self.assertEqual((first["dpi"], first["grade"], first["scale"], first["caption"]), (100, "X", 4, "[그림 1-1] 시험 도표"))   # 필요 x3 → x2로 모자라 x4
+        self.assertTrue(first["reaches_target"])
         self.assertIsNone(first["upscaled"])
         self.assertTrue(body["engine"]["available"])
 
@@ -129,15 +130,15 @@ class UpscaleWebTests(unittest.TestCase):
         self.assertEqual(done.status_code, 200, done.text)
         info = done.json()
         self.assertEqual((info["status"], info["out_px"], info["out_dpi"], info["new_href"]),
-                         ("완료", [400, 200], 200, "BinData/image1.png"))
-        self.assertIn("목표 DPI에 못 미침", info["note"])                             # 필요 x3인데 x2까지만
+                         ("완료", [600, 300], 300, "BinData/image1.png"))            # x4로 키운 뒤 필요한 x3 크기로 줄임
+        self.assertEqual((info["scale"], info["target_dpi"], info["note"]), (4, 300, ""))
 
         result = self.client.get(self.url("/image1/upscaled"), params={"download": "LM_[그림 1-1] 시험/도표_업스케일"})
         self.assertEqual(result.headers["content-type"], "image/png")
         self.assertIn("attachment", result.headers["content-disposition"])
         self.assertEqual(saved_name(result), "LM_[그림 1-1] 시험_도표_업스케일.png")   # '/'는 '_'로, 확장자는 결과 형식
         with Image.open(io.BytesIO(result.content)) as image:
-            self.assertEqual(image.size, (400, 200))
+            self.assertEqual(image.size, (600, 300))
 
         again = self.client.get(self.url()).json()["pictures"][0]["upscaled"]        # 목록에 결과가 남는다
         self.assertEqual(again["status"], "완료")
@@ -154,6 +155,20 @@ class UpscaleWebTests(unittest.TestCase):
             self.assertIn('href="BinData/image1.png" media-type="image/png"', z.read("Contents/content.hpf").decode())
             with zipfile.ZipFile(MANUSCRIPT) as before:
                 self.assertEqual(z.read("Contents/header.xml"), before.read("Contents/header.xml"))
+
+    def test_result_of_another_target_is_not_done(self):
+        """150 기준으로 키운 그림은 300 기준의 '완료'가 아니다 — 목록에서 빠지고 제안본에도 들어가지 않는다."""
+        done = self.client.post(self.url("/image1/upscale?target_dpi=150")).json()
+        self.assertEqual((done["status"], done["scale"], done["out_dpi"], done["target_dpi"]), ("완료", 2, 150, 150))
+        low = self.client.get(self.url("?target_dpi=150")).json()["pictures"][0]
+        self.assertEqual(low["upscaled"]["out_dpi"], 150)
+        self.assertIsNone(self.client.get(self.url()).json()["pictures"][0]["upscaled"])          # 기본 300 기준에서는 미완료
+        proposal = f"/api/uploads/{self.token}/proposal"
+        self.assertEqual(self.client.post(proposal, data={"target_dpi": "300"}).status_code, 400)
+        self.assertEqual(self.client.post(proposal, data={"target_dpi": "150"}).status_code, 200)
+        again = self.client.post(self.url("/image1/upscale")).json()                              # 300으로 다시 키우면 덮어쓴다
+        self.assertEqual((again["out_dpi"], again["target_dpi"]), (300, 300))
+        self.assertEqual(self.client.post(proposal, data={"target_dpi": "300"}).status_code, 200)
 
     def test_errors_are_messages(self):
         self.assertEqual(self.client.get("/api/uploads/nope/pictures").status_code, 400)

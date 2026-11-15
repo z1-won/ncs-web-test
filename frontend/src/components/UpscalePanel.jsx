@@ -21,7 +21,7 @@ function dpiTone(dpi, target, min) {
   return dpi >= target ? "bg-light-success" : dpi >= min ? "bg-light-warning" : "bg-light-danger";
 }
 
-// targetDpi: 해상도 기준(150/300). 바뀌면 부모가 key를 바꿔 목록을 새로 읽는다(이미 업스케일한 결과는 서버에 남아 다시 보인다)
+// targetDpi: 해상도 기준(150/300). 바뀌면 부모가 key를 바꿔 목록을 새로 읽는다(같은 기준으로 업스케일한 결과만 다시 보인다 — 다른 기준의 결과는 다시 키워야 한다)
 export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
   const [state, setState] = useState({ status: "loading" });   // { status: loading|ready|error, data, error }
   const [results, setResults] = useState({});                   // bin_id → 업스케일 결과 정보(서버 JSON)
@@ -74,6 +74,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
   const base = moduleCode || fileStem(manuscriptName);
   const engine = data.engine || {};
   const ready = pictures.filter(isDone).length;
+  const slow = pictures.filter((p) => p.scale >= 4).length;   // 4배로 키울 그림 수
   const low = pictures.filter((p) => p.dpi < data.min_dpi).length;      // 최소 기준에도 못 미침
   const mid = pictures.length - low;                                    // 최소 기준 이상, 목표 미만
   const { 그림: total = 0, "그림 파일": fileCount = 0 } = data.counts;
@@ -136,7 +137,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
     setBusy("proposal");
     setError(null);
     setNotice(null);
-    const { ok, error: message, summary } = await api.pictures.proposal(token, moduleCode, `${fileStem(manuscriptName)}_업스케일제안.hwpx`);
+    const { ok, error: message, summary } = await api.pictures.proposal(token, moduleCode, `${fileStem(manuscriptName)}_업스케일제안.hwpx`, targetDpi);
     setBusy(null);
     if (!ok) setError(message);
     else if (summary) setNotice(`업스케일한 그림 ${summary["바꾼 그림"]}장을 원고의 같은 자리에 넣은 제안본을 내려받았습니다. 한글에서 열어 그림을 확인하세요.`);
@@ -171,6 +172,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
       </dl>
       <ul className="krds-info-list dash upscale-notes">
         <li>기준은 쪽에 출력되는 크기에서의 실효 해상도 {data.target_dpi} DPI입니다. 아래 목록은 원고에 그림이 나오는 순서입니다.</li>
+        <li>2배로 기준에 닿지 않는 그림은 4배로 키웁니다. 4배는 한 장에 약 4배 오래 걸립니다{slow ? ` (이 원고는 ${slow}장)` : ""}.</li>
         <li>업스케일은 화질만 올립니다. 모델이 글자·선을 바꿀 수 있으니 줄을 펼쳐 결과를 원본과 나란히 놓고 확인하세요.</li>
       </ul>
       {!engine.available && <PageAlert kind="danger">업스케일 엔진을 쓸 수 없습니다. 그림 목록과 원본 보기만 됩니다.{"\n"}{engine.problem}</PageAlert>}
@@ -249,7 +251,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                         <div className="accordion-body">
                           <p className="meta">
                             {p.px[0]}×{p.px[1]}px · 출력 {p.mm[0]}×{p.mm[1]}mm · {p.format} · {p.places.join(", ")}
-                            {" · "}목표까지 {p.need}배 필요, {p.scale}배로 키움{p.reaches_target ? "" : " (목표 미달)"}
+                            {" · "}목표까지 {p.need}배 필요, {p.scale}배로 키움{p.scale >= 4 ? " (2배보다 약 4배 오래 걸림)" : ""}{p.reaches_target ? "" : " (목표 미달)"}
                           </p>
                           <div className="upscale-pair">
                             <figure>

@@ -24,3 +24,6 @@ scripts/.stdict_debug.xml
 
 # 하네스 중간 산출물(사례 분석·배치 결과에 원고 문구가 들어 있음 — git 제외)
 /_workspace*/
+
+# 업스케일 엔진 실행 파일(waifu2x-ncnn-vulkan 등 — 각자 내려받아 둠, git 제외)
+/tools/

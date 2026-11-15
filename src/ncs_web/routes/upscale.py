@@ -78,7 +78,7 @@ def register(app: FastAPI, services: Services) -> None:
 
     @app.post("/api/uploads/{token}/pictures/{bin_id}/upscale")
     def picture_upscale(token: str, bin_id: str, target_dpi: int = Query(300, ge=50, le=1200)) -> Response:
-        """그림 하나를 업스케일(20~40초). GPU가 하나라 다른 업스케일이 돌고 있으면 끝날 때까지 기다린다."""
+        """그림 하나를 업스케일(x2 20~40초, x4는 약 4배). GPU가 하나라 다른 업스케일이 돌고 있으면 끝날 때까지 기다린다."""
         def action():
             from ncs_upscale import service
             manuscript, work = _picture_upload(token)
@@ -103,12 +103,13 @@ def register(app: FastAPI, services: Services) -> None:
         return _picture_call(action)
 
     @app.post("/api/uploads/{token}/proposal", responses={400: {"model": ErrorResponse}})
-    def picture_proposal(token: str, module_code: Annotated[str, Form()] = "") -> Response:
+    def picture_proposal(token: str, module_code: Annotated[str, Form()] = "",
+                         target_dpi: Annotated[int | None, Form(ge=50, le=1200)] = None) -> Response:
         """업스케일에 성공한 그림만 같은 자리에 넣은 원고 사본(hwpx). 본문·그림 크기·위치는 그대로."""
         def action():
             from ncs_upscale import service
             manuscript, work = _picture_upload(token)
-            content, summary = service.build_proposal(manuscript, work)
+            content, summary = service.build_proposal(manuscript, work, target_dpi=target_dpi)
             filename = f"{manuscript.stem}_업스케일제안.hwpx"
             return Response(content, media_type="application/hwp+zip", headers={
                 "Content-Disposition": f"attachment; filename=upscaled_{quote(module_code or 'manuscript')}.hwpx; filename*=UTF-8''{quote(filename)}",

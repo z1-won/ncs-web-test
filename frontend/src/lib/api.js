@@ -118,8 +118,9 @@ export const api = {
     // v: 다시 업스케일했을 때 브라우저가 예전 그림을 쓰지 않게 붙이는 값
     upscaledUrl: (token, binId, v) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?v=${v || 0}`,
     downloadUrl: (token, binId, name) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?download=${encodeURIComponent(name)}`,
-    proposal: (token, moduleCode, filename) =>
-      download(`/api/uploads/${token}/proposal`, multipart({ module_code: moduleCode || "" }), filename),
+    // targetDpi: 이 기준으로 키운 그림만 제안본에 넣는다(화면의 '완료'와 같게)
+    proposal: (token, moduleCode, filename, targetDpi) =>
+      download(`/api/uploads/${token}/proposal`, multipart({ module_code: moduleCode || "", target_dpi: targetDpi ? String(targetDpi) : undefined }), filename),
   },
   groups: {
     list: () => request("/api/groups"),

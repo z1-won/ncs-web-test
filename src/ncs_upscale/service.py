@@ -24,7 +24,7 @@ from ncs_core.pictures import label, low_dpi, picture_records
 from .engine import DEFAULT_ENGINE, ENGINES
 from .pipeline import DEFAULT_TARGET_DPI, Job, _rgb, grade, plan, upscale, write_hwpx
 
-MAX_SCALE = 2                 # 화면에서는 x2만(한 장 20~40초). x4는 4배 느려 요청 하나로 기다리기 어렵다
+MAX_SCALE = 4                 # x2로 기준에 닿으면 x2(한 장 20~40초), 모자라면 x4(x2를 두 번 — 약 4배 오래 걸림)
 _GPU = threading.Lock()
 _CACHE: dict[tuple[str, float], tuple[list[dict], dict]] = {}
 _CACHE_LOCK = threading.Lock()
@@ -83,7 +83,8 @@ def list_pictures(manuscript: Path, work: Path, *, target_dpi: int = DEFAULT_TAR
         min_dpi = low_dpi(target_dpi)   # 화면의 빨강/노랑 경계 — 기준을 150으로 고르면 100
     records, binaries = _records(manuscript)
     jobs, skipped = plan(records, binaries, ENGINES[DEFAULT_ENGINE], target_dpi=target_dpi, max_scale=MAX_SCALE)
-    done = {item["bin_id"]: item for item in _results(work)}
+    # 다른 해상도 기준으로 키운 결과는 이 기준의 '완료'가 아니다(150으로 키운 그림은 300에 못 미친다) — 다시 업스케일해야 한다
+    done = {item["bin_id"]: item for item in _results(work, target_dpi)}
     pictures = []
     # 원고를 넘겨 보며 찾을 수 있게 그림이 나오는 순서(구역 → 문단)로. hwpx에는 쪽 번호가 없어 문단 위치로 줄 세운다
     for job in sorted(jobs, key=lambda j: min((u["section"], u["para"]) for u in j.uses)):
@@ -124,7 +125,7 @@ def upscale_one(manuscript: Path, bin_id: str, work: Path, *, target_dpi: int = 
         raise PictureError(f"그림 {bin_id}는 이미 {target_dpi} DPI 이상이거나 형식을 읽지 못해 업스케일 대상이 아닙니다")
     with _GPU:
         upscale([job], ENGINES[DEFAULT_ENGINE], tools=tools, runner=runner, progress=lambda _: None)
-    info = {"bin_id": job.bin_id, "status": job.status, "note": job.note, "href": job.href, "new_href": job.new_href,
+    info = {"bin_id": job.bin_id, "target_dpi": target_dpi, "status": job.status, "note": job.note, "href": job.href, "new_href": job.new_href,
             "media_type": job.media_type, "px": list(job.px), "out_px": list(job.out_px), "dpi": job.dpi,
             "out_dpi": job.out_dpi, "scale": job.scale, "need": round(job.need, 2), "reaches_target": job.reaches_target,
             "diff": None if job.diff is None else round(job.diff, 1),
@@ -150,16 +151,21 @@ def upscaled_file(work: Path, bin_id: str) -> tuple[bytes, str, str]:
     return data_path.read_bytes(), info["media_type"] or "image/png", ext
 
 
-def _results(work: Path) -> list[dict]:
+def _results(work: Path, target_dpi: int | None = None) -> list[dict]:
+    """work 폴더의 업스케일 결과 정보. target_dpi를 주면 그 기준으로 키운 결과만(기준 기록이 없는 예전 결과는 300으로 본다)."""
     if not work.is_dir():
         return []
-    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(work.glob("*.json"))]
+    results = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(work.glob("*.json"))]
+    if target_dpi is None:
+        return results
+    return [r for r in results if r.get("target_dpi", DEFAULT_TARGET_DPI) == target_dpi]
 
 
-def build_proposal(manuscript: Path, work: Path) -> tuple[bytes, dict]:
-    """업스케일에 성공한 그림만 같은 자리에 넣은 제안본 hwpx와 요약 {'바꾼 그림': n, '그림': [bin_id…]}."""
+def build_proposal(manuscript: Path, work: Path, *, target_dpi: int | None = None) -> tuple[bytes, dict]:
+    """업스케일에 성공한 그림만 같은 자리에 넣은 제안본 hwpx와 요약 {'바꾼 그림': n, '그림': [bin_id…]}.
+    target_dpi를 주면 그 기준으로 키운 그림만 넣는다(화면이 '완료'로 센 그림과 같게)."""
     jobs = []
-    for info in _results(work):
+    for info in _results(work, target_dpi):
         data_path = work / f"{_safe(info['bin_id'])}.bin"
         if info["status"] != "완료" or not data_path.exists():
             continue

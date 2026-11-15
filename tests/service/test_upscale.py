@@ -179,6 +179,26 @@ class UpscaleAndWriteTests(unittest.TestCase):
                     engine.run(Path(tools), Path(tools), 2, Path(tools), timeout=5)
             self.assertEqual(run.call_args.kwargs["timeout"], 5)
 
+    def test_engine_file_name_follows_the_operating_system(self):
+        """Windows는 '.exe', macOS·Linux는 확장자 없는 이름을 먼저 찾고 '.exe' 이름도 받는다. 기본 위치는 저장소 안 tools/가 먼저."""
+        import tempfile
+        from ncs_upscale import engine as module
+
+        self.assertEqual(module.exe_names("waifu2x-ncnn-vulkan.exe", "nt"), ("waifu2x-ncnn-vulkan.exe",))
+        self.assertEqual(module.exe_names("waifu2x-ncnn-vulkan.exe", "posix"), ("waifu2x-ncnn-vulkan", "waifu2x-ncnn-vulkan.exe"))
+        self.assertEqual(module.DEFAULT_TOOLS[0], Path(module.__file__).resolve().parents[2] / "tools")
+        engine = ENGINES["waifu2x-photo"]
+        with tempfile.TemporaryDirectory() as tools, mock.patch.object(module.os, "name", "posix"):
+            folder = Path(tools) / engine.folder / "waifu2x-macos"
+            folder.mkdir(parents=True)
+            with self.assertRaises(FileNotFoundError) as caught:
+                engine.find_exe(Path(tools))
+            self.assertIn("waifu2x-ncnn-vulkan 또는 waifu2x-ncnn-vulkan.exe", str(caught.exception))
+            (folder / "waifu2x-ncnn-vulkan.exe").write_bytes(b"")
+            self.assertEqual(engine.find_exe(Path(tools)).name, "waifu2x-ncnn-vulkan.exe")
+            (folder / "waifu2x-ncnn-vulkan").write_bytes(b"")
+            self.assertEqual(engine.find_exe(Path(tools)).name, "waifu2x-ncnn-vulkan")
+
     def test_engine_error_marks_jobs_failed(self):
         def broken(src, out, scale):
             raise RuntimeError("Vulkan 장치 없음")
