@@ -32,7 +32,7 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
   { id: "review-history", label: "검수 이력" },
 ];
 
-/* 페이지 메뉴 — 라우트 단위. 화면이 둘(원고 검수 / 개발계획서 작성)이라 1Depth 링크형 */
+/* 페이지 메뉴 — 라우트 단위. 화면이 둘(원고 검수 / 개발계획서 작성)이라 1Depth 링크형. 메인 메뉴에는 이것만 두고, 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
 export const PAGES = [
   { path: "/", label: "원고 검수" },
   { path: "/plan", label: "개발계획서 작성" },
@@ -79,7 +79,7 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
               </div>
             </div>
           </div>
-          {/* 메인 메뉴 — KRDS .krds-main-menu, 1Depth 링크형(.is-link). 앞은 페이지 이동(라우터), 뒤는 현재 페이지 안 영역 이동(앵커) */}
+          {/* 메인 메뉴 — KRDS .krds-main-menu, 1Depth 링크형(.is-link). 페이지 이동만 두어 어느 화면에서도 같은 항목이 보이게 한다(#10) */}
           <nav className="krds-main-menu" aria-label="주요 영역">
             <div className="inner">
               <ul className="gnb-menu">
@@ -89,15 +89,24 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
                           aria-current={location.pathname === page.path ? "page" : undefined}>{page.label}</Link>
                   </li>
                 ))}
-                {items.map((item) => (
-                  <li key={item.id}>
-                    <a href={`#${item.id}`} className={`gnb-main-trigger is-link${current === item.id ? " active" : ""}`}
-                       aria-current={current === item.id ? "location" : undefined} onClick={(e) => go(e, item.id)}>{item.label}</a>
-                  </li>
-                ))}
               </ul>
             </div>
           </nav>
+          {/* 하위 메뉴 — 현재 페이지 안 영역 이동(앵커). 페이지마다 항목이 다르므로 메인 메뉴와 분리해 한 단 아래 둔다. 영역이 없는 페이지(개인정보처리방침)는 생략 */}
+          {items.length > 0 && (
+            <nav className="page-subnav" aria-label="현재 페이지 영역">
+              <div className="inner">
+                <ul className="subnav-menu">
+                  {items.map((item) => (
+                    <li key={item.id}>
+                      <a href={`#${item.id}`} className={`subnav-trigger${current === item.id ? " active" : ""}`}
+                         aria-current={current === item.id ? "location" : undefined} onClick={(e) => go(e, item.id)}>{item.label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </nav>
+          )}
         </div>
       </header>
     </>
