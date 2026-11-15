@@ -277,6 +277,9 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .history-table td.when span { display: block; white-space: nowrap; }
 .history-table td.when span:first-child { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }   /* 날짜는 흐리게, 시각이 먼저 읽히게 */
 .history-table td.when span:last-child { color: var(--krds-light-color-text-basic); }
+.history-table .col-when { width: 13rem; }      /* 날짜·시각 두 줄('2026. 11. 15.' / '오후 12:34:56')이 들어가는 폭 */
+.history-table .col-check { width: 24rem; }     /* 가장 긴 글 '전체 실행 — 구성요소 10/10'이 한 줄에 들어가는 폭. 남는 폭은 모듈 칸이 갖는다 */
+.history-table td.module { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* 한 줄로. 칸보다 긴 이름만 말줄임 — 전체는 title로 */
 .history-table .col-verdict { width: 9.6rem; }
 .history-table .col-action { width: 11rem; }
 /* 배지·버튼은 한 덩어리 — 칸이 좁아져도 글자가 줄바꿈되지 않게 */

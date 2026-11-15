@@ -342,18 +342,18 @@ export default function App() {
       {history && (
         <section id="review-history" className="nav-anchor history">
           <div className="section-head">
-            <h2 className="section-title">검수 이력 <span className="meta">({history.length}건{history.length > HISTORY_PAGE ? ` · ${historyPage}/${Math.ceil(history.length / HISTORY_PAGE)}쪽` : ""})</span></h2>
+            <h2 className="section-title">검수 이력</h2>
           </div>
           {history.length === 0 ? <p className="empty">저장된 검수 이력이 없습니다.</p> : (
             <div className="krds-table-wrap" id="history-table">
               <table className="tbl col data history-table">
                 <caption>최근 검수 실행</caption>
                 {/* 열 너비 고정: '더 보기'로 행이 늘어도 칸 너비가 다시 계산되어 흔들리지 않게 */}
-                {/* 판정·열기·삭제는 내용 폭이 정해져 있어 rem으로 고정(%면 창이 좁아질 때 '부적합' 배지·버튼이 줄바꿈됨). 나머지는 비율 */}
+                {/* 실행 시각·모듈·판정·열기·삭제는 내용 폭이 정해져 있어 rem으로 고정(%면 창이 좁아질 때 모듈 코드·배지·버튼이 줄바꿈됨). 남는 폭은 모두 모듈 칸 */}
                 <colgroup>
-                  <col style={{ width: "18%" }} />
-                  <col style={{ width: "18%" }} />
+                  <col className="col-when" />
                   <col />
+                  <col className="col-check" />
                   <col className="col-verdict" />
                   <col className="col-action" />
                   <col className="col-action" />
@@ -362,7 +362,7 @@ export default function App() {
                 <tbody>{history.slice((historyPage - 1) * HISTORY_PAGE, historyPage * HISTORY_PAGE).map((row) => (
                   <tr key={row.id} className={row.id === result?.id || row.id === allRun?.group ? "is-open" : undefined}>
                     <td className="when">{formatDateLines(row.created_at).map((line, i) => <span key={i}>{line}</span>)}</td>
-                    <td>{row.module_code}</td>
+                    <td className="module" title={row.module_code}>{row.module_code}</td>
                     <td>{row.kind === "group"
                       ? `전체 실행 — 구성요소 ${row.checks.filter((c) => reviewChecks.some((item) => item.value === c)).length}/${reviewChecks.length}`
                       : checks.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
