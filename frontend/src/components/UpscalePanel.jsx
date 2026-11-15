@@ -1,9 +1,11 @@
 // 그림 해상도·업스케일: 원고(hwpx)의 목표 DPI 미만 그림을 원본 그대로 보여 주고, 사람이 고른 그림만 한 장씩 업스케일한다.
-// [업스케일링] → 서버가 20~40초 동안 키움 → 원본·결과를 나란히 보여 주고 결과 파일을 내려받는다.
+// [업스케일링] → 서버가 그림을 키움(엔진·GPU에 따라 수 초~수십 초) → 원본·결과를 나란히 보여 주고 결과 파일을 내려받는다.
 // 업스케일한 그림이 있으면 [제안본 hwpx 받기]로 그 그림들만 같은 자리에 넣은 원고 사본을 받는다(본문·그림 크기·위치는 그대로).
 import React, { useEffect, useState } from "react";
 
 import { api } from "../lib/api.js";
+import { Spinner } from "./Badge.jsx";
+import { PageAlert } from "./PageAlert.jsx";
 
 const GRADE = { O: "bg-light-success", "△": "bg-light-warning", X: "bg-light-danger" };
 
@@ -69,33 +71,55 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
   }
 
   if (state.status === "loading") {
-    return <section className="upscale-panel"><h2 className="section-title">그림 해상도·업스케일</h2><p className="empty">그림을 읽는 중…</p></section>;
+    return <section className="upscale-panel"><Spinner label="원고의 그림을 읽는 중" /></section>;
   }
   if (state.status === "error") {
-    return (
-      <section className="upscale-panel">
-        <h2 className="section-title">그림 해상도·업스케일</h2>
-        <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{state.error}</p>
-      </section>
-    );
+    return <section className="upscale-panel"><PageAlert kind="danger">{state.error}</PageAlert></section>;
   }
 
-  const { data } = state;
+  const data = state.data;
   const engine = data.engine || {};
   const ready = Object.values(results).filter((r) => r.status === "완료").length;
+  const low = data.pictures.filter((p) => p.dpi < data.min_dpi).length;      // 최소 기준에도 못 미침
+  const mid = data.pictures.length - low;                                    // 최소 기준 이상, 목표 미만
+  const { 그림: total = 0, "그림 파일": fileCount = 0, 건너뜀: skippedCount = 0 } = data.counts;
   return (
-    <section className="upscale-panel" id="upscale">
-      <div className="section-head">
-        <h2 className="section-title">그림 해상도·업스케일 <span className="meta">({data.counts.대상}장 / 그림 {data.counts.그림}개)</span></h2>
-      </div>
-      <p className="page-desc">
-        쪽에 출력되는 크기 기준 실효 DPI가 {data.target_dpi} 미만인 그림입니다(낮은 순, {data.min_dpi} 미만 X · 그 이상 △).
-        판정은 원본 기준이며, 업스케일은 화질만 올리고 원래 그림의 저작권은 그대로 남습니다.
-        업스케일 모델이 글자·선을 바꿀 수 있으니 결과를 원본과 나란히 놓고 확인하세요. 한 장에 20~40초 걸립니다.
-      </p>
-      {!engine.available && (
-        <p className="form-hint-invalid" role="alert">업스케일 엔진을 쓸 수 없습니다: {engine.problem}</p>
+    <section className="upscale-panel">
+      <h2 className="section-title">해상도 점검 결과</h2>
+      {/* 한눈에: 원고 그림 수 → 기준 미달 수(등급별) → 업스케일 진행. 숫자를 먼저, 설명은 그 아래 작은 글씨로 */}
+      <dl className="upscale-summary">
+        <div>
+          <dt>원고의 그림</dt>
+          <dd><strong>{total}</strong>개</dd>
+          <dd className="meta">{fileCount !== total ? `같은 그림을 여러 번 쓴 곳을 묶으면 그림 파일 ${fileCount}개` : "원고에 넣은 그림 전체"}</dd>
+        </div>
+        <div>
+          <dt>해상도 기준 미달</dt>
+          <dd><strong>{data.pictures.length}</strong>개</dd>
+          <dd className="meta">
+            {data.pictures.length === 0 ? `모두 ${data.target_dpi} DPI 이상`
+              : <>
+                  <span className="krds-badge bg-light-danger">{data.min_dpi} DPI 미만 {low}</span>{" "}
+                  <span className="krds-badge bg-light-warning">{data.min_dpi}~{data.target_dpi - 1} DPI {mid}</span>
+                </>}
+          </dd>
+        </div>
+        <div>
+          <dt>업스케일 완료</dt>
+          <dd><strong>{ready}</strong> / {data.pictures.length}개</dd>
+          <dd className="meta">완료한 그림만 제안본에 들어갑니다</dd>
+        </div>
+      </dl>
+      <ul className="krds-info-list dash upscale-notes">
+        <li>기준은 쪽에 출력되는 크기에서의 실효 해상도 {data.target_dpi} DPI입니다. 아래 목록은 해상도가 낮은 순서입니다.</li>
+        <li>업스케일은 화질만 올립니다. 모델이 글자·선을 바꿀 수 있으니 결과를 원본과 나란히 놓고 확인하세요.</li>
+      </ul>
+      {skippedCount > 0 && (
+        <PageAlert kind="info">
+          그림 {skippedCount}개는 읽지 못해 점검에서 빠졌습니다: {(data.skipped || []).map((s) => `${s.label}(${s.reason})`).join(", ")}
+        </PageAlert>
       )}
+      {!engine.available && <PageAlert kind="danger">업스케일 엔진을 쓸 수 없습니다. 그림 목록과 원본 보기만 됩니다.{"\n"}{engine.problem}</PageAlert>}
       {data.pictures.length === 0 && <p className="empty">{data.target_dpi} DPI 미만 그림이 없습니다.</p>}
 
       <ul className="upscale-list">
@@ -103,14 +127,14 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
           const result = results[p.bin_id];
           const running = busy === p.bin_id;
           return (
-            <li key={p.bin_id} className={`upscale-card${result?.status === "완료" ? " is-done" : result?.status === "실패" ? " is-failed" : ""}`}>
+            <li key={p.bin_id} className="upscale-card">
               <div className="upscale-head">
-                <strong>{p.label}</strong>
-                <span className={`krds-badge ${GRADE[p.grade] || "bg-light-gray"}`}>{p.grade} · {p.dpi} DPI</span>
+                <h3 className="upscale-title">{p.label}</h3>
+                <span className={`krds-badge ${GRADE[p.grade] || "bg-light-gray"}`}>{p.dpi} DPI</span>
               </div>
               <p className="meta">
                 {p.px[0]}×{p.px[1]}px · 출력 {p.mm[0]}×{p.mm[1]}mm · {p.format} · {p.places.join(", ")}
-                {" · "}필요 x{p.need} → x{p.scale}{p.reaches_target ? "" : " (목표 미달)"}
+                {" · "}목표까지 {p.need}배 필요, {p.scale}배로 키움{p.reaches_target ? "" : " (목표 미달)"}
               </p>
               <div className="upscale-pair">
                 <figure>
@@ -124,10 +148,10 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
                   </figure>
                 )}
               </div>
-              {result?.note && <p className={result.status === "실패" ? "form-hint-invalid" : "form-hint"}>{result.status === "실패" ? "실패: " : ""}{result.note}</p>}
+              {result?.note && <p className={`upscale-note${result.status === "실패" ? " failed" : ""}`}>{result.status === "실패" ? "실패: " : ""}{result.note}</p>}
               <div className="upscale-actions">
                 <button type="button" className="krds-btn small primary" disabled={!engine.available || busy !== null} onClick={() => upscale(p)}>
-                  {running ? "업스케일 중… (20~40초)" : result?.status === "완료" ? "다시 업스케일링" : "업스케일링"}
+                  {running ? "업스케일 중…" : result?.status === "완료" ? "다시 업스케일링" : "업스케일링"}
                 </button>
                 {result?.status === "완료" && (
                   <a className="krds-btn small tertiary" href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${p.label}_업스케일`)} download>
@@ -148,8 +172,8 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
           </button>
         </div>
       )}
-      {error && <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{error}</p>}
-      {notice && !error && <p className="form-hint-success" role="status">{notice}</p>}
+      {error && <PageAlert kind="danger">{error}</PageAlert>}
+      {notice && !error && <PageAlert kind="success">{notice}</PageAlert>}
     </section>
   );
 }

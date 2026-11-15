@@ -349,8 +349,26 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .plan-stage { display: flex; gap: 1.5rem; align-items: center; min-height: var(--krds-size-height-7, 3.5rem); }
 
 /* 그림 해상도·업스케일 (UpscalePanel) — 원본·결과를 나란히, 좁은 화면에서는 위아래로 */
-.upscale-panel { margin-top: var(--krds-gap-9); }
-.upscale-list { display: flex; flex-direction: column; gap: var(--krds-gap-5); margin: var(--krds-gap-5) 0 0; padding: 0; list-style: none; }
+.upscale-panel > .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); margin-top: var(--krds-gap-7); z-index: auto; }
+/* 요약 — 숫자 칸 셋(원고 그림 / 기준 미달 / 업스케일 완료). 업로드 칸(.review-form.fieldset)과 같은 테두리·모서리 */
+.upscale-summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: var(--krds-gap-5); margin: 0;
+}
+.upscale-summary > div {
+  padding: var(--krds-padding-6);
+  border: 1px solid var(--krds-light-color-border-gray-light);
+  border-radius: var(--krds-radius-medium2);
+  background: var(--krds-light-color-background-white);
+}
+.upscale-summary dt { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.upscale-summary dd { margin: var(--krds-gap-1) 0 0; font-size: var(--krds-pc-font-size-body-medium); }
+.upscale-summary dd strong { font-size: var(--krds-pc-font-size-heading-medium); font-weight: var(--krds-font-weight-bold); }
+.upscale-summary dd.meta { margin-top: var(--krds-gap-2); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.upscale-notes { margin-top: var(--krds-gap-5); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.upscale-title { margin: 0; font-size: var(--krds-pc-font-size-body-large); font-weight: var(--krds-font-weight-bold); overflow-wrap: anywhere; }
+.upscale-note { margin: var(--krds-gap-3) 0 0; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.upscale-note.failed { color: var(--krds-light-color-text-danger); }
+.upscale-list { display: flex; flex-direction: column; gap: var(--krds-gap-5); margin: var(--krds-gap-7) 0 0; padding: 0; list-style: none; }
 .upscale-card {
   padding: var(--krds-padding-6);
   border: var(--krds-light-border-width-static-regular) solid var(--krds-light-color-divider-gray-light);
@@ -361,6 +379,7 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .upscale-card .meta { margin: var(--krds-gap-2) 0 var(--krds-gap-4); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
 .upscale-pair { display: flex; flex-wrap: wrap; gap: var(--krds-gap-5); }
 .upscale-pair figure { flex: 1 1 28rem; min-width: 0; margin: 0; }
+@media (min-width: 768px) { .upscale-pair figure { max-width: calc(50% - var(--krds-gap-5) / 2); } }   /* 원본만 있을 때도 반 폭 — 결과가 옆에 붙어도 크기가 안 바뀐다 */
 .upscale-pair img { display: block; width: 100%; height: auto; border: 1px solid var(--krds-light-color-divider-gray-light); background: #fff; }
 .upscale-pair figcaption { margin-top: var(--krds-gap-1); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-xsmall); }
 .upscale-actions { display: flex; flex-wrap: wrap; gap: var(--krds-gap-2); margin-top: var(--krds-gap-4); }
