@@ -16,7 +16,8 @@ def _sections(c):
 
 DEFAULT_RULES = (
     # ①②③은 같은 내비게이터 묶음을 한 번 읽어 세 항목의 행을 함께 낸다.
-    Rule("navigator", "F02-필요지식-", lambda c: check_navigator(c.toc, c.overview, c.body)),
+    Rule("navigator", "F02-필요지식-", lambda c: check_navigator(c.toc, c.overview, c.body),
+         failure_item_ids=("F02-필요지식-①", "F02-필요지식-②", "F02-필요지식-③")),
     Rule("contents", "F02-필요지식-④", lambda c: check_contents(c.toc, c.overview, c.body, c.units)),
     Rule("goals", "F02-필요지식-⑤", lambda c: check_goals(c.plan_goals, c.units)),
     Rule("numbering", "F02-필요지식-⑥", lambda c: check_numbering(c.body, c.units, c.table_paragraphs, c.manuscript.section_numbers(c.config.body_section),
