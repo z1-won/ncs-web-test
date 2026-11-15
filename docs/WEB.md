@@ -6,7 +6,7 @@ FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다. **화면
 |---|---|
 | 화면(React·Vite·KRDS) | `frontend/` — 소스 `src/`, 빌드 결과 `dist/`(git 제외) |
 | 웹 의존성 고정 목록 | `requirements/web.txt`·`test.txt`·`dev.txt` — `pyproject.toml`의 `web`·`test` extra가 읽음 |
-| 서버(FastAPI) | `src/ncs_web/server.py` — 파일 업로드·요청 검증·HTTP 응답. 명령은 `ncs-web` |
+| 서버(FastAPI) | `src/ncs_web/` — `server.py`가 앱을 조립하고 기능별 경로는 `routes/`(review·history·export·plan·upscale). 명령은 `ncs-web` |
 | 검수 실행·저장 | `src/ncs_service/` |
 
 `src/ncs_core/`와 검수 패키지 10개는 웹 프레임워크 없이도 실행할 수 있습니다.

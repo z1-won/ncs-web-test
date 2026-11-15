@@ -12,7 +12,7 @@
 [사용자]  hwp/hwpx 원고 (+ 개발계획서)  ──업로드──▶  frontend (React + KRDS)
                                                       │  POST /api/review (check=position|toc|…)
                                                       ▼
-                                              ncs_web/server.py (FastAPI)
+                                              ncs_web (FastAPI: server.py + routes/)
                                                       │  ReviewRequest(paths, check, module_code)
                                                       ▼
                                    ncs_service: registry.ENGINES[check] → service.execute_review
@@ -45,7 +45,7 @@
 | 층 | 패키지 | 책임 | 의존 |
 |---|---|---|---|
 | 화면 | `frontend` | 업로드, 검수 종류 선택(KRDS 셀렉트, 라벨은 `/api/health`의 `engines`), 확인서·체크리스트·지적사항 표, 이력 조회·삭제 | HTTP만 |
-| HTTP | `ncs_web/server.py` | 파일 수신·임시 저장, 요청 검증, 응답 JSON, zip·확인서 내려주기, 이력 API | `ncs_service` |
+| HTTP | `ncs_web/` (`server.py` 조립 + `routes/` 기능별 경로) | 파일 수신·임시 저장, 요청 검증, 응답 JSON, zip·확인서 내려주기, 이력 API | `ncs_service` |
 | 조정 | `ncs_service` | 검수 종류 ↔ 엔진 연결(`registry`), 실행(`service`), 저장(`store`: 파일/PostgreSQL), 공용 CLI(`cli`), 내보내기(`export`), 메모 원고(`annotate`) | 엔진, `ncs_core` |
 | 엔진 10개 | `ncs_position` `ncs_toc`(출력본 PDF 선택 입력) `ncs_overview` `ncs_knowledge` `ncs_perform` `ncs_teaching` `ncs_evaluation` `ncs_references` `ncs_colophon` `ncs_misc` | F02 구성요소 하나씩. 구조 추출(pipeline) + 판정 규칙(rules/) + 확인서 표(sheet) + 저장 이름(reporting) | `ncs_core`만 |
 | 코어 | `ncs_core` | 문서 읽기, 공통 파서, 비교·정규화, 외부 데이터(NCS 목록·수준·행동명사), 규칙 실행기, 확인서 접기, 저장 | 표준 라이브러리만 |
@@ -145,7 +145,8 @@
 - **`service.py`** — `execute_review(ReviewRequest)`: 문서 선택 → `prepare_review` → `evaluate_review`. `persist_review`: 파일 저장.
 - **`cli.py`** — 엔진 공용 CLI `run_cli(check, 설명)`. 개발계획서 필수 여부는 `Engine.required`, `--body-section`은 엔진 `CheckConfig`에서 읽는다.
 - **`store.py` / `postgres.py` / `migrations.py` / `postgres_cli.py`** — 결과 zip 파일 저장소와 PostgreSQL 이력(`review_runs`·`review_results`·`review_inputs`·`review_files`). `postgres_cli import 결과`로 과거 결과 폴더를 이력으로 이관. DSN·비밀번호는 `.env`.
-- **`ncs_web/server.py`** — `POST /api/review`, `GET /api/health`, `GET/DELETE /api/reviews/{id}`, zip·확인서 내보내기. 정적 `--dist`로 프런트 제공.
+- **`ncs_web/server.py`** — 앱 조립: 미들웨어, 오류 응답, 정적 `--dist`로 프런트 제공. 경로는 `routes/`의 모듈이 `register(app, services)`로 붙인다.
+- **`ncs_web/routes/`** — `review.py`(`POST /api/review`, `/api/uploads`, `GET /api/health`) · `history.py`(`/api/reviews`, `/api/groups`) · `export.py`(확인서·수정 메모 원고) · `plan.py`(개발계획서 작성) · `upscale.py`(그림 업스케일). 요청·응답 모델은 `schemas.py`, 함께 쓰는 도우미는 `common.py`.
 - **`frontend/src/`** — `App.jsx`(화면 조립), `components/`(표·셀렉트·모달), `lib/checks.js`(`CHECKS`·`FILE_HINTS` — 서버 엔진 목록과 테스트가 일치를 검사), `lib/api.js`.
 
 ---
@@ -168,7 +169,7 @@
 | 어떤 항목의 판정 기준 | 해당 엔진 `rules/<항목>.py` (정책은 여기에만) |
 | 비고 문구 | `ncs_core/notes.py`, `goals.py explain_pair/difference/compare_lists`, `manuscript/names.py diff_list`, 확인서 요약은 `ncs_core/sheet.py` |
 | 새 항목 구현 | 엔진 `rules/` 추가 → `registry.py` Rule → `sheet.py` item_ids → `reporting.py` ITEM_FILES → `tests/engines/` → 골든 |
-| 새 엔진 추가 | `ncs_service/registry.py ENGINES` → `ncs_web/server.py CheckName` → `frontend/src/lib/checks.js` → `pyproject.toml` 스크립트 |
+| 새 엔진 추가 | `ncs_service/registry.py ENGINES` → `ncs_web/schemas.py CheckName`(+ `server.py` 오류 메시지) → `frontend/src/lib/checks.js` → `pyproject.toml` 스크립트 |
 | CLI 인자 | `ncs_service/cli.py` (엔진 `__main__`은 고치지 않음) |
 | NCS·사전 데이터 갱신 | `scripts/data/build_ncs_catalog.py`, `build_ncs_levels.py`, `build_action_nouns.py` |
 | 화면 라벨·표 | `frontend/src/` (`components/Tables.jsx`, `lib/format.jsx`, `app.css`) |

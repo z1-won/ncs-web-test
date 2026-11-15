@@ -156,14 +156,17 @@ class EngineContractTests(unittest.TestCase):
                 self.assertEqual(missing, [], f"{engine.package}에 뼈대 파일이 없습니다")
 
     def test_web_server_and_frontend_list_every_engine(self):
-        """엔진을 등록하면 src/ncs_web/server.py의 CheckName·health 목록과 화면의 CHECKS도 함께 갱신해야 한다."""
+        """엔진을 등록하면 src/ncs_web의 CheckName(schemas.py)·오류 메시지(server.py)와 화면의 CHECKS도 함께 갱신해야 한다."""
         registered = set(ENGINES)
-        server = (ROOT / "src" / "ncs_web" / "server.py").read_text(encoding="utf-8")
-        literal = re.search(r"CheckName = Literal\[(.*?)\]", server).group(1)
-        self.assertEqual(set(re.findall(r'"(\w+)"', literal)), registered, "server.py CheckName")
+        web = ROOT / "src" / "ncs_web"
+        schemas = (web / "schemas.py").read_text(encoding="utf-8")
+        literal = re.search(r"CheckName = Literal\[(.*?)\]", schemas).group(1)
+        self.assertEqual(set(re.findall(r'"(\w+)"', literal)), registered, "schemas.py CheckName")
         # /api/health의 checks·engines는 registry.ENGINES에서 만들므로 손으로 적은 목록이 없어야 한다
-        self.assertIn('"checks": list(ENGINES)', server, "server.py /api/health는 ENGINES에서 생성")
-        self.assertNotRegex(server, r'"checks":\s*\[', "server.py /api/health에 손으로 적은 목록이 있음")
+        health = (web / "routes" / "review.py").read_text(encoding="utf-8")
+        self.assertIn('"checks": list(ENGINES)', health, "routes/review.py /api/health는 ENGINES에서 생성")
+        self.assertNotRegex(health, r'"checks":\s*\[', "routes/review.py /api/health에 손으로 적은 목록이 있음")
+        server = (web / "server.py").read_text(encoding="utf-8")
         message = re.search(r"check는 (.*?) 중 하나여야 합니다", server).group(1)
         self.assertEqual(set(message.split(" / ")), registered, "server.py 오류 메시지")
         # 화면: 선택 목록 글은 서버 engines로 채우지만, 기본 목록(CHECKS)과 파일 안내(FILE_HINTS)는 모든 엔진을 알아야 한다
