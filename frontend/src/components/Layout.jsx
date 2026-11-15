@@ -32,10 +32,11 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
   { id: "review-history", label: "검수 이력" },
 ];
 
-/* 페이지 메뉴 — 라우트 단위. 화면이 둘(원고 검수 / 개발계획서 작성)이라 1Depth 링크형. 메인 메뉴에는 이것만 두고, 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
+/* 페이지 메뉴 — 라우트 단위. 화면이 셋(원고 검수 / 개발계획서 작성 / 업스케일링)이라 1Depth 링크형. 메인 메뉴에는 이것만 두고, 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
 export const PAGES = [
   { path: "/", label: "원고 검수" },
   { path: "/plan", label: "개발계획서 작성" },
+  { path: "/upscale", label: "업스케일링" },
 ];
 
 export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
