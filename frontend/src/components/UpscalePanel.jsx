@@ -82,7 +82,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
   const ready = Object.values(results).filter((r) => r.status === "완료").length;
   const low = data.pictures.filter((p) => p.dpi < data.min_dpi).length;      // 최소 기준에도 못 미침
   const mid = data.pictures.length - low;                                    // 최소 기준 이상, 목표 미만
-  const { 그림: total = 0, "그림 파일": fileCount = 0, 건너뜀: skippedCount = 0 } = data.counts;
+  const { 그림: total = 0, "그림 파일": fileCount = 0 } = data.counts;
   return (
     <section className="upscale-panel">
       <h2 className="section-title">해상도 점검 결과</h2>
@@ -114,11 +114,6 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
         <li>기준은 쪽에 출력되는 크기에서의 실효 해상도 {data.target_dpi} DPI입니다. 아래 목록은 해상도가 낮은 순서입니다.</li>
         <li>업스케일은 화질만 올립니다. 모델이 글자·선을 바꿀 수 있으니 결과를 원본과 나란히 놓고 확인하세요.</li>
       </ul>
-      {skippedCount > 0 && (
-        <PageAlert kind="info">
-          그림 {skippedCount}개는 읽지 못해 점검에서 빠졌습니다: {(data.skipped || []).map((s) => `${s.label}(${s.reason})`).join(", ")}
-        </PageAlert>
-      )}
       {!engine.available && <PageAlert kind="danger">업스케일 엔진을 쓸 수 없습니다. 그림 목록과 원본 보기만 됩니다.{"\n"}{engine.problem}</PageAlert>}
       {data.pictures.length === 0 && <p className="empty">{data.target_dpi} DPI 미만 그림이 없습니다.</p>}
 
