@@ -38,7 +38,7 @@ export default function UpscalePage() {
   return (
     <>
     <Header anchors={[]} hasHistory={false} hasResult={false} />
-    <main id="container" className="inner page">
+    <main id="container" className="inner page upscale-page">
       <h1 className="page-title">업스케일링</h1>
       <p className="page-desc">
         원고(.hwpx)를 올리면 쪽에 출력되는 크기에 비해 해상도가 낮은 그림을 찾아 보여 줍니다. 그림을 골라 한 장씩 키우고,
