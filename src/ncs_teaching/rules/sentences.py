@@ -1,13 +1,12 @@
 """F02 교수·학습 방법 ②·④: 교수 방법 / 학습 방법 내용은 행동동사로 종결하였는가? (~지도한다. ~학습한다.)
 
-판정은 ncs_core.sentences.judge_action_sentence: '~한다.' O / '~이다·있다·없다.' △ / 그 외 X.
-'~할 수 있다.' 등은 체크리스트(행동동사 예시만 듦)가 금지하지 않고 사람 검수를 통과한 최종본(SW제품기획 0401 등)에도 있어 △(사람 확인).
-판정 원칙: 체크리스트에 어긋나면 X, 체크리스트에는 없지만 최종본에 있는 것은 △.
-수행 내용 ④도 같은 이유로 △다(ncs_perform.rules.sentences).
+판정은 ncs_core.sentences.judge_action_sentence: '~한다.' O / 그 외 X.
+'~할 수 있다.'·'~이다/있다/없다.'도 X — 체크리스트가 행동동사 종결을 요구하고, 안내서 A-04(문장 종결)는 자동 판정 CASE다(결정 2026-11-15).
+수행 내용 ④는 '~할 수 있다.'만 적합으로 둔다(ncs_perform.rules.sentences).
 행동동사인지(설명·지도·유도…)까지는 보지 않는다 — 종결 형태만 본다.
 """
 
-from ncs_core import O, TRI, X, visible
+from ncs_core import O, X, visible
 from ncs_core.sentences import judge_action_sentence
 
 from .common import PART_LABEL, no_block_row, row
@@ -33,7 +32,7 @@ def check_sentences(blocks: list[dict], part: str) -> list[dict]:
                 values.append(value)
                 if value != O:
                     bad.append({"idx": item["idx"], "체크": value, "문장": visible(item["text"]), "사유": why})
-            checks[name] = X if X in values else TRI if TRI in values else O
+            checks[name] = X if X in values else O
             if bad:
                 notes[name] = f"{len(items)}개 중 {len(bad)}개 위반: " + " / ".join(
                     f'p{b["idx"]} "{b["문장"][-25:]}" ({b["사유"]})' for b in bad[:5]) + (" …" if len(bad) > 5 else "")

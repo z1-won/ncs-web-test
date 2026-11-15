@@ -134,6 +134,11 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(row["판정"], "판단불가")
         self.assertIn("피드백 「서술형 시험」에 '심화' 문구 없음", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
         self.assertIn("피드백 「역할 연기」에 '보충' 문구 없음", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
+        # 둘 다 없어도 낱말로 찾은 것이라 부적합이 아니라 판단불가(안내서 A-05: 후보 제시)
+        none = [self.block(1, "서술형 시험", "- 결과를 알려 준다."), self.block(2, "역할 연기", "- 보충 지도하고 심화 과제를 준다.")]
+        [row] = check_feedback([region(methods=self.METHODS, feedback_found=True, feedback=none)])
+        self.assertEqual((row["판정"], row["체크"]["⑤ 심화·보충 학습 각각 제시"]), ("판단불가", "△"))
+        self.assertIn("보충·심화 문구가 모두 없음", row["비고"]["⑤ 심화·보충 학습 각각 제시"])
 
 
 class ItemsTests(unittest.TestCase):

@@ -92,15 +92,17 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(learn[1]["위반_문단"][0]["문장"], "• 약어 숙지")
         self.assertEqual(learn[0]["item_id"], "F02-교수학습-④")
 
-    def test_iida_itda_eopda_ending_is_undecided(self):
-        """'~할 수 있다.' 등 '~이다/있다/없다.' 종결은 △ — 체크리스트는 행동동사 예시만 들고 이 꼴을 금지하지 않으며,
-        사람 검수를 통과한 최종본(SW제품기획 0401 등)에도 있다. 판정 원칙: 체크리스트 위반은 X, 체크리스트에 없지만 최종본에 있는 것은 △."""
+    def test_can_and_ida_endings_fail(self):
+        """'~할 수 있다.'와 '~이다/있다/없다.' 종결은 X — 체크리스트가 행동동사 종결을 요구하고 안내서 A-04는 자동 판정이다.
+        (수행 내용 ④만 '~할 수 있다.'를 적합으로 둔다 — test_perform.)"""
         texts, styles, numbers, tables, aside = manuscript()
         texts = [t.replace("용어를 숙지한다.", "용어를 숙지할 수 있다.") for t in texts]
         blocks = split_teaching_blocks(texts, styles=styles, numbers=numbers, table_paragraphs=tables, aside_paragraphs=aside)
         learn = check_sentences(blocks, "학습")
-        self.assertEqual(learn[0]["판정"], "판단불가")
-        self.assertEqual([v["체크"] for v in learn[0]["위반_문단"]], ["△"])
+        self.assertEqual(learn[0]["판정"], "부적합")
+        self.assertEqual([(v["체크"], v["사유"]) for v in learn[0]["위반_문단"]], [("X", "'~할 수 있다.'로 끝남 — '~한다.'로 종결")])
+        from ncs_core import judge_action_sentence
+        self.assertEqual([judge_action_sentence(t)[0] for t in ("• 예시이다.", "• 자료가 없다.", "• 설명한다.")], ["X", "X", "O"])
 
     def test_no_blocks_are_undecided(self):
         for rows in (check_counts([], "교수"), check_sentences([], "학습")):

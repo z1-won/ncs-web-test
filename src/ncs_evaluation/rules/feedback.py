@@ -2,7 +2,7 @@
 
 확정: 피드백 블록('N. 방법명') 수와 이름 = 평가 방법 목록(③이 읽은 글머리). 다르면 X.
 휴리스틱: 블록마다 보충 학습(성취 낮은 경우)과 심화 학습(성취 높은 경우) 문구가 있는가 — 낱말로 찾는다.
-  둘 다 없으면 X(체크리스트가 심화·보충 제시를 직접 요구), 하나만 없으면 △(낱말로 찾은 것이라 다른 표현일 수 있어 사람 확인).
+  하나라도 없으면 △ — 낱말로 찾은 것이라 다른 표현일 수 있다(안내서 A-05: 내용 판단은 후보 제시, 사람 확정). X는 내지 않는다.
 """
 
 import re
@@ -57,16 +57,15 @@ def check_feedback(regions: list[dict]) -> list[dict]:
                     if extra:
                         parts.append("방법 목록에 없는 피드백: " + ", ".join(extra))
                     notes[COUNT] = " · ".join(parts)
-            lacking, none = [], False
+            lacking = []
             for b in blocks:
                 text = b["text"]
                 need = [n for n, p in (("보충", REMEDIAL), ("심화", ENRICHMENT)) if not p.search(text)]
                 if len(need) == 2:
-                    none = True
-                    lacking.append(f"학습 {lesson} 피드백 「{b['name']}」에 보충·심화 문구가 모두 없음")
+                    lacking.append(f"학습 {lesson} 피드백 「{b['name']}」에 보충·심화 문구가 모두 없음 (낱말로 찾음, 사람 확인)")
                 elif need:
                     lacking.append(f"학습 {lesson} 피드백 「{b['name']}」에 '{need[0]}' 문구 없음 (낱말로 찾음, 사람 확인)")
-            checks[BOTH] = X if none else TRI if lacking else O
+            checks[BOTH] = TRI if lacking else O
             if lacking:
                 notes[BOTH] = lines(lacking)
         result = verdict(checks)

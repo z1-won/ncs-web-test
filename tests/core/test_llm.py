@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from ncs_core import llm
-from ncs_perform.rules.brands import CHECK, check_brands
+from ncs_perform.rules.brands import CHECK, DICTIONARY, check_brands
 
 
 def block(materials, tools, unit="1-1", no=1):
@@ -109,10 +109,26 @@ class BrandRuleTests(unittest.TestCase):
         ]}, "model": "m"}
         with mock.patch.dict(os.environ, {"LLM_API_KEY": "k", "LLM_ALLOW_UPLOAD": "1"}, clear=False):
             [row] = check_brands([block(["생수", "코카콜라 1.5L"], ["삼성 갤럭시 탭 S9"])], asker=lambda lines: answer)
-        self.assertEqual(row["판정"], "판단불가")  # 후보는 사람 확인(△), 자동 X 없음
+        self.assertEqual(row["체크"][CHECK], "△")  # LLM 후보는 사람 확인(△)
+        self.assertEqual((row["체크"][DICTIONARY], row["판정"]), ("X", "부적합"))  # 사전에 있는 이름(삼성·갤럭시)은 자동 X
+        self.assertIn("「삼성」", row["비고"][DICTIONARY])
         self.assertIn("후보 2건", row["비고"][CHECK])
         self.assertIn("「코카콜라」(상표, high) → 일반 명칭 「탄산음료」", row["비고"][CHECK])
         self.assertEqual(len(row["상세"]), 2)
+
+    def test_llm_only_findings_stay_candidates(self):
+        answer = {"data": {"findings": [{"line": 2, "text": "코카콜라", "kind": "상표", "generic": "탄산음료", "confidence": "high", "reason": "브랜드"}]}, "model": "m"}
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": "k", "LLM_ALLOW_UPLOAD": "1"}, clear=False):
+            [row] = check_brands([block(["생수", "코카콜라 1.5L"], ["태블릿"])], asker=lambda lines: answer)
+        self.assertEqual((row["체크"][DICTIONARY], row["체크"][CHECK], row["판정"]), ("O", "△", "판단불가"))
+
+    def test_dictionary_runs_without_llm(self):
+        with mock.patch.dict(os.environ, {"LLM_API_KEY": "", "OPENAI_API_KEY": "", "LLM_ALLOW_UPLOAD": ""}, clear=False):
+            [hard] = check_brands([block(["엑셀 서식"], ["노트북"])])
+            [soft] = check_brands([block(["한글 문서"], ["노트북"])])
+        self.assertEqual((hard["체크"][DICTIONARY], hard["판정"]), ("X", "부적합"))
+        self.assertIn("「엑셀」→스프레드시트 프로그램", hard["비고"][DICTIONARY])
+        self.assertEqual((soft["체크"][DICTIONARY], soft["판정"]), ("△", "판단불가"))
 
     def test_low_confidence_is_reference_only(self):
         answer = {"data": {"findings": [{"line": 1, "text": "BEO", "kind": "상품명", "generic": "", "confidence": "low", "reason": "약어"}]}, "model": "m"}

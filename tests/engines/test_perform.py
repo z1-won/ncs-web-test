@@ -46,7 +46,7 @@ def manuscript():
         ("수행 순서", "재료,기기,안전", False, False),  # 안전 소제목 누락
         (BOX + " 패키지 구성을 설명한다.", BOX + "제목", False, False),
         (BOX + " 가격은 정책에 따라 결정된다.", BOX + "제목", False, False),
-        (BOX + " 이것은 참고 사항이다.", BOX + "제목", False, False),  # '~이다.' → △
+        (BOX + " 이것은 참고 사항이다.", BOX + "제목", False, False),  # '~이다.' → X
         ("교수·학습 방법", "큰학습-네비게이터", False, False),
     ]
     texts = [r[0] for r in rows]
@@ -146,10 +146,12 @@ class SentenceRuleTests(unittest.TestCase):
         self.assertEqual(judge_sentence(BOX + " 요금 제도가 무엇인지 안다.")[0], "O")  # -ㄴ다 현재형 동사
         self.assertEqual(judge_sentence(BOX + " 사용법을 가르친다.")[0], "O")
         self.assertEqual(judge_sentence(BOX + " 객실이 크다.")[0], "X")  # 형용사
-        self.assertEqual(judge_sentence(BOX + " 참고 사항이다.")[0], "△")
-        # 수행 목표를 적는 '~할 수 있다.'는 다른 표현이 마땅치 않고 최종본(0401·0407)에도 있어 △
-        self.assertEqual(judge_sentence(BOX + " 개발 일정을 수립할 수 있다.")[0], "△")
-        self.assertEqual(judge_sentence(BOX + " 필요한 자원이 없다.")[0], "△")
+        self.assertEqual(judge_sentence(BOX + " 참고 사항이다.")[0], "X")
+        # 수행 목표를 적는 '~할 수 있다.'는 다른 표현이 마땅치 않고 최종본(0401·0407)에도 있어 수행 ④에서만 적합
+        self.assertEqual(judge_sentence(BOX + " 개발 일정을 수립할 수 있다.")[0], "O")
+        self.assertEqual(judge_sentence(BOX + " 개발 일정을 수립할 수 있다).")[0], "O")
+        self.assertEqual(judge_sentence(BOX + " 필요한 자원이 없다.")[0], "X")
+        self.assertEqual(judge_sentence(BOX + " 여유 자원이 있다.")[0], "X")  # '~가 있다.'는 '~할 수 있다.'가 아니다
         self.assertEqual(judge_sentence(BOX + " 기록한다")[0], "X")
         self.assertEqual(judge_sentence(BOX + " 응대한다,")[0], "X")
         self.assertEqual(judge_sentence(BOX + " 예약 접수")[0], "X")
@@ -158,9 +160,9 @@ class SentenceRuleTests(unittest.TestCase):
     def test_block_rows_and_violations(self):
         texts, styles, tables, aside = manuscript()
         rows = check_perform_sentences(split_perform_blocks(texts, styles=styles, table_paragraphs=tables, aside_paragraphs=aside))
-        self.assertEqual([r["판정"] for r in rows], ["부적합", "부적합", "판단불가"])
+        self.assertEqual([r["판정"] for r in rows], ["부적합", "부적합", "부적합"])
         self.assertEqual([v["사유"] for v in rows[0]["위반 문단"]], ["마침표 없음"])
-        self.assertEqual([v["체크"] for v in rows[2]["위반 문단"]], ["△"])
+        self.assertEqual([v["체크"] for v in rows[2]["위반 문단"]], ["X"])  # 판단불가는 내지 않는다
         self.assertTrue(all(r["item_id"] == "F02-수행-④" for r in rows))
 
     def test_hwp_without_styles_is_flagged(self):

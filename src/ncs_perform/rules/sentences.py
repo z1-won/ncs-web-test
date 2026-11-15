@@ -2,10 +2,10 @@
 
 확정 범위(설계 Q5·Q6·Q7, 2026-10-28): 네모 번호(수준 1) 제목 줄만 검사한다. 하위 번호·내용 문단은 보지 않는다.
   O  '(한|된|킨|는)다' + (괄호·따옴표) + '.'          예: ~숙지한다.  ~제공된다.  ~한다).
-  △  '(이|있|없)다.'                                   서술형이지만 수행 동작이 아닐 수 있어 사람 확인
-     '~할 수 있다.'처럼 수행 목표를 적는 꼴은 '~한다.'로 바꿀 다른 표현이 마땅치 않고, 사람 검수를 통과한
-     최종본(SW제품기획 0401·0407)에도 있어 X가 아니라 △로 둔다(판정 원칙: 체크리스트에 없지만 최종본에 있는 것은 △).
-  X  그 외 — 마침표 없음, 쉼표 종결, 명사형, 질문형 …
+     '~할 수 있다.' — 수행 목표를 적는 꼴은 '~한다.'로 바꿀 다른 표현이 마땅치 않고, 사람 검수를 통과한
+     최종본(SW제품기획 0401·0407)에도 있어 적합으로 본다(결정 2026-11-15).
+  X  그 외 — '~이다/~없다/~가 있다.', 마침표 없음, 쉼표 종결, 명사형, 질문형 …
+판단불가(△)는 내지 않는다(안내서 A-04는 자동 판정). 구역을 못 찾았거나 hwp라 번호 수준을 추정한 경우만 △.
 표 안(수행 tip·스크립트 상자)·메모 문단은 blocks.py에서 이미 제외됐다.
 """
 
@@ -16,8 +16,8 @@ ITEM_ID = "F02-수행-④"
 
 
 def judge_sentence(text: str) -> tuple[str, str | None]:
-    """공통 판정(ncs_core.sentences)을 그대로 쓴다. 이름은 기존 테스트·문서와 맞추어 둔다."""
-    return judge_action_sentence(text)
+    """공통 판정(ncs_core.sentences)에 '~할 수 있다.'만 적합으로 더한다."""
+    return judge_action_sentence(text, allow_can=True)
 
 
 def check_perform_sentences(blocks: list[dict], *, has_styles: bool = True) -> list[dict]:
@@ -49,7 +49,7 @@ def check_perform_sentences(blocks: list[dict], *, has_styles: bool = True) -> l
                 if value != O or why:
                     violations.append({"idx": s["idx"], "체크": value, "문장": visible(s["text"]), "사유": why})
             key = "④ 수행 순서 네모 번호 '~한다.' 종결"
-            checks[key] = X if X in values else TRI if TRI in values else O
+            checks[key] = X if X in values else O
             bad = [v for v in violations if v["체크"] != O]
             if bad:
                 notes[key] = f"네모 번호 {len(level1)}줄 중 {len(bad)}줄 위반: " + " / ".join(

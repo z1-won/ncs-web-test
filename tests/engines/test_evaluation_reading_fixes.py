@@ -46,7 +46,7 @@ class FeedbackWordsTests(unittest.TestCase):
                      "평가 결과 일정 점수 이하인 학생들은 추가 학습 후 재시험"):
             self.assertTrue(REMEDIAL.search(text), text)
         self.assertTrue(ENRICHMENT.search("브랜드명 기획을 잘 수행하는 경우 평판을 조사하여 발표하도록 지도한다"))
-        # 심화 내용이 없는 피드백은 여전히 못 찾는다(△ 유지 — 체크리스트가 심화를 직접 요구)
+        # 심화 내용이 없는 피드백은 여전히 못 찾는다(△ — 낱말로 찾은 것이라 사람 확인)
         self.assertIsNone(ENRICHMENT.search("성취도가 낮은 학생에게는 핵심 사항을 구체적으로 설명해 준다."))
 
 

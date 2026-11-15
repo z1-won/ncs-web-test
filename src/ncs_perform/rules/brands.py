@@ -1,6 +1,8 @@
 """F02 수행 내용 ②: 재료·기기 항목에 상표명·상품명·제조사명(특정 모델명)이 노출되지 않았는가 — 블록당 1행.
 
-규칙으로는 고유명사를 알 수 없어 LLM에 묻는다(ncs_core.llm). 보내는 것은 블록의 '재료·자료'와 '기기(장비·공구)' 줄뿐이다.
+먼저 사전(ncs_core.brands — 기타 ③과 같은 사전)으로 본다: 명확한 제품·서비스·회사명, ®·™ → X(안내서 A-09 자동 판정),
+일반 낱말과 겹치는 이름(한글·워드 …) → △. 사전은 LLM 설정과 무관하게 항상 돈다.
+사전에 없는 고유명사는 규칙으로 알 수 없어 LLM에 묻는다(ncs_core.llm). 보내는 것은 블록의 '재료·자료'와 '기기(장비·공구)' 줄뿐이다.
 프롬프트에는 원고 분야(모듈 코드의 세분류, NCS 목록)와 그 분야의 공용 명칭(`ncs_core/data/field_terms.tsv`)을 넣어
 분야마다 다른 업계 약어·문서명을 상표로 잡지 않게 한다.
 결과는 사람 확인(△) 후보: 모델이 찾은 항목을 줄 번호·근거와 함께 보여 주고, 아무것도 못 찾으면 O(비고에 모델 이름).
@@ -9,14 +11,16 @@ LLM 키·반출 승인이 없으면 △ "LLM 미설정/미승인"으로 남기�
 
 from __future__ import annotations
 
-import json
 
-from ncs_core import NA, O, PASS, TRI, verdict, visible
+from ncs_core import NA, O, PASS, TRI, X, verdict, visible
+from ncs_core.brands import find_brands
 from ncs_core.field_terms import field_of
 from ncs_core.llm import LlmError, ask_json, settings
 
 ITEM_ID = "F02-수행-②"
 CHECK = "② 상표·상품·제조사명 노출 없음"
+DICTIONARY = "② 사전에 있는 상호·상품명·프로그램명 없음"
+SUGGESTION = "상표·상품·제조사명을 일반 명칭으로 바꿈(예: 특정 제품명 → 기능을 나타내는 보통 명칭)"
 TASK = "perform2_brands"
 
 BASE_SYSTEM = """당신은 NCS 학습모듈 원고의 검수 보조자입니다. 아래 '재료·자료'와 '기기(장비·공구)' 목록에서
@@ -87,30 +91,47 @@ def check_brands(blocks: list[dict], *, module_code: str = "", asker=None) -> li
         if not lines:
             rows.append(_row(region, where, shown, {CHECK: NA}, {CHECK: "재료·기기 줄이 없음"}, None))
             continue
+        known, known_notes = _dictionary(lines)
+        fix = SUGGESTION if known.get(DICTIONARY) != O else None
         if not cfg.ready:
-            rows.append(_row(region, where, shown, {CHECK: TRI}, {CHECK: cfg.why_not + " — 사람이 상표·상품·제조사명을 확인"}, None))
+            rows.append(_row(region, where, shown, {**known, CHECK: TRI},
+                             {**known_notes, CHECK: cfg.why_not + " — 사전에 없는 상표·상품·제조사명은 사람이 확인"}, fix))
             continue
         try:
             answer = asker(lines)
         except LlmError as error:
-            rows.append(_row(region, where, shown, {CHECK: TRI}, {CHECK: f"LLM 호출 실패: {error}"}, None))
+            rows.append(_row(region, where, shown, {**known, CHECK: TRI}, {**known_notes, CHECK: f"LLM 호출 실패: {error}"}, fix))
             continue
         all_findings = _valid_findings(answer.get("data") or {}, lines)
         findings = [f for f in all_findings if f["confidence"] in MIN_CONFIDENCE]
         low = [f for f in all_findings if f["confidence"] not in MIN_CONFIDENCE]
         model = answer.get("model", cfg.model)
         if not findings:
-            notes = {"참고": f"LLM({model}) 탐지 없음" + (f" (확신 낮은 표현 {len(low)}건은 상세 참고)" if low else "")}
-            rows.append(_row(region, where, shown, {CHECK: O}, notes, None, findings=all_findings))
+            notes = {**known_notes, "참고": f"LLM({model}) 탐지 없음" + (f" (확신 낮은 표현 {len(low)}건은 상세 참고)" if low else "")}
+            rows.append(_row(region, where, shown, {**known, CHECK: O}, notes, fix, findings=all_findings))
             continue
-        checks = {CHECK: TRI}
+        checks = {**known, CHECK: TRI}
         parts = [f"「{f['text']}」({f['kind']}, {f['confidence']}) → 일반 명칭 「{f['generic']}」" if f.get("generic") else f"「{f['text']}」({f['kind']})"
                  for f in findings[:4]]
-        notes = {CHECK: f"LLM({model}) 후보 {len(findings)}건 — 사람 확인: " + " / ".join(parts) + (" …" if len(findings) > 4 else "")}
-        rows.append(_row(region, where, shown, checks, notes, "상표·상품·제조사명을 일반 명칭으로 바꿈(예: 특정 제품명 → 기능을 나타내는 보통 명칭)", findings=all_findings))
+        notes = {**known_notes, CHECK: f"LLM({model}) 후보 {len(findings)}건 — 사람 확인: " + " / ".join(parts) + (" …" if len(findings) > 4 else "")}
+        rows.append(_row(region, where, shown, checks, notes, SUGGESTION, findings=all_findings))
     if not blocks:
         rows.append(_row("section1", "", None, {CHECK: TRI}, {CHECK: "본문에서 '수행 내용' 머리를 찾지 못해 판단할 수 없음"}, None))
     return rows
+
+
+def _dictionary(lines: list[tuple[int, str, str]]) -> tuple[dict, dict]:
+    """사전 대조 → ({DICTIONARY: O/△/X}, 비고). 명확한 이름이 한 줄이라도 있으면 X, 뜻을 확인할 이름만 있으면 △."""
+    clear, unsure = [], []
+    for _, name, text in lines:
+        found, maybe = find_brands(text)
+        clear += [f"[{name}] 「{n}」→{generic}" for n, generic in found]
+        unsure += [f"[{name}] 「{n}」 {why} 사람 확인" for n, why in maybe]
+    if clear:
+        return {DICTIONARY: X}, {DICTIONARY: f"사전에 있는 이름 {len(clear)}건: " + " / ".join(clear[:5]) + (" …" if len(clear) > 5 else "")}
+    if unsure:
+        return {DICTIONARY: TRI}, {DICTIONARY: " / ".join(unsure[:5]) + (" …" if len(unsure) > 5 else "")}
+    return {DICTIONARY: O}, {}
 
 
 def _valid_findings(data: dict, lines: list[tuple[int, str, str]]) -> list[dict]:
