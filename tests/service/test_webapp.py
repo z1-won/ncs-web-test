@@ -157,6 +157,17 @@ class WebappTests(unittest.TestCase):
                 self.assertIn(word, response.json()["error"])
         self.assertEqual(len(self.client.app.state.uploads), 4, "거부된 업로드는 보관함에 남지 않는다")   # 받은 것: swapped·ordered·both·token
 
+    def test_image_dpi_choice_reaches_misc_and_rejects_other_values(self):
+        """이미지 해상도 기준(image_dpi)은 150/300만 받고 기타(misc) 검수 설정으로 들어간다. 다른 검수는 무시한다."""
+        files = [("files", (MANUSCRIPT.name, MANUSCRIPT.read_bytes()))]
+        for value in ("150", "300"):
+            with self.subTest(image_dpi=value):
+                self.assertEqual(self.client.post("/api/review", data={"check": "misc", "image_dpi": value}, files=files).status_code, 200)
+        bad = self.client.post("/api/review", data={"check": "misc", "image_dpi": "200"}, files=files)
+        self.assertEqual(bad.status_code, 400)
+        self.assertIn("150 / 300", bad.json()["error"])
+        self.assertEqual(self.client.post("/api/review", data={"check": "toc", "image_dpi": "200"}, files=files).status_code, 200)
+
     def test_upload_token_reports_missing_plan_and_rejects_bad_input(self):
         only_manuscript = self.client.post("/api/uploads", files=[("files", (MANUSCRIPT.name, MANUSCRIPT.read_bytes()))]).json()
         self.assertEqual(only_manuscript["roles"], {"manuscript": MANUSCRIPT.name, "plan": None, "print": None})
@@ -220,7 +231,8 @@ class WebappTests(unittest.TestCase):
     def test_health_docs_and_cors(self):
         health = self.client.get("/api/health")
         body = health.json()
-        self.assertEqual({k: v for k, v in body.items() if k != "engines"}, {"ok": True, "checks": list(PACKAGES), "history": False})
+        self.assertEqual({k: v for k, v in body.items() if k != "engines"},
+                         {"ok": True, "checks": list(PACKAGES), "history": False, "image_dpi": {"choices": [150, 300], "default": 300}})
         # engines: 화면 선택 목록의 글이 되는 엔진 설명 — 등록 순서대로, 구현 항목은 확인서 번호
         self.assertEqual([e["check"] for e in body["engines"]], list(PACKAGES))
         self.assertEqual(body["engines"][0]["component"], "NCS-학습모듈의 위치")

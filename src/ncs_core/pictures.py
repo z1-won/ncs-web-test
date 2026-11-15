@@ -17,6 +17,16 @@ import zlib
 from pathlib import Path
 
 HWPUNIT_PER_INCH = 7200
+# 이미지 해상도 기준(실효 DPI) — 검수(기타 ⑤·⑧)와 그림 업스케일이 같은 값을 쓴다. 지침에 숫자 기준이 없어 화면에서 고르게 한다:
+# 300 = 인쇄 권장(기본), 150 = 인쇄 최소로 흔히 쓰는 값(사람이 통과시킨 최종본 그림의 다수가 이 이상).
+DPI_CHOICES = (150, 300)
+DEFAULT_TARGET_DPI = 300
+
+
+def low_dpi(target_dpi: int) -> int:
+    """기준의 3분의 2 — 업스케일 화면에서 '많이 모자람'(빨강)과 '조금 모자람'(노랑)을 가르는 값(300 → 200, 150 → 100). 판정에는 쓰지 않는다."""
+    return round(target_dpi * 2 / 3)
+
 CAPTION = re.compile(r"\[\s*그림\s*\d+\s*-\s*\d+\s*\]")
 CAPTION_AFTER = 6   # 캡션은 보통 그림 아래 — 그림 문단 뒤 이 범위
 CAPTION_BEFORE = 3  # 그림 위에 캡션을 둔 원고도 있다

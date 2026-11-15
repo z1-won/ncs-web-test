@@ -56,7 +56,8 @@ class PictureTests(unittest.TestCase):
         pictures = [(2, "image1"), (5, "image2"), (13, "image9")]
         binaries = {"image1": {"href": "BinData/image1.jpg", "bytes": 631}, "image2": {"href": "BinData/image2.jpg", "bytes": 0}}
         [row] = check_pictures(context(body, pictures=pictures, binaries=binaries, lessons=[{"no": 1, "raw_span": (0, len(body))}]))
-        self.assertEqual(row["체크"], {"캡션에 그림 있음": "X", "그림 파일 존재": "X"})
+        # 누락(캡션 위에 그림이 안 보임)은 판단불가, 유실(그림 파일이 없음)은 사실이라 부적합
+        self.assertEqual(row["체크"], {"캡션에 그림 있음": "△", "그림 파일 존재": "X"})
         problems = {d.get("캡션") or d.get("BinData"): d["문제"] for d in row["상세"]}
         self.assertEqual(problems["[그림 1-5] 그림 없음"], "캡션 위에 그림 개체 없음")
         self.assertIn("표·텍스트만", problems["[그림 1-3] 표로 그린 양식"])

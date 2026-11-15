@@ -173,6 +173,12 @@ class EngineContractTests(unittest.TestCase):
         # 두 목록은 frontend/src/lib/checks.js에 있다(원고 검수 페이지에서 옮겨 옴).
         checks = (ROOT / "frontend" / "src" / "lib" / "checks.js").read_text(encoding="utf-8")
         self.assertEqual(set(re.findall(r'value:\s*"(\w+)"', checks)), registered, "checks.js CHECKS")
+        # 이미지 해상도 기준의 선택지·기본값도 화면(lib/dpi.js)과 서버(ncs_core.pictures)가 같아야 한다
+        from ncs_core.pictures import DEFAULT_TARGET_DPI, DPI_CHOICES
+        dpi = (ROOT / "frontend" / "src" / "lib" / "dpi.js").read_text(encoding="utf-8")
+        choices = re.search(r"IMAGE_DPI_CHOICES = \[(.*?)\]", dpi).group(1)
+        self.assertEqual(tuple(int(n) for n in re.findall(r"\d+", choices)), DPI_CHOICES, "dpi.js IMAGE_DPI_CHOICES")
+        self.assertEqual(int(re.search(r"IMAGE_DPI_DEFAULT = (\d+)", dpi).group(1)), DEFAULT_TARGET_DPI, "dpi.js IMAGE_DPI_DEFAULT")
         hints = re.search(r"const FILE_HINTS = \{(.*?)\};", checks, re.S).group(1)
         self.assertEqual(set(re.findall(r"^\s*(\w+):", hints, re.M)), registered, "checks.js FILE_HINTS")
 

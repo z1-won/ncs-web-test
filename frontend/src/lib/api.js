@@ -68,9 +68,11 @@ export const api = {
   // 검수 1건: files로 직접 올리거나 upload(토큰)+group으로 올려 둔 파일을 쓴다
   // signal: AbortController.signal — 취소 버튼
   // stage: 개발계획서 점검(plan)만 — "final" 최종본(기본) / "draft" 직능연 1차본(기관 기재 칸은 해당 없음)
-  review: ({ check, moduleCode, files = [], roles, upload, group, stage, signal }) =>
+  // imageDpi: 이미지 해상도 기준(150/300) — 기타(misc) 검수의 ⑤·⑧에만 쓰인다
+  review: ({ check, moduleCode, files = [], roles, upload, group, stage, imageDpi, signal }) =>
     request("/api/review", { method: "POST", body: multipart({ check, module_code: moduleCode, upload, group, stage: check === "plan" ? stage : undefined,
-                                                              roles: roles ? JSON.stringify(roles) : undefined }, files), signal }),
+                                                              roles: roles ? JSON.stringify(roles) : undefined,
+                                                              image_dpi: check === "misc" && imageDpi ? String(imageDpi) : undefined }, files), signal }),
   uploads: {
     create: (files, signal, roles) => request("/api/uploads", { method: "POST", body: multipart({ roles: roles ? JSON.stringify(roles) : undefined }, files), signal }),
     remove: (token) => request(`/api/uploads/${token}`, { method: "DELETE" }),
@@ -97,9 +99,11 @@ export const api = {
   },
   // 그림 업스케일: 업로드 토큰의 원고 그림 목록 → 원본 보기 → 한 장씩 업스케일(20~40초) → 업스케일한 그림으로 제안본 hwpx
   pictures: {
-    list: (token) => request(`/api/uploads/${token}/pictures`),
+    // targetDpi: 해상도 기준(150/300). 이 값 미만인 그림만 목록에 나온다
+    list: (token, targetDpi) => request(`/api/uploads/${token}/pictures${targetDpi ? `?target_dpi=${targetDpi}` : ""}`),
     originalUrl: (token, binId) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/original`,
-    upscale: (token, binId) => request(`/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscale`, { method: "POST" }),
+    upscale: (token, binId, targetDpi) =>
+      request(`/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscale${targetDpi ? `?target_dpi=${targetDpi}` : ""}`, { method: "POST" }),
     // v: 다시 업스케일했을 때 브라우저가 예전 그림을 쓰지 않게 붙이는 값
     upscaledUrl: (token, binId, v) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?v=${v || 0}`,
     downloadUrl: (token, binId, name) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?download=${encodeURIComponent(name)}`,

@@ -32,10 +32,11 @@ from typing import Callable
 
 from PIL import Image, ImageChops, ImageStat
 
+from ncs_core.pictures import DEFAULT_TARGET_DPI, low_dpi
+
 from .engine import Engine
 
-DEFAULT_TARGET_DPI = 300
-DEFAULT_MIN_DPI = 200          # 판정 표시용: 이보다 낮으면 X, 목표 미만이면 △ (설계 메모 1절 제안 기준)
+DEFAULT_MIN_DPI = low_dpi(DEFAULT_TARGET_DPI)   # 표시용(200): 이보다 낮으면 X, 목표 미만이면 △. 목표는 검수와 같은 ncs_core.pictures.DEFAULT_TARGET_DPI
 DEFAULT_FILE_DPI = 96          # 그림 파일에 DPI 정보가 없을 때 한글이 쓰는 값
 MAX_MEAN_DIFF = 40             # 결과를 원본 크기로 줄였을 때 원본과의 평균 밝기 차(0~255)가 이보다 크면 실패
 TILE = 16                      # 칸 비교 크기(원본 픽셀)

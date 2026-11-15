@@ -21,7 +21,8 @@ function dpiTone(dpi, target, min) {
   return dpi >= target ? "bg-light-success" : dpi >= min ? "bg-light-warning" : "bg-light-danger";
 }
 
-export function UpscalePanel({ token, manuscriptName, moduleCode }) {
+// targetDpi: 해상도 기준(150/300). 바뀌면 부모가 key를 바꿔 목록을 새로 읽는다(이미 업스케일한 결과는 서버에 남아 다시 보인다)
+export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
   const [state, setState] = useState({ status: "loading" });   // { status: loading|ready|error, data, error }
   const [results, setResults] = useState({});                   // bin_id → 업스케일 결과 정보(서버 JSON)
   const [busy, setBusy] = useState(null);                       // 업스케일 중인 bin_id 또는 "proposal"
@@ -41,7 +42,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
     setResults({});
     setError(null);
     setNotice(null);
-    api.pictures.list(token).then(({ ok, data, error: message }) => {
+    api.pictures.list(token, targetDpi).then(({ ok, data, error: message }) => {
       if (!current) return;
       if (!ok) { setState({ status: "error", error: message }); return; }
       const done = {};
@@ -50,7 +51,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
       setState({ status: "ready", data });
     });
     return () => { current = false; };
-  }, [token]);
+  }, [token, targetDpi]);
 
   const data = state.data;
   const pictures = useMemo(() => data?.pictures || [], [data]);
@@ -94,7 +95,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
   // 한 장 업스케일. 결과 상태("완료"/"실패")나 요청 오류(null)를 돌려준다
   async function runOne(binId) {
     setBusy(binId);
-    const { ok, data: info, error: message } = await api.pictures.upscale(token, binId);
+    const { ok, data: info, error: message } = await api.pictures.upscale(token, binId, targetDpi);
     if (!alive.current) return null;
     if (!ok) { setError(message); return null; }
     setResults((prev) => ({ ...prev, [binId]: { ...info, v: Date.now() } }));

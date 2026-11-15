@@ -17,6 +17,7 @@ from ..schemas import CheckName, ErrorResponse, ReviewResponse, SavedPaths, Uplo
 
 def register(app: FastAPI, services: Services) -> None:
     from ncs_core import select_documents
+    from ncs_core.pictures import DEFAULT_TARGET_DPI, DPI_CHOICES
     from ncs_service import ReviewRequest, execute_review
     from ncs_service.registry import ENGINES, describe_engines
 
@@ -26,7 +27,9 @@ def register(app: FastAPI, services: Services) -> None:
     def health() -> dict[str, Any]:
         # history: 이력 API(/api/reviews)가 등록되어 있는가. 화면이 이력 영역을 켤지 결정하는 데 쓴다.
         # engines: 검수 항목마다 구성요소 이름과 구현된 확인서 항목 번호 — 화면의 선택 목록 글이 여기서 나온다
-        return {"ok": True, "checks": list(ENGINES), "engines": describe_engines(), "history": store.supports_history}
+        # image_dpi: 이미지 해상도 기준의 선택지와 기본값 — 화면의 선택 칸(원고 검수·업스케일링)이 같은 값을 쓴다
+        return {"ok": True, "checks": list(ENGINES), "engines": describe_engines(), "history": store.supports_history,
+                "image_dpi": {"choices": list(DPI_CHOICES), "default": DEFAULT_TARGET_DPI}}
 
     @app.post(
         "/api/uploads", response_model=UploadResponse,
@@ -82,6 +85,7 @@ def register(app: FastAPI, services: Services) -> None:
         group: Annotated[str, Form()] = "",
         stage: Annotated[str, Form()] = "",     # 개발계획서 점검(plan) 단계: final / draft. 다른 검수는 무시
         roles: Annotated[str, Form()] = "",     # files로 직접 올릴 때만: files와 같은 순서의 역할 JSON 배열. 없으면 넣은 순서(검수 종류의 필수 역할 먼저)
+        image_dpi: Annotated[str, Form()] = "",  # 이미지 해상도 기준(150/300). 기타(misc) 검수의 ⑤·⑧에만 쓰이고 다른 검수는 무시. 비우면 기본값
     ) -> ReviewResponse | JSONResponse:
         """files로 직접 올리거나, /api/uploads 토큰(upload)으로 올려 둔 파일을 쓴다. group은 이력 묶음 id(토큰 응답의 group).
         토큰으로 실행하면 업로드 때 정한 역할을 그대로 쓴다."""
@@ -96,7 +100,7 @@ def register(app: FastAPI, services: Services) -> None:
                 # group을 보내지 않으면 단독 실행(묶음 없음) — 화면이 파일을 미리 올려 두고 토큰만으로 1건 돌리는 경우
                 if roles:
                     raise ValueError("roles는 업로드할 때 지정합니다. upload 토큰과 함께 보낼 수 없습니다")
-                payload = _run(kept.files, check, module_code, group or None, stage=stage, roles=kept.assigned or None)
+                payload = _run(kept.files, check, module_code, group or None, stage=stage, roles=kept.assigned or None, image_dpi=image_dpi)
             else:
                 if group:
                     raise ValueError("group은 upload 토큰과 함께만 쓸 수 있습니다")
@@ -121,7 +125,7 @@ def register(app: FastAPI, services: Services) -> None:
                                 assigned[str(path)] = given[index]
                     if not saved:
                         raise ValueError("업로드된 파일이 없습니다")
-                    payload = _run(saved, check, module_code, None, stage=stage, roles=assigned or None)
+                    payload = _run(saved, check, module_code, None, stage=stage, roles=assigned or None, image_dpi=image_dpi)
         except ValueError as error:
             return error_response(400, str(error))
         except Exception as error:
@@ -132,13 +136,19 @@ def register(app: FastAPI, services: Services) -> None:
         return payload
 
     def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None, *, stage: str = "",
-             roles: dict[str, str] | None = None) -> ReviewResponse:
+             roles: dict[str, str] | None = None, image_dpi: str = "") -> ReviewResponse:
         paths = tuple(path for _, path in saved)
         config = None
         if check == "plan" and stage:
             from ncs_plan import CheckConfig as PlanConfig
 
             config = PlanConfig(stage=stage)
+        if check == "misc" and image_dpi:
+            from ncs_misc import CheckConfig as MiscConfig
+
+            if image_dpi not in {str(choice) for choice in DPI_CHOICES}:
+                raise ValueError("image_dpi는 " + " / ".join(str(choice) for choice in DPI_CHOICES) + " 중 하나여야 합니다")
+            config = MiscConfig(target_dpi=int(image_dpi))
         execution = execute_review(ReviewRequest(paths, check, module_code.strip(), roles=roles, config=config))
         result = execution.result
         stored = store.save(execution, saved, group_id=group_id)

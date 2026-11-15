@@ -23,6 +23,7 @@ def run_cli(check: str, description: str, argv: list[str] | None = None) -> None
     field_names = {field.name for field in fields(config_class)}
     has_body = "body_section" in field_names
     has_stage = "stage" in field_names
+    has_dpi = "target_dpi" in field_names
     plan_help = "원고와 개발계획서" if "plan" in engine.required else "원고와 (선택) 개발계획서"
 
     parser = argparse.ArgumentParser(prog=f"python -m {engine.package}", description=description)
@@ -35,6 +36,11 @@ def run_cli(check: str, description: str, argv: list[str] | None = None) -> None
         parser.add_argument("--body-section", type=int, default=1)
     if has_stage:
         parser.add_argument("--stage", choices=("final", "draft"), default="final", help="개발계획서 점검 단계: final 최종본(기본) / draft 직능연 1차본")
+    if has_dpi:
+        from ncs_core.pictures import DEFAULT_TARGET_DPI, DPI_CHOICES
+
+        parser.add_argument("--image-dpi", type=int, choices=DPI_CHOICES, default=DEFAULT_TARGET_DPI,
+                            help=f"이미지 해상도 기준(실효 DPI). 미만이면 판단불가 (기본 {DEFAULT_TARGET_DPI})")
     parser.add_argument("--out", help="결과 폴더. 비우면 DATABASE_URL이 있을 때 DB 이력에, 없을 때 '결과' 폴더에 저장")
     args = parser.parse_args(argv)
 
@@ -48,6 +54,8 @@ def run_cli(check: str, description: str, argv: list[str] | None = None) -> None
         sections["body_section"] = args.body_section
     if has_stage:
         sections["stage"] = args.stage
+    if has_dpi:
+        sections["target_dpi"] = args.image_dpi
     try:
         execution = execute_review(
             ReviewRequest(

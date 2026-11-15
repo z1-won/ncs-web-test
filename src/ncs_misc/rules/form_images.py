@@ -1,16 +1,15 @@
 """기타 ⑧: '활용 서식'과 '부록'에서 해상도가 불량인 텍스트 이미지는 직접 입력 처리하였는가.
 
 활용 서식·부록 구역(section_presence) 안의 그림만 본다. 글자가 든 이미지인지는 OCR이 있어야 알 수 있어
-해상도로만 판정한다 — 기준은 기타 ⑤와 같다(CheckConfig.min_dpi·good_dpi).
-  X  < 72 DPI  글자 이미지라면 읽기 어려움 → 직접 입력(사진이라도 해상도 자체가 불량)
-  △  < 150 DPI 글자 이미지인지·읽을 수 있는지 사람 확인
+해상도로만 본다 — 기준은 기타 ⑤와 같다(CheckConfig.target_dpi, 화면에서 150/300 중 선택).
+  △  기준 미만  글자 이미지인지·읽을 수 있는지 사람 확인(안내서 D-01: 후보 제시 + 에디팅 기관 확정 — 자동으로 부적합을 내지 않는다)
   O  그 밖 / -  서식·부록이 없거나 그 안에 그림이 없음
 SW제품기획 최종본 10종은 서식·부록 안 그림이 0개라 이 기준을 보정할 데이터가 없었다.
 """
 
 import re
 
-from ncs_core import NA, O, TRI, X
+from ncs_core import NA, O, TRI
 
 from ncs_core.pictures import label, picture_records, size_advice
 from .common import row
@@ -58,14 +57,10 @@ def check_form_images(context) -> list[dict]:
         shown = {"픽셀": f"{r['px'][0]}×{r['px'][1]}", "출력 mm": f"{r['mm'][0]}×{r['mm'][1]}", "DPI": r["dpi"]}
         if r["dpi"] is None:
             rows.append(row("⑧", place, name, shown, {CHECK: TRI}, {CHECK: f"{name}의 {label(r)} 그림 파일을 읽지 못함 — 글자 이미지인지 사람 확인"}))
-        elif r["dpi"] < config.min_dpi:
-            rows.append(row("⑧", place, name, shown, {CHECK: X},
-                            {CHECK: f"{name}의 {label(r)} {r['dpi']} DPI — {config.min_dpi} DPI 미만, 글자 이미지라면 직접 입력"},
-                            f"글자 이미지는 한글로 직접 입력, 사진·그림은 해상도가 높은 것으로 교체{size_advice(r, config.good_dpi)}"))
-        elif r["dpi"] < config.good_dpi:
+        elif r["dpi"] < config.target_dpi:
             rows.append(row("⑧", place, name, shown, {CHECK: TRI},
-                            {CHECK: f"{name}의 {label(r)} {r['dpi']} DPI — 글자 이미지라면 읽을 수 있는지 사람 확인"},
-                            f"글자가 흐리면 직접 입력. 사진·그림이라면 교체{size_advice(r, config.good_dpi)}"))
+                            {CHECK: f"{name}의 {label(r)} {r['dpi']} DPI — 기준 {config.target_dpi} DPI 미만, 글자 이미지라면 읽을 수 있는지 사람 확인"},
+                            f"글자가 흐리면 한글로 직접 입력. 사진·그림이라면 해상도가 높은 것으로 교체{size_advice(r, config.target_dpi)}"))
         else:
             rows.append(row("⑧", place, name, shown, {CHECK: O}, {}))
     return rows

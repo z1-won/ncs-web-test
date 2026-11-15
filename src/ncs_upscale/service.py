@@ -19,10 +19,10 @@ from typing import Callable
 from PIL import Image
 
 from ncs_core.documents import load_document
-from ncs_core.pictures import label, picture_records
+from ncs_core.pictures import label, low_dpi, picture_records
 
 from .engine import DEFAULT_ENGINE, ENGINES
-from .pipeline import DEFAULT_MIN_DPI, DEFAULT_TARGET_DPI, Job, _rgb, grade, plan, upscale, write_hwpx
+from .pipeline import DEFAULT_TARGET_DPI, Job, _rgb, grade, plan, upscale, write_hwpx
 
 MAX_SCALE = 2                 # 화면에서는 x2만(한 장 20~40초). x4는 4배 느려 요청 하나로 기다리기 어렵다
 _GPU = threading.Lock()
@@ -77,8 +77,10 @@ def engine_status(tools: Path | None = None) -> dict:
 
 
 def list_pictures(manuscript: Path, work: Path, *, target_dpi: int = DEFAULT_TARGET_DPI,
-                  min_dpi: int = DEFAULT_MIN_DPI) -> dict:
+                  min_dpi: int | None = None) -> dict:
     """목표 DPI 미만인 그림 파일 목록(원고에 나오는 순서). 같은 그림 파일을 여러 곳에 쓰면 한 항목에 자리를 모으고, 처음 나온 자리로 줄 세운다."""
+    if min_dpi is None:
+        min_dpi = low_dpi(target_dpi)   # 화면의 빨강/노랑 경계 — 기준을 150으로 고르면 100
     records, binaries = _records(manuscript)
     jobs, skipped = plan(records, binaries, ENGINES[DEFAULT_ENGINE], target_dpi=target_dpi, max_scale=MAX_SCALE)
     done = {item["bin_id"]: item for item in _results(work)}

@@ -119,7 +119,8 @@ class TaskbarTests(unittest.TestCase):
         clean = record(bmp(320, 180, lambda x, y: (250, 250, 250)), "bmp", (320, 180))
         with mock.patch.object(screenshots, "picture_records", return_value=[with_bar]):
             [row] = screenshots.check_screenshots(SimpleNamespace(manuscript=manuscript))
-            self.assertEqual(row["판정"], "부적합")
+            self.assertEqual(row["판정"], "판단불가")   # 띠를 감지해도 후보 — 에디팅 기관이 확정한다(안내서 D-02)
+            self.assertIn("작업 표시줄", row["비고"]["④ 캡처 화면 작업 표시줄"])
         with mock.patch.object(screenshots, "picture_records", return_value=[clean]):
             self.assertEqual(screenshots.check_screenshots(SimpleNamespace(manuscript=manuscript))[-1]["판정"], "적합")
         progressive = record(b"", "jpeg-progressive", (1280, 720))
@@ -128,22 +129,27 @@ class TaskbarTests(unittest.TestCase):
 
 
 class ResolutionTests(unittest.TestCase):
-    def test_thresholds(self):
-        context = SimpleNamespace(manuscript=SimpleNamespace(format="hwpx"), config=CheckConfig())
+    def test_below_selected_standard_is_undecided_never_fail(self):
+        """기준(target_dpi, 화면에서 150/300 선택) 미만은 판단불가 — 이미지 판독은 후보 제시라 자동으로 부적합을 내지 않는다(안내서 D-01)."""
         recs = [record(b"", "bmp", (100, 100), caption="[그림 1-1] 가", dpi=60),
                 record(b"", "bmp", (100, 100), caption="[그림 1-2] 나", dpi=100),
                 record(b"", "bmp", (100, 100), caption="[그림 1-3] 다", dpi=200)]
+        low = SimpleNamespace(manuscript=SimpleNamespace(format="hwpx"), config=CheckConfig(target_dpi=150))
         with mock.patch.object(resolution, "picture_records", return_value=recs):
-            rows = resolution.check_resolution(context)
-        self.assertEqual([r["판정"] for r in rows], ["부적합", "판단불가"])
+            rows = resolution.check_resolution(low)
+        self.assertEqual([r["판정"] for r in rows], ["판단불가", "판단불가"])   # 60·100은 150 미만, 200은 통과
         # 수정 제안은 그림마다 계산 — 100×60mm를 150 DPI로: 591×355px 필요, 지금 60 DPI면 약 40×24mm(내림) 이하로 줄여야 함
         self.assertIn("591×355px 이상 필요(지금 100×100px)", rows[0]["수정 제안"])
         self.assertIn("39×24mm 이하로 줄이면", rows[0]["수정 제안"])
         with mock.patch.object(resolution, "picture_records", return_value=recs[2:]):
-            self.assertEqual([r["판정"] for r in resolution.check_resolution(context)], ["적합"])
-        with mock.patch.object(resolution, "picture_records", return_value=[record(b"", "bmp", (100, 100), dpi=80)]):
-            # 최종본 최저(80) — 사람이 통과시킨 해상도는 X가 아니다
-            self.assertEqual(resolution.check_resolution(context)[0]["판정"], "판단불가")
+            self.assertEqual([r["판정"] for r in resolution.check_resolution(low)], ["적합"])
+        # 기본 기준은 300 — 같은 200 DPI 그림이 기준을 올리면 판단불가가 된다
+        default = SimpleNamespace(manuscript=SimpleNamespace(format="hwpx"), config=CheckConfig())
+        self.assertEqual(default.config.target_dpi, 300)
+        with mock.patch.object(resolution, "picture_records", return_value=recs[2:]):
+            [row] = resolution.check_resolution(default)
+        self.assertEqual(row["판정"], "판단불가")
+        self.assertIn("기준 300 DPI 미만", row["비고"]["⑤ 이미지 해상도"])
 
 
 class FormImageTests(unittest.TestCase):
@@ -154,7 +160,7 @@ class FormImageTests(unittest.TestCase):
         recs = [record(b"", "bmp", (50, 50), caption="", dpi=50, para=3), record(b"", "bmp", (50, 50), caption="", dpi=60, para=12)]
         with mock.patch.object(form_images, "picture_records", return_value=recs):
             rows = form_images.check_form_images(context)
-        self.assertEqual([(r["판정"], r["region_path"]) for r in rows], [("부적합", "section1 > 활용 서식 > 문단 12")])
+        self.assertEqual([(r["판정"], r["region_path"]) for r in rows], [("판단불가", "section1 > 활용 서식 > 문단 12")])   # 기준 미만은 후보(판단불가)
         context.presence = {}
         self.assertEqual(form_images.check_form_images(context)[0]["체크"], {"⑧ 서식·부록 글자 이미지 해상도": "-"})
 

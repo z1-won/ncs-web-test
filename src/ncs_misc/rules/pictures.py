@@ -1,8 +1,8 @@
 """기타 ②: 사진·삽화의 누락 또는 유실 — 학습마다 1행.
 
-누락: [그림 N-M] 캡션 위에 그림 개체가 없음. 그림은 캡션 순서대로 가까운 것부터 짝짓는다(나란히 놓인 두 그림 + 두 캡션).
+누락(△): [그림 N-M] 캡션 위에 그림 개체가 없음 — 그림을 못 찾은 것일 수 있어 사람 확인(안내서 D-01: 후보 제시). 그림은 캡션 순서대로 가까운 것부터 짝짓는다(나란히 놓인 두 그림 + 두 캡션).
       그림 대신 표·텍스트(표로 그린 양식)가 있으면 △ — 삽화 누락인지 표로 그린 것인지 사람 확인.
-유실: 그림 개체가 가리키는 BinData 파일이 패키지에 없거나 0바이트.
+유실(X): 그림 개체가 가리키는 BinData 파일이 패키지에 없거나 0바이트 — 파일이 없다는 사실이라 확정한다.
 hwp는 그림 목록을 읽지 못해 △.
 """
 
@@ -52,12 +52,12 @@ def check_pictures(context) -> list[dict]:
                 lost.append(p)
                 details.append({"문단": p, "BinData": bin_id, "문제": "그림 파일 없음" if item is None else "그림 파일 0바이트"})
         count = sum(1 for p, _ in pictures if a <= p < b)
-        checks = {"캡션에 그림 있음": X if missing else TRI if drawn else O, "그림 파일 존재": X if lost else O}
+        checks = {"캡션에 그림 있음": TRI if missing or drawn else O, "그림 파일 존재": X if lost else O}
         notes = {}
         if missing or drawn:
             parts = []
             if missing:
-                parts.append(f"{len(missing)}개 위에 그림이 없음(" + ", ".join(visible(paragraphs[i])[:14] for i in missing[:3]) + ")")
+                parts.append(f"{len(missing)}개 위에 그림 개체가 보이지 않음 — 누락인지 확인(" + ", ".join(visible(paragraphs[i])[:14] for i in missing[:3]) + ")")
             if drawn:
                 parts.append(f"{len(drawn)}개는 그림 대신 표·텍스트(" + ", ".join(visible(paragraphs[i])[:14] for i in drawn[:3]) + ") — 표로 그린 양식인지 확인")
             notes["캡션에 그림 있음"] = f"캡션 {len(captions)}개 중 " + " · ".join(parts)

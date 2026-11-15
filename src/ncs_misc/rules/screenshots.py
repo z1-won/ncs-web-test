@@ -7,14 +7,14 @@
    - 띠 배경이 고르다(행마다 배경색에 가까운 픽셀이 60% 이상, 행끼리 배경 밝기 차 12 이하)
    - 띠 위 화면과 경계가 뚜렷하다(띠 바로 위 행들과 배경 밝기 차 25 이상)
    - 띠 안에 아이콘 같은 내용이 있다(배경과 다른 픽셀 2~45%) — 빈 여백 띠는 작업 표시줄이 아니다
-3. 판정: 띠 감지 → X(체크리스트가 직접 요구) · 픽셀을 읽지 못함(프로그레시브 JPEG 등) → △ · 감지 안 됨 → O
+3. 판정: 띠 감지 → △(후보 — 안내서 D-02: 후보 제시 + 에디팅 기관 확정. 감지 기준도 합성 이미지로만 검증했다) · 픽셀을 읽지 못함(프로그레시브 JPEG 등) → △ · 감지 안 됨 → O
    후보가 없으면 O(캡처 화면 없음). hwp는 그림을 읽지 못해 △.
 실제 작업 표시줄이 있는 캡처 예시가 없어 감지 기준은 합성 이미지로만 검증했다(SW제품기획 최종본 후보 3개는 감지 안 됨).
 """
 
 import re
 
-from ncs_core import O, TRI, X
+from ncs_core import O, TRI
 
 from ncs_core.pictures import decode_rows, label, picture_records
 from .common import row
@@ -97,8 +97,8 @@ def check_screenshots(context) -> list[dict]:
         band = find_taskbar({y: [_luma(p) for p in line] for y, line in decoded.items()}, h)
         if band:
             flagged += 1
-            rows.append(row("④", place, r["caption"], {**shown, "띠 높이": band}, {CHECK: X},
-                            {CHECK: f"{label(r)} 맨 아래 {band}px에 작업 표시줄로 보이는 띠(고른 배경 + 위 화면과 경계 + 아이콘)"},
+            rows.append(row("④", place, r["caption"], {**shown, "띠 높이": band}, {CHECK: TRI},
+                            {CHECK: f"{label(r)} 맨 아래 {band}px에 작업 표시줄로 보이는 띠(고른 배경 + 위 화면과 경계 + 아이콘) — 작업 표시줄인지 사람 확인"},
                             "캡처 화면에서 작업 표시줄을 잘라 내거나 지움(프로그램명 노출 불가)"))
     if not flagged:
         rows.append(row("④", "section1", "", {"캡처 후보": len(candidates)}, {CHECK: O},

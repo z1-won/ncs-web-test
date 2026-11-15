@@ -4,13 +4,16 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
 import { FileSlot } from "../components/FileSlot.jsx";
+import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { UpscalePanel } from "../components/UpscalePanel.jsx";
+import { IMAGE_DPI_DEFAULT, IMAGE_DPI_OPTIONS } from "../lib/dpi.js";
 import { usePageTitle } from "../lib/hooks.js";
 
 export default function UpscalePage() {
   usePageTitle("업스케일링");
   const [file, setFile] = useState(null);
+  const [targetDpi, setTargetDpi] = useState(String(IMAGE_DPI_DEFAULT));   // 해상도 기준 — 원고 검수(기타 ⑤·⑧)와 같은 선택지
   const [upload, setUpload] = useState({ status: "idle" });   // { status: idle|uploading|ready|error, token, name, error }
   const tokenRef = useRef(null);   // 서버에 올려 둔 토큰 — 파일을 바꾸거나 페이지를 떠날 때 반납한다
 
@@ -50,10 +53,17 @@ export default function UpscalePage() {
         <FileSlot id="file-upscale" label="원고" required accept=".hwpx" file={file} onChange={setFile}
                   uploading={upload.status === "uploading"} invalid={upload.status === "error" ? upload.error : null}
                   hint="hwpx 원고만 됩니다. hwp는 한글에서 hwpx로 저장해 올리세요." />
+        <div className="form-group">
+          <div className="form-tit"><label htmlFor="upscale-dpi">이미지 해상도 기준</label></div>
+          <div className="form-conts">
+            <KrdsSelect id="upscale-dpi" value={targetDpi} options={IMAGE_DPI_OPTIONS} onChange={setTargetDpi} title="이미지 해상도 기준 선택" describedBy="upscale-dpi-hint" />
+          </div>
+          <p className="form-hint" id="upscale-dpi-hint">이 값보다 낮은 그림을 찾아 보여 줍니다. 원고 검수의 기준과 같은 선택지입니다.</p>
+        </div>
       </div>
 
       {upload.status === "ready"
-        ? <UpscalePanel key={upload.token} token={upload.token} manuscriptName={upload.name} moduleCode="" />
+        ? <UpscalePanel key={`${upload.token}-${targetDpi}`} token={upload.token} manuscriptName={upload.name} moduleCode="" targetDpi={Number(targetDpi)} />
         : <p className="empty">원고를 올리면 해상도가 낮은 그림 목록이 여기에 표시됩니다.</p>}
       <TopButton />
     </main>

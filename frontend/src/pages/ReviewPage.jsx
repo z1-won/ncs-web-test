@@ -15,6 +15,7 @@ import { ResultHead } from "../components/ResultHead.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { Pagination } from "../components/Pagination.jsx";
+import { IMAGE_DPI_DEFAULT, IMAGE_DPI_OPTIONS } from "../lib/dpi.js";
 import { usePageTitle } from "../lib/hooks.js";
 
 const HISTORY_PAGE = 10;   // 이력 표 한 쪽 행 수(KRDS 페이지네이션)
@@ -37,6 +38,7 @@ export default function ReviewPage() {
   const fileRoles = useMemo(() => filled.map((slot) => slot.role), [filled]);   // files와 같은 순서의 역할
   const [tried, setTried] = useState(false);   // 실행을 한 번 눌렀는가 — 그 뒤부터 빈 필수 칸에 오류 문구를 보인다
   const [moduleCode, setModuleCode] = useState("");
+  const [imageDpi, setImageDpi] = useState(String(IMAGE_DPI_DEFAULT));   // 이미지 해상도 기준 — 기타 ⑤·⑧에 쓰인다
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);   // 성공 안내(메모 원고 요약 등)
@@ -120,6 +122,7 @@ export default function ReviewPage() {
 
   const needsPlan = (selected.required || []).includes("plan");
   const usesPrint = (selected.optional || []).includes("print");
+  const usesImageDpi = check === ALL_CHECK || check === "misc";
 
   // 실행 전 확인: 원고가 없거나, 개발계획서가 필요한 구성요소인데 없으면 실행하지 않고 오류 문구를 보인다(#13). 통과하면 null.
   function missingInput() {
@@ -142,12 +145,12 @@ export default function ReviewPage() {
     const controller = new AbortController();
     aborter.current = controller;
     let kept = await ensureUpload(controller.signal);
-    let answer = kept ? await api.review({ check, moduleCode, upload: kept.token, signal: controller.signal }) : null;
+    let answer = kept ? await api.review({ check, moduleCode, upload: kept.token, imageDpi, signal: controller.signal }) : null;
     if (answer && !answer.ok && answer.status === 400 && /만료/.test(answer.error)) {
       setUpload({ status: "idle" });
       uploadRef.current = { status: "idle" };
       kept = await ensureUpload(controller.signal);
-      answer = kept ? await api.review({ check, moduleCode, upload: kept.token, signal: controller.signal }) : null;
+      answer = kept ? await api.review({ check, moduleCode, upload: kept.token, imageDpi, signal: controller.signal }) : null;
     }
     if (answer && !answer.aborted) {
       if (!answer.ok) setError(answer.error);
@@ -190,7 +193,7 @@ export default function ReviewPage() {
       if (items[value].status === "skipped") continue;
       if (cancelled) { update(value, { status: "cancelled" }); continue; }
       update(value, { status: "running" });
-      const { ok, data, error: message, aborted } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group, signal: controller.signal });
+      const { ok, data, error: message, aborted } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group, imageDpi, signal: controller.signal });
       if (aborted) { cancelled = true; update(value, { status: "cancelled" }); continue; }
       update(value, ok ? { status: "done", data } : { status: "error", error: message });
     }
@@ -287,6 +290,17 @@ export default function ReviewPage() {
           </div>
           <p className="form-hint">비우면 원고 파일명에서 추출</p>
         </div>
+
+        {/* 이미지 해상도 기준 — 지침에 숫자 기준이 없어 고르게 한다. 기타 ⑤·⑧만 쓰므로 전체·기타를 고를 때만 보인다 */}
+        {usesImageDpi && (
+          <div className="form-group">
+            <div className="form-tit"><label htmlFor="image-dpi">이미지 해상도 기준</label></div>
+            <div className="form-conts">
+              <KrdsSelect id="image-dpi" value={imageDpi} options={IMAGE_DPI_OPTIONS} onChange={setImageDpi} title="이미지 해상도 기준 선택" describedBy="image-dpi-hint" />
+            </div>
+            <p className="form-hint" id="image-dpi-hint">기타 ⑤·⑧에 적용 — 이 값보다 낮은 그림은 판단불가로 표시</p>
+          </div>
+        )}
 
         <div className="form-group form-actions">
           {/* 다른 칸의 레이블(form-tit) 높이만큼 빈 자리 — 같은 줄의 입력칸과 버튼 윗선·높이가 맞게 */}

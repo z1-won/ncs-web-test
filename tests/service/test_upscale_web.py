@@ -92,6 +92,14 @@ class UpscaleWebTests(unittest.TestCase):
         self.token = response.json()["upload"]
         self.assertEqual(response.json()["roles"]["manuscript"], name)
 
+    def test_target_dpi_choice_sets_list_and_colour_boundary(self):
+        """해상도 기준을 바꾸면 목록 대상과 빨강/노랑 경계(기준의 2/3)가 따라 바뀐다 — 300 → 200, 150 → 100."""
+        default = self.client.get(f"/api/uploads/{self.token}/pictures").json()
+        self.assertEqual((default["target_dpi"], default["min_dpi"]), (300, 200))
+        low = self.client.get(f"/api/uploads/{self.token}/pictures?target_dpi=150").json()
+        self.assertEqual((low["target_dpi"], low["min_dpi"]), (150, 100))
+        self.assertEqual([p["dpi"] for p in low["pictures"]], [100])   # 100 DPI 그림은 150 기준에도 미달
+
     def tearDown(self):
         self.client.__exit__(None, None, None)
         self.out.cleanup()
