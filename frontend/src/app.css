@@ -1,5 +1,38 @@
 /* 이 페이지에만 필요한 배치. 색·간격·글자 크기는 모두 KRDS 토큰(--krds-*)을 쓴다. */
 /* 세로 스크롤바 자리를 항상 확보 — 이력 '더 보기/최근 5건만 보기'로 페이지 길이가 바뀌며 스크롤바가 생기고 사라질 때 화면 폭(≈15px)이 변해 표 칸이 들썩이던 것 */
+/* ── 색조: 한국직업능력연구원 누리집(krivet.re.kr) 기준 ─────────────────────────────────────────────
+   KRDS는 모든 색을 두 색 단계표(primary 파랑, secondary 남색)에서 끌어 쓴다. 단계표만 바꾸면 버튼·메뉴·표·초점 테두리가 함께 바뀐다.
+   - primary  → 연구원 CI 주황. 50 = 누리집 강조색 #ea7110(심볼 색 Pantone 1645C 계열), 60 이상은 글자용으로 어둡게(흰 바탕 대비 4.5:1 이상)
+   - secondary → 누리집 메뉴 띠·글자의 따뜻한 갈회색. 50 #786f62, 70 #4a443c, 80 #3c3730, 90 #27241f는 누리집에서 잰 값
+   판정 색(적합 초록·부적합 빨강·판단불가 노랑·안내 파랑)은 뜻이 있는 색이라 KRDS 그대로 둔다. */
+:root {
+  --krds-color-light-primary-5: #fff4ea;
+  --krds-color-light-primary-10: #ffe3c9;
+  --krds-color-light-primary-20: #ffc892;
+  --krds-color-light-primary-30: #fba75c;
+  --krds-color-light-primary-40: #f28a2e;
+  --krds-color-light-primary-50: #ea7110;
+  --krds-color-light-primary-60: #b84f00;
+  --krds-color-light-primary-70: #8f3d00;
+  --krds-color-light-primary-80: #6b2e00;
+  --krds-color-light-primary-90: #472000;
+  --krds-color-light-primary-95: #2e1500;
+  --krds-color-light-secondary-5: #f6f5f3;
+  --krds-color-light-secondary-10: #e7e4df;
+  --krds-color-light-secondary-20: #d0cbc3;
+  --krds-color-light-secondary-30: #b4aea4;
+  --krds-color-light-secondary-40: #968f84;
+  --krds-color-light-secondary-50: #786f62;
+  --krds-color-light-secondary-60: #5f584e;
+  --krds-color-light-secondary-70: #4a443c;
+  --krds-color-light-secondary-80: #3c3730;
+  --krds-color-light-secondary-90: #27241f;
+  --krds-color-light-secondary-95: #1a1814;
+  /* 주 버튼은 주황이 아니라 갈회색 — 주황 바탕의 흰 글자는 대비가 2.9:1이라 KRDS 기준(4.5:1)에 못 미친다. 주황은 강조선·선택 표시에만 쓴다 */
+  --krds-light-color-button-primary-fill: var(--krds-color-light-secondary-70);
+  --krds-light-color-button-primary-fill-hover: var(--krds-color-light-secondary-80);
+  --krds-light-color-button-primary-fill-pressed: var(--krds-color-light-secondary-90);
+}
 html { scrollbar-gutter: stable; }
 .page {
   padding-top: var(--krds-padding-10);
