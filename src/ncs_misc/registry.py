@@ -1,4 +1,4 @@
-"""규칙 등록. 기타 ①~⑧ — ③ 제품명 사전, ④ 캡처 화면 픽셀, ⑤⑧ 실효 DPI(ncs_misc.images)."""
+"""규칙 등록. 기타 ①~⑧ — ③ 제품명 사전, ④ 캡처 화면 픽셀, ⑤⑧ 실효 DPI(ncs_core.pictures)."""
 
 from ncs_core import Rule
 

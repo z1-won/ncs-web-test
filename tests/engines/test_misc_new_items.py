@@ -9,8 +9,8 @@ from types import SimpleNamespace
 from unittest import mock
 
 from ncs_misc.config import CheckConfig
-from ncs_misc.images import decode_rows, image_header
-from ncs_misc.jpeg import decode_jpeg_rows
+from ncs_core.jpeg import decode_jpeg_rows
+from ncs_core.pictures import decode_rows, image_header
 from ncs_misc.rules import brand_names, form_images, resolution, screenshots
 from ncs_misc.rules.screenshots import find_taskbar, is_capture_candidate
 

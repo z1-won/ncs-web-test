@@ -6,12 +6,12 @@
   △  < 150 DPI  인쇄용으로 흔히 쓰는 최소 기준 미만 — 규정이 없고 사람이 검수한 최종본에도 107개 있어 사람 확인
   O  ≥ 150 DPI
 그림 파일을 못 읽거나 형식을 모르면 △. hwp는 그림 개체를 읽지 못해 △.
-수정 제안에는 그림마다 계산한 필요 픽셀 수와 최대 출력 크기(images.size_advice)를 적는다.
+수정 제안에는 그림마다 계산한 필요 픽셀 수와 최대 출력 크기(ncs_core.pictures.size_advice)를 적는다.
 """
 
 from ncs_core import NA, O, TRI, X
 
-from ..images import label, picture_records, size_advice
+from ncs_core.pictures import label, picture_records, size_advice
 from .common import row
 
 CHECK = "⑤ 이미지 해상도"

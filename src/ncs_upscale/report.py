@@ -6,7 +6,7 @@ import html
 import json
 from pathlib import Path
 
-from ncs_misc.images import label
+from ncs_core.pictures import label
 
 from .pipeline import Job, grade
 

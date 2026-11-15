@@ -1,6 +1,7 @@
 """그림 정보 — 쪽 위 출력 크기, 원본 픽셀 크기, 실효 DPI, 캡션, 그리고 픽셀 행 읽기(BMP·PNG·JPEG). 표준 라이브러리만 쓴다.
 
-기타 ③④⑤⑧이 함께 쓴다. hwpx만 지원한다(hwp는 그림 개체를 읽지 못함 — Document.pictures가 비어 있음).
+기타 ③④⑤⑧(ncs_misc)과 그림 업스케일(ncs_upscale)이 함께 쓴다 — 두 패키지가 서로를 import하지 않도록 공통 코어에 둔다.
+hwpx만 지원한다(hwp는 그림 개체를 읽지 못함 — Document.pictures가 비어 있음).
 
   실효 DPI = 원본 픽셀 ÷ 출력 크기(인치). 출력 크기는 <hp:pic>의 <hp:sz>(HWP 단위, 1/7200 inch) — Document.figures.
   가로·세로 DPI 중 작은 쪽을 쓴다(한쪽만 늘린 그림도 잡기 위해).

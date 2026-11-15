@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from ncs_core.documents import load_document
-from ncs_misc.images import picture_records
+from ncs_core.pictures import picture_records
 
 from . import report
 from .engine import DEFAULT_ENGINE, ENGINES

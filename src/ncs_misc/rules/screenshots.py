@@ -2,7 +2,7 @@
 
 1. 캡처 화면 후보: 캡션·근처 출처 줄에 '스크린 숏·화면·캡처' 단서가 있거나, 픽셀 비율이 모니터 비율(16:9·16:10·21:9)이고
    가로가 화면 해상도 범위(800~3,840px)인 그림. 4160×2340 같은 카메라 사진 크기는 후보가 아니다.
-2. 후보의 맨 아래 행들을 픽셀로 읽어(BMP·PNG·JPEG — ncs_misc.images, ncs_misc.jpeg) 작업 표시줄 띠를 찾는다:
+2. 후보의 맨 아래 행들을 픽셀로 읽어(BMP·PNG·JPEG — ncs_core.pictures, ncs_core.jpeg) 작업 표시줄 띠를 찾는다:
    - 높이: 그림 높이의 2.5~7%(1080px 화면이면 약 27~75px)
    - 띠 배경이 고르다(행마다 배경색에 가까운 픽셀이 60% 이상, 행끼리 배경 밝기 차 12 이하)
    - 띠 위 화면과 경계가 뚜렷하다(띠 바로 위 행들과 배경 밝기 차 25 이상)
@@ -16,7 +16,7 @@ import re
 
 from ncs_core import O, TRI, X
 
-from ..images import decode_rows, label, picture_records
+from ncs_core.pictures import decode_rows, label, picture_records
 from .common import row
 
 CHECK = "④ 캡처 화면 작업 표시줄"

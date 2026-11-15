@@ -19,7 +19,7 @@ from typing import Callable
 from PIL import Image
 
 from ncs_core.documents import load_document
-from ncs_misc.images import label, picture_records
+from ncs_core.pictures import label, picture_records
 
 from .engine import DEFAULT_ENGINE, ENGINES
 from .pipeline import DEFAULT_MIN_DPI, DEFAULT_TARGET_DPI, Job, _rgb, grade, plan, upscale, write_hwpx

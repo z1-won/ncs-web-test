@@ -13,7 +13,7 @@ import re
 
 from ncs_core import O, TRI, X, visible
 
-from ..images import picture_records
+from ncs_core.pictures import picture_records
 from .common import row
 
 CHECK = "③ 본문 상호·상품명·프로그램명"

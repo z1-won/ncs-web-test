@@ -12,7 +12,7 @@ import re
 
 from ncs_core import NA, O, TRI, X
 
-from ..images import label, picture_records, size_advice
+from ncs_core.pictures import label, picture_records, size_advice
 from .common import row
 
 CHECK = "⑧ 서식·부록 글자 이미지 해상도"
