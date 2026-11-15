@@ -43,7 +43,7 @@ npm run dev
 
 ## 업스케일링 페이지
 
-메인 메뉴의 **업스케일링**(`/upscale`)은 원고 검수와 따로 쓰는 페이지입니다. 원고(hwpx)를 이 페이지에서 올리면 목표 DPI(기본 300) 미만 그림을 낮은 순으로 보여 주고, 고른 그림만 한 장씩 키웁니다. 화면은 `frontend/src/pages/UpscalePage.jsx`, 그림 목록·결과는 `components/UpscalePanel.jsx`, 서버는 `/api/uploads/{token}/pictures…` 경로와 `src/ncs_upscale/`입니다.
+메인 메뉴의 **업스케일링**(`/upscale`)은 원고 검수와 따로 쓰는 페이지입니다. 원고(hwpx)를 이 페이지에서 올리면 목표 DPI(기본 300) 미만 그림을 원고에 나오는 순서로 보여 주고, 고른 그림만 한 장씩 키웁니다. 화면은 `frontend/src/pages/UpscalePage.jsx`, 그림 목록·결과는 `components/UpscalePanel.jsx`, 서버는 `/api/uploads/{token}/pictures…` 경로와 `src/ncs_upscale/`입니다.
 
 업스케일은 외부 실행 파일(기본 `waifu2x-ncnn-vulkan`)을 부릅니다. 실행 파일은 저장소에 없으므로 따로 내려받아 도구 폴더에 둡니다. 도구 폴더는 환경 변수 `NCS_UPSCALE_TOOLS`로 지정하고, 없으면 저장소 바로 위 폴더의 `tools/`를 봅니다. 엔진을 찾지 못하면 그림 목록과 원본 보기는 되고 업스케일 버튼만 꺼집니다. 지금 코드는 실행 파일 이름을 `waifu2x-ncnn-vulkan.exe`로 찾습니다(`src/ncs_upscale/engine.py`).
 

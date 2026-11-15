@@ -78,12 +78,13 @@ def engine_status(tools: Path | None = None) -> dict:
 
 def list_pictures(manuscript: Path, work: Path, *, target_dpi: int = DEFAULT_TARGET_DPI,
                   min_dpi: int = DEFAULT_MIN_DPI) -> dict:
-    """목표 DPI 미만인 그림 파일 목록(낮은 DPI 순). 같은 그림 파일을 여러 곳에 쓰면 한 항목에 자리를 모은다."""
+    """목표 DPI 미만인 그림 파일 목록(원고에 나오는 순서). 같은 그림 파일을 여러 곳에 쓰면 한 항목에 자리를 모으고, 처음 나온 자리로 줄 세운다."""
     records, binaries = _records(manuscript)
     jobs, skipped = plan(records, binaries, ENGINES[DEFAULT_ENGINE], target_dpi=target_dpi, max_scale=MAX_SCALE)
     done = {item["bin_id"]: item for item in _results(work)}
     pictures = []
-    for job in sorted(jobs, key=lambda j: j.dpi):
+    # 원고를 넘겨 보며 찾을 수 있게 그림이 나오는 순서(구역 → 문단)로. hwpx에는 쪽 번호가 없어 문단 위치로 줄 세운다
+    for job in sorted(jobs, key=lambda j: min((u["section"], u["para"]) for u in j.uses)):
         first = job.uses[0]
         pictures.append({
             "bin_id": job.bin_id, "label": label(first), "caption": first.get("caption") or "",

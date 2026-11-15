@@ -111,7 +111,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode }) {
         </div>
       </dl>
       <ul className="krds-info-list dash upscale-notes">
-        <li>기준은 쪽에 출력되는 크기에서의 실효 해상도 {data.target_dpi} DPI입니다. 아래 목록은 해상도가 낮은 순서입니다.</li>
+        <li>기준은 쪽에 출력되는 크기에서의 실효 해상도 {data.target_dpi} DPI입니다. 아래 목록은 원고에 그림이 나오는 순서입니다.</li>
         <li>업스케일은 화질만 올립니다. 모델이 글자·선을 바꿀 수 있으니 결과를 원본과 나란히 놓고 확인하세요.</li>
       </ul>
       {!engine.available && <PageAlert kind="danger">업스케일 엔진을 쓸 수 없습니다. 그림 목록과 원본 보기만 됩니다.{"\n"}{engine.problem}</PageAlert>}

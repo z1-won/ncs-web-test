@@ -362,7 +362,7 @@ def create_app(
 
     @app.get("/api/uploads/{token}/pictures")
     def pictures(token: str, target_dpi: int = Query(300, ge=50, le=1200)) -> Response:
-        """목표 DPI 미만 그림 파일 목록(낮은 순)과 업스케일 엔진 상태."""
+        """목표 DPI 미만 그림 파일 목록(원고에 나오는 순서)과 업스케일 엔진 상태."""
         def action():
             from ncs_upscale import service
             manuscript, work = _picture_upload(token)
