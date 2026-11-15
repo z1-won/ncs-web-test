@@ -222,7 +222,6 @@ export default function PlanDraftPage() {
 
       <div id="plan-check" className="results-anchor nav-anchor" />
       {busy && <ResultHead status={<Spinner label="초안을 만들고 점검하는 중" />} />}
-      {!busy && !check && <p className="empty result-placeholder">초안을 만들면 함께 돌린 점검 ①~⑩ 결과가 여기에 표시됩니다.</p>}
       {check && made && (
         <section>
           <ResultHead
