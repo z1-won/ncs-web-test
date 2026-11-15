@@ -234,8 +234,11 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 
 
 /* ── 헤더·푸터 로고 ── KRDS 표준 치수(.logo/.f-logo 13.7×4.8rem, 모바일 9.4×3.2rem)는 그대로 두고 배경 이미지만 KRDS 로고 → 동국대 로고로 교체 */
-#krds-header .header-branding .logo a,
 #krds-footer .f-logo { background-image: url("/img/logo_dongguk.png"); }
+/* 헤더 로고는 한국직업능력연구원(검수 기준 기관). 가로로 긴 로고(약 8:1)라 KRDS 로고 칸(.logo)의 높이는 그대로 두고 너비만 넓힌다 — 로고는 칸 안에서 비율대로 왼쪽에 붙는다 */
+#krds-header .header-container .logo { width: 26rem; }
+#krds-header .header-container .logo a { background-image: url("/img/logo_krivet.png"); background-position: left center; }
+@media (max-width: 1023px) { #krds-header .header-container .logo { width: 17rem; } }
 /* 운영기관 식별자 로고: 표준 높이(size-height-4, 모바일 size-height-3)는 유지, 직능연 가로형 로고(약 8:1)에 맞춰 너비만 넓힘 */
 #krds-footer .krds-identifier .logo { width: 19rem; background-image: url("/img/logo_krivet.png"); }
 @media (max-width: 1023px) { #krds-footer .krds-identifier .logo { width: 16rem; } }

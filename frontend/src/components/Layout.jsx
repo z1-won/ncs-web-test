@@ -75,7 +75,7 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
             <div className="inner">
               <div className="header-branding">
                 <h2 className="logo">
-                  <Link to="/"><span className="sr-only">NCS 학습모듈 검수 — 동국대학교</span></Link>
+                  <Link to="/"><span className="sr-only">NCS 학습모듈 검수 — 한국직업능력연구원</span></Link>
                 </h2>
               </div>
             </div>
