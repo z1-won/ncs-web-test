@@ -121,7 +121,7 @@
 - `rules/navigator.py` ①②③: 내비게이터 학습명에 코드 없음, '~하기', 차례·내용체계와 일치, 묶음 간 일치. `contents.py` ④: 본문 `N-M.` 제목 = 차례 = 내용체계. `goals.py` ⑤: 학습 목표 = 계획서(순서 무시, 어절 차이 표시). `numbering.py` ⑥: 번호 체계 󰊱〉1.〉(1)〉(가)〉1)〉가)〉①. `figtab.py`(추출)·`rules/figures.py` ⑦: 그림·표 번호 연속, 괄호, 기호 글꼴. `sources.py` ⑧: 그림·표 출처 줄과 F14 14종 골격.
 
 ### `ncs_perform` 수행 내용 ①②④
-`blocks.py`가 본문을 '수행 내용' 블록(제목·재료·안전·수행 순서)으로 자르고, `rules/title.py` ①: 제목 '~하기', `rules/sentences.py` ④: 수행 순서 '~한다.' 종결. ②는 `rules/brands.py`가 재료·기기 줄을 먼저 사전(`ncs_core.brands`)으로 보고(명확한 이름 X), 같은 줄만 LLM에 보내 사전에 없는 상표·상품·제조사명 후보(△)를 받는다. 시스템 프롬프트는 `system_prompt(module_code)`가 원고 분야와 그 분야의 공용 명칭으로 만든다. ③은 미구현.
+`blocks.py`가 본문을 '수행 내용' 블록(제목·재료·안전·수행 순서)으로 자르고, `rules/title.py` ①: 제목 '~하기', `rules/sentences.py` ④: 수행 순서 '~한다.' 종결. ③은 `rules/safety.py`: 안전·유의 사항이 없거나 '해당 사항 없음'이면 X, 있으면 그 줄만 LLM에 보내 추상적인 줄 후보(△)를 받는다. ②는 `rules/brands.py`가 재료·기기 줄을 먼저 사전(`ncs_core.brands`)으로 보고(명확한 이름 X), 같은 줄만 LLM에 보내 사전에 없는 상표·상품·제조사명 후보(△)를 받는다. 시스템 프롬프트는 `system_prompt(module_code)`가 원고 분야와 그 분야의 공용 명칭으로 만든다. ③은 미구현.
 
 ### `ncs_teaching` 교수·학습 방법 ①~④
 `blocks.py`가 학습마다 교수 방법/학습 방법 글머리 목록을 자르고, `rules/counts.py` ①③: 각 3개 이상, `rules/sentences.py` ②④: 행동동사(-ㄴ다) 종결.

@@ -1,4 +1,4 @@
-"""생성형 AI(LLM) 호출 — 규칙으로 판단할 수 없는 항목(수행 ②③, 평가 ④, 기타 ③)의 '사람 확인(△) 후보'를 만드는 데만 쓴다.
+"""생성형 AI(LLM) 호출 — 규칙으로 판단할 수 없는 항목(수행 ②③, 평가 ④)의 '사람 확인(△) 후보'를 만드는 데만 쓴다.
 
 원칙
 - LLM 결과는 자동 X를 내지 않는다. 후보와 근거 문장을 △로 보고하고 사람이 확정한다.
@@ -35,6 +35,8 @@ DEFAULT_BASE_URL = "https://api.openai.com/v1"
 # 운영 중 임시로 좁히려면 .env에 LLM_ALLOWED_TASKS=perform2_brands 처럼 쉼표 목록으로 덮어쓸 수 있다(넓히는 건 불가).
 ALLOWED_TASKS = frozenset({
     "perform2_brands",   # 수행 내용 ② 재료·기기의 상표·상품·제조사명 노출
+    "perform3_safety",   # 수행 내용 ③ 안전·유의 사항이 추상적인가 — 블록의 안전·유의 사항 줄만 보낸다
+    "evaluation4_items", # 평가 ④ 평가 항목이 학습 목표와 연관된 구체적 내용인가 — 학습의 학습 목표와 평가 항목만 보낸다
 })
 
 
@@ -192,3 +194,26 @@ def usage_summary(cfg: LlmSettings | None = None) -> dict:
                 total["input_tokens"] += row.get("input_tokens", 0)
                 total["output_tokens"] += row.get("output_tokens", 0)
     return total
+
+
+def line_findings(task: str, system: str, user: str, lines: list[str], *, asker=None) -> tuple[list[dict], str]:
+    """번호 붙인 줄 목록을 물어 '지적할 줄'만 받는 후보 규칙의 공통 부분 → (지적 목록, 모델 이름).
+
+    lines는 프롬프트에서 1부터 번호를 붙인 줄(지적을 받을 수 있는 줄)이고, user는 그 번호가 들어간 실제 질문 글이다.
+    모델 출력 {"findings": [{"line": 번호, …}]} 중 실제 줄 번호를 가리키는 것만 남긴다(환각 방지). 줄마다 첫 지적만 쓴다.
+    돌려주는 지적: {'line', '원문', 'kind', 'reason', 'suggestion'}.
+    asker: 테스트에서 LLM 대신 넣는 함수((lines) → {'data': {...}, 'model': …}). 키·승인이 없거나 호출이 실패하면 LlmError.
+    """
+    answer = asker(lines) if asker is not None else ask_json(task, system, user).__dict__
+    out, seen = [], set()
+    for finding in (answer.get("data") or {}).get("findings") or []:
+        try:
+            no = int(finding.get("line"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if not 1 <= no <= len(lines) or no in seen:
+            continue
+        seen.add(no)
+        out.append({"line": no, "원문": lines[no - 1], "kind": str(finding.get("kind") or ""),
+                    "reason": str(finding.get("reason") or ""), "suggestion": str(finding.get("suggestion") or "")})
+    return sorted(out, key=lambda f: f["line"]), str(answer.get("model") or settings().model)
