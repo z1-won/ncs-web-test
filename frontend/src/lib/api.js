@@ -55,7 +55,7 @@ export async function download(path, body, filename) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  const summary = response.headers.get("x-memo-summary");
+  const summary = response.headers.get("x-memo-summary") || response.headers.get("x-upscale-summary");
   const check = response.headers.get("x-plan-check");   // 개발계획서 초안 — 함께 돌린 ①~⑩ 점검 요약(URL 인코딩 JSON)
   return { ok: true, summary: summary ? JSON.parse(summary) : null, check: check ? JSON.parse(decodeURIComponent(check)) : null };
 }
@@ -90,6 +90,17 @@ export const api = {
   plan: {
     subclasses: () => request("/api/plan/subclasses"),
     draft: (body) => download("/api/plan/draft", body, `개발계획서_초안_${body.duty}.hwpx`),
+  },
+  // 그림 업스케일: 업로드 토큰의 원고 그림 목록 → 원본 보기 → 한 장씩 업스케일(20~40초) → 업스케일한 그림으로 제안본 hwpx
+  pictures: {
+    list: (token) => request(`/api/uploads/${token}/pictures`),
+    originalUrl: (token, binId) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/original`,
+    upscale: (token, binId) => request(`/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscale`, { method: "POST" }),
+    // v: 다시 업스케일했을 때 브라우저가 예전 그림을 쓰지 않게 붙이는 값
+    upscaledUrl: (token, binId, v) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?v=${v || 0}`,
+    downloadUrl: (token, binId, name) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?download=${encodeURIComponent(name)}`,
+    proposal: (token, moduleCode, filename) =>
+      download(`/api/uploads/${token}/proposal`, multipart({ module_code: moduleCode || "" }), filename),
   },
   groups: {
     list: () => request("/api/groups"),
