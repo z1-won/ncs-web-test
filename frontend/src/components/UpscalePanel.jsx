@@ -24,7 +24,8 @@ function dpiTone(dpi, target, min) {
 // targetDpi: 해상도 기준(150/300). 바뀌면 부모가 key를 바꿔 목록을 새로 읽는다(같은 기준으로 업스케일한 결과만 다시 보인다 — 다른 기준의 결과는 다시 키워야 한다)
 export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
   const [state, setState] = useState({ status: "loading" });   // { status: loading|ready|error, data, error }
-  const [results, setResults] = useState({});                   // bin_id → 업스케일 결과 정보(서버 JSON)
+  const [results, setResults] = useState({});                   // bin_id → 업스케일 결과 정보(서버 JSON) — 마지막에 돌린 것(제안본에 들어감)
+  const [variants, setVariants] = useState({});                 // bin_id → { 모델 이름: 결과 정보 } — 모델별 결과를 나란히 보기 위한 것
   const [busy, setBusy] = useState(null);                       // 업스케일 중인 bin_id 또는 "proposal"
   const [busyEngine, setBusyEngine] = useState(null);           // 한 장 업스케일에서 고른 모델 이름(버튼 문구용)
   const [batch, setBatch] = useState(null);                     // 여러 장 실행 중: { total, done }
@@ -41,14 +42,20 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
     let current = true;
     setState({ status: "loading" });
     setResults({});
+    setVariants({});
     setError(null);
     setNotice(null);
     api.pictures.list(token, targetDpi).then(({ ok, data, error: message }) => {
       if (!current) return;
       if (!ok) { setState({ status: "error", error: message }); return; }
       const done = {};
-      data.pictures.forEach((p) => { if (p.upscaled) done[p.bin_id] = { ...p.upscaled, v: Date.now() }; });
+      const sides = {};
+      data.pictures.forEach((p) => {
+        if (p.upscaled) done[p.bin_id] = { ...p.upscaled, v: Date.now() };
+        Object.entries(p.variants || {}).forEach(([name, info]) => { sides[p.bin_id] = { ...sides[p.bin_id], [name]: { ...info, v: Date.now() } }; });
+      });
       setResults(done);
+      setVariants(sides);
       setState({ status: "ready", data });
     });
     return () => { current = false; };
@@ -104,7 +111,9 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
     const { ok, data: info, error: message } = await api.pictures.upscale(token, binId, targetDpi, engineName);
     if (!alive.current) return null;
     if (!ok) { setError(message); return null; }
-    setResults((prev) => ({ ...prev, [binId]: { ...info, v: Date.now() } }));
+    const stamped = { ...info, v: Date.now() };
+    setResults((prev) => ({ ...prev, [binId]: stamped }));
+    if (info.engine) setVariants((prev) => ({ ...prev, [binId]: { ...prev[binId], [info.engine]: stamped } }));
     return info.status;
   }
 
@@ -178,7 +187,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
       <ul className="krds-info-list dash upscale-notes">
         <li>기준은 쪽에 출력되는 크기에서의 실효 해상도 {data.target_dpi} DPI입니다. 아래 목록은 원고에 그림이 나오는 순서입니다.</li>
         <li>2배로 기준에 닿지 않는 그림은 4배로 키웁니다. 4배는 한 장에 약 4배 오래 걸립니다{slow ? ` (이 원고는 ${slow}장)` : ""}.</li>
-        {engines.length > 1 && <li>줄을 펼치면 모델을 골라 한 장씩 키울 수 있습니다. 그림마다 결과는 마지막에 돌린 것 하나만 남고, 여러 장 한 번에 돌리기는 기본 모델({engines[0].label})을 씁니다. Real-ESRGAN (x4plus)은 항상 4배로 키운 뒤 필요한 크기로 줄이며 한 장에 몇 분이 걸릴 수 있습니다.</li>}
+        {engines.length > 1 && <li>줄을 펼치면 모델을 골라 한 장씩 키울 수 있습니다. 모델별 결과는 원본 옆에 나란히 남고, 제안본에는 그림마다 마지막에 돌린 결과가 들어갑니다. 여러 장 한 번에 돌리기는 기본 모델({engines[0].label})을 씁니다. Real-ESRGAN (x4plus)은 항상 4배로 키운 뒤 필요한 크기로 줄이며 한 장에 몇 분이 걸릴 수 있습니다.</li>}
         {engine.available && missing.map((e) => <li key={e.name}>{e.label} 모델은 실행 파일이 없어 지금은 고를 수 없습니다. {e.problem}</li>)}
         <li>업스케일은 화질만 올립니다. 모델이 글자·선을 바꿀 수 있으니 줄을 펼쳐 결과를 원본과 나란히 놓고 확인하세요.</li>
       </ul>
@@ -226,6 +235,8 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
               const headId = `upscale-head-${p.bin_id}`;
               const bodyId = `upscale-body-${p.bin_id}`;
               const name = plainLabel(p.label);
+              // 이 그림을 성공적으로 키운 모델들(고를 수 있는 모델 순서)
+              const sides = engines.map((choice) => [choice, variants[p.bin_id]?.[choice.name]]).filter(([choice, side]) => choice.name && side?.status === "완료");
               return (
                 <div key={p.bin_id} className="upscale-row">
                   <div className="krds-check-area">
@@ -260,21 +271,33 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                             {p.px[0]}×{p.px[1]}px · 출력 {p.mm[0]}×{p.mm[1]}mm · {p.format} · {p.places.join(", ")}
                             {" · "}목표까지 {p.need}배 필요, {p.scale}배로 키움{p.scale >= 4 ? " (2배보다 약 4배 오래 걸림)" : ""}{p.reaches_target ? "" : " (목표 미달)"}
                           </p>
-                          <div className="upscale-pair">
+                          <div className={`upscale-pair${sides.length > 1 ? " three" : ""}`}>
                             <figure>
                               <img src={api.pictures.originalUrl(token, p.bin_id)} alt={`${name} 원본`} loading="lazy" />
                               <figcaption>원본 {p.px[0]}×{p.px[1]}px</figcaption>
                             </figure>
-                            {done && (
-                              <figure>
-                                <img src={api.pictures.upscaledUrl(token, p.bin_id, result.v)} alt={`${name} 업스케일`} loading="lazy" />
-                                <figcaption>업스케일{result.engine_label ? ` · ${result.engine_label}` : ""} · {result.out_px[0]}×{result.out_px[1]}px · {result.out_dpi} DPI · {result.seconds}초</figcaption>
-                              </figure>
-                            )}
+                            {/* 모델별 결과를 원본 옆에 모두 — 최대 3장(원본 + 모델 2개). 예전 서버(모델 구분 없음)면 마지막 결과 한 장 */}
+                            {sides.length > 0
+                              ? sides.map(([choice, side]) => (
+                                <figure key={choice.name}>
+                                  <img src={api.pictures.upscaledUrl(token, p.bin_id, side.v, choice.name)} alt={`${name} 업스케일 ${choice.label}`} loading="lazy" />
+                                  <figcaption>
+                                    {choice.label} · {side.out_px[0]}×{side.out_px[1]}px · {side.out_dpi} DPI · {side.seconds}초
+                                    {sides.length > 1 && done && result.engine === choice.name ? " · 제안본에 들어감" : ""}
+                                    {" · "}<a href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${name}_${choice.name}`, choice.name)} download>받기</a>
+                                  </figcaption>
+                                </figure>
+                              ))
+                              : done && (
+                                <figure>
+                                  <img src={api.pictures.upscaledUrl(token, p.bin_id, result.v)} alt={`${name} 업스케일`} loading="lazy" />
+                                  <figcaption>업스케일 {result.out_px[0]}×{result.out_px[1]}px · {result.out_dpi} DPI · {result.seconds}초</figcaption>
+                                </figure>
+                              )}
                           </div>
                           {result?.note && <p className={`upscale-note${result.status === "실패" ? " failed" : ""}`}>{result.status === "실패" ? "실패: " : ""}{result.note}</p>}
                           <div className="upscale-actions">
-                            {/* 모델마다 버튼 하나 — 같은 그림을 모델별로 돌려 비교한다(결과는 마지막에 돌린 것 하나만 남는다) */}
+                            {/* 모델마다 버튼 하나 — 같은 그림을 모델별로 돌려 비교한다(제안본에는 마지막에 돌린 결과가 들어간다) */}
                             {engines.map((choice) => (
                               <button key={choice.name || "default"} type="button" className="krds-btn small secondary"
                                       disabled={!choice.available || working} onClick={() => upscale(p, choice.name)}

@@ -122,8 +122,11 @@ export const api = {
       return request(`/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscale${tail ? `?${tail}` : ""}`, { method: "POST" });
     },
     // v: 다시 업스케일했을 때 브라우저가 예전 그림을 쓰지 않게 붙이는 값
-    upscaledUrl: (token, binId, v) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?v=${v || 0}`,
-    downloadUrl: (token, binId, name) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?download=${encodeURIComponent(name)}`,
+    // engine: 모델 이름을 주면 그 모델로 키운 결과(없으면 마지막에 돌린 결과 = 제안본에 들어갈 그림)
+    upscaledUrl: (token, binId, v, engine) =>
+      `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?v=${v || 0}${engine ? `&engine=${encodeURIComponent(engine)}` : ""}`,
+    downloadUrl: (token, binId, name, engine) =>
+      `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?download=${encodeURIComponent(name)}${engine ? `&engine=${encodeURIComponent(engine)}` : ""}`,
     // targetDpi: 이 기준으로 키운 그림만 제안본에 넣는다(화면의 '완료'와 같게)
     proposal: (token, moduleCode, filename, targetDpi) =>
       download(`/api/uploads/${token}/proposal`, multipart({ module_code: moduleCode || "", target_dpi: targetDpi ? String(targetDpi) : undefined }), filename),

@@ -93,12 +93,12 @@ def register(app: FastAPI, services: Services) -> None:
         return _picture_call(action)
 
     @app.get("/api/uploads/{token}/pictures/{bin_id}/upscaled")
-    def picture_upscaled(token: str, bin_id: str, download: str = "") -> Response:
-        """업스케일 결과(제안본에 들어갈 파일 그대로). download=파일 이름이면 내려받기로."""
+    def picture_upscaled(token: str, bin_id: str, download: str = "", engine: str = "") -> Response:
+        """업스케일 결과(제안본에 들어갈 파일 그대로). download=파일 이름이면 내려받기로. engine=모델 이름이면 그 모델로 키운 결과."""
         def action():
             from ncs_upscale import service
             _, work = _picture_upload(token)
-            content, media, ext = service.upscaled_file(work, bin_id)
+            content, media, ext = service.upscaled_file(work, bin_id, engine or None)
             name = None
             if download:
                 # 캡션의 '/' 등 파일 이름에 못 쓰는 글자는 '_'로(Path로 자르면 '/' 앞이 사라진다)

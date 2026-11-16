@@ -110,6 +110,7 @@ def list_pictures(manuscript: Path, work: Path, *, target_dpi: int = DEFAULT_TAR
     jobs, skipped = plan(records, binaries, ENGINES[DEFAULT_ENGINE], target_dpi=target_dpi, max_scale=MAX_SCALE)
     # 다른 해상도 기준으로 키운 결과는 이 기준의 '완료'가 아니다(150으로 키운 그림은 300에 못 미친다) — 다시 업스케일해야 한다
     done = {item["bin_id"]: item for item in _results(work, target_dpi)}
+    variants = _variants(work, target_dpi)
     pictures = []
     # 원고를 넘겨 보며 찾을 수 있게 그림이 나오는 순서(구역 → 문단)로. hwpx에는 쪽 번호가 없어 문단 위치로 줄 세운다
     for job in sorted(jobs, key=lambda j: min((u["section"], u["para"]) for u in j.uses)):
@@ -120,7 +121,7 @@ def list_pictures(manuscript: Path, work: Path, *, target_dpi: int = DEFAULT_TAR
             "px": list(job.px), "mm": list(first["mm"]), "format": job.format,
             "dpi": job.dpi, "grade": grade(job.dpi, target_dpi, min_dpi),
             "need": round(job.need, 2), "scale": job.scale, "reaches_target": job.reaches_target,
-            "upscaled": done.get(job.bin_id),
+            "upscaled": done.get(job.bin_id), "variants": variants.get(job.bin_id, {}),
         })
     return {
         "target_dpi": target_dpi, "min_dpi": min_dpi, "pictures": pictures,
@@ -164,12 +165,35 @@ def upscale_one(manuscript: Path, bin_id: str, work: Path, *, target_dpi: int = 
     else:
         (work / f"{name}.bin").unlink(missing_ok=True)
     (work / f"{name}.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
+    # 모델별 결과도 따로 남긴다 — 화면에서 원본·모델별 결과를 나란히 본다(제안본에는 위의 '마지막에 돌린 결과'만 들어간다)
+    side = _variant_dir(work, chosen.name)
+    side.mkdir(parents=True, exist_ok=True)
+    if job.status == "완료":
+        (side / f"{name}.bin").write_bytes(job.new_data)
+    else:
+        (side / f"{name}.bin").unlink(missing_ok=True)
+    (side / f"{name}.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
     return info
 
 
-def upscaled_file(work: Path, bin_id: str) -> tuple[bytes, str, str]:
-    """(그림 바이트, media-type, 확장자) — 제안본에 들어갈 파일 그대로."""
+def _variant_dir(work: Path, engine: str) -> Path:
+    return work / "variants" / _safe(engine)
+
+
+def _variants(work: Path, target_dpi: int) -> dict[str, dict[str, dict]]:
+    """bin_id → {모델 이름: 결과 정보}. 이 해상도 기준으로 키운 모델별 결과(WEB_ENGINES 순서)."""
+    found: dict[str, dict[str, dict]] = {}
+    for engine in WEB_ENGINES:
+        for info in _results(_variant_dir(work, engine), target_dpi):
+            found.setdefault(info["bin_id"], {})[engine] = info
+    return found
+
+
+def upscaled_file(work: Path, bin_id: str, engine: str | None = None) -> tuple[bytes, str, str]:
+    """(그림 바이트, media-type, 확장자) — 제안본에 들어갈 파일 그대로. engine을 주면 그 모델로 키운 결과."""
     name = _safe(bin_id)
+    if engine:
+        work = _variant_dir(work, _engine(engine).name)
     info_path, data_path = work / f"{name}.json", work / f"{name}.bin"
     if not info_path.exists() or not data_path.exists():
         raise PictureError(f"그림 {bin_id}의 업스케일 결과가 없습니다. 먼저 업스케일하세요")
