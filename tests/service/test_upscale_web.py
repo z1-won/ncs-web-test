@@ -117,6 +117,7 @@ class UpscaleWebTests(unittest.TestCase):
         self.assertTrue(first["reaches_target"])
         self.assertIsNone(first["upscaled"])
         self.assertTrue(body["engine"]["available"])
+        self.assertEqual([(e["name"], e["available"]) for e in body["engines"]], [("waifu2x-photo", True), ("esrgan-best", True)])
 
         original = self.client.get(self.url("/image1/original"))
         self.assertEqual(original.headers["content-type"], "image/png")
@@ -132,6 +133,12 @@ class UpscaleWebTests(unittest.TestCase):
         self.assertEqual((info["status"], info["out_px"], info["out_dpi"], info["new_href"]),
                          ("완료", [600, 300], 300, "BinData/image1.png"))            # x4로 키운 뒤 필요한 x3 크기로 줄임
         self.assertEqual((info["scale"], info["target_dpi"], info["note"]), (4, 300, ""))
+        self.assertEqual(info["engine"], "waifu2x-photo")                              # 모델을 안 고르면 기본
+
+        best = self.client.post(self.url("/image1/upscale?engine=esrgan-best")).json()  # 모델을 골라 다시 — 결과를 덮어쓴다
+        self.assertEqual((best["status"], best["engine"], best["scale"], best["out_px"]), ("완료", "esrgan-best", 4, [600, 300]))
+        self.assertEqual(self.client.get(self.url()).json()["pictures"][0]["upscaled"]["engine"], "esrgan-best")
+        self.assertEqual(self.client.post(self.url("/image1/upscale?engine=esrgan-fast")).status_code, 400)   # 화면에 내놓지 않은 모델
 
         result = self.client.get(self.url("/image1/upscaled"), params={"download": "LM_[그림 1-1] 시험/도표_업스케일"})
         self.assertEqual(result.headers["content-type"], "image/png")

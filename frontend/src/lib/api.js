@@ -113,8 +113,14 @@ export const api = {
     // targetDpi: 해상도 기준(150/300). 이 값 미만인 그림만 목록에 나온다
     list: (token, targetDpi) => request(`/api/uploads/${token}/pictures${targetDpi ? `?target_dpi=${targetDpi}` : ""}`),
     originalUrl: (token, binId) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/original`,
-    upscale: (token, binId, targetDpi) =>
-      request(`/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscale${targetDpi ? `?target_dpi=${targetDpi}` : ""}`, { method: "POST" }),
+    // engine: 모델 이름(목록 응답의 engines[].name). 비우면 서버 기본 모델
+    upscale: (token, binId, targetDpi, engine) => {
+      const query = new URLSearchParams();
+      if (targetDpi) query.set("target_dpi", targetDpi);
+      if (engine) query.set("engine", engine);
+      const tail = query.toString();
+      return request(`/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscale${tail ? `?${tail}` : ""}`, { method: "POST" });
+    },
     // v: 다시 업스케일했을 때 브라우저가 예전 그림을 쓰지 않게 붙이는 값
     upscaledUrl: (token, binId, v) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?v=${v || 0}`,
     downloadUrl: (token, binId, name) => `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?download=${encodeURIComponent(name)}`,

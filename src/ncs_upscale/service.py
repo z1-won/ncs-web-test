@@ -25,6 +25,9 @@ from .engine import DEFAULT_ENGINE, ENGINES
 from .pipeline import DEFAULT_TARGET_DPI, Job, _rgb, grade, plan, upscale, write_hwpx
 
 MAX_SCALE = 4                 # x2로 기준에 닿으면 x2(한 장 20~40초), 모자라면 x4(x2를 두 번 — 약 4배 오래 걸림)
+# 화면의 '이 그림만 업스케일링'에서 고를 수 있는 모델(앞의 것이 기본). 여러 장 한 번에 돌리기는 기본 모델만 쓴다
+WEB_ENGINES = (DEFAULT_ENGINE, "esrgan-best")
+ENGINE_LABELS = {"waifu2x-photo": "waifu2x (upconv_7_photo)", "esrgan-best": "Real-ESRGAN (x4plus)"}
 _GPU = threading.Lock()
 _CACHE: dict[tuple[str, float], tuple[list[dict], dict]] = {}
 _CACHE_LOCK = threading.Lock()
@@ -57,12 +60,19 @@ def _safe(bin_id: str) -> str:
     return re.sub(r"[^0-9A-Za-z_-]", "_", bin_id)
 
 
-def _job_for(manuscript: Path, bin_id: str, target_dpi: int) -> tuple[Job | None, list[dict]]:
+def _engine(name: str | None):
+    name = name or DEFAULT_ENGINE
+    if name not in WEB_ENGINES:
+        raise PictureError(f"업스케일 모델 {name}은(는) 고를 수 없습니다 (가능: {', '.join(WEB_ENGINES)})")
+    return ENGINES[name]
+
+
+def _job_for(manuscript: Path, bin_id: str, target_dpi: int, engine: str | None = None) -> tuple[Job | None, list[dict]]:
     records, binaries = _records(manuscript)
     uses = [r for r in records if r["bin_id"] == bin_id]
     if not uses:
         raise PictureError(f"원고에 그림 {bin_id}가 없습니다")
-    jobs, _ = plan(uses, binaries, ENGINES[DEFAULT_ENGINE], target_dpi=target_dpi, max_scale=MAX_SCALE)
+    jobs, _ = plan(uses, binaries, _engine(engine), target_dpi=target_dpi, max_scale=MAX_SCALE)
     return (jobs[0] if jobs else None), uses
 
 
@@ -74,6 +84,21 @@ def engine_status(tools: Path | None = None) -> dict:
     except FileNotFoundError as error:
         problem = str(error)
     return {"name": engine.name, "note": engine.note, "available": problem is None, "problem": problem}
+
+
+def engine_choices(tools: Path | None = None) -> list[dict]:
+    """화면에서 고를 수 있는 모델들과 지금 쓸 수 있는지(실행 파일이 있는지). 앞의 것이 기본."""
+    choices = []
+    for name in WEB_ENGINES:
+        engine = ENGINES[name]
+        try:
+            engine.find_exe(tools)
+            problem = None
+        except FileNotFoundError as error:
+            problem = str(error)
+        choices.append({"name": name, "label": ENGINE_LABELS.get(name, name), "note": engine.note, "scales": list(engine.scales),
+                        "available": problem is None, "problem": problem})
+    return choices
 
 
 def list_pictures(manuscript: Path, work: Path, *, target_dpi: int = DEFAULT_TARGET_DPI,
@@ -118,14 +143,16 @@ def original_png(manuscript: Path, bin_id: str) -> bytes:
 
 
 def upscale_one(manuscript: Path, bin_id: str, work: Path, *, target_dpi: int = DEFAULT_TARGET_DPI,
-                tools: Path | None = None, runner: Runner | None = None) -> dict:
-    """그림 하나를 업스케일해 work 폴더에 저장하고 결과 정보를 돌려준다. 실패해도 정보(status='실패', note)를 돌려준다."""
-    job, _ = _job_for(manuscript, bin_id, target_dpi)
+                tools: Path | None = None, runner: Runner | None = None, engine: str | None = None) -> dict:
+    """그림 하나를 업스케일해 work 폴더에 저장하고 결과 정보를 돌려준다. 실패해도 정보(status='실패', note)를 돌려준다.
+    engine: WEB_ENGINES 가운데 하나(없으면 기본). 그림마다 결과는 하나만 남는다 — 다른 모델로 다시 돌리면 앞 결과를 덮어쓴다."""
+    chosen = _engine(engine)
+    job, _ = _job_for(manuscript, bin_id, target_dpi, chosen.name)
     if job is None:
         raise PictureError(f"그림 {bin_id}는 이미 {target_dpi} DPI 이상이거나 형식을 읽지 못해 업스케일 대상이 아닙니다")
     with _GPU:
-        upscale([job], ENGINES[DEFAULT_ENGINE], tools=tools, runner=runner, progress=lambda _: None)
-    info = {"bin_id": job.bin_id, "target_dpi": target_dpi, "status": job.status, "note": job.note, "href": job.href, "new_href": job.new_href,
+        upscale([job], chosen, tools=tools, runner=runner, progress=lambda _: None)
+    info = {"bin_id": job.bin_id, "engine": chosen.name, "engine_label": ENGINE_LABELS.get(chosen.name, chosen.name), "target_dpi": target_dpi, "status": job.status, "note": job.note, "href": job.href, "new_href": job.new_href,
             "media_type": job.media_type, "px": list(job.px), "out_px": list(job.out_px), "dpi": job.dpi,
             "out_dpi": job.out_dpi, "scale": job.scale, "need": round(job.need, 2), "reaches_target": job.reaches_target,
             "diff": None if job.diff is None else round(job.diff, 1),

@@ -65,6 +65,9 @@ def register(app: FastAPI, services: Services) -> None:
             body = {**service.list_pictures(manuscript, work, target_dpi=target_dpi),
                     "engine": service.engine_status(app.state.upscale_tools) if app.state.upscale_runner is None
                     else {"name": "test", "note": "", "available": True, "problem": None}}
+            # engines: '이 그림만 업스케일링'에서 고를 수 있는 모델(앞의 것이 기본). 테스트 대역을 쓰면 모두 쓸 수 있는 것으로 본다
+            body["engines"] = [{**choice, **({"available": True, "problem": None} if app.state.upscale_runner is not None else {})}
+                               for choice in service.engine_choices(app.state.upscale_tools)]
             return JSONResponse(body)
         return _picture_call(action)
 
@@ -77,13 +80,14 @@ def register(app: FastAPI, services: Services) -> None:
         return _picture_call(action)
 
     @app.post("/api/uploads/{token}/pictures/{bin_id}/upscale")
-    def picture_upscale(token: str, bin_id: str, target_dpi: int = Query(300, ge=50, le=1200)) -> Response:
-        """그림 하나를 업스케일(x2 20~40초, x4는 약 4배). GPU가 하나라 다른 업스케일이 돌고 있으면 끝날 때까지 기다린다."""
+    def picture_upscale(token: str, bin_id: str, target_dpi: int = Query(300, ge=50, le=1200), engine: str = Query("")) -> Response:
+        """그림 하나를 업스케일(x2 20~40초, x4는 약 4배). GPU가 하나라 다른 업스케일이 돌고 있으면 끝날 때까지 기다린다.
+        engine: 모델 이름(목록 응답의 engines[].name). 비우면 기본 모델."""
         def action():
             from ncs_upscale import service
             manuscript, work = _picture_upload(token)
             info = service.upscale_one(manuscript, bin_id, work, target_dpi=target_dpi,
-                                       tools=app.state.upscale_tools, runner=app.state.upscale_runner)
+                                       tools=app.state.upscale_tools, runner=app.state.upscale_runner, engine=engine or None)
             uploads_store.touch(token)
             return JSONResponse(info)
         return _picture_call(action)
