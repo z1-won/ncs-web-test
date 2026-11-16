@@ -34,6 +34,9 @@
   --krds-light-color-button-primary-fill-pressed: var(--krds-color-light-secondary-90);
 }
 html { scrollbar-gutter: stable; }
+/* 내용이 짧은 페이지에서도 푸터가 화면 맨 아래에 붙게 — 머리·본문·푸터를 세로로 쌓고 본문이 남는 높이를 채운다 */
+#root { display: flex; flex-direction: column; min-height: 100vh; }
+#root > #container { flex: 1 0 auto; width: 100%; }
 .page {
   padding-top: var(--krds-padding-10);
   padding-bottom: var(--krds-padding-10);
