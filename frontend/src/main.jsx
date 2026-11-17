@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import ImageDbPage from "./pages/ImageDbPage.jsx";
 import PlanDraftPage from "./pages/PlanDraftPage.jsx";
 import PrivacyPage from "./pages/PrivacyPage.jsx";
 import ReviewPage from "./pages/ReviewPage.jsx";
@@ -13,12 +14,13 @@ import "./app.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {/* 페이지: / 원고 검수, /plan 개발계획서 작성, /upscale 업스케일링. 서버(ncs_web)는 /api 밖 404를 index.html로 돌려 새로 고침에도 열린다 */}
+    {/* 페이지: / 원고 검수, /plan 개발계획서 작성, /upscale 업스케일링, /images 이미지 저작권 DB. 서버(ncs_web)는 /api 밖 404를 index.html로 돌려 새로 고침에도 열린다 */}
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<ReviewPage />} />
         <Route path="/plan" element={<PlanDraftPage />} />
         <Route path="/upscale" element={<UpscalePage />} />
+        <Route path="/images" element={<ImageDbPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="*" element={<ReviewPage />} />
       </Routes>

@@ -17,6 +17,8 @@ NCS 학습모듈 원고(한글 파일)를 올리면, 한국직업능력연구원
 2. **검수할 범위를 고릅니다.** '전체'를 고르면 확인서의 구성요소 10개를 순서대로 한 번에 검사합니다. 구성요소 하나만 골라 볼 수도 있습니다.
 3. **결과를 확인하고 내려받습니다.** 화면에서 항목별 판정과 근거를 보고, 아래 파일을 받습니다. 데이터베이스를 연결해 두면 지난 검수 이력도 다시 열어 볼 수 있습니다.
 
+이미지의 권리 정보를 모아 두고 확정하려면 메뉴의 **이미지 저작권 DB** 페이지를 씁니다(데이터베이스 연결 필요). 이미지 레코드를 적재하고, 그림마다 분류·귀속·라이선스를 확인해 기관 확정을 하면 추천용 목록에 나옵니다(`docs/IMAGE_RECORD.md`).
+
 해상도가 낮은 그림을 키워 보려면 메뉴의 **업스케일링** 페이지에서 원고(hwpx)를 따로 올립니다. 고른 해상도 기준(300 DPI 또는 150 DPI, 기본 300)에 못 미치는 그림을 골라 한 장씩 키우고, 결과 그림이나 그 그림을 같은 자리에 넣은 제안본 hwpx를 받습니다. 서버에 업스케일 엔진이 설치되어 있어야 합니다(`docs/WEB.md`).
 
 | 내려받는 파일 | 내용 |
@@ -178,6 +180,7 @@ ncs-web --dist frontend/dist          # API + 빌드된 화면, http://127.0.0.1
 | `POST /api/export/annotated` (`upload` 토큰, `rows` JSON) | **수정 메모 원고**: 원고 hwpx의 해당 문단에 지적사항을 한글 메모로 단 파일(본문 불변). 문단을 못 찾은 지적은 첫 문단의 총괄 메모에 목록으로. hwp 원고는 불가 |
 | `GET /api/images`, `GET /api/images/{id}`, `GET /api/images/{id}/file` | **이미지 저작권 DB**(REQ-02-010, `DATABASE_URL` 설정 시): 관리용 목록·상세·그림 파일. `status`·`category`·`kogl_type`·`module_code`·`unit_code`·`keyword`·`q`로 거른다 |
 | `POST /api/images/{id}/rights` · `/confirm` · `/unconfirm` (`{by, version?, rights?}`) | 권리 정보 수정·기관 확정·확정 취소. 변경마다 버전이 오르고 이력이 남는다. 확정된 것은 확정을 푼 뒤 수정 |
+| `POST /api/images/load` (`files[]`, `by`, `check_only`) | 레코드 JSON 1개 + 그림 파일들을 올려 이미지 저작권 DB에 적재하거나 형식만 검사 |
 | `GET /api/images/recommendable`, `GET /api/images/recommendable/{id}/file` | 추천·생성형 AI용 조회: 기관 확정 + 재사용 범위 확인 + 비공개가 아닌 그림만, 출처·라이선스 정보와 함께. 형식은 `docs/IMAGE_RECORD.md` |
 
 ## CLI 실행

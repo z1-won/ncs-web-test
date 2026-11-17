@@ -9,18 +9,25 @@ PostgreSQL 저장소일 때만 붙는다(/api/health의 image_db가 그 여부).
   POST /api/images/{id}/rights                권리 정보 수정 {by, version?, rights} — 자동 태깅 상태에서만
   POST /api/images/{id}/confirm               기관 확정 {by, version?}
   POST /api/images/{id}/unconfirm             확정 취소 {by, version?}
+  POST /api/images/load                       레코드 JSON 1개 + 그림 파일들을 올려 적재(또는 check_only로 형식만 검사)
   GET  /api/images/recommendable              추천용 목록 — 기관 확정 + 재사용 범위 확인 + 비공개 아님(REQ-02-011, 생성형 AI가 부르는 쪽)
   GET  /api/images/recommendable/{id}/file    추천 목록에 나오는 그림의 파일만
 
 오류: 없는 그림 404, 형식·필수 항목 오류 400(사유를 모두 담는다), 확정된 것 수정·버전 불일치 409.
 """
 
-from fastapi import FastAPI, Query, Response
+import tempfile
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import FastAPI, File, Form, Query, Response, UploadFile
 from starlette.exceptions import HTTPException
 
 from ..common import Services
 from ..schemas import ImageActionRequest, ImageRightsRequest
 
+LOAD_MAX_BYTES = 50 << 20     # 한 번에 올리는 레코드 JSON + 그림 파일 합계 상한(50MB)
+LOAD_MAX_FILES = 300
 FILE_HEADERS = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
 
 
@@ -52,6 +59,46 @@ def register(app: FastAPI, services: Services) -> None:
     @app.get("/api/images/terms")
     def image_terms() -> dict:
         return image_store.terms()
+
+    @app.post("/api/images/load")
+    def image_load(files: Annotated[list[UploadFile], File()], by: Annotated[str, Form()] = "",
+                   check_only: Annotated[bool, Form()] = False) -> dict:
+        """레코드 JSON 1개와 그 레코드가 가리키는 그림 파일들을 함께 올린다. 그림은 파일 이름으로 짝짓는다(폴더 경로는 무시).
+
+        check_only면 DB에 넣지 않고 형식만 검사한다. 응답은 적재 보고서(전체·적재·거부 사유·필수 항목 충족률) 또는 검사 결과.
+        """
+        from ncs_service import image_db
+        from ncs_service.image_records import read_records
+
+        named = [item for item in files if item.filename]
+        if len(named) > LOAD_MAX_FILES:
+            raise HTTPException(400, f"한 번에 {LOAD_MAX_FILES}개까지 올릴 수 있습니다")
+        if not check_only and not by.strip():
+            raise HTTPException(400, "by(적재한 사람)가 필요합니다 — 변경 이력에 남습니다")
+        with tempfile.TemporaryDirectory(prefix="ncs_image_load_") as folder:
+            base, total, record_files = Path(folder), 0, []
+            for item in named:
+                name = Path(item.filename.replace("\\", "/")).name     # 브라우저가 보낸 경로는 버리고 이름만 쓴다
+                if not name or name in (".", "..") or (base / name).exists():
+                    raise HTTPException(400, f"파일 이름이 겹치거나 쓸 수 없습니다: {item.filename}")
+                data = item.file.read(LOAD_MAX_BYTES - total + 1)
+                total += len(data)
+                if total > LOAD_MAX_BYTES:
+                    raise HTTPException(400, f"올린 파일의 합계가 {LOAD_MAX_BYTES >> 20}MB를 넘습니다")
+                (base / name).write_bytes(data)
+                if name.lower().endswith(".json"):
+                    record_files.append(base / name)
+            if len(record_files) != 1:
+                raise HTTPException(400, f"레코드 JSON 파일을 1개 올려 주세요(지금 {len(record_files)}개)")
+            try:
+                records, _ = read_records(record_files[0])
+            except ValueError as error:      # JSON 문법 오류(JSONDecodeError)·schema 불일치
+                raise HTTPException(400, f"레코드 JSON을 읽지 못했습니다: {error}") from None
+            records = image_db.flatten_file_names(records)
+            if check_only:
+                return {"check_only": True, **image_db.check_records(records, base_dir=base)}
+            return {"check_only": False,
+                    **image_db.load_records(dsn, records, changed_by=by, base_dir=base).as_dict()}
 
     @app.get("/api/images/recommendable")
     def recommendable(module_code: str | None = None, unit_code: str | None = None, keyword: str | None = None,

@@ -4,8 +4,10 @@
 """
 
 import hashlib
+import json
 import os
 import unittest
+from pathlib import Path
 from uuid import uuid4
 
 import psycopg
@@ -17,6 +19,7 @@ from ncs_web.server import create_app
 
 DSN = os.getenv("NCS_TEST_DATABASE_URL")
 UNIT = "1203020201_24v3"
+EXAMPLE = Path(__file__).resolve().parents[2] / "docs" / "examples" / "image_records"
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (64).to_bytes(4, "big") + (48).to_bytes(4, "big") + b"\x08\x02\x00\x00\x00"
 
 
@@ -237,6 +240,61 @@ class ImageApiIntegrationTests(unittest.TestCase):
         self.post(shown, "unconfirm")
         self.assertEqual([i["id"] for i in self.listed("/api/images/recommendable")["items"]], [limited])
         self.assertEqual(self.client.get(f"/api/images/recommendable/{shown}/file").status_code, 404)
+
+    # ── 화면에서 올려 적재 ──
+    def upload(self, files: list[tuple[str, bytes]], expect: int = 200, **data) -> dict:
+        response = self.client.post("/api/images/load", data=data,
+                                    files=[("files", (name, content)) for name, content in files])
+        self.assertEqual(response.status_code, expect, response.text)
+        return response.json()
+
+    def example_files(self) -> list[tuple[str, bytes]]:
+        images = sorted((EXAMPLE / "images").glob("*.png"))
+        for record in json.loads((EXAMPLE / "records.example.json").read_text(encoding="utf-8"))["records"]:
+            self.used.append(record.get("sha256") or hashlib.sha256((EXAMPLE / record["file"]).read_bytes()).hexdigest())
+        return [("records.example.json", (EXAMPLE / "records.example.json").read_bytes()),
+                *[(f"C:\\고른 폴더\\{path.name}", path.read_bytes()) for path in images]]   # 브라우저가 경로를 붙여 보내도 이름만 쓴다
+
+    def test_upload_check_then_load_the_example(self):
+        files = self.example_files()
+        checked = self.upload(files, check_only="true")
+        self.assertEqual((checked["check_only"], checked["전체"], checked["통과"], checked["거부"]), (True, 3, 3, []))
+        with psycopg.connect(DSN) as connection:
+            self.assertEqual(connection.execute("SELECT count(*) FROM image_assets WHERE sha256 = ANY(%s)",
+                                                (self.used,)).fetchone()[0], 0, "형식 검사는 DB에 넣지 않는다")
+        self.assertIn("by", self.upload(files, expect=400)["error"])
+        loaded = self.upload(files, by="화면 적재")
+        self.assertEqual((loaded["적재"], loaded["새 그림"], loaded["거부"], loaded["필수 항목 충족률"]), (3, 3, [], 1.0))
+        found = self.client.get("/api/images", params={"q": "객실 유형 구분"}).json()["items"]
+        row = next(item for item in found if item["sha256"] in self.used)
+        self.assertEqual((row["has_file"], row["has_upscaled"], row["placement_count"]), (True, True, 2))
+        detail = self.client.get(f"/api/images/{row['id']}").json()
+        self.assertEqual(detail["history"][0]["changed_by"], "화면 적재")
+        again = self.upload(files, by="화면 적재")
+        self.assertEqual((again["새 그림"], again["기존 그림에 합침"]), (0, 3))
+
+    def test_upload_reports_bad_records_and_bad_requests(self):
+        content = PNG + uuid4().bytes
+        self.used.append(hashlib.sha256(content).hexdigest())
+        records = {"schema": "ncs-image-record/0.3", "records": [
+            {"file": "images/good.png", "title": "정상", "keywords": [self.tag]},
+            {"file": "images/missing.png"}, {"sha256": "a" * 64, "kind": "사진"}]}
+        body = json.dumps(records).encode()
+        report = self.upload([("r.json", body), ("good.png", content)], by="화면 적재")
+        self.assertEqual((report["전체"], report["적재"], [item["index"] for item in report["거부"]]), (3, 1, [1, 2]))
+        self.assertIn("찾을 수 없습니다", report["거부"][0]["reasons"][0])
+        self.assertEqual(len(self.listed()["items"]), 1)
+
+        self.assertIn("1개", self.upload([("good.png", content)], expect=400, by="x")["error"])
+        self.assertIn("1개", self.upload([("a.json", body), ("b.json", body)], expect=400, by="x")["error"])
+        self.assertIn("겹치", self.upload([("r.json", body), ("x/good.png", content), ("y/good.png", content)],
+                                        expect=400, by="x")["error"])
+        self.assertIn("읽지 못했습니다", self.upload([("r.json", b"{not json")], expect=400, by="x")["error"])
+        self.assertIn("schema", self.upload([("r.json", b'{"schema": "other", "records": []}')], expect=400, by="x")["error"])
+        # 기준 폴더 밖을 가리키는 file은 이름만 남으므로 올린 파일 밖을 읽지 못한다
+        escape = json.dumps([{"file": "../../etc/passwd"}]).encode()
+        report = self.upload([("r.json", escape)], by="x")
+        self.assertEqual((report["적재"], len(report["거부"])), (0, 1))
 
 
 if __name__ == "__main__":

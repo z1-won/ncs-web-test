@@ -135,6 +135,15 @@ python -m ncs_service.image_db 레코드.json --by 담당자이름              
 | `"ai": {"usage": 1, "mode": "modified"}` | usage 1은 '생성함'인데 mode가 '수정 보완함'입니다 |
 | `"rights": {"status": "confirmed"}` | 기관 확정은 적재로 할 수 없습니다 |
 
+## 화면
+
+메뉴의 **이미지 저작권 DB**(`/images`)에서 같은 일을 합니다. 서버가 `DATABASE_URL` 없이 떠 있으면 안내만 나옵니다.
+
+1. **변경한 사람**에 이름을 적습니다(적재·수정·확정의 변경 이력에 남음).
+2. **자료 적재**: 레코드 JSON 1개와 그림 파일들을 함께 고르고 [형식만 검사] 또는 [적재]. 예시는 `docs/examples/image_records/`의 JSON 1개 + `images/`의 그림 3장.
+3. **이미지 목록·확정**: 확정 상태·분류 체계·검색어로 거르고, [열기]로 그림·수록 위치·권리 정보·변경 이력을 봅니다. 권리 정보를 고쳐 [저장], 분류 체계와 권리 귀속이 있으면 [기관 확정].
+4. **추천용 조회**: 추천과 생성형 AI가 받게 될 목록. 확정 + 재사용 범위 확인 + 비공개 아님만 나옵니다.
+
 ## 조회·확정 API
 
 서버를 `DATABASE_URL`과 함께 띄우면 붙습니다(`/api/health`의 `image_db`가 true). 자세한 입력은 서버의 `/docs`.
@@ -142,6 +151,7 @@ python -m ncs_service.image_db 레코드.json --by 담당자이름              
 | API | 내용 |
 |---|---|
 | `GET /api/images/terms` | 허용값 코드 → 이름 |
+| `POST /api/images/load` | 레코드 JSON 1개 + 그림 파일들을 올려 적재(`files`, `by`). `check_only=true`면 형식만 검사. 그림은 파일 이름으로 짝지음(합계 50MB까지) |
 | `GET /api/images` | 관리용 목록 `{total, items}`. 거르기: `status`(`auto` / `confirmed` / `none` 권리 정보 없음), `category`, `license_scheme`, `kogl_type`, `reuse_scope`, `module_code`, `unit_code`, `keyword`, `kind`, `q`(제목·파일 이름·키워드·그림명·그림 사용 문장), `limit`·`offset` |
 | `GET /api/images/{id}` | 그림 1건: 수록 위치, 권리 정보, 증빙, 수행준거 연결, 변경 이력 |
 | `GET /api/images/{id}/file` | 그림 파일. `?upscaled=true`는 업스케일본 |

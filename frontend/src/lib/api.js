@@ -34,6 +34,17 @@ function multipart(fields, files = []) {
   return form;
 }
 
+function queryString(params) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== "") query.set(key, value); });
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}
+
+function postJson(path, body) {
+  return request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+
 // POST로 파일을 받아 브라우저 다운로드로 넘긴다. 실패하면 { ok:false, error } (성공은 { ok:true }).
 export async function download(path, body, filename) {
   let response;
@@ -130,6 +141,22 @@ export const api = {
     // targetDpi: 이 기준으로 키운 그림만 제안본에 넣는다(화면의 '완료'와 같게)
     proposal: (token, moduleCode, filename, targetDpi) =>
       download(`/api/uploads/${token}/proposal`, multipart({ module_code: moduleCode || "", target_dpi: targetDpi ? String(targetDpi) : undefined }), filename),
+  },
+  // 이미지 저작권 DB(REQ-02-010). 서버가 PostgreSQL일 때만 있다(/api/health의 image_db)
+  images: {
+    terms: () => request("/api/images/terms"),
+    // params: status·category·license_scheme·kogl_type·reuse_scope·module_code·unit_code·keyword·kind·q·limit·offset (빈 값은 보내지 않는다)
+    list: (params = {}) => request(`/api/images${queryString(params)}`),
+    recommendable: (params = {}) => request(`/api/images/recommendable${queryString(params)}`),
+    get: (id) => request(`/api/images/${id}`),
+    fileUrl: (id, upscaled) => `/api/images/${id}/file${upscaled ? "?upscaled=true" : ""}`,
+    recommendableFileUrl: (id) => `/api/images/recommendable/${id}/file`,
+    // rights: 이미지 레코드의 rights와 같은 모양(docs/IMAGE_RECORD.md). null은 그 칸을 비운다. version: 화면이 열어 본 버전
+    updateRights: (id, { by, version, rights }) => postJson(`/api/images/${id}/rights`, { by, version: version || null, rights }),
+    confirm: (id, { by, version }) => postJson(`/api/images/${id}/confirm`, { by, version: version || null }),
+    unconfirm: (id, { by, version }) => postJson(`/api/images/${id}/unconfirm`, { by, version: version || null }),
+    // files: 레코드 JSON 1개 + 그 레코드가 가리키는 그림 파일들. checkOnly면 DB에 넣지 않고 형식만 검사
+    load: (files, { by, checkOnly }) => request("/api/images/load", { method: "POST", body: multipart({ by: by || "", check_only: checkOnly ? "true" : "false" }, files) }),
   },
   groups: {
     list: () => request("/api/groups"),

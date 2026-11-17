@@ -201,6 +201,34 @@ def load_file(dsn: str, path: str | Path, *, changed_by: str) -> LoadReport:
     return load_records(dsn, records, changed_by=changed_by, base_dir=base_dir)
 
 
+def check_records(records: list, *, base_dir: str | Path | None = None) -> dict:
+    """DB에 넣지 않고 형식만 검사한다 → {'전체', '통과', '거부': [{'index', 'sha256', 'reasons'}]}."""
+    rejected = []
+    for index, raw in enumerate(records):
+        try:
+            normalize(raw, base_dir=base_dir)
+        except RecordError as error:
+            rejected.append({"index": index, "sha256": raw.get("sha256") if isinstance(raw, dict) else None,
+                             "reasons": error.reasons})
+    return {"전체": len(records), "통과": len(records) - len(rejected), "거부": rejected}
+
+
+def flatten_file_names(records: list) -> list:
+    """레코드의 file 경로를 파일 이름만 남긴다 — 화면에서 올린 파일은 폴더 없이 한곳에 놓이므로('images/a.png' → 'a.png')."""
+    def flat(source):
+        if isinstance(source, dict) and isinstance(source.get("file"), str):
+            return {**source, "file": Path(source["file"].replace("\\", "/")).name}
+        return source
+
+    out = []
+    for record in records:
+        record = flat(record)
+        if isinstance(record, dict) and "upscaled" in record:
+            record = {**record, "upscaled": flat(record["upscaled"])}
+        out.append(record)
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="이미지 레코드 JSON을 이미지 저작권 DB에 적재")
     parser.add_argument("file", type=Path, help="레코드 JSON 파일(docs/IMAGE_RECORD.md)")
@@ -209,15 +237,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.check:
         records, base_dir = read_records(args.file)
-        rejected = []
-        for index, raw in enumerate(records):
-            try:
-                normalize(raw, base_dir=base_dir)
-            except RecordError as error:
-                rejected.append({"index": index, "reasons": error.reasons})
-        print(json.dumps({"전체": len(records), "통과": len(records) - len(rejected), "거부": rejected},
-                         ensure_ascii=False, indent=2))
-        return 1 if rejected else 0
+        result = check_records(records, base_dir=base_dir)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if result["거부"] else 0
     dsn = os.getenv("DATABASE_URL")
     if not dsn:
         print("DATABASE_URL이 필요합니다(.env). 형식만 보려면 --check", file=sys.stderr)
