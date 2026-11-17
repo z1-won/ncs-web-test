@@ -1,0 +1,74 @@
+{
+  "schema": "ncs-image-record/0.3",
+  "records": [
+    {
+      "file": "images/figure_1-1.png",
+      "title": "객실 유형 구분",
+      "kind": "illustration",
+      "keywords": ["객실", "객실 유형", "예약"],
+      "upscaled": {"file": "images/figure_1-1_x2.png", "engine": "esrgan-fast"},
+      "placements": [
+        {
+          "module_code": "LM1203020201_24v3",
+          "module_name": "객실 예약 관리",
+          "page": 12,
+          "label": "그림 1-1",
+          "caption": "객실 유형 구분",
+          "source_line": "출처: 집필진 제작(2026).",
+          "source_template": "집필진 제작",
+          "context_text": "객실 유형은 [그림 1-1]과 같이 구분한다.",
+          "lesson_no": 1,
+          "para_index": 40,
+          "width_mm": 120,
+          "height_mm": 80
+        },
+        {
+          "module_code": "LM1203020202_24v3",
+          "module_name": "객실 판매 관리",
+          "label": "그림 2-3",
+          "caption": "객실 유형 구분",
+          "source_line": "출처: 교육부(2024). 객실 예약 관리(LM1203020201_24v3). 한국직업능력연구원. p.12.",
+          "lesson_no": 2,
+          "para_index": 310
+        }
+      ],
+      "links": [
+        {"unit_code": "1203020201_24v3", "element_code": "1203020201_24v3.1", "criterion_no": "1.1", "placement": 0},
+        {"unit_code": "1203020202_24v3", "placement": 1}
+      ],
+      "rights": {
+        "category": "author_made",
+        "author": "집필진",
+        "ai": {"usage": 2, "tool": "예시 AI 도구", "date": "2026-10-20"}
+      }
+    },
+    {
+      "file": "images/kogl_sample.png",
+      "title": "공공누리 자리표시 그림(예시)",
+      "kind": "graph",
+      "keywords": ["기후 변화", "기온"],
+      "links": [{"unit_code": "1203020201_24v3"}],
+      "rights": {
+        "category": "public_license",
+        "ownership": "kogl",
+        "release_class": "inherit",
+        "license": {"kogl_type": 2, "kogl_ai": true},
+        "source_org": "○○청",
+        "source_url": "https://www.kogl.or.kr/",
+        "retrieved_on": "2026-11-17"
+      }
+    },
+    {
+      "sha256": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
+      "filename": "gongu_sample.jpg",
+      "title": "파일 없이 메타데이터만 넣는 예시",
+      "rights": {
+        "category": "public_license",
+        "license": {"cc": "by-nc-sa", "note": "공유마당"},
+        "author": "저작자 이름",
+        "source_url": "https://gongu.copyright.or.kr/",
+        "retrieved_on": "2026-11-17"
+      }
+    }
+  ]
+}

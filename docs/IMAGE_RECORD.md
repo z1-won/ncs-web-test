@@ -1,0 +1,136 @@
+# 이미지 레코드 형식 (`ncs-image-record/0.3`)
+
+이미지 저작권 DB(REQ-02-010)에 넣는 자료의 형식입니다. 이미지 추출(REQ-02-009)과 공공누리 수집(REQ-02-012)이 이 형식으로 내보내면 그대로 적재됩니다.
+기준은 「NCS PoC 과업 안내」(요구사항정의서 V0.23) REQ-02-010의 데이터셋 예시 `학습모듈명 > [그림 N] > {그림명, 출처, 페이지, 그림 크기, jpeg, 공공누리 유형, 그림 사용 문장, 주요 키워드}`입니다.
+코드는 `ncs_service/image_records.py`(검사), `ncs_service/image_db.py`(적재), 표는 `migrations.py`의 `006_image_db`, 예시는 `docs/examples/image_records/`.
+
+## 쓰는 법
+
+```bash
+python -m ncs_service.image_db docs/examples/image_records/records.example.json --check     # DB 없이 형식만 검사
+set -a; source .env; set +a
+python -m ncs_service.image_db 레코드.json --by 담당자이름                                    # 적재(DATABASE_URL 필요)
+```
+
+파이썬에서는 `ncs_service.image_db.load_records(dsn, records, changed_by=…)`. 이때는 `file` 대신 `content`에 바이트를 바로 줄 수 있습니다.
+결과는 전체·적재·거부 건수와 거부 사유, 필수 항목 충족률(적재 ÷ 전체)입니다. 거부가 있으면 종료 코드가 1입니다.
+
+## 파일 모양
+
+```json
+{"schema": "ncs-image-record/0.3", "records": [ {레코드}, {레코드} ]}
+```
+
+레코드 1건은 **그림 파일 1개**입니다. 같은 그림이 여러 곳에 실렸으면 레코드는 하나, `placements`가 여러 개입니다.
+표에 없는 키를 적으면 거부됩니다(오타를 조용히 버리지 않기 위해).
+
+## 레코드
+
+| 키 | 필수 | 내용 |
+|---|---|---|
+| `file` | `sha256`과 둘 중 하나 | 그림 파일 경로. JSON 파일이 있는 폴더 기준 상대 경로이고 그 폴더 밖은 가리킬 수 없음 |
+| `sha256` | `file`과 둘 중 하나 | 그림 파일의 SHA-256(16진 64자). `file`이 있으면 계산하므로 적지 않아도 되고, 적었는데 다르면 거부 |
+| `filename`, `title` | | 파일 이름(없으면 `file`에서), 자료 제목 |
+| `format`, `width_px`, `height_px`, `byte_size` | | `file`이 있으면 파일에서 읽어 채움(png·jpeg·bmp) |
+| `kind` | | `photo` 사진 / `illustration` 삽화 / `table` 도표 / `graph` 그래프 / `screenshot` 화면 캡처 / `other` |
+| `keywords` | | 주요 키워드 목록 |
+| `upscaled` | | 업스케일본 `{file, format, width_px, height_px, engine}`. `file` 필수 |
+| `placements` | | 수록 위치 목록(아래) |
+| `links` | | 수행준거 연결 목록(아래) |
+| `rights` | | 권리 정보(아래). 모르면 생략 |
+
+### placements — 수록 위치
+
+| 키 | 필수 | 내용 |
+|---|---|---|
+| `module_code` | ○ | 학습모듈 코드 `LM1203020201_24v3` |
+| `module_name` | | 학습모듈명 |
+| `label` | | 그림 번호 `그림 1-1`. 캡션 없는 그림은 생략 |
+| `para_index` | | 문서 안 문단 순번(0부터). 캡션 없는 그림 여러 개를 구분하려면 필요 |
+| `page` | | 쪽. hwpx만으로는 알 수 없어 출력본 PDF가 있을 때 채움 |
+| `caption` | | 그림명 |
+| `source_line`, `source_template` | | 원고에 적힌 출처 줄 그대로, 맞은 F14 출처 골격 이름 |
+| `context_text` | | 그림 사용 문장(그림을 가리키는 본문 문장) |
+| `lesson_no` | | 학습 번호 |
+| `width_mm`, `height_mm` | | 쪽 위 출력 크기 |
+
+같은 그림의 같은 자리는 (`module_code`, `label`, `para_index`)로 구분합니다.
+
+### links — 수행준거 연결
+
+| 키 | 필수 | 내용 |
+|---|---|---|
+| `unit_code` | ○ | 능력단위 코드 `1203020201_24v3` |
+| `element_code` | | 능력단위요소 코드 `1203020201_24v3.1` |
+| `criterion_no` | | 수행준거 번호 `1.1` |
+| `placement` | | 이 연결이 나온 수록 위치의 순번(`placements`에서 0부터) |
+
+### rights — 권리 정보
+
+| 키 | 내용 |
+|---|---|
+| `category` | 분류 체계: `author_made` 집필자 직접제작 / `commissioned` 외부 제작의뢰 / `public_license` 공공누리·공유마당 / `blanket_license` 포괄적 이용허락 / `prior_module` 기개발 학습모듈 |
+| `ownership` | 권리 귀속: `government` 정부(교육부) 귀속 / `licensed` 이용허락 한정 / `kogl` 공공누리 조건 |
+| `reuse_scope` | 재사용 범위: `all` 전체 / `module_only` 해당 학습모듈 한정 / `unknown` 미확인(기본). 미확인은 추천에 나오지 않음 |
+| `release_class` | 산출물 분류(REQ-04-006): `open` 공개 가능 / `inherit` 원 조건 승계 / `private` 비공개 |
+| `license` | `{scheme, kogl_type, kogl_ai, cc, note}` (아래) |
+| `conditions` | `{attribution, non_commercial, no_derivatives, share_alike}`. 공공누리·CC는 유형에서 정해지므로 **적지 않습니다**. 적었는데 유형과 다르면 거부 |
+| `author`, `source_org`, `source_url`, `retrieved_on`, `credit_line` | 저작자, 원 출처 기관, URL, 확인 일자(`YYYY-MM-DD`), 출처 문구 |
+| `ai` | `{used, usage, mode, tool, date, original_source, pledge_submitted, tos_scope}` (아래) |
+
+**license**
+
+| 키 | 내용 |
+|---|---|
+| `kogl_type` | 공공누리 유형 0~4. 적으면 `scheme`은 `kogl`, 이용조건은 자동 |
+| `kogl_ai` | AI유형 병행 표시. 제1~4유형과만 가능. 이용조건은 함께 표시된 유형 그대로 |
+| `cc` | CC 유형 `by` / `by-sa` / `by-nd` / `by-nc` / `by-nc-sa` / `by-nc-nd` / `cc0`. 적으면 `scheme`은 `cc`, 이용조건은 자동 |
+| `scheme` | 유형이 없는 경우에만 적음: `expired` 보호기간 만료 / `donated` 기증 / `other` 기타 |
+| `note` | 설명(만료·기증·기타일 때) |
+
+| 공공누리 | 출처표시 | 상업적 이용금지 | 변경금지 |
+|---|---|---|---|
+| 제0유형 | | | |
+| 제1유형 | ○ | | |
+| 제2유형 | ○ | ○ | |
+| 제3유형 | ○ | | ○ |
+| 제4유형 | ○ | ○ | ○ |
+
+**ai**
+
+| 키 | 내용 |
+|---|---|
+| `usage` | AI 도구 사용 표기 예 번호: 1 집필진 작성 내용 기반 AI 생성 / 2 집필진 삽화 AI 수정 보완 / 3 기존 이미지 보정 / 4 AI 창작 / 5 원본 사진 AI 수정 |
+| `mode` | `generated` 생성함 / `modified` 수정 보완함. `usage`를 적으면 자동(1·4는 생성함, 2·3·5는 수정 보완함) |
+| `tool`, `date` | 활용 도구, 활용 일자 |
+| `original_source` | 수정 보완한 원본의 출처 |
+| `pledge_submitted` | 서약서 제출 여부 |
+| `tos_scope` | 사용 AI 서비스 약관상 이용 범위 |
+| `used` | 다른 AI 키가 있으면 true로 봄. AI를 쓰지 않았음을 명시하려면 `{"used": false}` |
+
+`status`, `confirmed_by`, `confirmed_at`, `version`은 적을 수 없습니다. 적재되는 값은 모두 '자동 태깅'이고 기관 확정은 확정 화면에서 합니다.
+
+## 다시 넣으면
+
+같은 파일을 몇 번 넣어도 결과가 같습니다.
+
+| 대상 | 이미 있을 때 |
+|---|---|
+| 그림 파일 | sha256이 같으면 같은 그림. 비어 있는 값만 채우고 있는 값은 덮지 않음. 키워드는 합침. 업스케일본은 없을 때만 넣음 |
+| 수록 위치 | 새 자리는 추가. 있는 자리는 레코드가 적은 값으로 고침(추출기를 고쳐 다시 돌리면 캡션·출처 줄이 바로잡힘) |
+| 권리 정보 | 자동 태깅 상태면 레코드가 적은 묶음만 고치고 버전을 올리며 변경 이력에 남김. **기관이 확정한 권리 정보는 건드리지 않고** 결과의 '확정 유지'에 표시 |
+| 수행준거 연결 | 같은 연결은 한 번만 |
+
+`license`와 `ai`는 묶음 단위로 바뀝니다. 예를 들어 `license`를 적으면 유형·조건 9개 열이 그 내용으로 통째로 바뀌고, 적지 않으면 그대로 둡니다.
+
+## 거부되는 예
+
+| 입력 | 사유 |
+|---|---|
+| `sha256`도 `file`도 없음 | sha256 또는 file이 필요합니다 |
+| `"kind": "사진"` | 허용값이 아닙니다(코드로 적음) |
+| `"license": {"kogl_type": 1}, "conditions": {"non_commercial": true}` | 상업적 이용금지가 라이선스 유형과 다릅니다 |
+| `"license": {"kogl_type": 0, "kogl_ai": true}` | AI유형은 제1~4유형과만 함께 표시됩니다 |
+| `"ownership": "kogl"`인데 `kogl_type` 없음 | 귀속이 공공누리 조건이면 kogl_type이 필요합니다 |
+| `"ai": {"usage": 1, "mode": "modified"}` | usage 1은 '생성함'인데 mode가 '수정 보완함'입니다 |
+| `"rights": {"status": "confirmed"}` | 기관 확정은 적재로 할 수 없습니다 |
