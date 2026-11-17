@@ -1,12 +1,15 @@
-"""증빙 제출 현황표 xlsx — 시트 '증빙 제출 현황'(그림마다 한 줄)과 '누락·확인'(지적마다 한 줄)."""
+"""증빙 제출 현황표 xlsx — 시트 '증빙 제출 현황'(그림마다 한 줄), '누락·확인'(지적마다 한 줄),
+받는 곳별 알림 시트 '알림_개발기관'·'알림_에디팅 기관'(그곳이 움직여야 할 지적과 그대로 보낼 글)."""
 
 from __future__ import annotations
 
 import io
 
-HEAD = ("그림 번호", "그림명", "원고", "목록", "제작 방식", "증빙", "AI 표기(원고)", "AI 결과물 현황", "판정", "비고")
-FINDING_HEAD = ("대상", "수준", "종류", "내용", "조치")
-WIDTHS = (12, 34, 7, 7, 24, 34, 28, 30, 10, 60)
+HEAD = ("그림 번호", "그림명", "쪽(출력본)", "원고", "목록", "제작 방식", "증빙", "AI 표기(원고)", "AI 결과물 현황", "판정", "비고")
+FINDING_HEAD = ("대상", "수준", "종류", "내용", "조치", "받는 곳")
+NOTICE_HEAD = ("대상", "수준", "종류", "내용", "조치")
+WIDTHS = (12, 34, 12, 7, 7, 24, 34, 28, 30, 10, 60)
+VERDICT_COLUMN = HEAD.index("판정") + 1
 FILLS = {"부적합": "FDE7E7", "판단불가": "FFF4D6", "적합": "E6F4EA"}
 
 
@@ -54,20 +57,34 @@ def build_xlsx(report: dict) -> bytes:
         ws.column_dimensions[get_column_letter(col)].width = WIDTHS[col - 1]
     for index, row in enumerate(report["현황표"], 1):
         r = top + index
-        values = (row["그림 번호"], row["그림명"], _mark(row["원고"]), _mark(row["목록"]), "\n".join(row["제작 방식"]),
+        values = (row["그림 번호"], row["그림명"], row.get("쪽", ""), _mark(row["원고"]), _mark(row["목록"]), "\n".join(row["제작 방식"]),
                   "\n".join(f"{e['증빙']}: {e['상태']}" for e in row["증빙"]), row["AI 표기"], row["결과물 현황"], row["판정"],
                   "\n".join(row["비고"]))
         for col, value in enumerate(values, 1):
-            put(ws, r, col, value, fill=FILLS.get(row["판정"]) if col == 9 else None)
+            put(ws, r, col, value, fill=FILLS.get(row["판정"]) if col == VERDICT_COLUMN else None)
     ws.freeze_panes = ws.cell(top + 1, 1)
 
     ws2 = wb.create_sheet("누락·확인")
-    for col, (name, width) in enumerate(zip(FINDING_HEAD, (34, 10, 16, 70, 50)), 1):
+    for col, (name, width) in enumerate(zip(FINDING_HEAD, (34, 10, 16, 70, 50, 14)), 1):
         put(ws2, 1, col, name, bold=True).fill = head_fill
         ws2.column_dimensions[get_column_letter(col)].width = width
     for index, finding in enumerate(report["지적사항"], 2):
-        for col, key in enumerate(("그림", "수준", "종류", "내용", "조치"), 1):
-            put(ws2, index, col, finding[key], fill=FILLS.get(finding["수준"]) if col == 2 else None)
+        for col, key in enumerate(("그림", "수준", "종류", "내용", "조치", "받는 곳"), 1):
+            put(ws2, index, col, finding.get(key, ""), fill=FILLS.get(finding["수준"]) if col == 2 else None)
+
+    for notice in report.get("알림", []):
+        sheet = wb.create_sheet(f"알림_{notice['받는 곳']}")
+        text = sheet.cell(1, 1, notice["글"])
+        text.data_type = "s"
+        text.alignment = Alignment(vertical="top", wrap_text=True)
+        sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(NOTICE_HEAD))
+        sheet.row_dimensions[1].height = min(400, 18 * (notice["글"].count("\n") + 2))
+        for col, (name, width) in enumerate(zip(NOTICE_HEAD, (34, 10, 16, 70, 50)), 1):
+            put(sheet, 3, col, name, bold=True).fill = head_fill
+            sheet.column_dimensions[get_column_letter(col)].width = width
+        for index, finding in enumerate(notice["지적사항"], 4):
+            for col, key in enumerate(("그림", "수준", "종류", "내용", "조치"), 1):
+                put(sheet, index, col, finding[key], fill=FILLS.get(finding["수준"]) if col == 2 else None)
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()

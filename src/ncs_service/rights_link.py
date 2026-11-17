@@ -1,10 +1,12 @@
 """권리 증빙 점검(ncs_rights) 결과를 이미지 저작권 DB에 잇는다 — REQ-02-014 '확인된 증빙은 이미지 저작권 DB(REQ-02-010)에 연결'.
 
-점검 결과의 그림을 원고(hwpx)의 그림 파일과 캡션으로 짝지어:
+점검 결과의 그림을 원고(hwpx)의 그림 파일과 자리로 짝지어(캡션 문단 바로 위, 앞 캡션보다 아래에 놓인 그림 파일):
   1. 그림 파일·수록 위치·(목록의 제작 방식에서 온) 분류·AI 표기를 이미지 레코드로 적재한다(image_db.load_records —
      이미 있는 그림은 합치고, 기관이 확정한 권리 정보는 건드리지 않는다)
   2. 현황표에서 '제출'로 확인된 증빙을 그 그림에 잇는다(image_store.add_evidence — 같은 증빙은 한 번만)
-캡션으로 그림 파일을 찾지 못한 그림(그림 개체가 없거나 hwp 원고)은 건너뛰고 그 수를 알려 준다.
+그림 파일을 찾지 못한 그림(캡션 위에 그림 개체가 없거나 hwp 원고)은 건너뛰고 그 수를 알려 준다.
+그림 번호로 짝짓지 않는 것은 실제 원고에 같은 번호가 두 번 쓰이거나 뒤 번호가 빈 캡션('그림 1-')이 여럿 있어서다 —
+번호로 찾으면 서로 다른 그림의 수록 위치와 권리 정보가 한 그림 파일에 붙는다.
 """
 
 from __future__ import annotations
@@ -13,7 +15,6 @@ from datetime import date
 from pathlib import Path
 
 from ncs_core.documents import load_document
-from ncs_core.figures import parse_label
 from ncs_core.pictures import picture_records
 
 from . import image_db, image_store
@@ -23,23 +24,43 @@ EVIDENCE_KINDS = {"양도 동의서(집필자)": "transfer_consent", "양도 동
 CATEGORIES = ("author_made", "commissioned", "public_license", "blanket_license", "prior_module")
 
 
-def _label(caption: str) -> str:
-    found = parse_label(caption)
-    return f"그림 {found[0]}-{found[1] if found[1] is not None else ''}" if found else ""
+MAX_GAP = 8        # 그림과 캡션 사이에 올 수 있는 문단 수(출처 줄·AI 활용 줄·빈 줄). 이보다 멀면 그 캡션의 그림으로 보지 않는다
+
+
+def _pictures_by_caption(document, rows: list[dict]) -> dict[tuple[int, int], dict]:
+    """현황표 줄의 캡션 자리 (구역, 문단) → 그 캡션의 그림 파일. 캡션 하나에 그림이 여럿이면 캡션에 가장 가까운 것."""
+    captions: dict[int, list[int]] = {}
+    for row in rows:
+        if row.get("문단"):
+            captions.setdefault(row["문단"][0], []).append(row["문단"][1])
+    pictures: dict[int, list[dict]] = {}
+    for record in picture_records(document):
+        if record["data"]:
+            pictures.setdefault(record["section"], []).append(record)
+    found = {}
+    for section, paras in captions.items():
+        previous = -1
+        for para in sorted(set(paras)):
+            above = [record for record in pictures.get(section, []) if max(previous, para - MAX_GAP - 1) < record["para"] <= para]
+            if above:
+                found[(section, para)] = max(above, key=lambda record: record["para"])
+            previous = para
+    return found
+
+
+def _page(row: dict) -> int | None:
+    """현황표의 쪽(출력본 PDF를 함께 올렸을 때만 있음) → 수록 위치의 쪽. 한 쪽으로 정해지고 숫자일 때만."""
+    folios = row.get("쪽 번호") or []
+    return int(folios[0]) if len(folios) == 1 and str(folios[0]).isdigit() else None
 
 
 def save_to_image_db(dsn: str, manuscript: str | Path, module_code: str, report: dict, *, by: str,
                      submitted_on: date | None = None) -> dict:
     """→ {'그림': 적재한 그림 수, '새 그림', '증빙': 새로 이은 증빙 수, '건너뜀': 그림 파일을 찾지 못한 그림 수, '거부': […]}."""
-    document = load_document(manuscript)
-    pictures = {}
-    for record in picture_records(document):
-        label = _label(record["caption"])
-        if label and record["data"] and label not in pictures:
-            pictures[label] = record
+    pictures = _pictures_by_caption(load_document(manuscript), report["현황표"])
     records, evidence, skipped = [], [], 0
     for row in report["현황표"]:
-        picture = pictures.get(row["그림 번호"]) if row["원고"] else None
+        picture = pictures.get(tuple(row["문단"])) if row["원고"] and row.get("문단") else None
         if picture is None:
             skipped += bool(row["원고"])
             continue
@@ -53,6 +74,7 @@ def save_to_image_db(dsn: str, manuscript: str | Path, module_code: str, report:
             "content": picture["data"], "title": row["그림명"] or None,
             "placements": [{"module_code": module_code, "label": row["그림 번호"], "caption": row["그림명"] or None,
                             "source_line": row["출처 줄"] or None, "para_index": picture["para"],
+                            "page": _page(row),
                             "width_mm": picture["mm"][0] or None, "height_mm": picture["mm"][1] or None}],
             **({"rights": rights} if rights else {}),
         })

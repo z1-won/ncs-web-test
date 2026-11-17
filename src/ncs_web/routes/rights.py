@@ -1,9 +1,11 @@
 """권리 증빙 제출 현황 점검(REQ-02-014) — 원고와 제출 서류(작성된 한글 양식)를 올려 현황표와 누락 목록을 받는다.
 
   POST /api/rights/check    manuscript(원고 1개) + forms(서류 여러 개) + 날짜·제출 여부 → 점검 결과
+                            print_copy(출력본 PDF, 선택)를 함께 주면 그림이 놓인 쪽을 읽어 결과물 현황의 쪽수와 대조한다
                             save=true면 결과를 이미지 저작권 DB에 잇는다(PostgreSQL일 때만, by·모듈 코드 필요)
   POST /api/rights/export   점검 결과(JSON) → 현황표 xlsx
-데이터베이스 없이도 점검은 된다. 올린 파일은 점검하는 동안만 임시 폴더에 두고 지운다.
+데이터베이스 없이도 점검은 된다. 올린 파일은 점검하는 동안만 임시 폴더에 두고 지운다 — 서류 파일과 그 본문은 서버에 남지 않는다.
+이미지 저작권 DB에 반영할 때 남는 것은 그림 파일·수록 위치·제작 방식·AI 표기와 증빙의 종류·서류 파일 이름·제출일뿐이다.
 """
 
 import tempfile
@@ -38,6 +40,7 @@ def register(app: FastAPI, services: Services) -> None:
     def rights_check(
         manuscript: Annotated[UploadFile, File()],
         forms: Annotated[list[UploadFile] | None, File()] = None,
+        print_copy: Annotated[UploadFile | None, File()] = None,
         first_review_on: Annotated[str, Form()] = "", submitted_on: Annotated[str, Form()] = "",
         transfer_author: Annotated[bool, Form()] = False, transfer_maker: Annotated[bool, Form()] = False,
         portrait: Annotated[str, Form()] = "unknown", pledge: Annotated[bool, Form()] = False,
@@ -79,8 +82,9 @@ def register(app: FastAPI, services: Services) -> None:
 
             manuscript_path = keep(manuscript, "manuscript")
             form_paths = [keep(item, "forms") for item in named]
+            print_path = keep(print_copy, "print") if print_copy is not None and print_copy.filename else None
             try:
-                report = run(manuscript_path, form_paths, options)
+                report = run(manuscript_path, form_paths, options, print_copy=print_path)
             except ValueError as error:
                 raise HTTPException(400, str(error)) from None
             report["저장"] = None

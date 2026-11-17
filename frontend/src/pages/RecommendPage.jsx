@@ -7,29 +7,11 @@ import { Spinner } from "../components/Badge.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { usePageTitle } from "../lib/hooks.js";
+import { copyText } from "../lib/clipboard.js";
 import { licenseLabel } from "../lib/imageTerms.js";
 
 const ANCHORS = [{ id: "recommend-input", label: "문단·수행준거" }, { id: "recommend-result", label: "추천 결과" }];
 const LINK_LABEL = { criterion: "같은 수행준거", element: "같은 능력단위요소", unit: "같은 능력단위" };
-
-async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    // 클립보드 API가 없는 환경(http 등): 숨은 textarea로 선택 후 복사
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.setAttribute("readonly", "");
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    const done = document.execCommand("copy");
-    area.remove();
-    return done;
-  }
-}
 
 function Card({ item, rank, terms }) {
   const [copied, setCopied] = useState(false);

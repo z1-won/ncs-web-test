@@ -4,6 +4,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
+import { copyText } from "../lib/clipboard.js";
 import { Badge, BADGE } from "../components/Badge.jsx";
 import { FileSlot, MultiFileSlot } from "../components/FileSlot.jsx";
 import { KrdsDateField } from "../components/KrdsDateField.jsx";
@@ -31,6 +32,8 @@ export default function RightsPage() {
   usePageTitle("권리 증빙 점검");
   const [manuscript, setManuscript] = useState(null);
   const [forms, setForms] = useState([]);
+  const [printCopy, setPrintCopy] = useState(null);   // 출력본 PDF(선택)
+  const [copied, setCopied] = useState(null);         // 방금 복사한 알림의 받는 곳
   const [options, setOptions] = useState({ firstReviewOn: "", submittedOn: "", transferAuthor: false, transferMaker: false, pledge: false, portrait: "unknown" });
   const [busy, setBusy] = useState(null);       // "check" | "save" | "export"
   const [error, setError] = useState(null);
@@ -55,7 +58,7 @@ export default function RightsPage() {
     setBusy("check");
     setError(null);
     setSaved(null);
-    const { ok, data, error: message } = await api.rights.check(manuscript, forms, options);
+    const { ok, data, error: message } = await api.rights.check(manuscript, forms, { ...options, printCopy });
     setBusy(null);
     if (!ok) { setError(message); setReport(null); return; }
     setReport(data);
@@ -65,7 +68,7 @@ export default function RightsPage() {
   async function saveToDb() {
     setBusy("save");
     setSaved(null);
-    const { ok, data, error: message } = await api.rights.check(manuscript, forms, { ...options, save: true, by, moduleCode });
+    const { ok, data, error: message } = await api.rights.check(manuscript, forms, { ...options, printCopy, save: true, by, moduleCode });
     setBusy(null);
     if (!ok) { setSaved({ kind: "danger", text: message }); return; }
     setReport(data);
@@ -73,6 +76,13 @@ export default function RightsPage() {
     setSaved({ kind: s.거부.length ? "danger" : "success",
                text: `이미지 저작권 DB에 반영했습니다(모듈 ${s["모듈 코드"]}). 그림 ${s.그림}개(새 그림 ${s["새 그림"]}), 새로 이은 증빙 ${s.증빙}건`
                  + (s.건너뜀 ? `, 그림 파일을 찾지 못해 건너뜀 ${s.건너뜀}개` : "") + (s.거부.length ? `, 거부 ${s.거부.length}건` : "") + "." });
+  }
+
+  async function copyNotice(notice) {
+    if (await copyText(notice.글)) {
+      setCopied(notice["받는 곳"]);
+      setTimeout(() => setCopied(null), 2000);
+    }
   }
 
   async function exportXlsx() {
@@ -103,6 +113,8 @@ export default function RightsPage() {
           <MultiFileSlot id="rights-forms" label="제출 서류" accept=".hwp,.hwpx" files={forms} disabled={!!busy}
                          onChange={(picked) => { setForms(picked); setReport(null); }}
                          hint="작성한 한글 양식을 한 번에 여러 개 고릅니다. 없으면 원고만으로 점검합니다." />
+          <FileSlot id="rights-print" label="출력본 PDF" accept=".pdf" file={printCopy} disabled={!!busy} onChange={(file) => { setPrintCopy(file); setReport(null); }}
+                    hint="올리면 그림이 놓인 쪽을 읽어 생성형 AI 결과물 현황의 쪽수와 대조합니다." />
           <KrdsDateField id="rights-first" label="1차 검토일" value={options.firstReviewOn} onChange={set("firstReviewOn")} disabled={!!busy}
                          hint="수록 현황 목록은 1차 검토 이후 4주 이내에 내야 합니다. 이 날짜로 기한을 계산합니다." />
           <KrdsDateField id="rights-submitted" label="수록 현황 목록 제출일" value={options.submittedOn} onChange={set("submittedOn")} disabled={!!busy}
@@ -150,6 +162,7 @@ export default function RightsPage() {
           </PageAlert>
           <p className="rights-forms-seen">
             읽은 양식: {seen.length ? seen.map(([name, files]) => `${name}(${files.join(", ")})`).join(" · ") : "없음"}
+            {report.출력본 && ` · 출력본 ${report.출력본.파일}(${report.출력본.쪽}쪽, 캡션을 찾은 그림 ${report.출력본["캡션 찾은 그림"]}개)`}
           </p>
           {report.안내.length > 0 && <PageAlert kind="info">{report.안내.join("\n")}</PageAlert>}
 
@@ -162,7 +175,7 @@ export default function RightsPage() {
                 <thead><tr><th scope="col">그림</th><th scope="col">원고</th><th scope="col">목록</th><th scope="col">제작 방식</th><th scope="col">증빙</th><th scope="col">AI 표기</th><th scope="col">판정</th><th scope="col">비고</th></tr></thead>
                 <tbody>{report.현황표.map((row, index) => (
                   <tr key={index}>
-                    <td><strong>{row["그림 번호"] || "번호 없음"}</strong><span className="sub">{row.그림명}</span></td>
+                    <td><strong>{row["그림 번호"] || "번호 없음"}</strong><span className="sub">{row.그림명}</span>{row.쪽 && <span className="sub">출력본 {row.쪽}</span>}</td>
                     <td className="center">{mark(row.원고)}</td>
                     <td className="center">{mark(row.목록)}</td>
                     <td>{row["제작 방식"].length ? row["제작 방식"].map((name) => <span className="line" key={name}>{name}</span>) : "—"}</td>
@@ -183,7 +196,7 @@ export default function RightsPage() {
             <ul className="findings-list">
               {report.지적사항.map((finding, index) => (
                 <li className="finding" key={index}>
-                  <div className="finding-head"><Badge value={finding.수준} /><span className="finding-check">{finding.그림}</span><span className="meta">{finding.종류}</span></div>
+                  <div className="finding-head"><Badge value={finding.수준} /><span className="finding-check">{finding.그림}</span><span className="meta">{finding.종류} · {finding["받는 곳"]}</span></div>
                   <dl className="finding-body">
                     <dt>내용</dt><dd>{finding.내용}</dd>
                     {finding.조치 && <><dt>조치</dt><dd>{finding.조치}</dd></>}
@@ -192,6 +205,24 @@ export default function RightsPage() {
               ))}
             </ul>
           )}
+
+          <h3 className="sub-title">기관별 알림</h3>
+          <p className="form-hint">서류를 내거나 원고·목록을 고쳐야 하는 것은 개발기관에, 같은 것인지 사람이 가려야 하는 것은 에디팅 기관에 보냅니다.
+            글을 복사해 그대로 전달할 수 있고, 현황표 xlsx에도 기관별 시트로 들어 있습니다. 이 화면이 직접 보내지는 않습니다.</p>
+          <div className="rights-notices">
+            {(report.알림 || []).map((notice) => (
+              <div className="rights-notice" key={notice["받는 곳"]}>
+                <div className="rights-notice-head">
+                  <strong>{notice["받는 곳"]}</strong>
+                  <span className="meta">{notice.건수}건 · 부적합 {notice.부적합} · 판단불가 {notice.판단불가}</span>
+                  <button type="button" className="krds-btn small tertiary" onClick={() => copyNotice(notice)}>
+                    {copied === notice["받는 곳"] ? "복사했습니다" : "알림 글 복사"}
+                  </button>
+                </div>
+                <pre className="rights-notice-text">{notice.글}</pre>
+              </div>
+            ))}
+          </div>
 
           <h3 className="sub-title">이미지 저작권 DB에 반영</h3>
           {!imageDb ? <p className="empty">데이터베이스가 연결되어 있지 않아 반영할 수 없습니다. 점검 결과는 위 표와 xlsx로 확인하세요.</p> : (

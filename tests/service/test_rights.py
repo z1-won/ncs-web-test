@@ -1,4 +1,4 @@
-"""권리 증빙 제출 현황 점검(ncs_rights, REQ-02-014) — 서류 읽기, 대조·판정, 기한, 현황표, 웹 API. DB 없이 돈다."""
+"""권리 증빙 제출 현황 점검(ncs_rights, REQ-02-014) — 서류 읽기, 대조·판정, 기한, 기관별 알림, 출력본 쪽수 대조, 현황표, 웹 API. DB 없이 돈다."""
 
 import io
 import tempfile
@@ -12,6 +12,7 @@ import rights_samples as S
 from ncs_core.documents import load_document
 from ncs_rights.check import Options
 from ncs_rights.forms import read_forms
+from ncs_rights.pages import figure_pages, page_numbers
 from ncs_rights.report import build_xlsx
 from ncs_rights.service import run
 from ncs_web.server import create_app
@@ -19,6 +20,7 @@ from ncs_web.server import create_app
 COMPLETE = dict(first_review_on=date(2026, 10, 1), submitted_on=date(2026, 10, 20), today=date(2026, 11, 17),
                 transfer_author=True, transfer_maker=True, portrait="none", pledge=True)
 M = S.M
+PRINT_COPY = Path(__file__).resolve().parents[1] / "fixtures" / "출력본_ok_LM1203020201_24v3.pdf"   # [그림 1-1]이 4쪽에 있다
 
 
 class RightsCase(unittest.TestCase):
@@ -27,9 +29,9 @@ class RightsCase(unittest.TestCase):
         self.addCleanup(folder.cleanup)
         self.folder = Path(folder.name)
 
-    def check(self, forms=None, figures=S.FIGURES, **options) -> dict:
+    def check(self, forms=None, figures=S.FIGURES, print_copy=None, **options) -> dict:
         forms = S.full_forms(self.folder) if forms is None else forms
-        return run(S.manuscript(self.folder, figures), forms, Options(**{**COMPLETE, **options}))
+        return run(S.manuscript(self.folder, figures), forms, Options(**{**COMPLETE, **options}), print_copy=print_copy)
 
     def row(self, report: dict, label: str) -> dict:
         return next(row for row in report["현황표"] if row["그림 번호"] == label)
@@ -227,6 +229,132 @@ class DeadlineTests(RightsCase):
         self.assertEqual(self.deadline()["기한"]["기한"], "2026-10-29")
 
 
+class MatchingTests(RightsCase):
+    """실제 원고에서 나온 경우 — 같은 제목이 다른 번호로 또 나오고, 뒤 번호를 비운 캡션의 제목이 숫자로 시작한다(tests/eval_rights.py가 찾음)."""
+
+    def test_same_title_under_another_number_does_not_lend_its_evidence(self):
+        figures = [("그림 1-10", "객실 전화 예약 흐름도", "출처: 홍길동(2024). 사례집.", ""), ("그림 1-13", "객실 전화 예약 흐름도", "출처: 홍길동(2024). 사례집.", "")]
+        listed = S.inclusion_table([["1", "[그림 1-10] 객실 전화 예약 흐름도", "", "", "", "", "", M, "", "", ""],
+                                    ["2", "[그림 1-13] 객실 전화 예약 흐름도", "", "", "", "", "", M, "", "", ""]])
+        only_first = S.license_table([["1", "[그림 1-10] 객실 전화 예약 흐름도", "홍길동(2024). 사례집.", "객실 예약 관리"]])
+        report = self.check([self.form("c.hwpx", listed, only_first)], figures)
+        self.assertEqual((self.kinds(report, "그림 1-10"), self.kinds(report, "그림 1-13")), ([], ["증빙 누락"]),
+                         "그림 1-10의 동의서 행을 그림 1-13의 것으로 보지 않는다")
+
+    def test_list_rows_go_to_the_figure_they_name(self):
+        figures = [("그림 1-10", "객실 전화 예약 흐름도", "출처: 집필진 제작(2026)", ""), ("그림 1-13", "객실 전화 예약 흐름도", "출처: 집필진 제작(2026)", "")]
+        listed = S.inclusion_table([["1", "[그림 1-13] 객실 전화 예약 흐름도", "", M, "", "", "", "", "", "", ""]])     # 그림 1-10이 목록에 없다
+        report = self.check([self.form("c.hwpx", listed)], figures)
+        self.assertEqual((self.kinds(report, "그림 1-10"), self.kinds(report, "그림 1-13")), (["목록 누락"], []),
+                         "앞 그림이 제목만 같은 뒤 그림의 행을 가져가지 않는다")
+
+    def test_same_number_used_twice_is_paired_by_title(self):
+        figures = [("그림 2-2", "객실 타입별 요금 조회 화면", "출처: 집필진 제작(2026)", ""), ("그림 2-2", "초과 예약 접수하기", "출처: 집필진 제작(2026)", "")]
+        listed = S.inclusion_table([["1", "[그림 2-2] 초과 예약 접수하기", "", M, "", "", "", "", "", "", ""]])
+        report = self.check([self.form("c.hwpx", listed)], figures)
+        self.assertEqual([(row["그림명"], [issue["종류"] for issue in row["지적"]]) for row in report["현황표"]],
+                         [("객실 타입별 요금 조회 화면", ["목록 누락"]), ("초과 예약 접수하기", [])])
+
+    def test_blank_minor_with_a_title_that_starts_with_a_digit(self):
+        figures = [("그림 2-", "6LoWPAN 프로토콜 스택", "출처: 집필진 제작(2026)", "ChatGPT를 활용하여 생성함. 2026. 7. 20.")]
+        forms = [self.form("c.hwpx", S.inclusion_table([["1", "[그림 2-] 6LoWPAN 프로토콜 스택", "", M, "", "", "", "", "", M, ""]])),
+                 self.form("a.hwpx", S.ai_table([["1", "그림 2- 6LoWPAN 프로토콜 스택", "p.12", "ChatGPT", ""]]))]
+        report = self.check(forms, figures)
+        self.assertEqual([issue["종류"] for issue in report["현황표"][0]["지적"] if issue["수준"] == "부적합"], [],
+                         "결과물 현황의 '그림 2- 6LoWPAN …'에서 6을 뒤 번호로 읽지 않는다")
+        read = read_forms([("a.hwpx", load_document(self.form("b.hwpx", S.ai_table([
+            ["1", "그림 1-2 개념도", "", "", ""], ["2", "그림 1 - 3. 구성도", "", "", ""], ["3", "그림 2- 6LoWPAN", "", "", ""]]))))])
+        self.assertEqual([(row["label"], row["title"]) for row in read.ai_results],
+                         [("그림 1-2", "개념도"), ("그림 1-3", "구성도"), ("그림 2-", "6LoWPAN")])
+
+
+class NoticeTests(RightsCase):
+    def test_each_finding_names_who_has_to_act(self):
+        """서류를 내거나 고칠 것은 개발기관, 같은 것인지 사람이 가릴 것은 에디팅 기관이 받는다."""
+        forms = [self.form("c.hwpx", S.inclusion_table([
+            ["1", "[그림 1-1] NCS학습모듈 개념도", M, "", "", "", "", "", "", M, ""],      # 직접제작(사진) + AI
+            ["2", "[그림 1-2] 다른 제목", "", "", "", "", "", M, "", "", ""],              # 번호는 같고 제목이 다름
+        ]), S.license_table())]
+        report = self.check(forms, S.FIGURES[:2], transfer_author=False, pledge=False, portrait="unknown")
+        to = {(finding["그림"].split("]")[0].lstrip("["), finding["종류"]): finding["받는 곳"] for finding in report["지적사항"]}
+        self.assertEqual(to[("그림 1-1", "증빙 누락")], "개발기관")
+        self.assertEqual(to[("그림 1-1", "초상권 확인")], "에디팅 기관")
+        self.assertEqual(to[("그림 1-2", "제목 다름")], "에디팅 기관")
+        self.assertTrue(all(finding["받는 곳"] in ("개발기관", "에디팅 기관") for finding in report["지적사항"]))
+
+        developer, editor = report["알림"]
+        self.assertEqual((developer["받는 곳"], editor["받는 곳"]), ("개발기관", "에디팅 기관"))
+        self.assertEqual(developer["건수"] + editor["건수"], len(report["지적사항"]), "지적은 빠짐없이 한 곳에만 간다")
+        self.assertEqual(developer["부적합"], report["요약"]["누락"], "서류로 확인된 누락은 모두 개발기관에 간다")
+        self.assertIn(f"보완할 것이 {developer['건수']}건", developer["글"])
+        self.assertIn("집필자 직접제작인데 지식재산권 양도 동의서가 제출되지 않았습니다", developer["글"])
+        self.assertIn(f"개발기관에 보완을 요청한 것은 {developer['건수']}건", editor["글"], "에디팅 기관도 누락 건수를 안다")
+
+    def test_deadline_goes_to_whoever_can_fix_it(self):
+        late = self.check(submitted_on=date(2026, 11, 10))
+        self.assertEqual([f["받는 곳"] for f in late["지적사항"] if f["종류"] == "기한"], ["개발기관"])
+        unsent = self.check([], first_review_on=date(2026, 11, 10), submitted_on=None)      # 아직 기한 안 — 내야 하는 쪽에 알린다
+        self.assertEqual([f["받는 곳"] for f in unsent["지적사항"] if f["종류"] == "기한"], ["개발기관"])
+        undated = self.check(first_review_on=None, submitted_on=None)                       # 날짜를 안 넣은 것은 점검하는 쪽의 일
+        self.assertEqual([f["받는 곳"] for f in undated["지적사항"] if f["종류"] == "기한"], ["에디팅 기관"])
+
+    def test_nothing_to_send(self):
+        figures = [S.FIGURES[2]]
+        report = self.check([self.form("c.hwpx", S.inclusion_table([["1", "[그림 1-3] NCS학습모듈 개발 프로세스", "", M, "", "", "", "", "", "", ""]]))], figures)
+        self.assertEqual([(notice["건수"], notice["글"].splitlines()[1]) for notice in report["알림"]],
+                         [(0, "보완할 것이 없습니다."), (0, "확인할 것이 없습니다. 개발기관에 보완을 요청한 것은 0건입니다.")])
+
+
+class PrintCopyTests(RightsCase):
+    def test_page_numbers_from_the_form(self):
+        self.assertEqual([page_numbers(text) for text in ("p.12", "pp. 12~13", "12쪽, 15쪽", "p. 7-9", "p.00", "", "본문", "12~300")],
+                         [[12], [12, 13], [12, 15], [7, 8, 9], [], [], [], [12, 300]])
+
+    def test_captions_are_located_in_the_print_copy(self):
+        from ncs_core.pdf import load_pdf
+
+        self.assertEqual(figure_pages(load_pdf(PRINT_COPY)), {"그림 1-1": [{"쪽": "4", "추정": False, "물리 쪽": 7}]})
+
+    def ai_forms(self, page: str) -> list[Path]:
+        return [self.form("c.hwpx", S.inclusion_table(), S.license_table()), self.form("p.hwpx", S.production_table()),
+                self.form("a.hwpx", S.ai_table([["1", "그림 1-1 NCS학습모듈 개념도", page, "ChatGPT 6.0", ""]]))]
+
+    def test_page_in_the_ai_results_is_compared_with_the_print_copy(self):
+        same = self.check(self.ai_forms("p.4"), print_copy=PRINT_COPY)
+        row = self.row(same, "그림 1-1")
+        self.assertEqual((row["쪽"], row["쪽 번호"], row["쪽수 대조"], row["판정"]), ("4쪽", ["4"], "일치", "적합"))
+        self.assertEqual(same["출력본"], {"파일": PRINT_COPY.name, "쪽": 45, "캡션 찾은 그림": 1, "모듈 코드": "LM1203020201_24v3"})
+        self.assertEqual(self.row(same, "그림 1-2")["쪽"], "", "출력본에서 찾지 못한 그림은 쪽이 비어 있다(지적은 내지 않는다)")
+
+        wide = self.check(self.ai_forms("pp. 3~5"), print_copy=PRINT_COPY)
+        self.assertEqual(self.row(wide, "그림 1-1")["쪽수 대조"], "일치", "적힌 범위 안에 있으면 맞는 것으로 본다")
+
+        other = self.check(self.ai_forms("p.12"), print_copy=PRINT_COPY)
+        row = self.row(other, "그림 1-1")
+        self.assertEqual((self.kinds(other, "그림 1-1"), row["판정"], row["지적"][0]["받는 곳"]), (["쪽수 다름"], "판단불가", "에디팅 기관"))
+        self.assertIn("「p.12」인데 출력본에서는 이 그림이 4쪽에", row["비고"][0])
+
+        unread = self.check(self.ai_forms("본문 참조"), print_copy=PRINT_COPY)
+        self.assertEqual(self.kinds(unread, "그림 1-1"), ["쪽 확인"])
+
+    def test_figure_missing_from_the_print_copy(self):
+        figures = [("그림 4-1", "출력본에 없는 그림", "출처: 집필진 제작(2026)", "ChatGPT를 활용하여 생성함. 2026. 7. 20.")]
+        forms = [self.form("c.hwpx", S.inclusion_table([["1", "[그림 4-1] 출력본에 없는 그림", "", M, "", "", "", "", "", M, ""]])),
+                 self.form("a.hwpx", S.ai_table([["1", "그림 4-1 출력본에 없는 그림", "p.30", "ChatGPT", ""]]))]
+        report = self.check(forms, figures, print_copy=PRINT_COPY)
+        self.assertEqual(self.kinds(report, "그림 4-1"), ["쪽 확인"])
+        self.assertIn("캡션을 찾지 못해", self.row(report, "그림 4-1")["비고"][0])
+
+    def test_without_or_with_an_unreadable_print_copy_pages_are_not_compared(self):
+        plain = self.check(self.ai_forms("p.12"))
+        self.assertEqual((plain["출력본"], self.kinds(plain, "그림 1-1"), self.row(plain, "그림 1-1")["쪽"]), (None, [], ""))
+        broken = self.folder / "깨진.pdf"
+        broken.write_bytes(b"not a pdf")
+        report = self.check(self.ai_forms("p.12"), print_copy=broken)
+        self.assertEqual((report["출력본"], self.kinds(report, "그림 1-1")), (None, []))
+        self.assertTrue(any("깨진.pdf: 출력본을 읽지 못해 쪽수를 대조하지 않았습니다" in note for note in report["안내"]))
+
+
 class OutputTests(RightsCase):
     def test_xlsx_has_both_sheets_and_no_formulas(self):
         from openpyxl import load_workbook
@@ -234,7 +362,7 @@ class OutputTests(RightsCase):
         figures = [("그림 1-1", "=HYPERLINK(\"http://x\")", "출처: 집필진 제작(2026)", "")]
         report = self.check([self.form("c.hwpx", S.inclusion_table([["1", "[그림 1-1] =HYPERLINK(\"http://x\")", "", M, "", "", "", "", "", "", ""]]))], figures)
         book = load_workbook(io.BytesIO(build_xlsx(report)))
-        self.assertEqual(book.sheetnames, ["증빙 제출 현황", "누락·확인"])
+        self.assertEqual(book.sheetnames, ["증빙 제출 현황", "누락·확인", "알림_개발기관", "알림_에디팅 기관"])
         sheet = book["증빙 제출 현황"]
         cells = [cell for row in sheet.iter_rows() for cell in row if cell.value is not None]
         self.assertTrue(any(cell.value == "그림 1-1" for cell in cells))
@@ -242,6 +370,15 @@ class OutputTests(RightsCase):
         full = load_workbook(io.BytesIO(build_xlsx(self.check())))
         self.assertEqual(full["누락·확인"].max_row, 3)                      # 머리 + 지적 2건
         self.assertEqual(full["증빙 제출 현황"].max_row, 6 + 9)             # 제목·요약 5줄 + 머리 + 그림 9줄
+        self.assertEqual([cell.value for cell in full["누락·확인"][2]][-1], "개발기관")
+        notice = full["알림_개발기관"]
+        self.assertTrue(notice["A1"].value.startswith("[권리 증빙 제출 현황 점검] 객실 예약 관리 — 개발기관\n보완할 것이 2건"))
+        self.assertEqual((notice.max_row, full["알림_에디팅 기관"].max_row), (3 + 2, 3), "글 + 머리 + 그곳의 지적")
+        self.assertFalse([c.coordinate for sheet in book for row in sheet.iter_rows() for c in row if c.data_type == "f"])
+        old = {key: value for key, value in self.check().items() if key != "알림"}        # 알림이 없는 예전 결과도 내보낼 수 있다
+        for finding in old["지적사항"]:
+            del finding["받는 곳"]
+        self.assertEqual(load_workbook(io.BytesIO(build_xlsx(old))).sheetnames, ["증빙 제출 현황", "누락·확인"])
 
 
 class WebTests(RightsCase):
@@ -251,8 +388,10 @@ class WebTests(RightsCase):
         cls.addClassCleanup(cls.out.cleanup)
         cls.client = TestClient(create_app(out_dir=Path(cls.out.name) / "결과"))
 
-    def post(self, manuscript: Path, forms: list[Path], expect: int = 200, **data):
+    def post(self, manuscript: Path, forms: list[Path], expect: int = 200, print_copy: Path | None = None, **data):
         files = [("manuscript", (manuscript.name, manuscript.read_bytes()))] + [("forms", (f.name, f.read_bytes())) for f in forms]
+        if print_copy:
+            files.append(("print_copy", (print_copy.name, print_copy.read_bytes())))
         response = self.client.post("/api/rights/check", files=files, data=data)
         self.assertEqual(response.status_code, expect, response.text)
         return response.json()
@@ -263,8 +402,13 @@ class WebTests(RightsCase):
                            transfer_maker="true", portrait="none", pledge="true")
         self.assertEqual((report["요약"]["적합"], report["요약"]["부적합"], report["원고"]["파일"], report["저장"]), (7, 2, S.MANUSCRIPT_NAME, None))
         self.assertEqual(report["기한"]["판정"], "적합")
+        self.assertEqual([notice["받는 곳"] for notice in report["알림"]], ["개발기관", "에디팅 기관"])
+        self.assertIsNone(report["출력본"])
         alone = self.post(manuscript, [])                          # 서류 없이 원고만 — 점검은 되고 목록 미제출로 나온다
         self.assertEqual(alone["지적사항"][0]["종류"], "목록 미제출")
+        printed = self.post(manuscript, forms, print_copy=PRINT_COPY, pledge="true", transfer_author="true")   # 출력본을 함께 — 쪽수 대조
+        self.assertEqual(printed["출력본"]["파일"], PRINT_COPY.name)
+        self.assertIn("쪽수 다름", [finding["종류"] for finding in printed["지적사항"]])
 
         exported = self.client.post("/api/rights/export", json=report)
         self.assertEqual(exported.status_code, 200)

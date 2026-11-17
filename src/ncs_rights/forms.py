@@ -64,7 +64,9 @@ def _marked(text: str) -> bool:
     return bool(text) and len(text) <= 2 and any(ch in MARKS for ch in text)
 
 
-BARE_LABEL = re.compile(r"^\s*그림\s*(\d+)\s*[-–—－‐]\s*(\d*)\s*[.:：]?\s*")
+# 괄호 없이 적은 그림 번호. 뒤 번호는 줄표에 바로 붙은 숫자이거나, 띄어 썼다면 그 뒤가 띄어쓰기·문장부호·끝일 때만 번호로 본다 —
+# 뒤 번호를 비운 '그림 2- 6LoWPAN 프로토콜 스택'의 6은 제목이다
+BARE_LABEL = re.compile(r"^\s*그림\s*(\d+)\s*[-–—－‐](?:(\d+)|\s+(\d+)(?=\s|$|[.:：]))?\s*[.:：]?\s*")
 
 
 def _figure(raw: str) -> dict:
@@ -72,7 +74,8 @@ def _figure(raw: str) -> dict:
     raw = raw.strip()
     found = parse_label(raw)
     if found is None and (bare := BARE_LABEL.match(raw)) is not None:
-        found = (int(bare.group(1)), int(bare.group(2)) if bare.group(2) else None, raw[bare.end():].strip())
+        minor = bare.group(2) or bare.group(3)
+        found = (int(bare.group(1)), int(minor) if minor else None, raw[bare.end():].strip())
     if found is None:
         return {"label": "", "title": raw, "raw": raw}
     major, minor, title = found

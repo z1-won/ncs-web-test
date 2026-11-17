@@ -94,6 +94,17 @@ def _caption(text: str) -> tuple[int, int | None, str, AiMark | None] | None:
     return int(found.group(1)), (int(found.group(2)) if found.group(2) else None), after.rstrip(".").strip(), inline_ai
 
 
+def caption_label(text: str) -> str | None:
+    """글 한 줄이 그림 캡션이면 그림 번호('그림 1-2', 뒤 번호가 비면 '그림 1-'), 아니면 None.
+
+    원고 문단과 같은 기준이다(본문의 참조 문장은 캡션이 아님). 출력본 PDF의 줄에서 그림이 놓인 쪽을 찾을 때 쓴다.
+    """
+    found = _caption(text)
+    if found is None:
+        return None
+    return f"그림 {found[0]}-{found[1] if found[1] is not None else ''}"
+
+
 def manuscript_figures(document) -> list[Figure]:
     """문서의 그림 캡션을 문서 순서대로. 메모·머리말·꼬리말·각주 안 문단은 보지 않는다."""
     figures = []

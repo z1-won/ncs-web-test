@@ -165,11 +165,13 @@ export const api = {
   },
   // 권리 증빙 제출 현황 점검(REQ-02-014). manuscript: 원고 파일, forms: 제출 서류(작성된 한글 양식) 파일들
   // options: { firstReviewOn, submittedOn, transferAuthor, transferMaker, portrait, pledge } + DB 반영용 { save, by, moduleCode }
+  //          + printCopy(출력본 PDF, 선택 — 그림이 놓인 쪽을 읽어 결과물 현황의 쪽수와 대조)
   rights: {
     check: (manuscript, forms, options = {}) => {
       const form = new FormData();
       form.append("manuscript", manuscript, manuscript.name);
       forms.forEach((file) => form.append("forms", file, file.name));
+      if (options.printCopy) form.append("print_copy", options.printCopy, options.printCopy.name);
       Object.entries({
         first_review_on: options.firstReviewOn || "", submitted_on: options.submittedOn || "",
         transfer_author: options.transferAuthor ? "true" : "false", transfer_maker: options.transferMaker ? "true" : "false",

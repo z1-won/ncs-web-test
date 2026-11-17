@@ -74,6 +74,28 @@ class RightsLinkIntegrationTests(unittest.TestCase):
         self.assertEqual((again["그림"], again["새 그림"], again["증빙"]), (8, 0, 0))
         self.assertEqual(len(self.image(1)["evidence"]), 2)
 
+    def test_page_from_the_print_copy_reaches_the_placement(self):
+        printed = Path(__file__).resolve().parents[1] / "fixtures" / "출력본_ok_LM1203020201_24v3.pdf"      # [그림 1-1]이 4쪽
+        manuscript, forms = S.manuscript(self.folder), S.full_forms(self.folder)
+        files = ([("manuscript", (manuscript.name, manuscript.read_bytes())), ("print_copy", (printed.name, printed.read_bytes()))]
+                 + [("forms", (f.name, f.read_bytes())) for f in forms])
+        response = self.client.post("/api/rights/check", files=files, data={"save": "true", "by": "에디팅기관"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual((self.image(1)["placements"][0]["page"], self.image(2)["placements"][0]["page"]), (4, None))
+
+    def test_figures_sharing_a_number_keep_their_own_picture(self):
+        """실제 원고처럼 같은 번호가 두 번 쓰이고 뒤 번호가 빈 캡션이 여럿이어도 그림마다 제 그림 파일에 붙는다."""
+        figures = [("그림 1-1", "첫 그림", "출처: 집필진 제작(2026)", ""), ("그림 1-1", "번호가 같은 다른 그림", "출처: 집필진 제작(2026)", ""),
+                   ("그림 2-", "뒤 번호가 빈 그림", "출처: 집필진 제작(2026)", ""), ("그림 2-", "뒤 번호가 빈 또 다른 그림", "출처: 집필진 제작(2026)", "")]
+        manuscript = S.manuscript(self.folder, figures)
+        response = self.client.post("/api/rights/check", files=[("manuscript", (manuscript.name, manuscript.read_bytes()))],
+                                    data={"save": "true", "by": "에디팅기관"})
+        self.assertEqual(response.status_code, 200, response.text)
+        saved = response.json()["저장"]
+        self.assertEqual((saved["그림"], saved["새 그림"], saved["건너뜀"]), (4, 4, 0))
+        self.assertEqual([[place["caption"] for place in self.image(index)["placements"]] for index in (1, 2, 3, 4)],
+                         [["첫 그림"], ["번호가 같은 다른 그림"], ["뒤 번호가 빈 그림"], ["뒤 번호가 빈 또 다른 그림"]])
+
     def test_missing_evidence_is_not_linked(self):
         saved = self.post(transfer_author="false", pledge="false")["저장"]
         self.assertEqual(saved["증빙"], 2, "제출로 확인된 것만 잇는다: 이용허락 동의서 1 + 제작자 양도 동의서 1")
