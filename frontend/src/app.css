@@ -589,3 +589,9 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .review-form .file-slot.multi .file-list .total { display: flex; align-items: center; justify-content: space-between; gap: var(--krds-gap-3); }
 .review-form .file-slot.multi .file-list .total .krds-btn { width: auto; }
 .review-form .file-slot.multi .upload-list { max-height: 28rem; overflow-y: auto; }
+
+/* KRDS 날짜 입력 + 달력(KrdsDateField) — 달력은 입력칸 바로 아래(자리가 없으면 위)에 뜬다. 칸이 좁아도 달력 폭은 KRDS 규격(38.4rem)을 지키되 화면 밖으로는 나가지 않는다 */
+.krds-date-field { position: relative; }
+.krds-date-field .krds-calendar-area { position: absolute; top: 100%; left: 0; }
+.krds-date-field .krds-calendar-area .calendar-wrap { max-width: calc(100vw - var(--krds-contents-padding-x, 1.6rem) * 2); }
+.krds-date-field .calendar-tbl abbr { text-decoration: none; }

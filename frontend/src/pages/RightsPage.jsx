@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { Badge, BADGE } from "../components/Badge.jsx";
 import { FileSlot, MultiFileSlot } from "../components/FileSlot.jsx";
+import { KrdsDateField } from "../components/KrdsDateField.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
@@ -102,16 +103,10 @@ export default function RightsPage() {
           <MultiFileSlot id="rights-forms" label="제출 서류" accept=".hwp,.hwpx" files={forms} disabled={!!busy}
                          onChange={(picked) => { setForms(picked); setReport(null); }}
                          hint="작성한 한글 양식을 한 번에 여러 개 고릅니다. 없으면 원고만으로 점검합니다." />
-          <div className="form-group">
-            <div className="form-tit"><label htmlFor="rights-first">1차 검토일</label></div>
-            <div className="form-conts"><input id="rights-first" type="date" className="krds-input" value={options.firstReviewOn} onChange={(e) => set("firstReviewOn")(e.target.value)} /></div>
-            <p className="form-hint">수록 현황 목록은 1차 검토 이후 4주 이내에 내야 합니다. 이 날짜로 기한을 계산합니다.</p>
-          </div>
-          <div className="form-group">
-            <div className="form-tit"><label htmlFor="rights-submitted">수록 현황 목록 제출일</label></div>
-            <div className="form-conts"><input id="rights-submitted" type="date" className="krds-input" value={options.submittedOn} onChange={(e) => set("submittedOn")(e.target.value)} /></div>
-            <p className="form-hint">아직 제출하지 않았으면 비워 둡니다.</p>
-          </div>
+          <KrdsDateField id="rights-first" label="1차 검토일" value={options.firstReviewOn} onChange={set("firstReviewOn")} disabled={!!busy}
+                         hint="수록 현황 목록은 1차 검토 이후 4주 이내에 내야 합니다. 이 날짜로 기한을 계산합니다." />
+          <KrdsDateField id="rights-submitted" label="수록 현황 목록 제출일" value={options.submittedOn} onChange={set("submittedOn")} disabled={!!busy}
+                         hint="아직 제출하지 않았으면 비워 둡니다." />
           <div className="form-group">
             <div className="form-tit"><span id="rights-signed-label">서명 서류 제출 여부</span></div>
             <div className="form-conts krds-check-area chk-column rights-checks" role="group" aria-labelledby="rights-signed-label">
