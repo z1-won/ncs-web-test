@@ -107,7 +107,7 @@ export default function RecommendPage() {
   const context = result?.context;
   return (
     <>
-    <Header anchors={ready === true ? ANCHORS : []} hasHistory={false} hasResult={false} />
+    <Header anchors={ready === true ? (result ? ANCHORS : ANCHORS.slice(0, 1)) : []} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page image-db-page recommend-page">
       <h1 className="page-title">이미지 추천</h1>
       <p className="page-desc">
@@ -175,10 +175,11 @@ export default function RecommendPage() {
           </form>
         </section>
 
+        {/* 추천을 한 번 돌린 뒤에만 보인다 */}
+        {result && (
         <section id="recommend-result" className="nav-anchor image-section" aria-live="polite">
-          <h2 className="section-title">추천 결과{result ? <span className="meta"> {result.items.length}건 (후보 {result.total_candidates}건 가운데)</span> : null}</h2>
-          {!result && <p className="empty">문단이나 능력단위 코드를 넣고 ‘그림 추천’을 누르세요.</p>}
-          {result && <>
+          <h2 className="section-title">추천 결과<span className="meta"> {result.items.length}건 (후보 {result.total_candidates}건 가운데)</span></h2>
+          <>
             <div className="recommend-context">
               <p className="recommend-method">
                 <span className={`krds-badge ${context.method === "llm" ? "bg-light-information" : "bg-light-gray"}`}>
@@ -203,8 +204,9 @@ export default function RecommendPage() {
             {result.items.length > 0 && (
               <p className="form-hint">출처 문구는 ‘복사’해서 원고의 그림 아래 출처 줄에 붙여 넣습니다. 그림을 실은 뒤에는 사진·삽화 수록 현황 목록에도 올려야 합니다.</p>
             )}
-          </>}
+          </>
         </section>
+        )}
       </>}
       <TopButton />
     </main>
