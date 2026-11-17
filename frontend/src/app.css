@@ -526,3 +526,32 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .image-placements th:nth-child(2) { width: 10rem; }
 .image-placements th:nth-child(3) { width: 6.4rem; }
 .image-placements th:nth-child(4) { width: 18rem; }
+
+/* ── 권리 증빙 점검(RightsPage) ── 요약 칸·입력칸·버튼 줄은 이미지 저작권 DB와 같은 모양을 쓴다 */
+.rights-page .rights-checks { display: flex; flex-direction: column; gap: var(--krds-gap-2); }
+.rights-page .check-text { display: block; }
+.rights-page .check-hint { display: block; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
+.rights-result .image-summary { margin-top: var(--krds-gap-5); }
+.rights-result { margin-top: var(--krds-gap-9); }
+.rights-result .section-title .krds-badge { margin-left: var(--krds-gap-2); vertical-align: middle; }
+.rights-result .sub-title { margin: var(--krds-gap-8) 0 var(--krds-gap-4); font-size: var(--krds-pc-font-size-heading-small); font-weight: var(--krds-font-weight-bold); }
+.rights-result .page-alert strong { display: inline-block; margin-bottom: var(--krds-gap-1); }
+.rights-forms-seen { margin: var(--krds-gap-4) 0 0; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+.rights-table { table-layout: fixed; width: 100%; }
+.rights-table td, .rights-table th { vertical-align: top; overflow-wrap: anywhere; word-break: keep-all; }
+.rights-table .col-figure { width: 19rem; }
+.rights-table .col-mark { width: 6rem; }
+.rights-table .col-method { width: 16rem; }
+.rights-table .col-evidence { width: 24rem; }
+.rights-table .col-ai { width: 18rem; }
+.rights-table .col-verdict { width: 9.6rem; }
+.rights-table td.center { text-align: center; }
+.rights-table .sub { display: block; margin-top: var(--krds-gap-1); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
+.rights-table .line { display: block; }
+.rights-table .line + .line { margin-top: var(--krds-gap-2); }
+.rights-table .krds-badge { white-space: nowrap; }
+/* 열이 많아 좁은 화면에서는 표만 가로로 민다(쪽 전체가 밀리지 않게) */
+.rights-result .krds-table-wrap { overflow-x: auto; }
+.rights-table { min-width: 112rem; }
+.rights-page .fieldset, .rights-page .form-conts, .rights-page .image-file-input { min-width: 0; max-width: 100%; }
+.rights-page .form-hint, .image-db-page .form-hint { overflow-wrap: anywhere; min-width: 0; }   /* 긴 파일 이름(띄어쓰기 없는 이름)이 칸 밖으로 나가지 않게 */

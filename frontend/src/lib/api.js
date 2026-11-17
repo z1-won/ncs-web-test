@@ -158,6 +158,23 @@ export const api = {
     // files: 레코드 JSON 1개 + 그 레코드가 가리키는 그림 파일들. checkOnly면 DB에 넣지 않고 형식만 검사
     load: (files, { by, checkOnly }) => request("/api/images/load", { method: "POST", body: multipart({ by: by || "", check_only: checkOnly ? "true" : "false" }, files) }),
   },
+  // 권리 증빙 제출 현황 점검(REQ-02-014). manuscript: 원고 파일, forms: 제출 서류(작성된 한글 양식) 파일들
+  // options: { firstReviewOn, submittedOn, transferAuthor, transferMaker, portrait, pledge } + DB 반영용 { save, by, moduleCode }
+  rights: {
+    check: (manuscript, forms, options = {}) => {
+      const form = new FormData();
+      form.append("manuscript", manuscript, manuscript.name);
+      forms.forEach((file) => form.append("forms", file, file.name));
+      Object.entries({
+        first_review_on: options.firstReviewOn || "", submitted_on: options.submittedOn || "",
+        transfer_author: options.transferAuthor ? "true" : "false", transfer_maker: options.transferMaker ? "true" : "false",
+        portrait: options.portrait || "unknown", pledge: options.pledge ? "true" : "false",
+        save: options.save ? "true" : "false", by: options.by || "", module_code: options.moduleCode || "",
+      }).forEach(([key, value]) => form.append(key, value));
+      return request("/api/rights/check", { method: "POST", body: form });
+    },
+    exportXlsx: (report) => download("/api/rights/export", report, `권리증빙_제출현황_${(report.원고?.파일 || "원고").replace(/\.[^.]+$/, "")}.xlsx`),
+  },
   groups: {
     list: () => request("/api/groups"),
     get: (id) => request(`/api/groups/${id}`),

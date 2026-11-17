@@ -52,7 +52,7 @@ const HISTORY_COLUMN_NAMES = {
   share_alike: "동일조건변경허락", author: "저작자", source_org: "원 출처 기관", source_url: "출처 URL", retrieved_on: "확인 일자",
   credit_line: "출처 문구", ai_used: "AI 활용", ai_usage: "AI 활용 유형", ai_mode: "AI 활용 방식", ai_tool: "AI 도구", ai_date: "AI 활용 일자",
   ai_original_source: "원본 출처", ai_pledge_submitted: "서약서 제출", ai_tos_scope: "약관상 이용 범위",
-  placements: "수록 위치", links: "수행준거 연결", rights: "권리 정보",
+  placements: "수록 위치", links: "수행준거 연결", rights: "권리 정보", evidence: "증빙",
 };
 
 function show(value) {

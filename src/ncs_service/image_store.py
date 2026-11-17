@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psycopg
 from psycopg.rows import dict_row
@@ -349,5 +349,32 @@ def unconfirm(dsn: str, image_id: str, *, by: str, version: int | None = None) -
     return get_image(dsn, image_id)
 
 
-__all__ = ["ImageConflict", "ImageNotFound", "RecordError", "confirm", "get_image", "image_file", "list_images",
+def add_evidence(dsn: str, sha256: str, kind: str, *, by: str, file_ref: str | None = None,
+                 submitted_on: date | None = None, note: str | None = None) -> bool:
+    """그 그림(sha256)에 증빙 1건을 잇는다(REQ-02-014 '확인된 증빙은 이미지 저작권 DB에 연결'). 새로 넣었으면 True.
+
+    같은 그림에 같은 종류·같은 파일의 증빙이 이미 있으면 다시 넣지 않는다(점검을 여러 번 돌려도 한 건).
+    그 그림이 DB에 없으면 ImageNotFound, 종류가 허용값이 아니면 ValueError.
+    """
+    by = _who(by)
+    if kind not in image_terms.EVIDENCE_KIND:
+        raise ValueError(f"증빙 종류 '{kind}'는 허용값이 아닙니다")
+    with psycopg.connect(dsn) as connection:
+        found = connection.execute("SELECT id FROM image_assets WHERE sha256 = %s FOR UPDATE", (sha256,)).fetchone()
+        if found is None:
+            raise ImageNotFound("그림을 찾을 수 없습니다")
+        image_id = found[0]
+        if connection.execute(
+                "SELECT 1 FROM image_evidence WHERE image_id = %s AND kind = %s AND file_ref IS NOT DISTINCT FROM %s",
+                (image_id, kind, file_ref)).fetchone():
+            return False
+        connection.execute(
+            "INSERT INTO image_evidence (id, image_id, kind, file_ref, submitted_on, note) VALUES (%s, %s, %s, %s, %s, %s)",
+            (str(uuid4()), image_id, kind, file_ref, submitted_on, note))
+        _history(connection, str(image_id), by, "evidence_added", None,
+                 {"evidence": [None, image_terms.EVIDENCE_KIND[kind] + (f" ({file_ref})" if file_ref else "")]})
+    return True
+
+
+__all__ = ["ImageConflict", "ImageNotFound", "RecordError", "add_evidence", "confirm", "get_image", "image_file", "list_images",
            "list_recommendable", "recommendable_file", "terms", "unconfirm", "update_rights"]
