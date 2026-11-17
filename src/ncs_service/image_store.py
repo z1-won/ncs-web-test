@@ -363,18 +363,64 @@ def add_evidence(dsn: str, sha256: str, kind: str, *, by: str, file_ref: str | N
         found = connection.execute("SELECT id FROM image_assets WHERE sha256 = %s FOR UPDATE", (sha256,)).fetchone()
         if found is None:
             raise ImageNotFound("그림을 찾을 수 없습니다")
-        image_id = found[0]
-        if connection.execute(
-                "SELECT 1 FROM image_evidence WHERE image_id = %s AND kind = %s AND file_ref IS NOT DISTINCT FROM %s",
-                (image_id, kind, file_ref)).fetchone():
-            return False
-        connection.execute(
-            "INSERT INTO image_evidence (id, image_id, kind, file_ref, submitted_on, note) VALUES (%s, %s, %s, %s, %s, %s)",
-            (str(uuid4()), image_id, kind, file_ref, submitted_on, note))
-        _history(connection, str(image_id), by, "evidence_added", None,
-                 {"evidence": [None, image_terms.EVIDENCE_KIND[kind] + (f" ({file_ref})" if file_ref else "")]})
+        return _insert_evidence(connection, found[0], kind, by, file_ref, submitted_on, note)
+
+
+def _evidence_name(kind: str, file_ref: str | None) -> str:
+    return image_terms.EVIDENCE_KIND.get(kind, kind) + (f" ({file_ref})" if file_ref else "")
+
+
+def _insert_evidence(connection, image_id, kind: str, by: str, file_ref: str | None, submitted_on: date | None,
+                     note: str | None) -> bool:
+    """잠근 그림에 증빙 1건을 넣고 이력을 남긴다. 같은 종류·같은 파일이 이미 있으면 넣지 않고 False."""
+    if connection.execute(
+            "SELECT 1 FROM image_evidence WHERE image_id = %s AND kind = %s AND file_ref IS NOT DISTINCT FROM %s",
+            (image_id, kind, file_ref)).fetchone():
+        return False
+    connection.execute(
+        "INSERT INTO image_evidence (id, image_id, kind, file_ref, submitted_on, note) VALUES (%s, %s, %s, %s, %s, %s)",
+        (str(uuid4()), image_id, kind, file_ref, submitted_on, note))
+    _history(connection, str(image_id), by, "evidence_added", None, {"evidence": [None, _evidence_name(kind, file_ref)]})
     return True
 
 
+def register_evidence(dsn: str, image_id: str, kind: str, *, by: str, file_ref: str | None = None,
+                      submitted_on: date | None = None, note: str | None = None) -> dict:
+    """확정 화면에서 증빙 1건을 직접 등록한다 → 그림 상세(get_image).
+
+    권리 증빙 점검을 거치지 않고 기관이 보유한 서류를 기록할 때 쓴다. 서류 파일은 받지 않고 종류·파일 이름(또는 보관 위치)·
+    제출일·비고만 남긴다(서명된 동의서의 개인정보를 DB에 두지 않기 위해, REQ-04-002). 기관 확정 여부와 상관없이 등록할 수 있다.
+    같은 종류·같은 파일의 증빙이 이미 있으면 ImageConflict.
+    """
+    by, image_id = _who(by), _uuid(image_id)
+    if kind not in image_terms.EVIDENCE_KIND:
+        raise ValueError(f"증빙 종류 '{kind}'는 허용값이 아닙니다")
+    file_ref, note = ((value or "").strip() or None for value in (file_ref, note))
+    with psycopg.connect(dsn) as connection:
+        if connection.execute("SELECT 1 FROM image_assets WHERE id = %s FOR UPDATE", (image_id,)).fetchone() is None:
+            raise ImageNotFound("그림을 찾을 수 없습니다")
+        if not _insert_evidence(connection, image_id, kind, by, file_ref, submitted_on, note):
+            raise ImageConflict(f"같은 증빙이 이미 등록되어 있습니다: {_evidence_name(kind, file_ref)}")
+    return get_image(dsn, image_id)
+
+
+def remove_evidence(dsn: str, image_id: str, evidence_id: str, *, by: str) -> dict:
+    """증빙 1건을 지우고 이력에 남긴다 → 그림 상세. 그 그림의 증빙이 아니면 ImageNotFound."""
+    by, image_id = _who(by), _uuid(image_id)
+    try:
+        evidence_id = str(UUID(str(evidence_id)))
+    except ValueError:
+        raise ImageNotFound("증빙을 찾을 수 없습니다") from None
+    with psycopg.connect(dsn) as connection:
+        if connection.execute("SELECT 1 FROM image_assets WHERE id = %s FOR UPDATE", (image_id,)).fetchone() is None:
+            raise ImageNotFound("그림을 찾을 수 없습니다")
+        gone = connection.execute(
+            "DELETE FROM image_evidence WHERE id = %s AND image_id = %s RETURNING kind, file_ref", (evidence_id, image_id)).fetchone()
+        if gone is None:
+            raise ImageNotFound("증빙을 찾을 수 없습니다")
+        _history(connection, image_id, by, "evidence_removed", None, {"evidence": [_evidence_name(*gone), None]})
+    return get_image(dsn, image_id)
+
+
 __all__ = ["ImageConflict", "ImageNotFound", "RecordError", "add_evidence", "confirm", "get_image", "image_file", "list_images",
-           "list_recommendable", "recommendable_file", "terms", "unconfirm", "update_rights"]
+           "list_recommendable", "recommendable_file", "register_evidence", "remove_evidence", "terms", "unconfirm", "update_rights"]

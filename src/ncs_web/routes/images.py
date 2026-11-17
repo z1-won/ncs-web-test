@@ -9,12 +9,14 @@ PostgreSQL 저장소일 때만 붙는다(/api/health의 image_db가 그 여부).
   POST /api/images/{id}/rights                권리 정보 수정 {by, version?, rights} — 자동 태깅 상태에서만
   POST /api/images/{id}/confirm               기관 확정 {by, version?}
   POST /api/images/{id}/unconfirm             확정 취소 {by, version?}
+  POST /api/images/{id}/evidence              증빙 1건 직접 등록 {by, kind, file_ref?, submitted_on?, note?} — 서류 파일은 받지 않는다
+  POST /api/images/{id}/evidence/{증빙 id}/delete   증빙 1건 삭제 {by}
   POST /api/images/load                       레코드 JSON 1개 + 그림 파일들을 올려 적재(또는 check_only로 형식만 검사).
                                               이미지 레코드(docs/IMAGE_RECORD.md)와 공공누리 수집 JSON(0.1-PoC, REQ-02-012) 둘 다 받는다
   GET  /api/images/recommendable              추천용 목록 — 기관 확정 + 재사용 범위 확인 + 비공개 아님(REQ-02-011, 생성형 AI가 부르는 쪽)
   GET  /api/images/recommendable/{id}/file    추천 목록에 나오는 그림의 파일만
 
-오류: 없는 그림 404, 형식·필수 항목 오류 400(사유를 모두 담는다), 확정된 것 수정·버전 불일치 409.
+오류: 없는 그림·증빙 404, 형식·필수 항목 오류 400(사유를 모두 담는다), 확정된 것 수정·버전 불일치·같은 증빙 중복 409.
 """
 
 import json
@@ -26,7 +28,7 @@ from fastapi import FastAPI, File, Form, Query, Response, UploadFile
 from starlette.exceptions import HTTPException
 
 from ..common import Services
-from ..schemas import ImageActionRequest, ImageRightsRequest
+from ..schemas import ImageActionRequest, ImageEvidenceRequest, ImageRightsRequest
 
 LOAD_MAX_BYTES = 50 << 20     # 한 번에 올리는 레코드 JSON + 그림 파일 합계 상한(50MB)
 LOAD_MAX_FILES = 300
@@ -152,3 +154,12 @@ def register(app: FastAPI, services: Services) -> None:
     @app.post("/api/images/{image_id}/unconfirm")
     def image_unconfirm(image_id: str, body: ImageActionRequest) -> dict:
         return run(image_store.unconfirm, image_id, by=body.by, version=body.version)
+
+    @app.post("/api/images/{image_id}/evidence")
+    def image_evidence_add(image_id: str, body: ImageEvidenceRequest) -> dict:
+        return run(image_store.register_evidence, image_id, body.kind, by=body.by, file_ref=body.file_ref,
+                   submitted_on=body.submitted_on, note=body.note)
+
+    @app.post("/api/images/{image_id}/evidence/{evidence_id}/delete")
+    def image_evidence_remove(image_id: str, evidence_id: str, body: ImageActionRequest) -> dict:
+        return run(image_store.remove_evidence, image_id, evidence_id, by=body.by)

@@ -155,6 +155,10 @@ export const api = {
     updateRights: (id, { by, version, rights }) => postJson(`/api/images/${id}/rights`, { by, version: version || null, rights }),
     confirm: (id, { by, version }) => postJson(`/api/images/${id}/confirm`, { by, version: version || null }),
     unconfirm: (id, { by, version }) => postJson(`/api/images/${id}/unconfirm`, { by, version: version || null }),
+    // 증빙 직접 등록·삭제. 서류 파일은 보내지 않는다 — 종류와 파일 이름(또는 보관 위치)·제출일·비고만 남긴다
+    addEvidence: (id, { by, kind, fileRef, submittedOn, note }) => postJson(`/api/images/${id}/evidence`, {
+      by, kind, file_ref: (fileRef || "").trim() || null, submitted_on: submittedOn || null, note: (note || "").trim() || null }),
+    removeEvidence: (id, evidenceId, { by }) => postJson(`/api/images/${id}/evidence/${evidenceId}/delete`, { by }),
     // files: 레코드 JSON 1개 + 그 레코드가 가리키는 그림 파일들. checkOnly면 DB에 넣지 않고 형식만 검사
     load: (files, { by, checkOnly }) => request("/api/images/load", { method: "POST", body: multipart({ by: by || "", check_only: checkOnly ? "true" : "false" }, files) }),
   },

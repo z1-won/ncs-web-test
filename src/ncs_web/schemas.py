@@ -1,5 +1,6 @@
 """API 요청·응답 모델. 경로 모듈(routes/)이 함께 쓴다."""
 
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -63,6 +64,15 @@ class ImageActionRequest(BaseModel):
     """이미지 저작권 DB의 확정·확정 취소(REQ-02-010). by는 변경 이력에 남는 이름(로그인이 없어 화면에서 입력받는다)."""
     by: str = Field(min_length=1, max_length=50)
     version: int | None = Field(None, ge=1)   # 화면이 열어 본 버전. 주면 그 버전일 때만 바꾼다
+
+
+class ImageEvidenceRequest(BaseModel):
+    """이미지 저작권 DB에 증빙 1건을 직접 등록(REQ-02-010). 서류 파일은 받지 않는다 — 종류와 파일 이름(또는 보관 위치)만 남긴다."""
+    by: str = Field(min_length=1, max_length=50)
+    kind: str = Field(min_length=1, max_length=30)          # transfer_consent / license_consent / portrait_consent / ai_pledge
+    file_ref: str | None = Field(None, max_length=200)      # 서류 파일 이름 또는 보관 위치
+    submitted_on: date | None = None
+    note: str | None = Field(None, max_length=500)
 
 
 class RecommendRequest(BaseModel):

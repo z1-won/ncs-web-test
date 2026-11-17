@@ -538,6 +538,8 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .rights-result .sub-title { margin: var(--krds-gap-8) 0 var(--krds-gap-4); font-size: var(--krds-pc-font-size-heading-small); font-weight: var(--krds-font-weight-bold); }
 .rights-result .page-alert strong { display: inline-block; margin-bottom: var(--krds-gap-1); }
 .rights-forms-seen { margin: var(--krds-gap-4) 0 0; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+.image-evidence-form { margin-top: var(--krds-gap-5); }
+.image-evidence-table td, .image-evidence-table th { vertical-align: middle; overflow-wrap: anywhere; }
 .rights-notices { display: grid; gap: var(--krds-gap-4); margin-top: var(--krds-gap-4); }
 .rights-notice { padding: var(--krds-padding-5); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); }
 .rights-notice-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); }

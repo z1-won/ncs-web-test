@@ -1,4 +1,5 @@
-// 이미지 저작권 DB — 그림 1건 상세: 그림 보기, 수록 위치·수행준거, 권리 정보 입력, 기관 확정/확정 취소, 변경 이력.
+// 이미지 저작권 DB — 그림 1건 상세: 그림 보기, 수록 위치·수행준거, 권리 정보 입력, 기관 확정/확정 취소, 증빙 등록·삭제, 변경 이력.
+// 증빙은 기관 확정 여부와 상관없이 등록·삭제할 수 있다. 서류 파일은 올리지 않고 종류·파일 이름(보관 위치)·제출일·비고만 남긴다.
 // 권리 정보는 자동 태깅 상태에서만 고칠 수 있다(확정된 것은 확정을 푼 뒤). 저장·확정 요청에는 화면이 열어 본 버전을 실어
 // 그사이 다른 사람이 바꿨으면 서버가 409로 거절한다 — 그때는 다시 읽어 온다.
 import React, { useEffect, useMemo, useState } from "react";
@@ -7,10 +8,12 @@ import { api } from "../lib/api.js";
 import { formatDate } from "../lib/format.jsx";
 import { conditionsLabel, conditionsOf, licenseChoice, licenseOptions, statusBadge, termOptions } from "../lib/imageTerms.js";
 import { Spinner } from "./Badge.jsx";
+import { KrdsDateField } from "./KrdsDateField.jsx";
 import { KrdsSelect } from "./KrdsSelect.jsx";
 import { PageAlert } from "./PageAlert.jsx";
 
 const TEXT_FIELDS = ["author", "source_org", "source_url", "credit_line"];
+const NEW_EVIDENCE = { kind: "", fileRef: "", submittedOn: "", note: "" };
 
 // 서버의 rights → 입력칸 상태(모두 문자열·불리언)
 function toForm(rights) {
@@ -79,8 +82,9 @@ function changeText(entry, terms) {
 export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
   const [state, setState] = useState({ status: "loading" });   // { status: loading|ready|error, data, error }
   const [form, setForm] = useState(() => toForm(null));
-  const [busy, setBusy] = useState(null);     // "save" | "confirm" | "unconfirm"
-  const [message, setMessage] = useState(null);   // { kind, text }
+  const [busy, setBusy] = useState(null);     // "save" | "confirm" | "unconfirm" | "evidence"
+  const [evidence, setEvidence] = useState(NEW_EVIDENCE);   // 새로 등록할 증빙의 입력칸
+  const [message, setMessage] = useState(null);   // { kind, text, at } — at: 알림을 보일 자리("rights" | "evidence")
   const [upscaledView, setUpscaledView] = useState(false);
 
   function accept(data) {
@@ -93,6 +97,7 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
     setState({ status: "loading" });
     setMessage(null);
     setUpscaledView(false);
+    setEvidence(NEW_EVIDENCE);
     api.images.get(imageId).then(({ ok, data, error }) => {
       if (!current) return;
       if (!ok) { setState({ status: "error", error }); return; }
@@ -126,9 +131,10 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
     setBusy(kind);
     setMessage(null);
     const { ok, data: next, error, status } = await call();
+    const at = kind === "evidence" ? "evidence" : "rights";
     setBusy(null);
     if (!ok) {
-      setMessage({ kind: "danger", text: error });
+      setMessage({ kind: "danger", text: error, at });
       if (status === 409) {   // 다른 사람이 먼저 바꿨거나 상태가 달라졌다 — 지금 값을 다시 읽어 보여 준다
         const fresh = await api.images.get(imageId);
         if (fresh.ok) setState({ status: "ready", data: fresh.data });
@@ -136,7 +142,7 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
       return null;
     }
     accept(next);
-    setMessage({ kind: next.notice ? "info" : "success", text: next.notice ? `${done} ${next.notice}` : done });
+    setMessage({ kind: next.notice ? "info" : "success", text: next.notice ? `${done} ${next.notice}` : done, at });
     onChanged();
     return next;
   }
@@ -154,6 +160,13 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
   }
 
   const unconfirm = () => send("unconfirm", () => api.images.unconfirm(imageId, { by, version: rights?.version }), "확정을 취소했습니다. 이제 수정할 수 있습니다.");
+
+  const evidenceOptions = termOptions(terms?.evidence_kind, "종류 선택");
+  async function addEvidence() {
+    const added = await send("evidence", () => api.images.addEvidence(imageId, { by, ...evidence }), "증빙을 등록했습니다.");
+    if (added) setEvidence(NEW_EVIDENCE);
+  }
+  const removeEvidence = (item) => send("evidence", () => api.images.removeEvidence(imageId, item.id, { by }), "증빙을 삭제했습니다.");
 
   const name = data.placements[0]?.caption || data.title || data.filename || "이름 없는 그림";
   const field = (id, label, control, hint) => (
@@ -270,7 +283,7 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
         </>}
         <div className="form-group form-group-wide form-actions">
           {needName && <PageAlert kind="info">저장·확정하려면 화면 위쪽의 ‘변경한 사람’에 이름을 적어 주세요. 변경 이력에 남습니다.</PageAlert>}
-          {message && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
+          {message && message.at !== "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
           <div className="run-buttons image-actions">
             {confirmed
               ? <button type="button" className="krds-btn large secondary" onClick={unconfirm} disabled={!!busy || needName}>{busy === "unconfirm" ? "취소하는 중…" : "확정 취소"}</button>
@@ -278,6 +291,40 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
                   <button type="button" className="krds-btn large secondary" onClick={save} disabled={!!busy || needName || !dirty}>{busy === "save" ? "저장하는 중…" : "저장"}</button>
                   <button type="button" className="krds-btn large primary" onClick={confirm} disabled={!!busy || needName}>{busy === "confirm" ? "확정하는 중…" : dirty ? "저장하고 기관 확정" : "기관 확정"}</button>
                 </>}
+          </div>
+        </div>
+      </div>
+
+      <h3 className="sub-title">증빙 {data.evidence.length}건</h3>
+      {data.evidence.length === 0 ? <p className="empty">등록된 증빙이 없습니다.</p> : (
+        <div className="krds-table-wrap">
+          <table className="tbl col data image-evidence-table">
+            <caption>이 그림에 이어진 권리 증빙</caption>
+            <thead><tr><th scope="col">종류</th><th scope="col">서류(파일 이름·보관 위치)</th><th scope="col">제출일</th><th scope="col">비고</th><th scope="col">삭제</th></tr></thead>
+            <tbody>{data.evidence.map((item) => (
+              <tr key={item.id}>
+                <td>{terms?.evidence_kind?.[item.kind] || item.kind}</td>
+                <td>{item.file_ref || "—"}</td>
+                <td>{item.submitted_on || "—"}</td>
+                <td>{item.note || "—"}</td>
+                <td className="center"><button type="button" className="krds-btn small text" disabled={!!busy || needName} onClick={() => removeEvidence(item)}>삭제<span className="sr-only"> — {terms?.evidence_kind?.[item.kind] || item.kind}</span></button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+      <div className="fieldset review-form image-evidence-form">
+        {field("evidence-kind", "증빙 종류", <KrdsSelect id="evidence-kind" value={evidence.kind} options={evidenceOptions} onChange={(value) => setEvidence((prev) => ({ ...prev, kind: value }))} title="증빙 종류 선택" />)}
+        {field("evidence-file", "서류", <input id="evidence-file" type="text" className="krds-input" maxLength={200} value={evidence.fileRef} placeholder="예: 원고집필계약서_붙임3.hwp"
+                                              onChange={(e) => setEvidence((prev) => ({ ...prev, fileRef: e.target.value }))} />,
+               "파일 이름이나 보관 위치를 적습니다. 서류 파일 자체는 올리지 않습니다.")}
+        <KrdsDateField id="evidence-date" label="제출일" value={evidence.submittedOn} onChange={(value) => setEvidence((prev) => ({ ...prev, submittedOn: value }))} disabled={!!busy} />
+        {field("evidence-note", "비고", <input id="evidence-note" type="text" className="krds-input" maxLength={500} value={evidence.note}
+                                              onChange={(e) => setEvidence((prev) => ({ ...prev, note: e.target.value }))} />)}
+        <div className="form-group form-group-wide form-actions">
+          {message && message.at === "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
+          <div className="run-buttons image-actions">
+            <button type="button" className="krds-btn large secondary" onClick={addEvidence} disabled={!!busy || needName || !evidence.kind}>{busy === "evidence" ? "처리하는 중…" : "증빙 등록"}</button>
           </div>
         </div>
       </div>

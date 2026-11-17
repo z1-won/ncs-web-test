@@ -209,6 +209,37 @@ class ImageApiIntegrationTests(unittest.TestCase):
                          ["confirmed", "updated", "unconfirmed", "confirmed", "created"])
         self.assertEqual(again["rights"]["version"], 5)
 
+    # ── 증빙 직접 등록·삭제 ──
+    def test_evidence_is_registered_and_removed_from_the_detail_screen(self):
+        image_id = self.confirmed(title="증빙을 붙일 그림")           # 기관 확정된 그림에도 증빙은 붙일 수 있다
+        added = self.post(image_id, "evidence", by="김증빙", kind="license_consent", file_ref=" 원고집필계약서_붙임3.hwp ",
+                          submitted_on="2026-10-20", note="원본은 문서고")
+        self.assertEqual([(e["kind"], e["file_ref"], e["submitted_on"], e["note"]) for e in added["evidence"]],
+                         [("license_consent", "원고집필계약서_붙임3.hwp", "2026-10-20", "원본은 문서고")])
+        self.assertEqual((added["history"][0]["action"], added["history"][0]["changed_by"], added["history"][0]["changes"]),
+                         ("evidence_added", "김증빙", {"evidence": [None, "이용허락 동의서 (원고집필계약서_붙임3.hwp)"]}))
+        self.assertEqual((added["rights"]["status"], added["rights"]["version"]), ("confirmed", 2), "권리 정보와 확정 상태는 그대로다")
+
+        same = self.post(image_id, "evidence", expect=409, kind="license_consent", file_ref="원고집필계약서_붙임3.hwp")
+        self.assertIn("같은 증빙이 이미", same["error"])
+        self.post(image_id, "evidence", kind="portrait_consent")     # 종류만으로도 등록된다
+        self.assertEqual(len(self.client.get(f"/api/images/{image_id}").json()["evidence"]), 2)
+
+        self.assertIn("허용값", self.post(image_id, "evidence", expect=400, kind="receipt")["error"])
+        self.post(image_id, "evidence", expect=400, kind="ai_pledge", submitted_on="10/20")
+        self.post(image_id, "evidence", expect=400, kind="ai_pledge", by="")
+        self.post("00000000-0000-0000-0000-000000000000", "evidence", expect=404, kind="ai_pledge")
+
+        evidence_id = added["evidence"][0]["id"]
+        other = self.add(title="다른 그림")
+        self.post(other, f"evidence/{evidence_id}/delete", expect=404)     # 다른 그림의 증빙은 지울 수 없다
+        self.post(image_id, "evidence/not-a-uuid/delete", expect=404)
+        removed = self.post(image_id, f"evidence/{evidence_id}/delete", by="김증빙")
+        self.assertEqual([e["kind"] for e in removed["evidence"]], ["portrait_consent"])
+        self.assertEqual((removed["history"][0]["action"], removed["history"][0]["changes"]),
+                         ("evidence_removed", {"evidence": ["이용허락 동의서 (원고집필계약서_붙임3.hwp)", None]}))
+        self.post(image_id, f"evidence/{evidence_id}/delete", expect=404)
+
     # ── 추천용 조회 ──
     def test_recommendable_shows_only_cleared_non_private_images(self):
         shown = self.confirmed(title="정부 귀속", placements=[{"module_code": "LM" + UNIT, "label": "그림 1-1"}],
