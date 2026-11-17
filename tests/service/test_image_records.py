@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ncs_service import image_terms
 from ncs_service.image_db import main
-from ncs_service.image_records import SCHEMA, RecordError, normalize, read_records
+from ncs_service.image_records import SCHEMA, RecordError, normalize, read_records, rights_changes
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "docs" / "examples" / "image_records" / "records.example.json"
@@ -182,6 +182,40 @@ class RejectionTests(unittest.TestCase):
                 read_records(path)
             path.write_text(json.dumps([{"sha256": SHA}]), encoding="utf-8")
             self.assertEqual(read_records(path), ([{"sha256": SHA}], Path(folder)))
+
+
+class RightsChangeTests(unittest.TestCase):
+    """확정 화면의 권리 정보 수정 요청(rights_changes) — 레코드의 rights와 같은 검사에 '비우기'가 더해진다."""
+
+    def test_only_written_groups_change(self):
+        self.assertEqual(rights_changes({"category": "author_made", "author": " 집필진 "}),
+                         {"category": "author_made", "author": "집필진"})
+        changes = rights_changes({"license": {"kogl_type": 3}})
+        self.assertEqual((changes["license_scheme"], changes["no_derivatives"], changes["non_commercial"]),
+                         ("kogl", True, False))
+        self.assertNotIn("category", changes)
+
+    def test_null_clears(self):
+        self.assertEqual(rights_changes({"author": None, "retrieved_on": None, "reuse_scope": None}),
+                         {"author": None, "retrieved_on": None, "reuse_scope": "unknown"})
+        cleared = rights_changes({"license": None})
+        self.assertEqual((cleared["license_scheme"], cleared["kogl_type"], cleared["kogl_ai"], cleared["attribution"]),
+                         (None, None, False, None))
+        self.assertEqual(len(cleared), 9)
+        cleared = rights_changes({"ai": None})
+        self.assertEqual((cleared["ai_used"], cleared["ai_usage"], cleared["ai_tool"]), (False, None, None))
+        self.assertEqual(len(cleared), 8)
+
+    def test_bad_requests_are_rejected_with_reasons(self):
+        for value, fragment in (({}, "바꿀 내용이 없습니다"), (None, "바꿀 내용이 없습니다"), ("x", "객체"),
+                                ({"category": "집필자 직접제작"}, "허용값이 아닙니다"),
+                                ({"status": "confirmed"}, "기관 확정은 적재로 할 수 없습니다"),
+                                ({"license": {"kogl_type": 1}, "conditions": {"non_commercial": True}}, "라이선스 유형과 다릅니다"),
+                                ({"ownership": "kogl"}, "kogl_type이 필요합니다")):
+            with self.subTest(value=value):
+                with self.assertRaises(RecordError) as caught:
+                    rights_changes(value)
+                self.assertTrue(any(fragment in reason for reason in caught.exception.reasons), caught.exception.reasons)
 
 
 if __name__ == "__main__":

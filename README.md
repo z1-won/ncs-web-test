@@ -176,6 +176,9 @@ ncs-web --dist frontend/dist          # API + 빌드된 화면, http://127.0.0.1
 | `GET /api/groups`, `GET/DELETE /api/groups/{group_id}` | 전체 실행 묶음 이력 — 한 묶음의 모든 검수를 한 번에 열고 지운다 |
 | `POST /api/export/sheet?format=xlsx\|hwpx` (`{module_code, rows, created_at}`) | **F02 검수 확인서 파일**. hwpx는 원본 양식(`src/ncs_core/data/F02_검수확인서_양식.hwpx`)에 ✓·비고를 채운 제출본, xlsx는 열람·편집용. 실행하지 않은 구성요소는 '미검사'로 54개 항목을 모두 채운다 |
 | `POST /api/export/annotated` (`upload` 토큰, `rows` JSON) | **수정 메모 원고**: 원고 hwpx의 해당 문단에 지적사항을 한글 메모로 단 파일(본문 불변). 문단을 못 찾은 지적은 첫 문단의 총괄 메모에 목록으로. hwp 원고는 불가 |
+| `GET /api/images`, `GET /api/images/{id}`, `GET /api/images/{id}/file` | **이미지 저작권 DB**(REQ-02-010, `DATABASE_URL` 설정 시): 관리용 목록·상세·그림 파일. `status`·`category`·`kogl_type`·`module_code`·`unit_code`·`keyword`·`q`로 거른다 |
+| `POST /api/images/{id}/rights` · `/confirm` · `/unconfirm` (`{by, version?, rights?}`) | 권리 정보 수정·기관 확정·확정 취소. 변경마다 버전이 오르고 이력이 남는다. 확정된 것은 확정을 푼 뒤 수정 |
+| `GET /api/images/recommendable`, `GET /api/images/recommendable/{id}/file` | 추천·생성형 AI용 조회: 기관 확정 + 재사용 범위 확인 + 비공개가 아닌 그림만, 출처·라이선스 정보와 함께. 형식은 `docs/IMAGE_RECORD.md` |
 
 ## CLI 실행
 

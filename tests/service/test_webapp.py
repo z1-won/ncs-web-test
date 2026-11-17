@@ -252,7 +252,11 @@ class WebappTests(unittest.TestCase):
         health = self.client.get("/api/health")
         body = health.json()
         self.assertEqual({k: v for k, v in body.items() if k != "engines"},
-                         {"ok": True, "checks": list(PACKAGES), "history": False, "image_dpi": {"choices": [150, 300], "default": 300}})
+                         {"ok": True, "checks": list(PACKAGES), "history": False, "image_db": False,
+                          "image_dpi": {"choices": [150, 300], "default": 300}})
+        # 이미지 저작권 DB API는 PostgreSQL 저장소일 때만 붙는다 — 파일 저장소에서는 경로 자체가 없다
+        self.assertEqual(self.client.get("/api/images").status_code, 404)
+        self.assertEqual(self.client.get("/api/images/terms").status_code, 404)
         # engines: 화면 선택 목록의 글이 되는 엔진 설명 — 등록 순서대로, 구현 항목은 확인서 번호
         self.assertEqual([e["check"] for e in body["engines"]], list(PACKAGES))
         self.assertEqual(body["engines"][0]["component"], "NCS-학습모듈의 위치")

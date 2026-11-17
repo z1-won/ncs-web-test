@@ -1,0 +1,243 @@
+"""NCS_TEST_DATABASE_URL을 지정하면 이미지 저작권 DB API(/api/images, REQ-02-010)를 실제 PostgreSQL로 검사한다.
+
+테스트가 넣은 그림은 끝날 때 sha256으로 찾아 지운다. 다른 자료가 섞여 있어도 되게 목록은 테스트용 키워드로 좁혀 본다.
+"""
+
+import hashlib
+import os
+import unittest
+from uuid import uuid4
+
+import psycopg
+from fastapi.testclient import TestClient
+
+from ncs_service.image_db import load_records
+from ncs_service.postgres import migrate
+from ncs_web.server import create_app
+
+DSN = os.getenv("NCS_TEST_DATABASE_URL")
+UNIT = "1203020201_24v3"
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (64).to_bytes(4, "big") + (48).to_bytes(4, "big") + b"\x08\x02\x00\x00\x00"
+
+
+@unittest.skipUnless(DSN, "NCS_TEST_DATABASE_URL 미설정")
+class ImageApiIntegrationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        migrate(DSN)
+        cls.client = TestClient(create_app(database_url=DSN))
+
+    def setUp(self):
+        self.tag = f"테스트-{uuid4()}"          # 이 테스트가 넣은 그림만 고르는 키워드
+        self.used: list[str] = []
+        self.addCleanup(self.cleanup)
+
+    def cleanup(self):
+        with psycopg.connect(DSN) as connection:
+            connection.execute("DELETE FROM image_assets WHERE sha256 = ANY(%s)", (self.used,))
+
+    def add(self, **fields) -> str:
+        """그림 1건을 적재하고 id를 돌려준다."""
+        content = PNG + uuid4().bytes
+        sha256 = hashlib.sha256(content).hexdigest()
+        self.used.append(sha256)
+        keywords = [self.tag, *fields.pop("keywords", [])]
+        report = load_records(DSN, [{"content": content, "keywords": keywords, **fields}], changed_by="적재")
+        self.assertEqual(report.rejected, [])
+        with psycopg.connect(DSN) as connection:
+            return str(connection.execute("SELECT id FROM image_assets WHERE sha256 = %s", (sha256,)).fetchone()[0])
+
+    def listed(self, path: str = "/api/images", **params) -> dict:
+        response = self.client.get(path, params={"keyword": self.tag, **params})
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
+    def post(self, image_id: str, action: str, expect: int = 200, **body) -> dict:
+        response = self.client.post(f"/api/images/{image_id}/{action}", json={"by": "에디팅기관", **body})
+        self.assertEqual(response.status_code, expect, response.text)
+        return response.json()
+
+    def confirmed(self, **fields) -> str:
+        rights = {"category": "author_made", "ownership": "government", "reuse_scope": "all", **fields.pop("rights", {})}
+        image_id = self.add(rights=rights, **fields)
+        self.post(image_id, "confirm")
+        return image_id
+
+    # ── 상태·허용값 ──
+    def test_health_and_terms(self):
+        self.assertIs(self.client.get("/api/health").json()["image_db"], True)
+        terms = self.client.get("/api/images/terms").json()
+        self.assertEqual(terms["category"]["public_license"], "공공누리·공유마당")
+        self.assertEqual(terms["kogl_type"]["2"], {"attribution": True, "non_commercial": True, "no_derivatives": False})
+        self.assertEqual(terms["ai_usage"]["4"], {"name": "AI 창작", "mode": "generated"})
+
+    # ── 관리용 조회 ──
+    def test_list_filters_and_paging(self):
+        plain = self.add(title="권리 정보 없는 그림")
+        kogl = self.add(title="공공누리 그림", kind="graph", rights={"category": "public_license", "license": {"kogl_type": 2}},
+                        placements=[{"module_code": "LM" + UNIT, "label": "그림 1-1", "caption": "기온 변화"},
+                                    {"module_code": "LM1203020202_24v3", "label": "그림 2-1"}],
+                        links=[{"unit_code": UNIT}])
+        done = self.confirmed(title="확정된 그림")
+        everything = self.listed()
+        self.assertEqual((everything["total"], {item["id"] for item in everything["items"]}), (3, {plain, kogl, done}))
+
+        def ids(**params):
+            return [item["id"] for item in self.listed(**params)["items"]]
+
+        self.assertEqual(ids(status="none"), [plain])
+        self.assertEqual(ids(status="auto"), [kogl])
+        self.assertEqual(ids(status="confirmed"), [done])
+        self.assertEqual(ids(kogl_type=2), [kogl])
+        self.assertEqual(ids(license_scheme="kogl", category="public_license"), [kogl])
+        self.assertEqual(ids(module_code="LM1203020202_24v3"), [kogl])
+        self.assertEqual(ids(unit_code=UNIT), [kogl])
+        self.assertEqual(ids(kind="graph"), [kogl])
+        self.assertEqual(ids(q="기온"), [kogl], "수록 위치의 그림명으로도 찾는다")
+        self.assertEqual(ids(q="100%_"), [], "검색어의 %와 _는 글자 그대로 본다")
+        item = next(i for i in everything["items"] if i["id"] == kogl)
+        self.assertEqual((item["placement_count"], item["module_count"], item["has_file"], item["width_px"], item["kogl_type"],
+                          item["module_code"], item["label"]), (2, 2, True, 64, 2, "LM" + UNIT, "그림 1-1"))
+        self.assertNotIn("content", item)
+        page = self.listed(limit=2, offset=2)
+        self.assertEqual((page["total"], len(page["items"])), (3, 1))
+        self.assertEqual(self.client.get("/api/images", params={"limit": 1000}).status_code, 400)
+
+    def test_detail_and_file(self):
+        image_id = self.add(title="상세", rights={"license": {"cc": "by-nc"}, "retrieved_on": "2026-11-17"},
+                            placements=[{"module_code": "LM" + UNIT, "label": "그림 1-1", "width_mm": 120.5}],
+                            links=[{"unit_code": UNIT, "criterion_no": "1.1", "placement": 0}])
+        detail = self.client.get(f"/api/images/{image_id}").json()
+        self.assertEqual((detail["title"], detail["has_file"], detail["rights"]["cc_license"], detail["rights"]["non_commercial"],
+                          detail["rights"]["retrieved_on"], detail["rights"]["status"]),
+                         ("상세", True, "by-nc", True, "2026-11-17", "auto"))
+        self.assertEqual((detail["placements"][0]["width_mm"], detail["links"][0]["placement_id"]),
+                         (120.5, detail["placements"][0]["id"]))
+        self.assertEqual([entry["action"] for entry in detail["history"]], ["created"])
+        self.assertEqual(detail["evidence"], [])
+        self.assertNotIn("content", detail)
+
+        file = self.client.get(f"/api/images/{image_id}/file")
+        self.assertEqual((file.status_code, file.headers["content-type"], file.headers["x-content-type-options"]),
+                         (200, "image/png", "nosniff"))
+        self.assertTrue(file.content.startswith(PNG))
+        self.assertEqual(self.client.get(f"/api/images/{image_id}/file", params={"upscaled": True}).status_code, 404)
+        for missing in (str(uuid4()), "not-a-uuid"):
+            self.assertEqual(self.client.get(f"/api/images/{missing}").status_code, 404)
+            self.assertEqual(self.client.get(f"/api/images/{missing}/file").status_code, 404)
+
+    # ── 수정 ──
+    def test_update_rights_writes_history_and_keeps_other_fields(self):
+        image_id = self.add(rights={"category": "public_license", "author": "처음"})
+        first = self.post(image_id, "rights", rights={"license": {"kogl_type": 1}, "source_org": "○○청"}, by="김담당")
+        self.assertEqual((first["rights"]["version"], first["rights"]["kogl_type"], first["rights"]["attribution"],
+                          first["rights"]["category"], first["rights"]["author"]), (2, 1, True, "public_license", "처음"))
+        entry = first["history"][0]
+        self.assertEqual((entry["action"], entry["changed_by"], entry["version"], entry["changes"]["kogl_type"],
+                          entry["changes"]["source_org"]), ("updated", "김담당", 2, [None, 1], [None, "○○청"]))
+        same = self.post(image_id, "rights", rights={"source_org": "○○청"})
+        self.assertEqual((same["rights"]["version"], len(same["history"])), (2, 2), "같은 값이면 버전·이력이 늘지 않는다")
+        cleared = self.post(image_id, "rights", rights={"license": None, "author": None})
+        self.assertEqual((cleared["rights"]["version"], cleared["rights"]["kogl_type"], cleared["rights"]["license_scheme"],
+                          cleared["rights"]["author"], cleared["rights"]["source_org"]), (3, None, None, None, "○○청"))
+
+    def test_update_creates_rights_for_an_image_without_them(self):
+        image_id = self.add()
+        made = self.post(image_id, "rights", rights={"category": "commissioned"})
+        self.assertEqual((made["rights"]["status"], made["rights"]["version"], made["rights"]["reuse_scope"]),
+                         ("auto", 1, "unknown"))
+        self.assertEqual(made["history"][0]["changes"], {"category": [None, "commissioned"]})
+
+    def test_update_rejections(self):
+        image_id = self.add(rights={"ownership": "kogl", "license": {"kogl_type": 1}})
+        for rights, fragment in (({"category": "집필자 직접제작"}, "허용값이 아닙니다"),
+                                 ({"license": {"kogl_type": 0, "kogl_ai": True}}, "제1~4유형"),
+                                 ({"status": "confirmed"}, "기관 확정은"), ({}, "바꿀 내용이 없습니다"),
+                                 # 형식은 맞지만 지금 값과 합치면 DB 제약에 걸리는 수정 — 사람 말로 알려 준다
+                                 ({"license": None}, "귀속이 공공누리 조건이면 공공누리 유형이 필요합니다")):
+            with self.subTest(rights=rights):
+                self.assertIn(fragment, self.post(image_id, "rights", expect=400, rights=rights)["error"])
+        self.assertEqual(self.client.post(f"/api/images/{image_id}/rights", json={"rights": {"author": "x"}}).status_code, 400,
+                         "by 없이는 바꿀 수 없다")
+        self.assertEqual(self.client.post(f"/api/images/{image_id}/rights", json={"by": " ", "rights": {"author": "x"}}).status_code, 400)
+        self.post(str(uuid4()), "rights", expect=404, rights={"author": "x"})
+        untouched = self.client.get(f"/api/images/{image_id}").json()
+        self.assertEqual((untouched["rights"]["version"], untouched["rights"]["kogl_type"]), (1, 1))
+
+    def test_stale_version_is_refused(self):
+        image_id = self.add(rights={"category": "author_made"})
+        self.post(image_id, "rights", rights={"author": "먼저 저장"}, version=1)
+        late = self.post(image_id, "rights", expect=409, rights={"author": "늦게 저장"}, version=1)
+        self.assertIn("다른 사람이 먼저 바꿨습니다", late["error"])
+        self.assertEqual(self.client.get(f"/api/images/{image_id}").json()["rights"]["author"], "먼저 저장")
+        self.post(image_id, "confirm", expect=409, version=1)
+
+    # ── 확정 ──
+    def test_confirm_requires_category_and_ownership(self):
+        nothing = self.add()
+        self.assertIn("분류 체계·권리 귀속", self.post(nothing, "confirm", expect=400)["error"])
+        partial = self.add(rights={"category": "author_made"})
+        error = self.post(partial, "confirm", expect=400)["error"]
+        self.assertIn("권리 귀속", error)
+        self.assertNotIn("분류 체계", error)
+        self.assertEqual(self.client.get(f"/api/images/{partial}").json()["rights"]["status"], "auto")
+
+    def test_confirm_edit_lock_and_unconfirm(self):
+        image_id = self.add(rights={"category": "author_made", "ownership": "government"})
+        done = self.post(image_id, "confirm", by="박확정")
+        rights = done["rights"]
+        self.assertEqual((rights["status"], rights["confirmed_by"], rights["version"]), ("confirmed", "박확정", 2))
+        self.assertIsNotNone(rights["confirmed_at"])
+        self.assertIn("추천 목록에는 나오지 않습니다", done["notice"], "재사용 범위 미확인이면 알려 준다")
+        self.assertEqual(done["history"][0]["action"], "confirmed")
+        self.post(image_id, "confirm", expect=409)
+        locked = self.post(image_id, "rights", expect=409, rights={"reuse_scope": "all"})
+        self.assertIn("확정을 푼 뒤", locked["error"])
+
+        opened = self.post(image_id, "unconfirm", by="박확정")
+        self.assertEqual((opened["rights"]["status"], opened["rights"]["confirmed_by"], opened["rights"]["version"],
+                          opened["rights"]["category"]), ("auto", None, 3, "author_made"))
+        self.assertEqual(opened["history"][0]["changes"]["confirmed_by"], ["박확정", None])
+        self.post(image_id, "unconfirm", expect=409)
+        self.post(image_id, "rights", rights={"reuse_scope": "all"})
+        again = self.post(image_id, "confirm")
+        self.assertIsNone(again["notice"])
+        self.assertEqual([entry["action"] for entry in again["history"]],
+                         ["confirmed", "updated", "unconfirmed", "confirmed", "created"])
+        self.assertEqual(again["rights"]["version"], 5)
+
+    # ── 추천용 조회 ──
+    def test_recommendable_shows_only_cleared_non_private_images(self):
+        shown = self.confirmed(title="정부 귀속", placements=[{"module_code": "LM" + UNIT, "label": "그림 1-1"}],
+                               links=[{"unit_code": UNIT}])
+        limited = self.confirmed(title="이용허락 한정", rights={"ownership": "licensed", "reuse_scope": "module_only"})
+        private = self.confirmed(title="비공개", rights={"release_class": "private"})
+        unknown = self.confirmed(title="범위 미확인", rights={"reuse_scope": "unknown"})
+        auto = self.add(title="자동 태깅", rights={"category": "author_made", "ownership": "government", "reuse_scope": "all"})
+        bare = self.add(title="권리 정보 없음")
+
+        found = self.listed("/api/images/recommendable")
+        self.assertEqual((found["total"], [item["id"] for item in found["items"]]), (2, [shown, limited]),
+                         "정부 귀속 + 전체 재사용 자산이 먼저 나온다")
+        self.assertEqual([item["scope_check_needed"] for item in found["items"]], [False, True])
+        first = found["items"][0]
+        # REQ-04-006: 원본 출처·라이선스 정보가 함께 나가고 파일 내용은 싣지 않는다
+        self.assertLessEqual({"license_scheme", "kogl_type", "attribution", "non_commercial", "no_derivatives", "source_org",
+                              "source_url", "credit_line", "ownership", "reuse_scope", "confirmed_by"}, set(first))
+        self.assertFalse({"content", "upscaled_content"} & set(first))
+        self.assertEqual([i["id"] for i in self.listed("/api/images/recommendable", unit_code=UNIT)["items"]], [shown])
+        self.assertEqual([i["id"] for i in self.listed("/api/images/recommendable", module_code="LM" + UNIT)["items"]], [shown])
+
+        self.assertEqual(self.client.get(f"/api/images/recommendable/{shown}/file").status_code, 200)
+        for hidden in (private, unknown, auto, bare):
+            with self.subTest(hidden=hidden):
+                self.assertEqual(self.client.get(f"/api/images/recommendable/{hidden}/file").status_code, 404)
+                self.assertEqual(self.client.get(f"/api/images/{hidden}/file").status_code, 200, "관리용은 볼 수 있다")
+        # 확정을 풀면 추천에서도 바로 빠진다
+        self.post(shown, "unconfirm")
+        self.assertEqual([i["id"] for i in self.listed("/api/images/recommendable")["items"]], [limited])
+        self.assertEqual(self.client.get(f"/api/images/recommendable/{shown}/file").status_code, 404)
+
+
+if __name__ == "__main__":
+    unittest.main()

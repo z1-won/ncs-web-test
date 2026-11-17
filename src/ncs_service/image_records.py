@@ -408,6 +408,37 @@ def _rights(check: _Checker, value) -> dict | None:
     return rights
 
 
+LICENSE_COLUMNS = ("license_scheme", "kogl_type", "kogl_ai", "cc_license", "license_note", *CONDITIONS)
+AI_COLUMNS = ("ai_used", "ai_usage", "ai_mode", "ai_tool", "ai_date", "ai_original_source", "ai_pledge_submitted",
+              "ai_tos_scope")
+CLEARABLE = ("category", "ownership", "release_class", "retrieved_on", *RIGHTS_TEXT)
+
+
+def rights_changes(value) -> dict:
+    """확정 화면의 권리 정보 수정 요청 → 바꿀 열 {열: 값}. 모양은 레코드의 rights와 같다(같은 검사·같은 파생값).
+
+    레코드와 다른 점 하나: 값을 null로 적으면 그 칸을 비운다. license: null은 라이선스 묶음 전체를,
+    ai: null은 AI 묶음 전체를 비우고(AI 미사용), reuse_scope: null은 '미확인'으로 되돌린다.
+    """
+    reasons: list[str] = []
+    changes = _rights(_Checker(reasons), value if value is not None else {}) or {}
+    if isinstance(value, dict):
+        for key in CLEARABLE:
+            if key in value and value[key] is None:
+                changes[key] = None
+        if "reuse_scope" in value and value["reuse_scope"] is None:
+            changes["reuse_scope"] = "unknown"
+        if "license" in value and value["license"] is None and value.get("conditions") is None:
+            changes.update({column: None for column in LICENSE_COLUMNS}, kogl_ai=False)
+        if "ai" in value and value["ai"] is None:
+            changes.update({column: None for column in AI_COLUMNS}, ai_used=False)
+    if reasons:
+        raise RecordError(reasons)
+    if not changes:
+        raise RecordError(["바꿀 내용이 없습니다"])
+    return changes
+
+
 def normalize(record, *, base_dir: str | Path | None = None) -> NormalRecord:
     """레코드 1건을 검사해 표의 열 이름으로 정리한다. 맞지 않으면 사유를 모두 모아 RecordError."""
     reasons: list[str] = []

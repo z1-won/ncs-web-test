@@ -134,3 +134,24 @@ python -m ncs_service.image_db 레코드.json --by 담당자이름              
 | `"ownership": "kogl"`인데 `kogl_type` 없음 | 귀속이 공공누리 조건이면 kogl_type이 필요합니다 |
 | `"ai": {"usage": 1, "mode": "modified"}` | usage 1은 '생성함'인데 mode가 '수정 보완함'입니다 |
 | `"rights": {"status": "confirmed"}` | 기관 확정은 적재로 할 수 없습니다 |
+
+## 조회·확정 API
+
+서버를 `DATABASE_URL`과 함께 띄우면 붙습니다(`/api/health`의 `image_db`가 true). 자세한 입력은 서버의 `/docs`.
+
+| API | 내용 |
+|---|---|
+| `GET /api/images/terms` | 허용값 코드 → 이름 |
+| `GET /api/images` | 관리용 목록 `{total, items}`. 거르기: `status`(`auto` / `confirmed` / `none` 권리 정보 없음), `category`, `license_scheme`, `kogl_type`, `reuse_scope`, `module_code`, `unit_code`, `keyword`, `kind`, `q`(제목·파일 이름·키워드·그림명·그림 사용 문장), `limit`·`offset` |
+| `GET /api/images/{id}` | 그림 1건: 수록 위치, 권리 정보, 증빙, 수행준거 연결, 변경 이력 |
+| `GET /api/images/{id}/file` | 그림 파일. `?upscaled=true`는 업스케일본 |
+| `POST /api/images/{id}/rights` | 권리 정보 수정. `{"by": "이름", "version": 3, "rights": {…}}` — `rights`는 위 형식과 같고, 값을 `null`로 적으면 그 칸을 비움(`"license": null`은 라이선스 묶음 전체) |
+| `POST /api/images/{id}/confirm` | 기관 확정 `{"by": "이름"}`. 분류 체계와 권리 귀속이 있어야 함 |
+| `POST /api/images/{id}/unconfirm` | 확정 취소(값은 그대로, 자동 태깅 상태로) |
+| `GET /api/images/recommendable` | 추천·생성형 AI용 목록. 기관 확정 + 재사용 범위 확인 + 비공개가 아닌 그림만. 항목마다 출처·라이선스 유형·이용조건이 함께 나가고, 이용허락 한정 자산은 `scope_check_needed`가 true |
+| `GET /api/images/recommendable/{id}/file` | 추천 목록에 나오는 그림의 파일만 |
+
+- `by`는 변경 이력에 남는 이름입니다(로그인이 없어 요청이 적어 보냅니다).
+- `version`을 보내면 그 버전일 때만 바뀝니다. 그사이 다른 사람이 바꿨으면 409.
+- 확정된 권리 정보는 수정할 수 없습니다(409). 확정을 푼 뒤 고치고 다시 확정합니다.
+- 응답 코드: 없는 그림 404, 형식·필수 항목 오류 400(사유를 모두 담음), 확정된 것 수정·이미 확정·버전 불일치 409.

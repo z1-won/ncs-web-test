@@ -29,6 +29,7 @@ def register(app: FastAPI, services: Services) -> None:
         # engines: 검수 항목마다 구성요소 이름과 구현된 확인서 항목 번호 — 화면의 선택 목록 글이 여기서 나온다
         # image_dpi: 이미지 해상도 기준의 선택지와 기본값 — 화면의 선택 칸(원고 검수·업스케일링)이 같은 값을 쓴다
         return {"ok": True, "checks": list(ENGINES), "engines": describe_engines(), "history": store.supports_history,
+                "image_db": store.supports_history,   # 이미지 저작권 DB API(/api/images)가 등록되어 있는가 — 이력과 같이 PostgreSQL일 때만
                 "image_dpi": {"choices": list(DPI_CHOICES), "default": DEFAULT_TARGET_DPI}}
 
     @app.post(

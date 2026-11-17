@@ -2,7 +2,7 @@
 
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 CheckName = Literal["position", "toc", "overview", "knowledge", "perform", "teaching", "evaluation", "references", "colophon", "misc", "plan"]
 
@@ -57,3 +57,14 @@ class UploadResponse(BaseModel):
     files: list[str]
     roles: dict[str, str | None]  # 역할 → 파일 이름(요청의 roles로 지정했으면 그대로, 아니면 넣은 순서). plan이 None이면 개발계획서 없음
     expires_in: int               # 초
+
+
+class ImageActionRequest(BaseModel):
+    """이미지 저작권 DB의 확정·확정 취소(REQ-02-010). by는 변경 이력에 남는 이름(로그인이 없어 화면에서 입력받는다)."""
+    by: str = Field(min_length=1, max_length=50)
+    version: int | None = Field(None, ge=1)   # 화면이 열어 본 버전. 주면 그 버전일 때만 바꾼다
+
+
+class ImageRightsRequest(ImageActionRequest):
+    """권리 정보 수정. rights의 모양은 이미지 레코드의 rights와 같다(docs/IMAGE_RECORD.md). null은 그 칸을 비운다."""
+    rights: dict[str, Any]
