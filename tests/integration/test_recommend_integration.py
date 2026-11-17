@@ -95,6 +95,7 @@ class RecommendIntegrationTests(unittest.TestCase):
         self.assertIn(kogl, [item["id"] for item in self.ask(unit_code=UNIT)["items"]], "문단 없이 능력단위만으로도 찾는다")
 
     def test_no_match_guides_to_ai_generation_and_bad_requests(self):
+        self.add("확정", OWN)          # 후보는 있지만 문단과 맞는 것이 없는 경우
         nothing = self.ask(text=f"없는말{uuid4().hex}")
         self.assertEqual(nothing["items"], [])
         self.assertTrue(any("REQ-02-006" in line for line in nothing["guidance"]))
@@ -102,6 +103,13 @@ class RecommendIntegrationTests(unittest.TestCase):
         self.assertIn("숫자 10자리", self.ask(expect=400, text="x", unit_code="LM12")["error"])
         self.ask(expect=400, text="x", criterion_no="일점일")
         self.ask(expect=400, text="x", limit=0)
+
+    def test_empty_pool_points_to_confirmation_not_ai_generation(self):
+        from unittest import mock
+        with mock.patch.object(image_recommend, "candidates", return_value=[]):
+            result = image_recommend.recommend(DSN, text="객실 유형", use_llm=False)
+        self.assertEqual((result["items"], result["total_candidates"], result["guidance"]), ([], 0, [image_recommend.NO_CANDIDATES]))
+        self.assertIn("기관 확정", result["guidance"][0])
 
     def test_llm_answer_is_used_when_given(self):
         self.add("확정", OWN)

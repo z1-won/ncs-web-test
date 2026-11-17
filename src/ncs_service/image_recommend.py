@@ -15,6 +15,8 @@ from ncs_recommend import rank as recommend_rank
 from . import kogl_import
 from .image_store import RECOMMENDABLE, _row
 
+NO_CANDIDATES = ("추천에 쓸 수 있는 그림이 아직 없습니다. 이미지 저작권 DB에서 그림을 열어 재사용 범위를 정하고 ‘기관 확정’을 하면 "
+                 "추천 대상이 됩니다(자동 태깅 상태나 재사용 범위 미확인 그림은 추천하지 않습니다).")
 MAX_CANDIDATES = 5000        # PoC 규모. 넘으면 앞에서부터만 보고 그 사실을 결과에 적는다
 
 CANDIDATES = f"""
@@ -85,5 +87,6 @@ def recommend(dsn: str, *, text: str = "", unit_code: str = "", criterion_no: st
         "items": items,
         "total_candidates": min(len(pool), MAX_CANDIDATES),
         "truncated": truncated,
-        "guidance": recommend_rank.guidance(items),
+        # 후보가 하나도 없으면 '맞는 그림이 없다'가 아니라 '확정된 그림이 없다'가 원인이다 — AI 생성으로 안내하지 않는다
+        "guidance": recommend_rank.guidance(items) if pool else [NO_CANDIDATES],
     }
