@@ -41,7 +41,7 @@ function Card({ item, rank, terms }) {
       </a>
       <div className="recommend-body">
         <h3><span className="recommend-rank">{rank}</span>{name}</h3>
-        <p className="recommend-badges">
+        <p className="krds-badge-wrap recommend-badges">
           {item.priority && <span className="krds-badge bg-light-success">정부 귀속 · 전체 재사용</span>}
           {item.scope_check_needed && <span className="krds-badge bg-light-warning">범위 확인 필요</span>}
           {item.link_level && <span className="krds-badge bg-light-information">{LINK_LABEL[item.link_level]}</span>}
@@ -56,7 +56,7 @@ function Card({ item, rank, terms }) {
           <div><dt>크기</dt><dd>{item.width_px ? `${item.width_px}×${item.height_px}px` : "—"}{item.has_upscaled ? " (업스케일본 있음)" : ""}
             {item.max_width_mm != null && <span className="meta"> · 300dpi로 가로 {item.max_width_mm}mm까지</span>}</dd></div>
         </dl>
-        {item.notes.length > 0 && <ul className="recommend-notes">{item.notes.map((note, i) => <li key={i}>{note}</li>)}</ul>}
+        {item.notes.length > 0 && <ul className="krds-info-list recommend-notes">{item.notes.map((note, i) => <li key={i}>{note}</li>)}</ul>}
         {item.credit ? (
           <div className="recommend-credit">
             <code>{item.credit}</code>
@@ -100,7 +100,10 @@ export default function RecommendPage() {
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
   }
 
-  const canRun = form.text.trim() || form.unitCode.trim();
+  const unitError = form.unitCode.trim() && !/\d{10}/.test(form.unitCode) ? "숫자 10자리가 들어 있어야 합니다(예: 1203020201)." : "";
+  const criterionError = form.criterionNo && !/^\d+\.\d+$/.test(form.criterionNo) ? "1.1처럼 숫자.숫자로 적습니다."
+    : form.criterionNo && !form.unitCode.trim() ? "능력단위 코드를 함께 적어야 수행준거를 찾습니다." : "";
+  const canRun = (form.text.trim() || form.unitCode.trim()) && !unitError && !criterionError;
   const context = result?.context;
   return (
     <>
@@ -128,30 +131,39 @@ export default function RecommendPage() {
             <div className="form-group form-group-wide">
               <div className="form-tit"><label htmlFor="recommend-text">집필 중인 문단</label></div>
               <div className="form-conts">
-                <textarea id="recommend-text" className="krds-input recommend-text" rows={6} maxLength={4000} value={form.text}
-                          placeholder="그림을 넣으려는 곳의 문단을 붙여 넣으세요." onChange={(e) => set("text")(e.target.value)} />
+                <div className="textarea-wrap">
+                  <textarea id="recommend-text" className="krds-input recommend-text" rows={6} maxLength={4000} value={form.text} aria-describedby="recommend-text-hint"
+                            placeholder="그림을 넣으려는 곳의 문단을 붙여 넣으세요." onChange={(e) => set("text")(e.target.value)} />
+                  <p className="textarea-count"><span className="sr-only">적은 글자 수 </span><span className="count-now">{form.text.length}</span><span className="count-total">/4000</span></p>
+                </div>
               </div>
-              <p className="form-hint">{form.text.length} / 4000자. 문단 없이 능력단위 코드만 넣어도 그 능력단위에 이어진 그림을 찾습니다.</p>
+              <p className="form-hint" id="recommend-text-hint">문단 없이 능력단위 코드만 넣어도 그 능력단위에 이어진 그림을 찾습니다.</p>
             </div>
             <div className="form-group">
               <div className="form-tit"><label htmlFor="recommend-unit">능력단위 코드 <span className="meta">(선택)</span></label></div>
               <div className="form-conts">
-                <input id="recommend-unit" type="text" className="krds-input" maxLength={30} value={form.unitCode} placeholder="예: LM1203020201"
-                       onChange={(e) => set("unitCode")(e.target.value)} />
+                <input id="recommend-unit" type="text" className={`krds-input${unitError ? " is-error" : ""}`} maxLength={30} value={form.unitCode} placeholder="예: LM1203020201"
+                       aria-invalid={unitError ? "true" : undefined} aria-describedby="recommend-unit-hint" onChange={(e) => set("unitCode")(e.target.value)} />
               </div>
+              {unitError ? <p className="form-hint-invalid" id="recommend-unit-hint" role="alert">{unitError}</p>
+                         : <p className="form-hint" id="recommend-unit-hint">LM을 붙여도, 숫자 10자리만 적어도 됩니다.</p>}
             </div>
             <div className="form-group">
               <div className="form-tit"><label htmlFor="recommend-criterion">수행준거 번호 <span className="meta">(선택)</span></label></div>
               <div className="form-conts">
-                <input id="recommend-criterion" type="text" className="krds-input" maxLength={10} value={form.criterionNo} placeholder="예: 1.1"
-                       pattern="\d+\.\d+" title="1.1처럼 적습니다" onChange={(e) => set("criterionNo")(e.target.value.trim())} />
+                <input id="recommend-criterion" type="text" inputMode="decimal" className={`krds-input${criterionError ? " is-error" : ""}`} maxLength={10} value={form.criterionNo} placeholder="예: 1.1"
+                       aria-invalid={criterionError ? "true" : undefined} aria-describedby="recommend-criterion-hint" onChange={(e) => set("criterionNo")(e.target.value.trim())} />
               </div>
+              {criterionError ? <p className="form-hint-invalid" id="recommend-criterion-hint" role="alert">{criterionError}</p>
+                              : <p className="form-hint" id="recommend-criterion-hint">능력단위 코드와 함께 적습니다.</p>}
             </div>
             <div className="form-group form-group-wide">
+              <div className="form-conts krds-check-area">
               <div className="krds-form-check">
                 <input type="checkbox" id="recommend-llm" checked={form.useLlm} onChange={(e) => set("useLlm")(e.target.checked)} />
                 <label htmlFor="recommend-llm"><span className="check-text">생성형 AI로 문단을 요약해 핵심어 뽑기
                   <span className="check-hint">켜면 위 문단과 수행준거 글이 외부 AI 서비스로 전송됩니다(서버에 키와 전송 승인이 있을 때만). 끄면 규칙으로 핵심어를 뽑습니다.</span></span></label>
+              </div>
               </div>
             </div>
             <div className="form-group form-group-wide form-actions">
@@ -174,7 +186,8 @@ export default function RecommendPage() {
                 {context.note && <span className="meta"> {context.note}</span>}
               </p>
               {context.summary && <p><strong>요약</strong> {context.summary}</p>}
-              <p><strong>핵심어</strong> {context.keywords.length ? context.keywords.map((word) => <span key={word} className="recommend-keyword">{word}</span>) : "—"}</p>
+              <div className="recommend-keywords"><strong>핵심어</strong>
+                {context.keywords.length ? <span className="krds-tag-wrap small">{context.keywords.map((word) => <span key={word} className="krds-btn-tag">{word}</span>)}</span> : " —"}</div>
               {context.dropped.length > 0 && <p className="form-hint">AI가 냈지만 글에 없어 쓰지 않은 말: {context.dropped.join(", ")}</p>}
               {result.criterion.criterion_no && (result.criterion.found
                 ? <p><strong>수행준거 {result.criterion.criterion_no}</strong> {result.criterion.text}<span className="meta"> ({result.criterion.unit_name})</span></p>

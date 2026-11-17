@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
 import { Badge, BADGE } from "../components/Badge.jsx";
-import { FileSlot } from "../components/FileSlot.jsx";
+import { FileSlot, MultiFileSlot } from "../components/FileSlot.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
@@ -22,7 +22,8 @@ const ALERT_KIND = { 적합: "success", 부적합: "danger", 판단불가: "info
 const STATE_TONE = { 제출: "bg-light-success", 누락: "bg-light-danger", "확인 필요": "bg-light-warning", "해당 없음": "bg-light-gray" };
 
 function mark(value) {
-  return value === null || value === undefined ? "—" : value ? "○" : "×";
+  if (value === null || value === undefined) return <><span aria-hidden="true">—</span><span className="sr-only">해당 없음</span></>;
+  return <><span aria-hidden="true">{value ? "○" : "×"}</span><span className="sr-only">{value ? "있음" : "없음"}</span></>;
 }
 
 export default function RightsPage() {
@@ -98,14 +99,9 @@ export default function RightsPage() {
         <div className="fieldset review-form">
           <FileSlot id="rights-manuscript" label="원고" required accept=".hwpx,.hwp" file={manuscript} onChange={(file) => { setManuscript(file); setReport(null); }}
                     hint="hwpx 또는 hwp. 이미지 저작권 DB에 반영하려면 hwpx여야 합니다." />
-          <div className="form-group">
-            <div className="form-tit"><label htmlFor="rights-forms">제출 서류 (선택)</label></div>
-            <div className="form-conts">
-              <input id="rights-forms" type="file" multiple accept=".hwp,.hwpx" className="image-file-input"
-                     onChange={(e) => { setForms([...e.target.files]); setReport(null); }} />
-            </div>
-            <p className="form-hint">{forms.length ? `고른 서류 ${forms.length}개: ${forms.map((f) => f.name).join(", ")}` : "작성한 한글 양식을 한 번에 여러 개 고릅니다. 없으면 원고만으로 점검합니다."}</p>
-          </div>
+          <MultiFileSlot id="rights-forms" label="제출 서류" accept=".hwp,.hwpx" files={forms} disabled={!!busy}
+                         onChange={(picked) => { setForms(picked); setReport(null); }}
+                         hint="작성한 한글 양식을 한 번에 여러 개 고릅니다. 없으면 원고만으로 점검합니다." />
           <div className="form-group">
             <div className="form-tit"><label htmlFor="rights-first">1차 검토일</label></div>
             <div className="form-conts"><input id="rights-first" type="date" className="krds-input" value={options.firstReviewOn} onChange={(e) => set("firstReviewOn")(e.target.value)} /></div>
@@ -117,8 +113,8 @@ export default function RightsPage() {
             <p className="form-hint">아직 제출하지 않았으면 비워 둡니다.</p>
           </div>
           <div className="form-group">
-            <div className="form-tit"><span>서명 서류 제출 여부</span></div>
-            <div className="form-conts rights-checks">
+            <div className="form-tit"><span id="rights-signed-label">서명 서류 제출 여부</span></div>
+            <div className="form-conts krds-check-area chk-column rights-checks" role="group" aria-labelledby="rights-signed-label">
               {check("transferAuthor", "집필자 지식재산권 양도 동의서", "원고 집필 계약서 붙임 4")}
               {check("transferMaker", "제작자 지식재산권 양도 동의서", "사진·삽화 제작 계약서 붙임 3")}
               {check("pledge", "생성형 AI 결과물 집필자 서약서")}

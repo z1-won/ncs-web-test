@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { api } from "../lib/api.js";
 import { Spinner } from "../components/Badge.jsx";
+import { MultiFileSlot } from "../components/FileSlot.jsx";
 import { ImageDetail } from "../components/ImageDetail.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
@@ -38,7 +39,6 @@ function LoadSection({ by, onLoaded }) {
   const [busy, setBusy] = useState(null);     // "check" | "load"
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
-  const input = useRef(null);
   const jsonCount = files.filter((f) => /\.json$/i.test(f.name)).length;
 
   async function run(checkOnly) {
@@ -63,16 +63,11 @@ function LoadSection({ by, onLoaded }) {
         같은 자료를 다시 넣어도 중복되지 않고, 기관이 확정한 권리 정보는 덮어쓰지 않습니다.
       </p>
       <div className="fieldset review-form">
-        <div className="form-group form-group-wide">
-          <div className="form-tit"><label htmlFor="image-load-files">레코드 JSON과 그림 파일</label></div>
-          <div className="form-conts">
-            <input ref={input} id="image-load-files" type="file" multiple accept=".json,image/*" className="image-file-input"
-                   onChange={(e) => { setFiles([...e.target.files]); setReport(null); setError(null); }} />
-          </div>
-          <p className="form-hint">{files.length
-            ? `고른 파일 ${files.length}개 — JSON ${jsonCount}개, 그림 ${files.length - jsonCount}개${jsonCount === 1 ? "" : " (JSON은 1개여야 합니다)"}`
-            : "JSON 1개와 그림 파일 여러 개를 한 번에 고릅니다(합계 50MB까지)."}</p>
-        </div>
+        <MultiFileSlot id="image-load-files" label="JSON과 그림 파일" required wide accept=".json,image/*" files={files} disabled={!!busy}
+                       onChange={(picked) => { setFiles(picked); setReport(null); setError(null); }}
+                       countNote={`JSON ${jsonCount}개, 그림 ${files.length - jsonCount}개`}
+                       invalid={files.length > 0 && jsonCount !== 1 ? `JSON은 1개여야 합니다(지금 ${jsonCount}개).` : null}
+                       hint="JSON 1개와 그림 파일 여러 개를 한 번에 고릅니다(합계 50MB까지)." />
         <div className="form-group form-group-wide form-actions">
           {error && <PageAlert kind="danger">{error}</PageAlert>}
           <div className="run-buttons image-actions">
@@ -101,7 +96,7 @@ function LoadSection({ by, onLoaded }) {
             <ul className="image-rejected">
               {rejected.map((item) => (
                 <li key={item.index}><strong>{item.index + 1}번째 {report.형식?.startsWith("공공누리") ? "항목" : "레코드"}</strong>
-                  <ul>{item.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
+                  <ul className="krds-info-list">{item.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
                 </li>
               ))}
             </ul>
@@ -112,7 +107,7 @@ function LoadSection({ by, onLoaded }) {
               <ul className="image-rejected is-note">
                 {report.안내.map((item) => (
                   <li key={item.index}><strong>{item.index + 1}번째 항목{item.image_id ? ` (${item.image_id})` : ""}</strong>
-                    <ul>{item.notes.map((note, i) => <li key={i}>{note}</li>)}</ul>
+                    <ul className="krds-info-list">{item.notes.map((note, i) => <li key={i}>{note}</li>)}</ul>
                   </li>
                 ))}
               </ul>
