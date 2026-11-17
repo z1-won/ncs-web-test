@@ -595,3 +595,8 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .krds-date-field .krds-calendar-area { position: absolute; top: 100%; left: 0; }
 .krds-date-field .krds-calendar-area .calendar-wrap { max-width: calc(100vw - var(--krds-contents-padding-x, 1.6rem) * 2); }
 .krds-date-field .calendar-tbl abbr { text-decoration: none; }
+/* KRDS 달력은 표 제목(caption)을 요일 줄 아래에 다시 보여 주는데, 머리의 연·월과 겹쳐 화면에서는 숨긴다(화면낭독기는 그대로 읽는다) */
+.krds-date-field .krds-calendar-area .calendar-wrap .calendar-body .calendar-table-wrap .calendar-tbl caption {
+  position: absolute !important; width: 1px !important; height: 1px !important; margin: -1px !important; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0) !important; white-space: nowrap; border: 0;
+}
+.krds-date-field .krds-calendar-area .calendar-wrap .calendar-body .calendar-table-wrap .calendar-tbl th { padding-bottom: var(--krds-padding-4); }   /* 제목이 있던 자리(4.6rem)를 비워 두지 않는다 */
