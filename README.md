@@ -183,7 +183,8 @@ ncs-web --dist frontend/dist          # API + 빌드된 화면, http://127.0.0.1
 | `POST /api/export/annotated` (`upload` 토큰, `rows` JSON) | **수정 메모 원고**: 원고 hwpx의 해당 문단에 지적사항을 한글 메모로 단 파일(본문 불변). 문단을 못 찾은 지적은 첫 문단의 총괄 메모에 목록으로. hwp 원고는 불가 |
 | `GET /api/images`, `GET /api/images/{id}`, `GET /api/images/{id}/file` | **이미지 저작권 DB**(REQ-02-010, `DATABASE_URL` 설정 시): 관리용 목록·상세·그림 파일. `status`·`category`·`kogl_type`·`module_code`·`unit_code`·`keyword`·`q`로 거른다 |
 | `POST /api/images/{id}/rights` · `/confirm` · `/unconfirm` (`{by, version?, rights?}`) | 권리 정보 수정·기관 확정·확정 취소. 변경마다 버전이 오르고 이력이 남는다. 확정된 것은 확정을 푼 뒤 수정 |
-| `POST /api/rights/check` (`manuscript`, `forms[]`, 날짜·제출 여부), `POST /api/rights/export` | **권리 증빙 점검**(REQ-02-014): 원고의 그림과 제출 서류를 대조한 현황표·누락 목록, 현황표 xlsx. `save=true`면 확인된 증빙을 이미지 저작권 DB에 연결 |
+| `POST /api/images/{id}/evidence` (`{by, kind, file_ref?, submitted_on?, note?}`) · `/evidence/{증빙 id}/delete` (`{by}`) | 증빙 직접 등록·삭제. 서류 파일은 받지 않고 종류·파일 이름·제출일만 남긴다 |
+| `POST /api/rights/check` (`manuscript`, `forms[]`, `print_copy`(선택), 날짜·제출 여부), `POST /api/rights/export` | **권리 증빙 점검**(REQ-02-014): 원고의 그림과 제출 서류를 대조한 현황표·누락 목록·기관별 알림, 현황표 xlsx. 출력본 PDF를 함께 주면 결과물 현황의 쪽수 대조. `save=true`면 확인된 증빙을 이미지 저작권 DB에 연결 |
 | `POST /api/images/load` (`files[]`, `by`, `check_only`) | 레코드 JSON 1개 + 그림 파일들을 올려 이미지 저작권 DB에 적재하거나 형식만 검사 |
 | `POST /api/recommend/images` | 문단·수행준거에 맞는 그림 추천: 요약·핵심어와 순위, 그림마다 이용조건·출처 문구(`docs/RECOMMEND.md`) |
 | `GET /api/images/recommendable`, `GET /api/images/recommendable/{id}/file` | 추천·생성형 AI용 조회: 기관 확정 + 재사용 범위 확인 + 비공개가 아닌 그림만, 출처·라이선스 정보와 함께. 형식은 `docs/IMAGE_RECORD.md` |
