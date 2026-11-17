@@ -38,6 +38,7 @@ export const PAGES = [
   { path: "/", label: "원고 검수" },
   { path: "/upscale", label: "업스케일링" },
   { path: "/images", label: "이미지 저작권 DB" },
+  { path: "/recommend", label: "이미지 추천" },
   { path: "/rights", label: "권리 증빙 점검" },
 ];
 

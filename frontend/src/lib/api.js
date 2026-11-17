@@ -158,6 +158,11 @@ export const api = {
     // files: 레코드 JSON 1개 + 그 레코드가 가리키는 그림 파일들. checkOnly면 DB에 넣지 않고 형식만 검사
     load: (files, { by, checkOnly }) => request("/api/images/load", { method: "POST", body: multipart({ by: by || "", check_only: checkOnly ? "true" : "false" }, files) }),
   },
+  // 이미지 추천(REQ-02-011). 문단과 능력단위 코드 중 하나는 있어야 한다. useLlm이 꺼져 있으면 문단을 외부로 보내지 않는다
+  recommend: {
+    images: ({ text, unitCode, criterionNo, useLlm, limit }) => postJson("/api/recommend/images", {
+      text: text || "", unit_code: (unitCode || "").trim(), criterion_no: (criterionNo || "").trim(), use_llm: !!useLlm, limit: limit || 10 }),
+  },
   // 권리 증빙 제출 현황 점검(REQ-02-014). manuscript: 원고 파일, forms: 제출 서류(작성된 한글 양식) 파일들
   // options: { firstReviewOn, submittedOn, transferAuthor, transferMaker, portrait, pledge } + DB 반영용 { save, by, moduleCode }
   rights: {

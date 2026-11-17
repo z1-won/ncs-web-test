@@ -65,6 +65,15 @@ class ImageActionRequest(BaseModel):
     version: int | None = Field(None, ge=1)   # 화면이 열어 본 버전. 주면 그 버전일 때만 바꾼다
 
 
+class RecommendRequest(BaseModel):
+    """이미지 추천(REQ-02-011). 문단과 능력단위 코드 중 하나는 있어야 한다."""
+    text: str = Field("", max_length=4000)
+    unit_code: str = Field("", max_length=30)        # '1203020201', 'LM1203020201_24v3' 모두 받는다
+    criterion_no: str = Field("", max_length=10, pattern=r"^(\d+\.\d+)?$")   # 수행준거 번호 '1.1'
+    limit: int = Field(10, ge=1, le=30)
+    use_llm: bool = True
+
+
 class ImageRightsRequest(ImageActionRequest):
     """권리 정보 수정. rights의 모양은 이미지 레코드의 rights와 같다(docs/IMAGE_RECORD.md). null은 그 칸을 비운다."""
     rights: dict[str, Any]

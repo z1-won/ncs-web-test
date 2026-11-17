@@ -17,7 +17,7 @@ NCS 학습모듈 원고(한글 파일)를 올리면, 한국직업능력연구원
 2. **검수할 범위를 고릅니다.** '전체'를 고르면 확인서의 구성요소 10개를 순서대로 한 번에 검사합니다. 구성요소 하나만 골라 볼 수도 있습니다.
 3. **결과를 확인하고 내려받습니다.** 화면에서 항목별 판정과 근거를 보고, 아래 파일을 받습니다. 데이터베이스를 연결해 두면 지난 검수 이력도 다시 열어 볼 수 있습니다.
 
-이미지의 권리 정보를 모아 두고 확정하려면 메뉴의 **이미지 저작권 DB** 페이지를 씁니다(데이터베이스 연결 필요). 이미지 레코드를 적재하고, 그림마다 분류·귀속·라이선스를 확인해 기관 확정을 하면 추천용 목록에 나옵니다(`docs/IMAGE_RECORD.md`). 공공누리에서 모은 그림은 과업 안내의 수집 JSON(0.1-PoC) 그대로 같은 화면에서 적재합니다(`docs/KOGL_IMPORT.md`).
+이미지의 권리 정보를 모아 두고 확정하려면 메뉴의 **이미지 저작권 DB** 페이지를 씁니다(데이터베이스 연결 필요). 이미지 레코드를 적재하고, 그림마다 분류·귀속·라이선스를 확인해 기관 확정을 하면 추천용 목록에 나옵니다(`docs/IMAGE_RECORD.md`). 공공누리에서 모은 그림은 과업 안내의 수집 JSON(0.1-PoC) 그대로 같은 화면에서 적재합니다(`docs/KOGL_IMPORT.md`). 확정된 그림은 **이미지 추천** 페이지에서 집필 중인 문단·수행준거에 맞춰 찾습니다(`docs/RECOMMEND.md`).
 
 권리 증빙이 빠진 그림을 찾으려면 메뉴의 **권리 증빙 점검** 페이지에서 원고와 제출 서류(작성한 한글 양식)를 올립니다. 그림마다 필요한 증빙과 제출 여부, 제출 기한 준수 여부를 표로 보여 주고 현황표 xlsx를 내려받을 수 있습니다(`docs/RIGHTS_CHECK.md`).
 
@@ -153,6 +153,7 @@ pip install openpyxl               # scripts/batch/batch_review.py xlsx 출력�
 | `NCS_API_KEY` | 공공데이터포털 B490007/ncsInfo — 수준 표 갱신 스크립트만 사용(검수 서버는 호출하지 않음) |
 | `LLM_API_KEY`(또는 `OPENAI_API_KEY`), `LLM_MODEL`(기본 gpt-5.4-mini), `LLM_ALLOW_UPLOAD=1` | 수행 ② LLM 후보. 키와 반출 승인 스위치가 **둘 다** 있어야 원고 문장을 전송. `LLM_ALLOWED_TASKS`로 더 좁힐 수 있음 |
 | `DATABASE_URL`, `NCS_DB_*` | PostgreSQL 검수 이력(선택). `DATABASE_URL`이 있으면 웹 서버와 검수 CLI가 결과를 DB에 남기고, 없으면 파일로만 저장 |
+| `LLM_MODEL_RECOMMEND` | 이미지 추천(REQ-02-011)의 문단 요약에만 쓸 모델. 없으면 `LLM_MODEL` |
 | `LLM_CACHE_TTL_DAYS` | LLM 응답 캐시(`.llm_cache/`, 원고 문장이 평문으로 들어 있음) 보관 일수. 기본 30, 지난 파일은 호출 때마다 삭제. `0`이면 캐시 안 씀 |
 | `NCS_WEB_ORIGINS` | 웹 API에 교차 출처 접근을 허용할 출처(쉼표 구분). 기본은 Vite dev 서버(`http://localhost:5173`, `http://127.0.0.1:5173`)뿐. 화면은 같은 출처(빌드본은 서버가 함께 냄, dev 서버는 `/api` 프록시)로 부르므로 보통 비워 둠 |
 | `NCS_WEB_DEBUG=1` | 검수 실행이 500으로 끝났을 때 응답에 traceback을 실음(개발용). 기본은 서버 로그에만 남김 |
@@ -184,6 +185,7 @@ ncs-web --dist frontend/dist          # API + 빌드된 화면, http://127.0.0.1
 | `POST /api/images/{id}/rights` · `/confirm` · `/unconfirm` (`{by, version?, rights?}`) | 권리 정보 수정·기관 확정·확정 취소. 변경마다 버전이 오르고 이력이 남는다. 확정된 것은 확정을 푼 뒤 수정 |
 | `POST /api/rights/check` (`manuscript`, `forms[]`, 날짜·제출 여부), `POST /api/rights/export` | **권리 증빙 점검**(REQ-02-014): 원고의 그림과 제출 서류를 대조한 현황표·누락 목록, 현황표 xlsx. `save=true`면 확인된 증빙을 이미지 저작권 DB에 연결 |
 | `POST /api/images/load` (`files[]`, `by`, `check_only`) | 레코드 JSON 1개 + 그림 파일들을 올려 이미지 저작권 DB에 적재하거나 형식만 검사 |
+| `POST /api/recommend/images` | 문단·수행준거에 맞는 그림 추천: 요약·핵심어와 순위, 그림마다 이용조건·출처 문구(`docs/RECOMMEND.md`) |
 | `GET /api/images/recommendable`, `GET /api/images/recommendable/{id}/file` | 추천·생성형 AI용 조회: 기관 확정 + 재사용 범위 확인 + 비공개가 아닌 그림만, 출처·라이선스 정보와 함께. 형식은 `docs/IMAGE_RECORD.md` |
 
 ## CLI 실행
