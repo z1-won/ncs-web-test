@@ -33,7 +33,7 @@ RIGHTS_COLUMNS = (
     "non_commercial", "no_derivatives", "share_alike", "author", "source_org", "source_url", "retrieved_on",
     "credit_line", "ai_used", "ai_usage", "ai_mode", "ai_tool", "ai_date", "ai_original_source",
     "ai_pledge_submitted", "ai_tos_scope")
-ASSET_COLUMNS = ("id", "sha256", "created_at", "filename", "title", "format", "width_px", "height_px", "byte_size",
+ASSET_COLUMNS = ("id", "sha256", "source_id", "created_at", "filename", "title", "format", "width_px", "height_px", "byte_size",
                  "kind", "keywords", "upscaled_format", "upscaled_width_px", "upscaled_height_px", "upscale_engine")
 MEDIA_TYPES = {"png": "image/png", "jpeg": "image/jpeg", "jpeg-progressive": "image/jpeg", "jpg": "image/jpeg",
                "bmp": "image/bmp", "gif": "image/gif"}
@@ -86,7 +86,7 @@ def terms() -> dict:
 # ───────────────────────── 조회 ─────────────────────────
 
 LIST_SELECT = """
-SELECT a.id, a.sha256, a.title, a.filename, a.kind, a.format, a.width_px, a.height_px, a.keywords, a.created_at,
+SELECT a.id, a.sha256, a.source_id, a.title, a.filename, a.kind, a.format, a.width_px, a.height_px, a.keywords, a.created_at,
        (a.content IS NOT NULL) AS has_file, (a.upscaled_content IS NOT NULL) AS has_upscaled,
        r.status, r.version, r.category, r.ownership, r.reuse_scope, r.release_class, r.license_scheme, r.kogl_type,
        r.kogl_ai, r.cc_license, r.ai_used, r.confirmed_by, r.confirmed_at,
@@ -119,10 +119,10 @@ def _filters(*, module_code=None, unit_code=None, keyword=None, q=None, kind=Non
     if q:
         like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         where.append(
-            f"({alias}.title ILIKE %s OR {alias}.filename ILIKE %s OR EXISTS (SELECT 1 FROM unnest({alias}.keywords) k "
+            f"({alias}.title ILIKE %s OR {alias}.filename ILIKE %s OR {alias}.source_id ILIKE %s OR EXISTS (SELECT 1 FROM unnest({alias}.keywords) k "
             f"WHERE k ILIKE %s) OR EXISTS (SELECT 1 FROM image_placements p WHERE p.image_id = {alias}.id "
             "AND (p.caption ILIKE %s OR p.context_text ILIKE %s)))")
-        params += [like] * 5
+        params += [like] * 6
     return where, params
 
 

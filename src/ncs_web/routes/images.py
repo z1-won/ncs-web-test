@@ -9,13 +9,15 @@ PostgreSQL 저장소일 때만 붙는다(/api/health의 image_db가 그 여부).
   POST /api/images/{id}/rights                권리 정보 수정 {by, version?, rights} — 자동 태깅 상태에서만
   POST /api/images/{id}/confirm               기관 확정 {by, version?}
   POST /api/images/{id}/unconfirm             확정 취소 {by, version?}
-  POST /api/images/load                       레코드 JSON 1개 + 그림 파일들을 올려 적재(또는 check_only로 형식만 검사)
+  POST /api/images/load                       레코드 JSON 1개 + 그림 파일들을 올려 적재(또는 check_only로 형식만 검사).
+                                              이미지 레코드(docs/IMAGE_RECORD.md)와 공공누리 수집 JSON(0.1-PoC, REQ-02-012) 둘 다 받는다
   GET  /api/images/recommendable              추천용 목록 — 기관 확정 + 재사용 범위 확인 + 비공개 아님(REQ-02-011, 생성형 AI가 부르는 쪽)
   GET  /api/images/recommendable/{id}/file    추천 목록에 나오는 그림의 파일만
 
 오류: 없는 그림 404, 형식·필수 항목 오류 400(사유를 모두 담는다), 확정된 것 수정·버전 불일치 409.
 """
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Annotated
@@ -67,7 +69,7 @@ def register(app: FastAPI, services: Services) -> None:
 
         check_only면 DB에 넣지 않고 형식만 검사한다. 응답은 적재 보고서(전체·적재·거부 사유·필수 항목 충족률) 또는 검사 결과.
         """
-        from ncs_service import image_db
+        from ncs_service import image_db, kogl_import
         from ncs_service.image_records import read_records
 
         named = [item for item in files if item.filename]
@@ -91,14 +93,24 @@ def register(app: FastAPI, services: Services) -> None:
             if len(record_files) != 1:
                 raise HTTPException(400, f"레코드 JSON 파일을 1개 올려 주세요(지금 {len(record_files)}개)")
             try:
+                data = json.loads(record_files[0].read_text(encoding="utf-8-sig"))
+            except (ValueError, UnicodeDecodeError) as error:
+                raise HTTPException(400, f"레코드 JSON을 읽지 못했습니다: {error}") from None
+            if kogl_import.is_dataset(data):      # 공공누리 수집 JSON(0.1-PoC, REQ-02-012) — 이미지 레코드로 바꿔 넣는다
+                try:
+                    return {"check_only": check_only,
+                            **kogl_import.run(dsn, data, base_dir=base, by=by, check_only=check_only)}
+                except ValueError as error:
+                    raise HTTPException(400, str(error)) from None
+            try:
                 records, _ = read_records(record_files[0])
-            except ValueError as error:      # JSON 문법 오류(JSONDecodeError)·schema 불일치
+            except ValueError as error:      # schema 불일치·records 모양
                 raise HTTPException(400, f"레코드 JSON을 읽지 못했습니다: {error}") from None
             records = image_db.flatten_file_names(records)
             if check_only:
-                return {"check_only": True, **image_db.check_records(records, base_dir=base)}
-            return {"check_only": False,
-                    **image_db.load_records(dsn, records, changed_by=by, base_dir=base).as_dict()}
+                return {"check_only": True, "형식": "이미지 레코드", **image_db.check_records(records, base_dir=base), "안내": []}
+            return {"check_only": False, "형식": "이미지 레코드",
+                    **image_db.load_records(dsn, records, changed_by=by, base_dir=base).as_dict(), "안내": []}
 
     @app.get("/api/images/recommendable")
     def recommendable(module_code: str | None = None, unit_code: str | None = None, keyword: str | None = None,

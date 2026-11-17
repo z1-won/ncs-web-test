@@ -31,6 +31,7 @@ python -m ncs_service.image_db 레코드.json --by 담당자이름              
 | `file` | `sha256`과 둘 중 하나 | 그림 파일 경로. JSON 파일이 있는 폴더 기준 상대 경로이고 그 폴더 밖은 가리킬 수 없음 |
 | `sha256` | `file`과 둘 중 하나 | 그림 파일의 SHA-256(16진 64자). `file`이 있으면 계산하므로 적지 않아도 되고, 적었는데 다르면 거부 |
 | `filename`, `title` | | 파일 이름(없으면 `file`에서), 자료 제목 |
+| `source_id` | | 수집할 때 붙인 고유 번호(예: `KOGL-0001`). 화면에 ‘수집 번호’로 보이고 검색됨. 같은 그림인지는 여전히 `sha256`으로 가림 |
 | `format`, `width_px`, `height_px`, `byte_size` | | `file`이 있으면 파일에서 읽어 채움(png·jpeg·bmp) |
 | `kind` | | `photo` 사진 / `illustration` 삽화 / `table` 도표 / `graph` 그래프 / `screenshot` 화면 캡처 / `other` |
 | `keywords` | | 주요 키워드 목록 |

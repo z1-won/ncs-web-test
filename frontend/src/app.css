@@ -466,6 +466,7 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .review-form .image-actions .krds-btn { flex: none; min-width: 16rem; }
 .image-report { margin-top: var(--krds-gap-5); }
 .image-rejected { margin: var(--krds-gap-5) 0 0; padding: var(--krds-padding-5) var(--krds-padding-6); list-style: none; border: 1px solid var(--krds-light-color-border-danger); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-danger-subtler); font-size: var(--krds-pc-font-size-body-small); }
+.image-rejected.is-note { border-color: var(--krds-light-color-border-gray-light); background: var(--krds-light-color-surface-gray-subtler); }
 .image-rejected > li + li { margin-top: var(--krds-gap-3); }
 .image-rejected ul { margin: var(--krds-gap-1) 0 0; padding-left: 2rem; list-style: disc; overflow-wrap: anywhere; }
 /* 거르기 줄 — 선택 칸 둘 + 검색칸(남는 폭) + 버튼. 좁으면 줄바꿈 */

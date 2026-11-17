@@ -57,8 +57,9 @@ function LoadSection({ by, onLoaded }) {
     <section id="image-load" className="nav-anchor image-section">
       <h2 className="section-title">자료 적재</h2>
       <p className="section-desc">
-        이미지 레코드 JSON 1개와 그 안에서 가리키는 그림 파일들을 함께 고릅니다. 그림은 파일 이름으로 짝짓습니다.
-        형식은 저장소의 <code>docs/IMAGE_RECORD.md</code>, 예시는 <code>docs/examples/image_records/</code>(JSON 1개 + 그림 3장)에 있습니다.
+        JSON 1개와 그 안에서 가리키는 그림 파일들을 함께 고릅니다. 그림은 파일 이름으로 짝짓습니다.
+        JSON은 두 가지를 받습니다 — 이미지 레코드(<code>docs/IMAGE_RECORD.md</code>, 예시 <code>docs/examples/image_records/</code>)와
+        공공누리 수집 JSON 0.1-PoC(<code>docs/KOGL_IMPORT.md</code>, 예시 <code>docs/examples/kogl_samples/</code>). 어느 쪽인지는 자동으로 알아봅니다.
         같은 자료를 다시 넣어도 중복되지 않고, 기관이 확정한 권리 정보는 덮어쓰지 않습니다.
       </p>
       <div className="fieldset review-form">
@@ -83,6 +84,7 @@ function LoadSection({ by, onLoaded }) {
       </div>
       {report && (
         <div className="image-report" role="status">
+          {report.형식 && <p className="form-hint">읽은 형식: {report.형식}</p>}
           <dl className="upscale-summary">
             <div><dt>전체</dt><dd><strong>{report.전체}</strong>건</dd></div>
             {report.check_only
@@ -98,11 +100,23 @@ function LoadSection({ by, onLoaded }) {
           {rejected.length > 0 && (
             <ul className="image-rejected">
               {rejected.map((item) => (
-                <li key={item.index}><strong>{item.index + 1}번째 레코드</strong>
+                <li key={item.index}><strong>{item.index + 1}번째 {report.형식?.startsWith("공공누리") ? "항목" : "레코드"}</strong>
                   <ul>{item.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
                 </li>
               ))}
             </ul>
+          )}
+          {(report.안내 || []).length > 0 && (
+            <div className="image-notes">
+              <p className="form-hint">안내 — 거부 사유는 아니지만 확인해 둘 점입니다.</p>
+              <ul className="image-rejected is-note">
+                {report.안내.map((item) => (
+                  <li key={item.index}><strong>{item.index + 1}번째 항목{item.image_id ? ` (${item.image_id})` : ""}</strong>
+                    <ul>{item.notes.map((note, i) => <li key={i}>{note}</li>)}</ul>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}
@@ -262,7 +276,7 @@ export default function ImageDbPage() {
             <div className="filter"><label htmlFor="filter-category">분류 체계</label>
               <KrdsSelect id="filter-category" value={filters.category} options={categoryOptions} onChange={(v) => changeFilter("category", v)} title="분류 체계 선택" /></div>
             <div className="filter grow"><label htmlFor="filter-q">검색</label>
-              <input id="filter-q" type="search" className="krds-input" maxLength={100} value={query} placeholder="제목·그림명·키워드·그림 사용 문장" onChange={(e) => setQuery(e.target.value)} /></div>
+              <input id="filter-q" type="search" className="krds-input" maxLength={100} value={query} placeholder="제목·그림명·키워드·수집 번호·그림 사용 문장" onChange={(e) => setQuery(e.target.value)} /></div>
             <button type="submit" className="krds-btn medium secondary">검색</button>
           </form>
 
@@ -282,7 +296,7 @@ export default function ImageDbPage() {
                       <tr key={row.id} className={row.id === openId ? "is-open" : undefined}>
                         <td><Thumb src={row.has_file ? api.images.fileUrl(row.id) : null} alt={rowName(row)} /></td>
                         <td><strong>{rowName(row)}</strong>
-                          <span className="sub">{row.module_code ? `${row.module_code}${row.placement_count > 1 ? ` 외 ${row.placement_count - 1}곳(모듈 ${row.module_count}개)` : ""}` : "수록 위치 없음(수집 자료)"}</span></td>
+                          <span className="sub">{row.module_code ? `${row.module_code}${row.placement_count > 1 ? ` 외 ${row.placement_count - 1}곳(모듈 ${row.module_count}개)` : ""}` : `수록 위치 없음(수집 자료${row.source_id ? ` ${row.source_id}` : ""})`}</span></td>
                         <td>{terms?.category?.[row.category] || "—"}</td>
                         <td>{licenseLabel(row, terms)}{row.ai_used && <span className="sub">AI 활용</span>}</td>
                         <td>{row.status ? terms?.reuse_scope?.[row.reuse_scope] || row.reuse_scope : "—"}</td>

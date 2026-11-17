@@ -202,6 +202,7 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
           {data.has_upscaled && <div><dt>업스케일본</dt><dd>{data.upscaled_width_px}×{data.upscaled_height_px}px{data.upscale_engine ? ` · ${data.upscale_engine}` : ""}</dd></div>}
           <div><dt>유형</dt><dd>{terms?.kind?.[data.kind] || "—"}</dd></div>
           <div><dt>주요 키워드</dt><dd>{data.keywords.length ? data.keywords.join(", ") : "—"}</dd></div>
+          {data.source_id && <div><dt>수집 번호</dt><dd className="mono">{data.source_id}</dd></div>}
           <div><dt>SHA-256</dt><dd className="mono">{data.sha256}</dd></div>
           <div><dt>증빙</dt><dd>{data.evidence.length ? data.evidence.map((e) => terms?.evidence_kind?.[e.kind] || e.kind).join(", ") : "등록된 증빙 없음"}</dd></div>
         </dl>

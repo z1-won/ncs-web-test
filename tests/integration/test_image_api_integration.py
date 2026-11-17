@@ -297,5 +297,60 @@ class ImageApiIntegrationTests(unittest.TestCase):
         self.assertEqual((report["적재"], len(report["거부"])), (0, 1))
 
 
+    # ── 공공누리 수집 JSON(0.1-PoC, REQ-02-012) ──
+    def test_upload_kogl_dataset(self):
+        saved = os.environ.pop("NCS_CATALOG_FILE", None)      # 골든 테스트가 꺼 둔 NCS 목록을 이 테스트 동안만 켠다
+        if saved is not None:
+            self.addCleanup(os.environ.__setitem__, "NCS_CATALOG_FILE", saved)
+        data = json.loads((EXAMPLE.parent / "kogl_samples" / "kogl_samples.example.json").read_text(encoding="utf-8"))
+        good, other, bad = (json.loads(json.dumps(data["items"][0])) for _ in range(3))
+        contents = [PNG + uuid4().bytes, PNG + uuid4().bytes]
+        self.used += [hashlib.sha256(content).hexdigest() for content in contents]
+        source_id = f"KOGL-{uuid4()}"
+        good.update(image_id=source_id, file={"name": "a.png", "format": "png", "width_px": 64, "height_px": 48})
+        good["ncs_link"]["match_keywords"] = [self.tag, "객실"]
+        other.update(image_id=f"{source_id}-2", file={"name": "b.png"})
+        other["kogl"] = {"type": "제4유형", "ai_type_combined": True}
+        other["ncs_link"]["match_keywords"] = [self.tag]
+        bad["kogl"]["type"] = "제9유형"
+        body = json.dumps({**data, "items": [good, bad, other]}, ensure_ascii=False).encode()
+        files = [("수집.json", body), ("a.png", contents[0]), ("b.png", contents[1])]
+
+        checked = self.upload(files, check_only="true")
+        self.assertEqual((checked["형식"], checked["전체"], checked["통과"], [item["index"] for item in checked["거부"]]),
+                         ("공공누리 수집 JSON(0.1-PoC)", 3, 2, [1]))
+        self.assertEqual(self.listed()["items"], [], "형식 검사는 DB에 넣지 않는다")
+        loaded = self.upload(files, by="수집 담당")
+        self.assertEqual((loaded["전체"], loaded["적재"], loaded["새 그림"], [item["index"] for item in loaded["거부"]],
+                          loaded["추가된 수행준거 연결"], loaded["필수 항목 충족률"]), (3, 2, 2, [1], 2, 0.6667))   # 거부된 1건은 충족하지 못한 것으로 센다
+        again = self.upload(files, by="수집 담당")
+        self.assertEqual((again["새 그림"], again["기존 그림에 합침"], again["추가된 수행준거 연결"]), (0, 2, 0))
+
+        rows = {row["source_id"]: row for row in self.listed()["items"]}
+        self.assertEqual(set(rows), {source_id, f"{source_id}-2"})
+        self.assertEqual([row["source_id"] for row in self.client.get("/api/images", params={"q": source_id + "-2"}).json()["items"]],
+                         [f"{source_id}-2"], "수집 번호로 찾을 수 있다")
+        detail = self.client.get(f"/api/images/{rows[source_id]['id']}").json()
+        rights = detail["rights"]
+        self.assertEqual((rights["status"], rights["category"], rights["ownership"], rights["license_scheme"], rights["kogl_type"],
+                          rights["attribution"], rights["non_commercial"], rights["source_org"], rights["retrieved_on"]),
+                         ("auto", "public_license", "kogl", "kogl", 1, True, False, "예시기관", "2026-11-17"))
+        self.assertEqual(rights["credit_line"], "공공누리 홈페이지(https://www.kogl.or.kr/)에서 2026. 11. 17. 검색. 공공누리 제1유형.")
+        self.assertEqual((detail["placements"], [(link["unit_code"], link["criterion_no"]) for link in detail["links"]]),
+                         ([], [(UNIT, "1.1")]))
+        fourth = self.client.get(f"/api/images/{rows[source_id + '-2']['id']}").json()["rights"]
+        self.assertEqual((fourth["kogl_type"], fourth["kogl_ai"], fourth["non_commercial"], fourth["no_derivatives"], fourth["release_class"]),
+                         (4, True, True, True, "inherit"))
+        # 자동 적재분은 추천에 나오지 않고, 기관이 재사용 범위를 정해 확정해야 나온다
+        self.assertEqual(self.listed("/api/images/recommendable")["items"], [])
+        image_id = rows[source_id]["id"]
+        self.post(image_id, "rights", version=rights["version"], rights={"reuse_scope": "all"})
+        self.post(image_id, "confirm")
+        self.assertEqual([row["id"] for row in self.listed("/api/images/recommendable")["items"]], [image_id])
+        # 확정 뒤 다시 적재해도 확정 내용은 그대로
+        after = self.upload(files, by="수집 담당")
+        self.assertEqual(len(after["확정 유지"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

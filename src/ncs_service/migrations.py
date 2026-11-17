@@ -227,4 +227,9 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "ALTER TABLE IF EXISTS review_runs ADD CONSTRAINT review_runs_source_check "
      "CHECK (source IN ('web', 'import', 'cli'))"),
     ("006_image_db", IMAGE_DB),
+    # 007: 수집 자료의 고유번호(공공누리 샘플 JSON의 image_id — 'KOGL-SAMPLE-0001'). 그림의 동일성은 여전히 sha256으로 보고,
+    # 이 값은 수집 목록과 DB의 그림을 사람이 맞춰 볼 때 쓰는 이름표다(REQ-02-012). 같은 번호가 두 그림에 붙어도 막지 않는다.
+    ("007_image_source_id",
+     "ALTER TABLE IF EXISTS image_assets ADD COLUMN IF NOT EXISTS source_id text;\n"
+     "CREATE INDEX IF NOT EXISTS image_assets_source_id_idx ON image_assets (source_id)"),
 )

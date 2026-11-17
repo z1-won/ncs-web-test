@@ -1,0 +1,48 @@
+{
+  "schema_version": "0.1-PoC",
+  "dataset": "공공누리 이미지 샘플 수집(PoC) · 수행준거 연결",
+  "collected_at": "2026-11-17",
+  "items": [
+    {
+      "image_id": "KOGL-SAMPLE-0001",
+      "title": "객실 유형별 이용 현황 도표",
+      "file": {
+        "name": "kogl_0001.png",
+        "format": "png",
+        "width_px": 80,
+        "height_px": 80
+      },
+      "ncs_link": {
+        "lm_code": "LM1203020201",
+        "unit_name": "객실 예약 관리",
+        "element": "객실 · 부대시설 이용정보 파악하기",
+        "performance_criteria": "호텔의 객실 유형(위치, 면적, 객실 타입 등)에 따라 객실 및 부대시설 정보를 구분 할 수 있다.",
+        "match_keywords": [
+          "객실",
+          "이용정보",
+          "부대시설"
+        ]
+      },
+      "kogl": {
+        "type": "제1유형",
+        "ai_type_combined": false,
+        "conditions": {
+          "attribution": true,
+          "non_commercial": false,
+          "no_derivatives": false
+        }
+      },
+      "source": {
+        "original_org": "예시기관",
+        "original_url": "https://www.kogl.or.kr/",
+        "retrieved_at": "2026-11-17",
+        "credit_line": "공공누리 홈페이지(https://www.kogl.or.kr/)에서 2026. 11. 17. 검색. 공공누리 제1유형."
+      },
+      "status": {
+        "tagging": "자동 태깅",
+        "confirmed_by": null,
+        "db_target": "REQ-02-010 이미지 저작권 DB"
+      }
+    }
+  ]
+}

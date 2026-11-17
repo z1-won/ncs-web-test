@@ -4,7 +4,7 @@
 형식 설명과 예시는 docs/IMAGE_RECORD.md, docs/examples/image_records/.
 
 레코드 1건 = 그림 파일 1개:
-  {sha256 | file, filename, title, format, width_px, height_px, byte_size, kind, keywords: [...],
+  {sha256 | file, source_id, filename, title, format, width_px, height_px, byte_size, kind, keywords: [...],
    upscaled: {file, format, width_px, height_px, engine},
    placements: [{module_code, module_name, page, label, caption, source_line, source_template, context_text,
                  lesson_no, para_index, width_mm, height_mm}],
@@ -41,7 +41,7 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 CONDITIONS = ("attribution", "non_commercial", "no_derivatives", "share_alike")
 CONDITION_NAMES = dict(zip(CONDITIONS, ("출처표시", "상업적 이용금지", "변경금지", "동일조건변경허락")))
 
-ASSET_KEYS = {"sha256", "file", "content", "filename", "title", "format", "width_px", "height_px", "byte_size",
+ASSET_KEYS = {"sha256", "file", "content", "source_id", "filename", "title", "format", "width_px", "height_px", "byte_size",
               "kind", "keywords", "upscaled", "placements", "links", "rights"}
 UPSCALED_KEYS = {"file", "content", "format", "width_px", "height_px", "engine"}
 PLACEMENT_TEXT = ("module_name", "caption", "source_line", "source_template", "context_text")
@@ -195,6 +195,7 @@ def _asset(check: _Checker, record: dict, base_dir: Path | None) -> dict:
 
     asset = {
         "sha256": sha256,
+        "source_id": check.text(record, "source_id", ""),
         "filename": check.text(record, "filename", ""),
         "title": check.text(record, "title", ""),
         "format": check.text(record, "format", ""),

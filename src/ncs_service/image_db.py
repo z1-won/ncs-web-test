@@ -34,7 +34,7 @@ from psycopg.types.json import Jsonb
 from .image_records import NormalRecord, RecordError, normalize, read_records
 from .postgres import migrate
 
-ASSET_FILL = ("filename", "title", "format", "width_px", "height_px", "byte_size", "content", "kind")
+ASSET_FILL = ("source_id", "filename", "title", "format", "width_px", "height_px", "byte_size", "content", "kind")
 UPSCALED = ("upscaled_content", "upscaled_format", "upscaled_width_px", "upscaled_height_px", "upscale_engine")
 PLACEMENT_VALUES = ("module_name", "page", "caption", "source_line", "source_template", "context_text", "lesson_no",
                     "width_mm", "height_mm")
@@ -231,13 +231,20 @@ def flatten_file_names(records: list) -> list:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="이미지 레코드 JSON을 이미지 저작권 DB에 적재")
-    parser.add_argument("file", type=Path, help="레코드 JSON 파일(docs/IMAGE_RECORD.md)")
+    parser.add_argument("file", type=Path, help="레코드 JSON 파일(docs/IMAGE_RECORD.md) 또는 공공누리 수집 JSON(0.1-PoC)")
     parser.add_argument("--by", help="적재한 사람(변경 이력에 남는 이름). 적재할 때 필수")
     parser.add_argument("--check", action="store_true", help="DB에 넣지 않고 형식만 검사")
     args = parser.parse_args(argv)
+    from . import kogl_import      # 공공누리 수집 JSON(0.1-PoC, REQ-02-012)도 같은 명령으로 넣는다
+
+    data = json.loads(args.file.read_text(encoding="utf-8-sig"))
+    kogl = kogl_import.is_dataset(data)
     if args.check:
-        records, base_dir = read_records(args.file)
-        result = check_records(records, base_dir=base_dir)
+        if kogl:
+            result = kogl_import.run(None, data, base_dir=args.file.parent, check_only=True)
+        else:
+            records, base_dir = read_records(args.file)
+            result = check_records(records, base_dir=base_dir)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 1 if result["거부"] else 0
     dsn = os.getenv("DATABASE_URL")
@@ -248,9 +255,10 @@ def main(argv: list[str] | None = None) -> int:
         print("--by(적재한 사람)가 필요합니다", file=sys.stderr)
         return 2
     migrate(dsn)
-    report = load_file(dsn, args.file, changed_by=args.by)
-    print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
-    return 1 if report.rejected else 0
+    result = (kogl_import.run(dsn, data, base_dir=args.file.parent, by=args.by) if kogl
+              else load_file(dsn, args.file, changed_by=args.by).as_dict())
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 1 if result["거부"] else 0
 
 
 if __name__ == "__main__":
