@@ -6,7 +6,7 @@ FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다. **화면
 |---|---|
 | 화면(React·Vite·KRDS) | `frontend/` — 소스 `src/`, 빌드 결과 `dist/`(git 제외) |
 | 웹 의존성 고정 목록 | `requirements/web.txt`·`test.txt`·`dev.txt` — `pyproject.toml`의 `web`·`test` extra가 읽음 |
-| 서버(FastAPI) | `src/ncs_web/` — `server.py`가 앱을 조립하고 기능별 경로는 `routes/`(review·history·export·plan·upscale). 명령은 `ncs-web` |
+| 서버(FastAPI) | `src/ncs_web/` — `server.py`가 앱을 조립하고 기능별 경로는 `routes/`(review·history·export·plan·upscale·volume). 명령은 `ncs-web` |
 | 검수 실행·저장 | `src/ncs_service/` |
 
 `src/ncs_core/`와 검수 패키지 10개는 웹 프레임워크 없이도 실행할 수 있습니다.
@@ -46,6 +46,10 @@ npm run dev
 메인 메뉴의 **업스케일링**(`/upscale`)은 원고 검수와 따로 쓰는 페이지입니다. 원고(hwpx)를 이 페이지에서 올리면 고른 해상도 기준(300 또는 150 DPI, 기본 300 — `?target_dpi=`) 미만 그림을 원고에 나오는 순서로 보여 주고, 고른 그림만 한 장씩 키웁니다. 화면은 `frontend/src/pages/UpscalePage.jsx`, 그림 목록·결과는 `components/UpscalePanel.jsx`, 서버는 `/api/uploads/{token}/pictures…` 경로와 `src/ncs_upscale/`입니다.
 
 업스케일은 외부 실행 파일(기본 `waifu2x-ncnn-vulkan`)을 부릅니다. 실행 파일은 저장소에 없으므로 따로 내려받아 도구 폴더에 둡니다. 도구 폴더는 환경 변수 `NCS_UPSCALE_TOOLS`로 지정하고, 없으면 저장소 안 `tools/`(git 제외)를, 그다음 예전 위치인 저장소 바로 위 폴더의 `tools/`를 봅니다. 엔진을 찾지 못하면 그림 목록과 원본 보기는 되고 업스케일 버튼만 꺼집니다. 실행 파일 이름은 운영체제에 맞춰 찾습니다 — Windows는 `waifu2x-ncnn-vulkan.exe`, macOS·Linux는 `waifu2x-ncnn-vulkan`(`src/ncs_upscale/engine.py`). 2배로 기준에 닿지 않는 그림은 4배로 키우며 약 4배 오래 걸립니다. 해상도 기준을 바꾸면 이전 기준으로 키운 결과는 완료로 세지 않습니다.
+
+## 원고 분량 페이지
+
+메인 메뉴의 **원고 분량**(`/volume`)은 집필료 산정용 분량 산정 페이지입니다(REQ-02-013). 최종 원고(필수)와 기존 원고(선택)를 올리고, 수작업으로 센 쪽수(선택)와 부록 포함 여부(기본 포함 — 계약서 제13조 4항 ①)를 고릅니다. 서버는 `POST /api/volume`(multipart: `manuscript`, `previous`, `manual_pages`, `include_appendix`)으로 `src/ncs_volume`의 산정표 JSON을 돌려주며 파일은 저장하지 않습니다. 화면은 `frontend/src/pages/VolumePage.jsx`입니다.
 
 ## 저장·화면 경로 분리
 

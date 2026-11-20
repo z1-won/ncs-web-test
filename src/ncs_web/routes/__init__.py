@@ -5,4 +5,5 @@
   export   확인서·수정 메모 원고 내려받기(/api/export/…)
   plan     개발계획서 작성(/api/plan/…)
   upscale  그림 업스케일(/api/uploads/{token}/pictures…, /proposal)
+  volume   원고 분량 산정(/api/volume)
 """
