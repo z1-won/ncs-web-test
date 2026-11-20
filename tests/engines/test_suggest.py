@@ -235,13 +235,15 @@ class AiTests(unittest.TestCase):
             ("사례 중심으로 절차를 3단계로 설명한다.", "수치"),                    # 새 수치
             ("사례 중심으로 Agile 절차를 설명한다.", "영문"),                      # 새 영문
             ("학습자가 현장 전문가와 협업 프로젝트를 수행하도록 지도한다.", "너무 다름"),   # 내용을 바꿈
-            ("사례 중심으로 절차를 설명한다.", "이미 있는 후보"),                  # 규칙 후보와 같음
         ]
         for text, why in cases:
             asker, _ = fake(fix=[{"line": 1, "suggestion": text}])
             result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", use_llm=True, asker=asker)
             self.assertEqual([c["출처"] for c in result["후보"]], [SOURCE_RULE], text)
             self.assertIn(why, result["버린 AI 후보"][0]["이유"], text)
+        asker, _ = fake(fix=[{"line": 1, "suggestion": "사례 중심으로 절차를 설명한다."}])     # 규칙 후보와 같은 문장
+        same = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", use_llm=True, asker=asker)
+        self.assertEqual(([c["출처"] for c in same["후보"]], same["버린 AI 후보"]), ([SOURCE_RULE], []))
 
     def test_validate_brand(self):
         self.assertIn("상호", validate("교수 방법", "프로그램으로 표를 작성함.", "엑셀로 표를 작성한다."))

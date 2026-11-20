@@ -41,6 +41,7 @@ SYSTEM = """당신은 NCS 학습모듈 원고의 검수 보조자입니다. 아�
 - 표현이 달라도 의견이 요구한 내용이 원고에 들어가 있는 의견 (같은 뜻의 다른 낱말, 풀어 쓴 설명, 약어와 본딧말도 반영으로 봄)
 - 수정·보완을 요구하지 않는 의견
 원고 문단에 없는 사실을 지어내지 않습니다. 확신할 수 없으면 '확인 필요'로 넣습니다.
+suggestion은 의견에 적힌 낱말과 요구만으로 쓴 한 문장입니다. 의견에 없는 설명·정의·수치·사례를 덧붙이지 않습니다(직무 내용은 집필자가 씁니다).
 반드시 JSON 객체 하나만 출력합니다:
 {"findings": [{"line": <의견 번호(정수)>, "kind": "미반영|확인 필요", "reason": "<왜 그렇게 보는지 한 문장>", "suggestion": "<미반영이면 원고에 넣을 문장 후보 한 문장, 아니면 빈 문자열>"}]}
 모든 의견이 반영되었으면 {"findings": []}."""
@@ -99,6 +100,8 @@ def _apply(row: dict, finding: dict | None, model: str, sent: int) -> None:
                   "수정 문장": finding["suggestion"] if finding else "", "보낸 문단 수": sent}
     if after == NOT_REFLECTED and finding and finding["suggestion"]:
         row["수정 제안"] = finding["suggestion"]
+    if before == NOT_REFLECTED and after == CHECK:
+        row["수정 제안"] = ""      # 규칙이 못 찾은 낱말을 넣으라는 제안은, LLM이 다른 표현으로 반영됐다고 볼 때는 맞지 않는다
     if before != after:
         row["판정"] = after
         row["비고"].append(f"LLM({model}) 판정 반영: {before} → {after}"

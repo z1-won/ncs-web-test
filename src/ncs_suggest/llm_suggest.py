@@ -91,7 +91,9 @@ def _screen(kind: str, body: str, finding: dict, taken: set[str], model: str, ex
     text = finding["suggestion"].strip()
     if not text:
         return None, None
-    why = "이미 있는 후보와 같음" if text in taken else validate(kind, body, text, extra=extra, config=config)
+    if text in taken and text != body:
+        return None, None      # 규칙 후보와 같은 문장 — 새 후보가 아니므로 버린 목록에도 올리지 않는다
+    why = validate(kind, body, text, extra=extra, config=config)
     if why:
         return None, {"문장": text, "이유": why}
     return _candidate(text, finding["reason"], model, config), None

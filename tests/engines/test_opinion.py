@@ -287,6 +287,7 @@ class LlmTests(unittest.TestCase):
         item = self.item("<표 1-3>에 원격 접속 인증도 추가 필요")
         refine_all([item], self.ms, asker=self.fake([]))
         self.assertEqual(item[0]["판정"], CHECK)                           # 규칙(미반영 후보)과 엇갈리면 확인 필요
+        self.assertEqual(item[0]["수정 제안"], "")                          # '넣을지 검토' 제안은 거둔다
         self.assertIn("엇갈림", " ".join(item[0]["비고"]))
         self.assertEqual(item[0]["LLM"]["판정"], "미반영 아님")
 
