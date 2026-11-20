@@ -453,3 +453,19 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
   .upscale-bar .bar-actions { flex: 1 1 100%; flex-wrap: wrap; }
   .upscale-bar .bar-actions .krds-btn { flex: 1 1 100%; min-width: 0; white-space: normal; }
 }
+
+/* 문장 추천 — 문장마다 카드(원문 · 순위 붙인 후보 · 채택/기각 · 참고 예문) */
+.suggest-card { margin: var(--krds-gap-4) 0; padding: var(--krds-padding-5) var(--krds-padding-6); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: 0.8rem; }
+.suggest-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); }
+.suggest-original { margin: var(--krds-gap-3) 0 var(--krds-gap-2); }
+.suggest-candidates { margin: var(--krds-gap-3) 0 0; border: 0; padding: 0; }
+.suggest-candidates ol { list-style: none; margin: 0 0 var(--krds-gap-3); padding: 0; }
+.suggest-candidates li { display: flex; align-items: flex-start; gap: var(--krds-gap-3); padding: var(--krds-padding-3) 0; border-top: 1px solid var(--krds-light-color-border-gray-light); }
+.suggest-candidates li.chosen { background: var(--krds-light-color-surface-primary-subtler); }
+.suggest-candidates .rank { flex: none; width: 2.4rem; font-weight: 700; text-align: center; }
+.suggest-candidates .candidate-body { flex: 1 1 auto; min-width: 0; }
+.suggest-candidates .candidate-text { margin: 0; overflow-wrap: anywhere; }
+.suggest-candidates li .krds-btn { flex: none; }
+.suggest-none { margin: var(--krds-gap-3) 0 0; color: var(--krds-light-color-text-subtle); }
+.suggest-examples { margin-top: var(--krds-gap-3); }
+.suggest-direct textarea { width: 100%; }
