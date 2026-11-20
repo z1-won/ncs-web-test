@@ -149,6 +149,7 @@
 - **`ncs_web/server.py`** — 앱 조립: 미들웨어, 오류 응답, 정적 `--dist`로 프런트 제공. 경로는 `routes/`의 모듈이 `register(app, services)`로 붙인다.
 - **`ncs_web/routes/`** — `review.py`(`POST /api/review`, `/api/uploads`, `GET /api/health`) · `history.py`(`/api/reviews`, `/api/groups`) · `export.py`(확인서·수정 메모 원고) · `plan.py`(개발계획서 작성) · `upscale.py`(그림 업스케일). 요청·응답 모델은 `schemas.py`, 함께 쓰는 도우미는 `common.py`.
 - **`frontend/src/`** — `main.jsx`(경로 등록), `pages/`(페이지: `ReviewPage` 원고 검수 · `PlanDraftPage` 개발계획서 작성 · `UpscalePage` 업스케일링 · `PrivacyPage`), `components/`(표·셀렉트·모달), `lib/checks.js`(`CHECKS`·`FILE_HINTS` — 서버 엔진 목록과 테스트가 일치를 검사), `lib/api.js`.
+- **`ncs_suggest`**(검수 엔진이 아닌 기능 패키지, REQ-02-004 문장 추천) — `extract.py`가 원고에서 종결 규정이 있는 문장(개요 목표·차례·학습 목표·수행 내용 제목·수행 순서 네모 번호 줄·교수/학습 방법·평가 항목)을 모으고, `kinds.py`가 종류별 규정 꼴을 코어 도우미(`ncs_core.sentences`·`lexicon`)로 판정, `endings.py`가 끝 서술어를 하/되/모음/자음 줄기로 읽어 '~한다.'·'~할 수 있다.'·'~하기'·명사로 활용(불규칙·형용사·모르는 낱말은 후보 없음), `rewrite.py`가 표현 규칙과 순위, `examples.py`가 같은 원고의 참고 예문, `llm_suggest.py`가 AI 후보(허용 시)와 재검사를 맡는다. 웹은 `routes/suggest.py`(`/api/suggest`, `/api/suggest/sentence`, `/api/suggest/kinds`), 화면은 `pages/SuggestPage.jsx`.
 
 ---
 

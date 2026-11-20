@@ -60,6 +60,10 @@ npm run dev
 화면 경로가 없거나 지정되지 않으면 `/`는 안내와 함께 404를 반환하고 API·`/docs`는 계속 사용할 수 있습니다.
 `DATABASE_URL`을 설정하지 않으면 기존 JSON·ZIP 파일 저장 방식을 유지합니다.
 
+## 문장 추천 페이지
+
+메인 메뉴의 **문장 추천**(`/suggest`)은 집필 보조 페이지입니다(REQ-02-004). 원고를 올리면 `POST /api/suggest`(multipart: `manuscript`, `use_llm`)가 `src/ncs_suggest`의 구성별 추천 카드 JSON을 돌려주고, 문장 하나는 `POST /api/suggest/sentence`(form: `text`, `kind`, 선택 `before`·`after`·`use_llm`)로, 종류 목록은 `GET /api/suggest/kinds`로 받습니다. 결과는 저장하지 않으며 채택/기각 기록과 채택률은 화면이 갖고 JSON·CSV로 내려받게 합니다. 화면은 `frontend/src/pages/SuggestPage.jsx`입니다.
+
 ## PostgreSQL 검수 이력
 
 웹 서버에 `DATABASE_URL`을 설정하면 PostgreSQL에 검수 이력을 저장합니다. 이 모드에서 실행별 JSON·ZIP 폴더는 새로 만들지 않으며, ZIP은 이력 화면의 다운로드 링크를 누를 때 임시로 생성합니다. `DATABASE_URL`이 없으면 기존 파일 저장 방식으로 실행됩니다. 검수 CLI(`python -m ncs_position …` 등)도 같은 규칙을 따릅니다: `--out`을 주면 그 폴더에 파일로, 안 주면 셸에 `DATABASE_URL`이 있을 때 DB 이력에만(`source`=`cli`, 폴더를 만들지 않음), 없을 때 `결과/` 폴더에 저장합니다. CLI는 `.env`를 자동으로 읽지 않으므로 `set -a; source .env; set +a`로 올린 셸에서만 DB로 갑니다. 파일이 필요하면 `--out`을 지정하세요. 이미 만든 결과 폴더는 아래 `import` 명령으로 이력에 넣습니다.
