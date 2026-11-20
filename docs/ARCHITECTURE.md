@@ -147,8 +147,9 @@
 - **`cli.py`** — 엔진 공용 CLI `run_cli(check, 설명)`. 개발계획서 필수 여부는 `Engine.required`, `--body-section`은 엔진 `CheckConfig`에서 읽는다.
 - **`store.py` / `postgres.py` / `migrations.py` / `postgres_cli.py`** — 결과 zip 파일 저장소와 PostgreSQL 이력(`review_runs`·`review_results`·`review_inputs`·`review_files`). `postgres_cli import 결과`로 과거 결과 폴더를 이력으로 이관. DSN·비밀번호는 `.env`.
 - **`ncs_web/server.py`** — 앱 조립: 미들웨어, 오류 응답, 정적 `--dist`로 프런트 제공. 경로는 `routes/`의 모듈이 `register(app, services)`로 붙인다.
-- **`ncs_web/routes/`** — `review.py`(`POST /api/review`, `/api/uploads`, `GET /api/health`) · `history.py`(`/api/reviews`, `/api/groups`) · `export.py`(확인서·수정 메모 원고) · `plan.py`(개발계획서 작성) · `upscale.py`(그림 업스케일). 요청·응답 모델은 `schemas.py`, 함께 쓰는 도우미는 `common.py`.
-- **`frontend/src/`** — `main.jsx`(경로 등록), `pages/`(페이지: `ReviewPage` 원고 검수 · `PlanDraftPage` 개발계획서 작성 · `UpscalePage` 업스케일링 · `PrivacyPage`), `components/`(표·셀렉트·모달), `lib/checks.js`(`CHECKS`·`FILE_HINTS` — 서버 엔진 목록과 테스트가 일치를 검사), `lib/api.js`.
+- **`ncs_volume`**(검수 엔진이 아닌 기능 패키지, REQ-02-013) — `layout.py`가 한글이 저장한 줄 배치(hwp `PARA_LINE_SEG`, hwpx `linesegarray`)로 최상위 문단을 쪽·행에 놓고(세로 위치가 줄면 새 쪽, 큰 표는 다음 쪽으로 넘침), 그림 자리는 시각 자료로 뺀다. `segments.py`가 제목 글(표 배너는 앞 두 칸, 꼬리 구성의 글 없는 배너 그림은 차례 순서)로 구성을 나누고, `diff.py`가 기존 원고와 문단·표 행 단위로 짝지어 1자 이상 바뀐 행을 찾고, `pipeline.py`가 ½쪽 규칙으로 합산한다. 설정값과 근거는 `config.py`. 배치 정보가 없으면 글자 폭 추정(권고 범위는 판단불가).
+- **`ncs_web/routes/`** — `review.py`(`POST /api/review`, `/api/uploads`, `GET /api/health`) · `history.py`(`/api/reviews`, `/api/groups`) · `export.py`(확인서·수정 메모 원고) · `plan.py`(개발계획서 작성) · `upscale.py`(그림 업스케일) · `volume.py`(원고 분량 산정 `POST /api/volume`). 요청·응답 모델은 `schemas.py`, 함께 쓰는 도우미는 `common.py`.
+- **`frontend/src/`** — `main.jsx`(경로 등록), `pages/`(페이지: `ReviewPage` 원고 검수 · `PlanDraftPage` 개발계획서 작성 · `UpscalePage` 업스케일링 · `VolumePage` 원고 분량 · `PrivacyPage`), `components/`(표·셀렉트·모달), `lib/checks.js`(`CHECKS`·`FILE_HINTS` — 서버 엔진 목록과 테스트가 일치를 검사), `lib/api.js`.
 
 ---
 
