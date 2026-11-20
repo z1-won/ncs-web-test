@@ -50,7 +50,7 @@ npm run dev
 
 ## 원고 분량 페이지
 
-메인 메뉴의 **원고 분량**(`/volume`)은 집필료 산정용 분량 산정 페이지입니다(REQ-02-013). 최종 원고(필수)와 기존 원고(선택)를 올리고, 수작업으로 센 쪽수(선택)와 부록 포함 여부(기본 포함 — 계약서 제13조 4항 ①)를 고릅니다. 서버는 `POST /api/volume`(multipart: `manuscript`, `previous`, `manual_pages`, `include_appendix`)으로 `src/ncs_volume`의 산정표 JSON을 돌려주며 파일은 저장하지 않습니다. 화면은 `frontend/src/pages/VolumePage.jsx`입니다.
+메인 메뉴의 **원고 분량**(`/volume`)은 집필료 산정용 분량 산정 페이지입니다(REQ-02-013). 최종 원고(필수)와 기존 원고·출력본 PDF(선택)를 올리고, 수작업으로 센 쪽수·원고료 단가·계약 분량(선택)과 부록 포함 여부(기본 포함 — 계약서 제13조 4항 ①)를 고릅니다. 서버는 `POST /api/volume`(multipart: `manuscript`, `previous`, `print_copy`, `manual_pages`, `unit_price`, `contract_pages`, `include_appendix`)으로 `src/ncs_volume`의 산정표 JSON을 돌려주며 파일은 저장하지 않습니다. 결과의 `출력본`(PDF 측정: 전체 쪽 수, 구성별 쪽 범위, 쪽별 채움, 측정/계산 구분, 한글 계산과의 차이)·`채택 분량`(산정에 쓴 매수와 근거)·`집필료`(산식, 단가와 근거, 계약 분량 인정, 개선 기준, 근거 조항)는 새 키이고 기존 키는 그대로입니다. PDF 칸에 PDF가 아닌 파일, 0 이하 단가·계약 분량은 400입니다. pypdf가 없거나 다른 원고의 출력본이면 400이 아니라 `출력본.사유`에 판단불가로 적고 한글 값으로 산정합니다. 화면은 `frontend/src/pages/VolumePage.jsx`입니다.
 ## 의견 반영 검토 페이지
 
 메인 메뉴의 **의견 반영 검토**(`/opinion`)는 검토의견서 반영 여부 검토 페이지입니다(REQ-02-003). 1차·2차 검토의견서(하나 이상), 최종 원고(필수), 출력본 PDF·반영 전 원고(선택)를 올립니다. 서버는 `POST /api/opinion`(multipart: `opinions` 여러 개, 같은 순서의 `rounds`, `manuscript`, `print_pdf`, `previous`)으로 `src/ncs_opinion`의 판정 후보표 JSON을 돌려주며 파일은 저장하지 않습니다. 판정은 LLM이 하며 서버에 LLM 설정·반출 승인(`LLM_ALLOW_UPLOAD=1`)이 있으면 자동으로 부릅니다(선택 칸 없음). 없으면 모든 의견이 '확인 필요'와 이유로 오고, 화면은 결과 머리의 배지(`#opinion-llm-state`)에 'LLM: 사용(모델) · 호출 N번' 또는 'LLM 미설정 — 이유'를 보여 줍니다. 화면은 `frontend/src/pages/OpinionPage.jsx`입니다.

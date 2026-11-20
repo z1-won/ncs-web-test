@@ -185,6 +185,24 @@ class HwpxLayout(unittest.TestCase):
         self.assertNotIn("평가", by)
 
 
+class UnderstandingSection(unittest.TestCase):
+    """'NCS학습모듈의 이해'의 양식 설명('1. NCS학습모듈의 위치', 위치 예시, '2. NCS학습모듈의 개요')을 구성 시작으로 보지 않는다."""
+
+    @staticmethod
+    def block(head, page_top=False):
+        from ncs_volume.layout import Block
+        return Block("text", head, head, [], 0.0, 0, page_top)
+
+    def test_examples_inside_understanding_are_not_headings(self):
+        blocks = [self.block("표지"), self.block("NCS학습모듈의 이해", True), self.block("1. NCS학습모듈의 위치"),
+                  self.block("[NCS-학습모듈의 위치]"), self.block("2. NCS학습모듈의 개요"), self.block("학습2 평 가"),
+                  self.block("[NCS-학습모듈의 위치]", True), self.block("차 례", True)]
+        names, found = assign(blocks)
+        self.assertEqual(names[2:6], ["NCS학습모듈의 이해"] * 4)
+        self.assertEqual(names[6:], ["NCS-학습모듈의 위치", "차례"])
+        self.assertEqual(found, ["NCS학습모듈의 이해", "NCS-학습모듈의 위치", "차례"])
+
+
 class HwpRecords(unittest.TestCase):
     """hwp 본문 레코드 → 최상위 문단. 레코드 머리(태그 10비트·수준 10비트·크기 12비트)를 직접 만든다."""
 

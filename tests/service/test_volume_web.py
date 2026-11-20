@@ -1,4 +1,4 @@
-"""원고 분량 산정 웹 경로(/api/volume) — 최종 원고 하나, 기존 원고 비교, 수작업 대조, 부록 제외, 잘못된 입력."""
+"""원고 분량 산정 웹 경로(/api/volume) — 최종 원고 하나, 기존 원고 비교, 수작업 대조, 부록 제외, 출력본 PDF, 집필료 단가·계약 분량, 잘못된 입력."""
 
 import tempfile
 import unittest
@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures"
 OK = FIXTURES / "원고_ok_LM1203020201_24v3.hwpx"
 NAME = FIXTURES / "원고_name_LM1203020201_24v3.hwpx"
+PRINT = FIXTURES / "출력본_ok_LM1203020201_24v3.pdf"
 
 
 class VolumeWebTests(unittest.TestCase):
@@ -52,6 +53,32 @@ class VolumeWebTests(unittest.TestCase):
     def test_exclude_appendix_flag(self):
         body = self.post({"include_appendix": "false"}, manuscript=OK).json()
         self.assertIn("제외", body["가정"]["부록"])
+
+    def test_print_copy_unit_price_and_contract_pages(self):
+        response = self.post({"unit_price": "46200", "contract_pages": "1"}, manuscript=OK, print_copy=PRINT)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertTrue(body["출력본"]["사용"], body["출력본"]["사유"])
+        self.assertEqual(body["출력본"]["파일"], PRINT.name)
+        self.assertEqual(body["출력본"]["전체 쪽 수"], 45)
+        self.assertIn("출력본", body["채택 분량"]["근거"])
+        fee = body["집필료"]
+        self.assertEqual((fee["단가"], fee["계약 분량"], fee["인정 분량"]), (46200, 1, 1))
+        self.assertEqual(fee["집필료"], 46200)
+
+    def test_fee_defaults_without_inputs(self):
+        body = self.post(manuscript=OK).json()
+        self.assertIsNone(body["출력본"])
+        self.assertEqual(body["집필료"]["단가"], 50000)
+        self.assertFalse(body["집필료"]["단가 입력"])
+
+    def test_bad_print_copy_and_fee_inputs_are_400(self):
+        response = self.post(manuscript=OK, print_copy=NAME)      # PDF 칸에 hwpx
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("PDF", response.json()["error"])
+        self.assertEqual(self.post({"unit_price": "0"}, manuscript=OK).status_code, 400)
+        self.assertEqual(self.post({"unit_price": "만원"}, manuscript=OK).status_code, 400)
+        self.assertEqual(self.post({"contract_pages": "-3"}, manuscript=OK).status_code, 400)
 
     def test_bad_inputs_are_400(self):
         with tempfile.TemporaryDirectory() as folder:

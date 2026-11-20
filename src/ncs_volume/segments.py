@@ -39,6 +39,12 @@ def heading(block: Block, state: str) -> str | None:
         return "NCS학습모듈의 이해"
     if "개발이력" in key[:12] or (block.kind == "table" and "ISBN" in block.full):
         return "개발진(개발 이력·판권)"
+    if state == "NCS학습모듈의 이해":
+        # 'NCS학습모듈의 이해'는 '1. NCS학습모듈의 위치', '[NCS-학습모듈의 위치]' 예시, '학습2 평 가' 같은 양식 설명을 담는다.
+        # 그 뒤에는 위치(새 쪽 맨 위) 또는 차례가 오므로 그 둘만 다음 구성의 시작으로 본다.
+        if "학습모듈의위치" in key and len(key) <= 20 and block.page_top:
+            return "NCS-학습모듈의 위치"
+        return "차례" if key == "차례" else None
     if "학습모듈의위치" in key and len(key) <= 20:
         return "NCS-학습모듈의 위치"
     if key == "차례":

@@ -2,6 +2,7 @@
 
 검수 엔진이 아닌 기능 패키지다(ncs_plan·ncs_upscale과 같은 층, ncs_core만 import). 판정(O/X)을 내지 않고 산정표를 낸다.
 산정 규칙과 설정값의 근거는 config.py, 줄 배치 읽기는 layout.py, 구성 나누기는 segments.py, 변경 행은 diff.py, 합산은 pipeline.py.
+출력본 PDF로 쪽 재기는 printed.py, 계약서 기준 집필료는 fee.py.
 """
 
 from .config import DEFAULT_CONFIG, VolumeConfig

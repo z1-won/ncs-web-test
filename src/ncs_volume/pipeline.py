@@ -5,26 +5,27 @@
 - 쪽: 줄 배치를 읽은 원고는 물리 쪽마다 산정 대상이 차지한 높이가 본문 높이의 ½ 이상이면 1쪽, 아니면 그 쪽의 행을 '행'으로 남긴다.
   기입 분량(매) = 쪽 + (남은 행 ÷ 쪽당 행 수, ½ 이상 올림). 배치 정보가 없으면 전체 행 ÷ 쪽당 행 수(½ 이상 올림)로 '추정'한다.
 - 변경 분량: 변경된 행만 같은 방식으로 센다.
+- 출력본 PDF를 함께 주면 전체 쪽 수·구성별 쪽 범위·쪽별 채움 높이를 PDF에서 재고(printed.py) 그 기입 분량을 산정에 쓴다.
+  한글 줄 배치 계산값은 '합계'에 그대로 두고 나란히 보여 준다. 다른 원고의 PDF면 판단불가로 알리고 한글 값을 쓴다.
+- 집필료: 채택한 기입 분량 × 단가(fee.py, 계약서 F07·정산지침 F16 근거).
 판정 원칙: 확인하지 못한 것은 '판단불가'(추정치로는 권고 범위를 판정하지 않는다, 구성을 찾지 못하면 알린다).
 """
 
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 from pathlib import Path
 
-from .config import DEFAULT_CONFIG, MM_PER_UNIT, SEGMENTS, VolumeConfig
+from .config import DEFAULT_CONFIG, MM_PER_UNIT, SEGMENTS, VolumeConfig, round_half_up
+from ncs_core.pdf import PdfUnavailable
+
 from .diff import changed_lines
+from .fee import compute_fee
 from .layout import Layout, Line, Unit, read_layout
+from .printed import measure_printed
 from .segments import assign
 
 UNDECIDED = "판단불가"
-
-
-def round_half_up(value: float) -> int:
-    """½ 이상이면 올림(계약서 '½쪽 이상인 경우 1쪽')."""
-    return math.floor(value + 0.5)
 
 
 def tally(lines: list[Line], layout: Layout, config: VolumeConfig) -> dict:
@@ -61,9 +62,9 @@ def _method(layout: Layout, config: VolumeConfig) -> str:
     return f"추정(줄 배치 정보가 없어 글자 폭으로 줄 수를 셈 — 한 줄 약 {config.chars_per_line:g}자)"
 
 
-def _range(value: int, layout: Layout, config: VolumeConfig) -> dict:
+def _range(value: int, measured: bool, config: VolumeConfig) -> dict:
     low, high = config.recommended
-    if not layout.measured:
+    if not measured:
         status = UNDECIDED
         note = f"추정치 {value}쪽이라 권고 범위({low}~{high}쪽)를 판정하지 않음 — 한글에서 저장한 원고로 다시 산정"
     elif value < low:
@@ -76,8 +77,10 @@ def _range(value: int, layout: Layout, config: VolumeConfig) -> dict:
 
 
 def measure(path: Path | str, *, previous: Path | str | None = None, manual_pages: float | None = None,
-            config: VolumeConfig = DEFAULT_CONFIG) -> dict:
-    """원고 분량 산정표. previous를 주면 기존 원고 대비 변경 분량, manual_pages를 주면 수작업 산정 대비 오차율을 함께."""
+            config: VolumeConfig = DEFAULT_CONFIG, print_pdf: Path | str | None = None,
+            fee_unit: int | None = None, contract_pages: int | None = None) -> dict:
+    """원고 분량 산정표. previous를 주면 기존 원고 대비 변경 분량, manual_pages를 주면 수작업 산정 대비 오차율,
+    print_pdf(출력본)를 주면 쪽을 PDF에서 잰 값, fee_unit(원/쪽)·contract_pages(계약 분량 매)로 집필료를 함께 낸다."""
     layout = read_layout(path, config)
     names, found = assign(layout.blocks)
     body_mm = round(config.body_height * MM_PER_UNIT, 1)
@@ -122,14 +125,40 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
         "물리 쪽 수": layout.pages if layout.measured else None,
         "구성": rows,
         "합계": total,
-        "권고 분량": _range(total["기입 분량"], layout, config),
-        "변경": None, "수작업 대조": None, "알림": notes,
+        "권고 분량": None, "변경": None, "수작업 대조": None, "알림": notes,
+        "출력본": None, "채택 분량": None, "집필료": None,
     }
+    if print_pdf is not None:
+        result["출력본"] = _printed(print_pdf, layout, rows, total, config)
+        if not result["출력본"]["사용"]:
+            notes.append(result["출력본"]["사유"] + " — 한글 줄 배치 값으로 산정합니다.")
+    use_pdf = bool(result["출력본"] and result["출력본"]["사용"])
+    if use_pdf:
+        adopted, basis = result["출력본"]["합계"]["기입 분량"], "출력본 PDF 측정(쪽 수·쪽 범위·쪽별 채움) + 남은 행 계산"
+    elif layout.measured:
+        adopted, basis = total["기입 분량"], "한글 줄 배치 계산"
+    else:
+        adopted, basis = total["기입 분량"], "추정(글자 폭으로 줄 수를 셈)"
+    result["채택 분량"] = {"기입 분량": adopted, "근거": basis, "한글 계산": total["기입 분량"],
+                         "출력본 측정": result["출력본"]["합계"]["기입 분량"] if use_pdf else None}
+    result["권고 분량"] = _range(adopted, use_pdf or layout.measured, config)
     if previous is not None:
         result["변경"] = compare(layout, names, units, previous, config)
     if manual_pages is not None:
-        result["수작업 대조"] = manual_check(total["기입 분량"], manual_pages, config)
+        result["수작업 대조"] = manual_check(adopted, manual_pages, config)
+    changed = result["변경"]["변경 분량"]["기입 분량"] if result["변경"] else None
+    result["집필료"] = compute_fee(adopted, basis, config=config, unit=fee_unit, contract_pages=contract_pages,
+                                changed_pages=changed, estimated=not (use_pdf or layout.measured))
     return result
+
+
+def _printed(print_pdf: Path | str, layout: Layout, rows: list[dict], total: dict, config: VolumeConfig) -> dict:
+    """출력본 산정. pypdf가 없으면 판단불가로 돌려준다(PDF가 아니거나 못 읽는 파일은 ValueError로 올린다)."""
+    try:
+        return measure_printed(print_pdf, layout, rows, total, config)
+    except PdfUnavailable as error:
+        return {"파일": Path(print_pdf).name, "사용": False, "사유": f"{UNDECIDED}: {error}", "측정 구분": [], "구성": [],
+                "합계": None, "쪽별": [], "알림": []}
 
 
 def compare(layout: Layout, names: list[str], units: list[tuple[str, Unit]], previous: Path | str, config: VolumeConfig) -> dict:

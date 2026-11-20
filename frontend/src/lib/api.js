@@ -131,12 +131,15 @@ export const api = {
     proposal: (token, moduleCode, filename, targetDpi) =>
       download(`/api/uploads/${token}/proposal`, multipart({ module_code: moduleCode || "", target_dpi: targetDpi ? String(targetDpi) : undefined }), filename),
   },
-  // 원고 분량 산정(REQ-02-013): 최종 원고(+ 기존 원고)의 구성별 행·쪽 산정표
-  volume: ({ file, previous, manualPages, includeAppendix = true, signal }) => {
+  // 원고 분량 산정(REQ-02-013): 최종 원고(+ 기존 원고, 출력본 PDF)의 구성별 행·쪽 산정표와 계약서 기준 집필료
+  volume: ({ file, previous, printCopy, manualPages, unitPrice, contractPages, includeAppendix = true, signal }) => {
     const form = new FormData();
     form.append("manuscript", file, file.name);
     if (previous) form.append("previous", previous, previous.name);
+    if (printCopy) form.append("print_copy", printCopy, printCopy.name);
     if (manualPages) form.append("manual_pages", String(manualPages));
+    if (unitPrice) form.append("unit_price", String(unitPrice));
+    if (contractPages) form.append("contract_pages", String(contractPages));
     form.append("include_appendix", includeAppendix ? "true" : "false");
     return request("/api/volume", { method: "POST", body: form, signal });
   },
