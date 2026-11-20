@@ -6,7 +6,7 @@
                             "reason": 한 문장, "suggestions": [정정 후보, 순위 순, 최대 5개]}]}
 검증(규칙은 출력 검증에만 쓴다)
 - 없는 문장 번호·같은 번호의 두 번째 지적은 버린다. 사유 유형이 목록 밖이면 '기타 표현'.
-- '종결형 위반'이라 했는데 원문이 규정 꼴에 맞으면(kinds.check) 그 지적을 버린다(버린 지적으로 남김).
+- '종결형 위반'이라 했는데 원문이 규정 꼴에 맞으면(kinds.check) 사유 유형을 '기타 표현'으로 바꾼다(바꾼 지적으로 남김).
 - 후보마다 validate: 규정 꼴 재검사, 원문에 없던 수치·영문 낱말·상호 금지(내용 생성 금지), 원문과 글자 유사도 하한.
   통과한 것만 받은 순서대로 순위를 다시 매기고(최대 5개), 버린 후보와 이유는 '버린 AI 후보'로 남긴다.
 """
@@ -26,7 +26,8 @@ SYSTEM = """당신은 NCS 학습모듈 원고의 문장 검수 보조자입니�
 고쳐야 할 문장만 찾고, 문장마다 고친 문장 후보를 좋은 순서로 최대 5개 냅니다.
 고칠 것(kind):
 - 종결형 위반: 문장 끝이 규정 꼴과 다름(예: 규정 꼴이 '~한다.'인데 "설명함.", "설명할 수 있다.", 마침표 없음, 끝말 오타 "설명다.")
-- 주어 군더더기: 규정상 없어야 할 주어가 있음(예: 학습 목표의 "학습자는 …", 교수 방법의 "교수자는 …")
+- 주어 군더더기: 문장 맨 앞에 문장 전체의 주어가 있음(예: 학습 목표의 "학습자는 …", 교수 방법의 "교수자는 …").
+  "학습자가 …하도록 지도한다."처럼 안긴 문장의 주어는 군더더기가 아닙니다.
 - 어색한 낱말: 문장의 다른 부분과 어울리지 않는 낱말, 끝말만 규정 꼴로 맞춘 엉뚱한 서술어, 글자가 빠지거나 잘못 들어간 낱말
   (예: "절차를 단계별로 저격한다.", "분석 방법을 지한다.", "개념을 요리한다.")
 - 중복 표현: 같은 뜻의 말을 겹쳐 씀(예: "미리 사전에 준비한다.", "예측되어지도록")
@@ -37,8 +38,11 @@ SYSTEM = """당신은 NCS 학습모듈 원고의 문장 검수 보조자입니�
 - 문장이 길거나 전문 용어가 많다는 이유만으로 고르지 않습니다. 띄어쓰기만 다른 것도 고르지 않습니다.
 - 확신할 수 없으면 넣지 않습니다.
 고친 문장(suggestions) 규칙:
+- 후보마다 원문 전체를 다시 쓴 완전한 문장입니다. 바뀐 부분만 쓰지 않습니다(예: "지도한다."만 쓰면 안 됨).
+  원문의 나머지 글자는 한 글자도 바꾸지 않고 그대로 둡니다.
 - 틀린 부분만 고치고 규정 꼴로 끝냅니다. 직무 내용·용어·수치·영문·고유명사를 새로 넣거나 빼지 않고, 뜻을 바꾸지 않습니다.
-- 어색한 낱말은 문맥에 맞는 낱말로 바꾼 후보를 여러 개(가능성이 높은 순) 냅니다.
+- 후보는 검토자가 고를 수 있게 서로 다른 고친 방법으로 3~5개를 좋은 순서로 냅니다(다른 서술어·낱말, 다른 조사·어순,
+  규정 꼴 안에서 다른 끝말 등). 문맥상 맞는 고침이 하나뿐일 때만 하나를 냅니다.
 - 문장 앞의 번호·글머리 기호는 넣지 않습니다. 같은 후보를 두 번 넣지 않습니다.
 반드시 JSON 객체 하나만 출력합니다:
 {"findings": [{"line": <문장 번호(정수)>, "kind": "종결형 위반|주어 군더더기|어색한 낱말|중복 표현|문장부호|기타 표현",
@@ -109,7 +113,7 @@ def screen(kind: str, body: str, finding: dict, model: str, *, extra: frozenset[
 
 def ask_lines(kind: str, bodies: list[str], *, extra: frozenset[str] = frozenset(), asker=None,
               config: SuggestConfig = DEFAULT_CONFIG) -> tuple[dict[int, dict], list[dict], str]:
-    """같은 종류 문장들 → ({문장 순번(0부터): {'kind','reason','후보','버린'}}, 버린 지적 목록, 모델 이름).
+    """같은 종류 문장들 → ({문장 순번(0부터): {'kind','reason','후보','버린'}}, 사유를 바꾼 지적 목록, 모델 이름).
 
     asker: 테스트에서 LLM 대신 넣는 함수((종류, 문장 목록) → {'data': {'findings': […]}, 'model': …}). 부를 수 없으면 LlmError.
     """
@@ -120,7 +124,7 @@ def ask_lines(kind: str, bodies: list[str], *, extra: frozenset[str] = frozenset
     model = str(reply.get("model") or "")
     items = (reply.get("data") or {}).get("findings")
     out: dict[int, dict] = {}
-    rejected: list[dict] = []
+    relabeled: list[dict] = []
     for item in items if isinstance(items, list) else []:
         if not isinstance(item, dict):
             continue
@@ -132,10 +136,12 @@ def ask_lines(kind: str, bodies: list[str], *, extra: frozenset[str] = frozenset
             continue
         reason_kind = str(item.get("kind") or "").strip()
         reason_kind = reason_kind if reason_kind in REASONS else OTHER_REASON
-        finding = {"kind": reason_kind, "reason": str(item.get("reason") or "").strip(), "suggestions": _suggestions(item.get("suggestions"))}
+        reason = str(item.get("reason") or "").strip()
         body = bodies[no - 1]
         if reason_kind == ENDING and check(kind, body, extra)[0] is True:
-            rejected.append({"문장": body, "사유": reason_kind, "이유": "규정 꼴에 맞는 문장을 종결형 위반으로 봄 — 지적을 버림"})
-            continue
+            note = "끝말은 규정 꼴에 맞음 — AI의 '종결형 위반'을 '기타 표현'으로 바꿈"
+            relabeled.append({"문장": body, "이유": note})
+            reason_kind, reason = OTHER_REASON, f"{reason} ({note})".strip()
+        finding = {"kind": reason_kind, "reason": reason, "suggestions": _suggestions(item.get("suggestions"))}
         out[no - 1] = {"kind": reason_kind, "reason": finding["reason"], **screen(kind, body, finding, model, extra=extra, config=config)}
-    return out, rejected, model
+    return out, relabeled, model

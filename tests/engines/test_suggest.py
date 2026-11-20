@@ -1,5 +1,5 @@
 """원고 문장 추천(ncs_suggest, REQ-02-004): 종류별 규정 꼴(출력 검증용), 참고 예문, AI 판정·후보 검증(가짜 응답 주입 — 순위 재부여·
-버림·종결형 오지적 버림·번호 검증), AI 미설정(판단불가), 원고 전체(합성 hwpx), CLI.
+버림·종결형 오지적의 사유 바꿈·번호 검증), AI 미설정(판단불가), 원고 전체(합성 hwpx), CLI.
 
 실제 원고(samples/, git 제외)를 실제 LLM으로 돌린 결과는 README의 문장 추천 단락에 적는다. 테스트는 실제 호출을 하지 않는다.
 """
@@ -131,11 +131,12 @@ class AiTests(unittest.TestCase):
         self.assertTrue(result["추천 없음"].startswith("추천 없음(사람이 고쳐야 함)"))
         self.assertIn("수치", result["버린 AI 후보"][0]["이유"])
 
-    def test_ending_claim_on_compliant_sentence_is_dropped(self):
-        asker, _ = fake([finding(1, suggestions=["절차를 단계별로 안내한다."])])
-        result = suggest_sentence("절차를 단계별로 설명한다.", "교수 방법", asker=asker)
-        self.assertEqual((result["상태"], result["후보"]), (NO_FINDING, []))
-        self.assertIn("종결형 위반으로 봄", result["사유"][0])
+    def test_ending_claim_on_compliant_sentence_is_relabeled(self):
+        asker, _ = fake([finding(1, reason="'명한다'는 끝말 오류", suggestions=["절차를 단계별로 설명한다."])])
+        result = suggest_sentence("절차를 단계별로 명한다.", "교수 방법", asker=asker)
+        self.assertEqual(result["상태"], "기타 표현")                            # 끝말은 '~한다.'로 규정 꼴에 맞다
+        self.assertIn("끝말은 규정 꼴에 맞음", result["사유"][0])
+        self.assertEqual([c["문장"] for c in result["후보"]], ["절차를 단계별로 설명한다."])
 
     def test_numbers_and_unknown_kind_are_checked(self):
         flagged, rejected, model = ask_lines("교수 방법", ["절차를 설명함.", "사례를 든다."], asker=fake([

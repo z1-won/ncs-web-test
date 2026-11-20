@@ -27,7 +27,7 @@ ASSUMPTIONS = {
     "출처 표시": "후보는 모두 'AI 생성'입니다(AI 문장은 집필자 서약서 고지 대상일 수 있음). 참고 예문은 같은 원고에서 AI가 지적하지 않은 같은 종류 문장입니다.",
     "검사 범위": "학습모듈의 목표·학습 목표 · 차례 학습명·학습 내용명 · 수행 내용 제목·수행 순서 네모 번호 줄 · 교수 방법·학습 방법 · 평가 항목",
     "검증": "AI 후보는 규정 꼴(행동명사 목록 + '~화' + 같은 원고에서 'W한다'로 쓰인 낱말)·원문에 없던 수치·영문·상호·원문 유사도로 다시 걸러 "
-            "통과한 것만 후보로 씁니다. 규정 꼴에 맞는 문장을 '종결형 위반'이라 한 지적은 버립니다.",
+            "통과한 것만 후보로 씁니다. 규정 꼴에 맞는 문장을 '종결형 위반'이라 한 지적은 사유를 '기타 표현'으로 바꿉니다.",
 }
 
 
@@ -59,7 +59,7 @@ def ask_all(sentences: list[Sentence], *, extra: frozenset[str] = frozenset(), a
     """
     cards: list[dict | None] = [None] * len(sentences)
     asked = [False] * len(sentences)
-    stats = {"호출": 0, "물은 문장 수": 0, "실패": [], "모델": "", "버린 지적": []}
+    stats = {"호출": 0, "물은 문장 수": 0, "실패": [], "모델": "", "사유를 바꾼 지적": []}
     groups: dict[str, list[int]] = {}
     for at, sentence in enumerate(sentences):
         groups.setdefault(sentence.kind, []).append(at)
@@ -78,7 +78,7 @@ def ask_all(sentences: list[Sentence], *, extra: frozenset[str] = frozenset(), a
             stats["호출"] += 1
             stats["물은 문장 수"] += len(chunk)
             stats["모델"] = model
-            stats["버린 지적"] += rejected
+            stats["사유를 바꾼 지적"] += rejected
             for at in chunk:
                 asked[at] = True
             for order, info in flagged.items():
@@ -108,8 +108,6 @@ def suggest_sentence(text: str, kind: str, *, asker=None, config: SuggestConfig 
         cards, _, stats = ask_all([sentence], asker=asker, config=config)
         found, state = cards[0], _ai_state(state, stats)
         status, reasons = (UNDECIDED, [f"AI 호출 실패: {stats['실패'][0]}"]) if stats["실패"] else (NO_FINDING, [])
-        if found is None and stats["버린 지적"]:
-            reasons = [stats["버린 지적"][0]["이유"]]
     if found is None:
         found = {"구성": "직접 입력", "종류": kind, "자리": "직접 입력", "원문": text.strip(), "본문": body, "앞 번호": prefix,
                  "상태": status, "사유": reasons, "규정 꼴": KINDS[kind], "후보": [], "추천 없음": None, "참고 예문": [],
@@ -125,13 +123,13 @@ def suggest_manuscript(path: Path | str, *, asker=None, config: SuggestConfig = 
     sentences = collect(document)
     extra = verbs_in(document)
     on, state = llm_ready(asker)
-    llm = {"상태": state, "물은 문장 수": 0, "호출": 0, "실패": 0, "버린 지적": []}
+    llm = {"상태": state, "물은 문장 수": 0, "호출": 0, "실패": 0, "사유를 바꾼 지적": []}
     cards: list[dict | None] = [None] * len(sentences)
     asked = [False] * len(sentences)
     if on and sentences:
         cards, asked, stats = ask_all(sentences, extra=extra, asker=asker, config=config)
         llm.update({"상태": _ai_state(state, stats), "물은 문장 수": stats["물은 문장 수"], "호출": stats["호출"],
-                    "실패": len(stats["실패"]), "버린 지적": stats["버린 지적"]})
+                    "실패": len(stats["실패"]), "사유를 바꾼 지적": stats["사유를 바꾼 지적"]})
     pools: dict[str, list[tuple[str, str]]] = {}
     for sentence, found, was_asked in zip(sentences, cards, asked):
         if was_asked and found is None:      # AI가 지적하지 않은 같은 종류 문장 — 참고 예문 후보
