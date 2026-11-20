@@ -39,7 +39,7 @@ OTHER = "기타"
 SUMMARY = "종합 의견"
 PLAN = "개발계획서"
 
-LLM_TASK = "opinion_reflection"   # ncs_core.llm.ALLOWED_TASKS에 아직 없음 — 추가되기 전에는 LLM 판정이 '판단불가'로 남는다
+LLM_TASK = "opinion_reflection"   # ncs_core.llm.ALLOWED_TASKS에 등록된 작업 이름
 
 
 @dataclass(frozen=True)

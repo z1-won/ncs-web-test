@@ -48,7 +48,7 @@ def _llm_status(asker) -> tuple[bool, str]:
     from ncs_core.llm import settings, task_allowed
 
     if not task_allowed(LLM_TASK):
-        return False, f"LLM 미사용 — '{LLM_TASK}'가 ncs_core.llm.ALLOWED_TASKS에 없음(팀장 승인 후 추가)"
+        return False, f"LLM 미사용 — '{LLM_TASK}' 작업이 허용 목록(LLM_ALLOWED_TASKS)에서 빠져 있음"
     cfg = settings()
     if not cfg.ready:
         return False, f"LLM 미사용 — {cfg.why_not}"

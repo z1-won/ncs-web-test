@@ -35,7 +35,7 @@ NO_SUGGESTION = "추천 없음(사람이 고쳐야 함)"
 
 AI_STATUS = "표현 확인(AI)"       # AI가 낱말이 어색하다고 본 문장의 카드 상태
 
-# ncs_core.llm.ALLOWED_TASKS에 아직 없는 작업 이름 — 목록에 추가되기 전에는 AI를 부르지 않고 이유만 보여 준다(코드 리뷰로 추가)
+# ncs_core.llm.ALLOWED_TASKS에 등록된 작업 이름
 LLM_TASK = "sentence_suggest"      # 규칙에 걸린 문장의 정정 후보 — 걸린 문장 줄만 보낸다
 WORDING_TASK = "sentence_wording"  # 규정 꼴은 맞지만 낱말이 어색한 문장 — 같은 종류의 문장 줄만 보낸다
 
