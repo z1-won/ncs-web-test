@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import OpinionPage from "./pages/OpinionPage.jsx";
 import PlanDraftPage from "./pages/PlanDraftPage.jsx";
 import PrivacyPage from "./pages/PrivacyPage.jsx";
 import ReviewPage from "./pages/ReviewPage.jsx";
@@ -20,6 +21,7 @@ createRoot(document.getElementById("root")).render(
         <Route path="/plan" element={<PlanDraftPage />} />
         <Route path="/upscale" element={<UpscalePage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/opinion" element={<OpinionPage />} />
         <Route path="*" element={<ReviewPage />} />
       </Routes>
     </BrowserRouter>

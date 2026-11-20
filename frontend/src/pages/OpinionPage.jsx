@@ -1,0 +1,191 @@
+// 검토의견서 반영 여부 검토(REQ-02-003) — 1·2차 검토의견서와 최종 원고를 올리면 의견마다 반영 후보·미반영 후보·확인 필요를 근거 문장과 함께 보여 준다.
+// 판정은 모두 후보다(서버 ncs_opinion). 화면에서 사람이 의견마다 반영/미반영을 정하면 자동 후보와의 오차율(기준 6% 이내)을 바로 센다.
+import React, { useMemo, useRef, useState } from "react";
+
+import { api } from "../lib/api.js";
+import { Spinner } from "../components/Badge.jsx";
+import { FileSlot } from "../components/FileSlot.jsx";
+import { Footer, Header, TopButton } from "../components/Layout.jsx";
+import { PageAlert } from "../components/PageAlert.jsx";
+import { RawJson } from "../components/RawJson.jsx";
+import { ResultHead } from "../components/ResultHead.jsx";
+import { usePageTitle } from "../lib/hooks.js";
+
+// 판정 후보 → KRDS 배지 색
+const VERDICT_BADGE = { "반영 후보": "bg-light-success", "미반영 후보": "bg-light-danger", "확인 필요": "bg-light-warning", "조치 불필요": "bg-light-gray" };
+const FILTERS = ["전체", "반영 후보", "미반영 후보", "확인 필요", "조치 불필요"];
+
+export default function OpinionPage() {
+  usePageTitle("검토의견서 반영 검토");
+  const [first, setFirst] = useState(null);
+  const [second, setSecond] = useState(null);
+  const [file, setFile] = useState(null);
+  const [printCopy, setPrintCopy] = useState(null);
+  const [previous, setPrevious] = useState(null);
+  const [useLlm, setUseLlm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);
+  const aborter = useRef(null);
+  const ready = file && (first || second);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!ready) return;
+    aborter.current = new AbortController();
+    setBusy(true);
+    setError(null);
+    const opinions = [first && { file: first, round: "1차" }, second && { file: second, round: "2차" }].filter(Boolean);
+    const { ok, data, error: message, aborted } = await api.opinion({ file, opinions, printCopy, previous, useLlm, signal: aborter.current.signal });
+    setBusy(false);
+    if (aborted) return;
+    if (!ok) { setError(message); setResult(null); return; }
+    setResult(data);
+  }
+
+  return (
+    <>
+    <Header anchors={[]} hasHistory={false} hasResult={false} />
+    <main id="container" className="inner page opinion-page">
+      <h1 className="page-title">검토의견서 반영 검토</h1>
+      <p className="page-desc">
+        1·2차 검토의견서(PDF·hwp)와 의견을 반영한 최종 원고(hwp/hwpx)를 올리면, 의견이 가리키는 표·그림·학습 구성에서 핵심어를 찾아
+        의견마다 <strong>반영 후보 · 미반영 후보 · 확인 필요</strong>를 근거 문장과 함께 보여 줍니다. 용어 변경 의견은 바로 반영으로 보지 않고
+        집필자에게 확인할 항목으로 따로 표시합니다. 판정은 모두 후보이며 최종 판단은 사람이 합니다. 올린 파일은 검토 뒤 바로 지웁니다.
+      </p>
+
+      <form className="fieldset review-form" onSubmit={submit}>
+        <FileSlot id="opinion-first" label="1차 검토의견서" accept=".pdf,.hwp,.hwpx" file={first} onChange={setFirst} disabled={busy}
+                  hint="개발계획서 및 초고본 검토의견서(PDF·hwp·hwpx). 1차·2차 중 하나 이상 필요합니다." />
+        <FileSlot id="opinion-second" label="2차 검토의견서" accept=".pdf,.hwp,.hwpx" file={second} onChange={setSecond} disabled={busy}
+                  hint="완성본 검토의견서(PDF·hwp·hwpx)." />
+        <FileSlot id="opinion-final" label="최종 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
+                  hint="의견을 반영한 원고(hwp/hwpx)." />
+        <FileSlot id="opinion-print" label="출력본 PDF" accept=".pdf" file={printCopy} onChange={setPrintCopy} disabled={busy}
+                  hint="최종 원고의 PDF — 올리면 근거 문장이 실린 쪽을 함께 보여 줍니다." />
+        <FileSlot id="opinion-previous" label="반영 전 원고" accept=".hwp,.hwpx" file={previous} onChange={setPrevious} disabled={busy}
+                  hint="초고본·완성본 — 올리면 원래 있던 표현을 반영으로 잘못 보지 않게 걸러 냅니다." />
+        <div className="form-group">
+          <div className="form-tit"><span>LLM 판정</span></div>
+          <div className="form-conts">
+            <div className="krds-form-check">
+              <input type="checkbox" id="opinion-llm" checked={useLlm} disabled={busy} onChange={(e) => setUseLlm(e.target.checked)} />
+              <label htmlFor="opinion-llm">LLM으로 한 번 더 판정 (서버에 키·원고 반출 승인이 있을 때만 호출, 없으면 규칙 판정만)</label>
+            </div>
+          </div>
+        </div>
+        <div className="form-group form-actions">
+          <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
+          <div className="run-buttons">
+            <button className="krds-btn primary large" type="submit" disabled={busy || !ready}>{busy ? "검토 중…" : "반영 여부 검토"}</button>
+            {busy && <button className="krds-btn tertiary large" type="button" onClick={() => aborter.current?.abort()}>취소</button>}
+          </div>
+          <PageAlert kind="danger">{error}</PageAlert>
+        </div>
+      </form>
+
+      {busy && <ResultHead status={<Spinner label="의견서와 원고를 대조하는 중" />} />}
+      {result && !busy && <OpinionResult result={result} />}
+      <TopButton />
+    </main>
+    <Footer />
+    </>
+  );
+}
+
+// 사람 확정값과 자동 후보의 오차율 — 서버 ncs_opinion.error_rate와 같은 셈(확인 필요는 보류, 조치 불필요는 뺀다)
+function errorRate(rows, decisions) {
+  let judged = 0, wrong = 0, held = 0;
+  rows.forEach((row) => {
+    const truth = decisions[row.번호];
+    if (!truth || row.판정 === "조치 불필요") return;
+    if (row.판정 === "확인 필요") { held += 1; return; }
+    judged += 1;
+    if ((row.판정 === "반영 후보") !== (truth === "반영")) wrong += 1;
+  });
+  return { judged, wrong, held, rate: judged ? (wrong / judged) * 100 : null };
+}
+
+function OpinionResult({ result }) {
+  const [filter, setFilter] = useState("전체");
+  const [decisions, setDecisions] = useState({});
+  const summary = result.요약;
+  const rows = useMemo(() => result.의견.filter((row) => filter === "전체" || row.판정 === filter), [result, filter]);
+  const rate = errorRate(result.의견, decisions);
+  const decided = Object.values(decisions).filter(Boolean).length;
+  return (
+    <section className="opinion-result">
+      <ResultHead
+        status={<span className="krds-badge large bg-light-gray">의견 {summary["총 의견"]}개</span>}
+        meta={`${result.원고} · ${result.의견서.map((s) => `${s.차수 || "차수 모름"} ${s.파일}`).join(", ")}${result.출력본 ? ` · 출력본 ${result.출력본}` : ""}`}
+        badges={<span className="krds-badge bg-light-gray">LLM: {result.LLM}</span>}
+      />
+      <dl className="upscale-summary">
+        <div><dt>조치 요구 의견</dt><dd><strong>{summary["조치 요구"]}</strong>개</dd><dd className="meta">조치 불필요(적합 확인) {summary["조치 불필요"]}개 제외</dd></div>
+        <div><dt>반영 후보</dt><dd><strong>{summary["반영 후보"]}</strong>개</dd></div>
+        <div><dt>미반영 후보</dt><dd><strong>{summary["미반영 후보"]}</strong>개</dd></div>
+        <div><dt>확인 필요</dt><dd><strong>{summary["확인 필요"]}</strong>개</dd><dd className="meta">그중 용어 변경(집필자 확인) {summary["용어 변경(집필자 확인)"]}개</dd></div>
+        <div>
+          <dt>사람 확정 대비 오차율 (기준 6% 이내)</dt>
+          <dd><strong>{rate.rate == null ? "-" : `${rate.rate.toFixed(1)}%`}</strong></dd>
+          <dd className="meta">확정 {decided}개 · 후보와 다름 {rate.wrong} · 보류(확인 필요) {rate.held}</dd>
+        </div>
+      </dl>
+      {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
+
+      <h2 className="section-title">의견별 반영 여부</h2>
+      <p className="meta section-desc">{result["판정 원칙"]} 표의 '사람 확정'에서 반영/미반영을 고르면 위 오차율이 바뀝니다(화면에만 남습니다).</p>
+      <div className="opinion-filter" role="group" aria-label="판정으로 거르기">
+        {FILTERS.map((name) => (
+          <button key={name} type="button" className={`krds-btn small ${filter === name ? "primary" : "tertiary"}`} aria-pressed={filter === name}
+                  onClick={() => setFilter(name)}>
+            {name}{name !== "전체" && ` ${result.의견.filter((r) => r.판정 === name).length}`}
+          </button>
+        ))}
+      </div>
+      <div className="krds-table-wrap">
+        <table className="tbl col data opinion-table">
+          <caption>의견별 판정 후보와 근거</caption>
+          <thead>
+            <tr><th scope="col">번호</th><th scope="col">차수·위치</th><th scope="col">의견</th><th scope="col">유형</th><th scope="col">판정 후보</th><th scope="col">근거·비고</th><th scope="col">사람 확정</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.번호}>
+                <th scope="row">{row.번호}</th>
+                <td>{row.차수} {row.구분}{row.구성 && ` ${row.구성}`}{row.쪽 && <><br /><span className="meta">{row.쪽}쪽</span></>}</td>
+                <td className="opinion-text">{row.의견}</td>
+                <td>{row.유형}</td>
+                <td><span className={`krds-badge ${VERDICT_BADGE[row.판정] || "bg-light-gray"}`}>{row.판정}</span></td>
+                <td className="opinion-evidence">
+                  {row.근거.slice(0, 3).map((e, i) => (
+                    <p key={i}><span className="meta">{e.위치}{e["출력본 쪽"] ? ` · ${e["출력본 쪽"]}쪽` : ""}</span> {e.문단}</p>
+                  ))}
+                  {row["집필자 확인"] && <p className="opinion-ask">집필자 확인: {row["집필자 확인"]}</p>}
+                  {row["수정 제안"] && <p className="opinion-suggest">수정 제안: {row["수정 제안"]}</p>}
+                  {row.비고.length > 0 && (
+                    <details><summary>비고 {row.비고.length}개{row["찾은 범위"] && ` · ${row["찾은 범위"]}`}</summary>
+                      <ul className="krds-info-list dash">{[...row.비고, ...row["의견서 읽기 추정"]].map((note, i) => <li key={i}>{note}</li>)}</ul>
+                    </details>
+                  )}
+                  {row.LLM && <p className="meta">LLM: {row.LLM.상태}{row.LLM.판정 ? ` · ${row.LLM.판정} — ${row.LLM.이유}` : ""}</p>}
+                </td>
+                <td>
+                  {row.판정 !== "조치 불필요" && (
+                    <select className="krds-form-select small" aria-label={`의견 ${row.번호} 사람 확정`} value={decisions[row.번호] || ""}
+                            onChange={(e) => setDecisions({ ...decisions, [row.번호]: e.target.value })}>
+                      <option value="">-</option>
+                      <option value="반영">반영</option>
+                      <option value="미반영">미반영</option>
+                    </select>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <RawJson data={result} title="원본 JSON" />
+    </section>
+  );
+}
