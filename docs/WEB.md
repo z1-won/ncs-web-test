@@ -53,7 +53,7 @@ npm run dev
 메인 메뉴의 **원고 분량**(`/volume`)은 집필료 산정용 분량 산정 페이지입니다(REQ-02-013). 최종 원고(필수)와 기존 원고(선택)를 올리고, 수작업으로 센 쪽수(선택)와 부록 포함 여부(기본 포함 — 계약서 제13조 4항 ①)를 고릅니다. 서버는 `POST /api/volume`(multipart: `manuscript`, `previous`, `manual_pages`, `include_appendix`)으로 `src/ncs_volume`의 산정표 JSON을 돌려주며 파일은 저장하지 않습니다. 화면은 `frontend/src/pages/VolumePage.jsx`입니다.
 ## 의견 반영 검토 페이지
 
-메인 메뉴의 **의견 반영 검토**(`/opinion`)는 검토의견서 반영 여부 검토 페이지입니다(REQ-02-003). 1차·2차 검토의견서(하나 이상), 최종 원고(필수), 출력본 PDF·반영 전 원고(선택)를 올리고 LLM 판정 여부를 고릅니다. 서버는 `POST /api/opinion`(multipart: `opinions` 여러 개, 같은 순서의 `rounds`, `manuscript`, `print_pdf`, `previous`, `use_llm`)으로 `src/ncs_opinion`의 판정 후보표 JSON을 돌려주며 파일은 저장하지 않습니다. 화면은 `frontend/src/pages/OpinionPage.jsx`입니다. LLM 판정은 `ncs_core.llm.ALLOWED_TASKS`에 `opinion_reflection`이 추가되기 전에는 호출되지 않고 규칙 판정만 나옵니다.
+메인 메뉴의 **의견 반영 검토**(`/opinion`)는 검토의견서 반영 여부 검토 페이지입니다(REQ-02-003). 1차·2차 검토의견서(하나 이상), 최종 원고(필수), 출력본 PDF·반영 전 원고(선택)를 올립니다. 서버는 `POST /api/opinion`(multipart: `opinions` 여러 개, 같은 순서의 `rounds`, `manuscript`, `print_pdf`, `previous`)으로 `src/ncs_opinion`의 판정 후보표 JSON을 돌려주며 파일은 저장하지 않습니다. 판정은 LLM이 하며 서버에 LLM 설정·반출 승인(`LLM_ALLOW_UPLOAD=1`)이 있으면 자동으로 부릅니다(선택 칸 없음). 없으면 모든 의견이 '확인 필요'와 이유로 오고, 화면은 결과 머리의 배지(`#opinion-llm-state`)에 'LLM: 사용(모델) · 호출 N번' 또는 'LLM 미설정 — 이유'를 보여 줍니다. 화면은 `frontend/src/pages/OpinionPage.jsx`입니다.
 
 ## 저장·화면 경로 분리
 
@@ -70,7 +70,7 @@ npm run dev
 
 ## 문장 추천 페이지
 
-메인 메뉴의 **문장 추천**(`/suggest`)은 집필 보조 페이지입니다(REQ-02-004). 원고를 올리면 `POST /api/suggest`(multipart: `manuscript`, `use_llm`)가 `src/ncs_suggest`의 구성별 추천 카드 JSON을 돌려주고, 문장 하나는 `POST /api/suggest/sentence`(form: `text`, `kind`, 선택 `before`·`after`·`use_llm`)로, 종류 목록은 `GET /api/suggest/kinds`로 받습니다. 결과는 저장하지 않으며 채택/기각 기록과 채택률은 화면이 갖고 JSON·CSV로 내려받게 합니다. 화면은 `frontend/src/pages/SuggestPage.jsx`입니다.
+메인 메뉴의 **문장 추천**(`/suggest`)은 집필 보조 페이지입니다(REQ-02-004). 원고를 올리면 `POST /api/suggest`(multipart: `manuscript`)가 `src/ncs_suggest`의 구성별 추천 카드 JSON을 돌려주고, 문장 하나는 `POST /api/suggest/sentence`(form: `text`, `kind`)로, 종류 목록은 `GET /api/suggest/kinds`로 받습니다. 고칠 문장과 후보는 LLM이 내며 서버에 LLM 설정·반출 승인이 있으면 자동으로 부릅니다(선택 칸 없음). 없으면 카드 없이 'AI 미설정 — 이유'(결과 머리 배지 `#suggest-ai-state`, 문장 직접 입력은 '판단불가' 카드)만 옵니다. 결과는 저장하지 않으며 채택/기각 기록과 채택률은 화면이 갖고 JSON·CSV로 내려받게 합니다. 화면은 `frontend/src/pages/SuggestPage.jsx`입니다.
 
 ## PostgreSQL 검수 이력
 
