@@ -1,5 +1,5 @@
 """패키지 계층 규약 검사: 검수 패키지는 서로를 import하지 않고, ncs_core는 검수 패키지를 모른다.
-검수 엔진이 아닌 기능 패키지(개발계획서 ncs_plan, 그림 업스케일 ncs_upscale, 원고 분량 ncs_volume, 검토의견서 반영 ncs_opinion)도 검수 패키지를 import하지 않는다 — 함께 쓰는 코드는 ncs_core에 둔다."""
+검수 엔진이 아닌 기능 패키지(개발계획서 ncs_plan, 그림 업스케일 ncs_upscale, 원고 분량 ncs_volume, 검토의견서 반영 ncs_opinion, 문장 추천 ncs_suggest)도 검수 패키지를 import하지 않는다 — 함께 쓰는 코드는 ncs_core에 둔다."""
 
 import re
 import unittest
@@ -7,7 +7,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 ENGINES = ("ncs_position", "ncs_toc", "ncs_overview", "ncs_knowledge", "ncs_perform", "ncs_teaching", "ncs_evaluation", "ncs_references", "ncs_colophon", "ncs_misc")
-FEATURES = ("ncs_plan", "ncs_upscale", "ncs_volume", "ncs_opinion")   # 검수 엔진은 아니지만 같은 층(ncs_core 위)에 서는 기능 패키지
+FEATURES = ("ncs_plan", "ncs_upscale", "ncs_volume", "ncs_opinion", "ncs_suggest")   # 검수 엔진은 아니지만 같은 층(ncs_core 위)에 서는 기능 패키지
 IMPORT = re.compile(r"^\s*(?:from|import)\s+(ncs_\w+)", re.MULTILINE)
 
 
