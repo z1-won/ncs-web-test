@@ -50,7 +50,11 @@ class OpinionConfig:
     long_key: int = 15            # 이보다 긴 핵심어는 글자 일치율로 찾는다
     fuzzy: float = 0.85           # 긴 핵심어 글자 일치율 문턱
     evidence_chars: int = 160     # 근거 문장 표시 길이
-    llm_lines: int = 40           # LLM에 보내는 원고 문단 수(근거 주변만)
+    llm_lines: int = 60           # LLM 한 번에 보내는 원고 문단 수 상한
+    llm_per_opinion: int = 12     # 의견 하나를 위해 고르는 문단 수(범위가 이보다 작으면 범위 전체)
+    llm_min_overlap: int = 2      # 의견과 겹치는 두 글자 조각이 이만큼은 있어야 고른다
+    llm_batch: int = 10           # LLM 한 번에 묻는 의견 수(같은 범위를 가리키는 의견끼리)
+    llm_para_chars: int = 300     # 보내는 문단 하나의 길이 상한
 
 
 DEFAULT_CONFIG = OpinionConfig()

@@ -11,7 +11,7 @@ from ncs_opinion import error_rate, review
 from ncs_opinion.config import CHECK, KIND_FIGURE, KIND_FORM, KIND_NONE, KIND_TERM, NO_ACTION, NOT_REFLECTED, REFLECTED
 from ncs_opinion.judge import judge
 from ncs_opinion.keys import read_opinion
-from ncs_opinion.llm_check import refine
+from ncs_opinion.llm_check import refine_all
 from ncs_opinion.regions import find, map_manuscript, ref_region
 from ncs_opinion.sheet import Opinion, flipped, parse_lines, parse_tables, split_bullets
 
@@ -252,46 +252,89 @@ class JudgeTests(unittest.TestCase):
 
 
 class LlmTests(unittest.TestCase):
+    """LLM 2차 판정은 가짜 응답으로만 검사한다(실제 호출 없음). 수행 ③·평가 ④와 같은 줄 번호 방식(line_findings)."""
+
     def setUp(self):
         self.ms = map_manuscript("원고.hwpx", MANUSCRIPT)
-        self.op = opinion("<표 1-3>에 원격 접속 인증도 추가 필요")
-        self.reading = read_opinion(self.op.text)
 
-    def row(self):
-        return judge(self.op, self.reading, self.ms)
+    def item(self, text, **where):
+        op = opinion(text, **where)
+        reading = read_opinion(op.text)
+        return judge(op, reading, self.ms), op, reading
 
-    def test_llm_reflected_needs_real_evidence_line(self):
-        def asker(lines, user):
-            self.assertIn("[의견]", user)
-            n = lines.index("CSAP 인증") + 1
-            return {"data": {"판정": "반영", "근거_줄": [n, 999], "근거_문장": "CSAP 인증", "이유": "인증 행이 있음"}, "model": "가짜"}
+    @staticmethod
+    def fake(findings, calls=None):
+        def asker(lines):
+            if calls is not None:
+                calls.append(list(lines))
+            return {"data": {"findings": findings}, "model": "가짜"}
+        return asker
 
-        row = refine(self.row(), self.op, self.reading, self.ms, asker=asker)
-        self.assertEqual(row["판정"], CHECK)       # 규칙(미반영 후보)과 엇갈리면 확인 필요
-        self.assertEqual([e["문단"] for e in row["LLM"]["근거"]], ["CSAP 인증"])   # 없는 줄 999는 버린다
-
-    def test_llm_hallucinated_quote_is_not_used(self):
-        def asker(lines, user):
-            return {"data": {"판정": "반영", "근거_줄": [1], "근거_문장": "원고에 없는 문장"}, "model": "가짜"}
-
-        op = opinion("<표 1-3>에 원격 접속 인증도 추가 필요")
-        row = judge(op, self.reading, self.ms)
-        row["판정"] = CHECK
-        row = refine(row, op, self.reading, self.ms, asker=asker)
-        self.assertEqual(row["판정"], CHECK)
-        self.assertIn("근거 줄을 대지 못해", row["LLM"]["알림"])
-
-    def test_llm_not_reflected_gives_sentence(self):
-        def asker(lines, user):
-            return {"data": {"판정": "미반영", "근거_줄": [], "수정_문장": "원격 접속 인증은 … 제도이다."}, "model": "가짜"}
-
-        row = refine(self.row(), self.op, self.reading, self.ms, asker=asker)
+    def test_flagged_missing_gives_sentence_and_ignores_unknown_line(self):
+        item = self.item("<표 1-3>에 원격 접속 인증도 추가 필요")          # 규칙: 미반영 후보
+        self.assertEqual(item[0]["판정"], NOT_REFLECTED)
+        calls = []
+        findings = [{"line": 1, "kind": "미반영", "reason": "표에 없음", "suggestion": "원격 접속 인증은 … 제도이다."},
+                    {"line": 9, "kind": "미반영", "reason": "보낸 적 없는 번호"}]
+        stats = refine_all([item], self.ms, asker=self.fake(findings, calls))
+        row = item[0]
+        self.assertEqual(calls, [[item[1].text]])                          # 의견 줄만 번호 붙여 보낸다
         self.assertEqual((row["판정"], row["수정 제안"]), (NOT_REFLECTED, "원격 접속 인증은 … 제도이다."))
+        self.assertEqual((row["LLM"]["판정"], row["LLM"]["모델"]), ("미반영", "가짜"))
+        self.assertEqual(stats, {"호출": 1, "물은 의견": 1, "실패": 0})
 
-    def test_without_settings_rules_stay(self):
-        row = refine(self.row(), self.op, self.reading, self.ms)   # 키·승인·허용 목록 없음 → LlmError
-        self.assertEqual(row["판정"], NOT_REFLECTED)
-        self.assertTrue(row["LLM"]["상태"].startswith("LLM 미사용"))
+    def test_unflagged_against_rule_missing_becomes_check(self):
+        item = self.item("<표 1-3>에 원격 접속 인증도 추가 필요")
+        refine_all([item], self.ms, asker=self.fake([]))
+        self.assertEqual(item[0]["판정"], CHECK)                           # 규칙(미반영 후보)과 엇갈리면 확인 필요
+        self.assertIn("엇갈림", " ".join(item[0]["비고"]))
+        self.assertEqual(item[0]["LLM"]["판정"], "미반영 아님")
+
+    def test_flagged_against_rule_reflected_becomes_check(self):
+        item = self.item("<표 1-3> 추가내용으로 보안기능 확인서도 추가되면 좋을 것으로 생각됨")
+        self.assertEqual(item[0]["판정"], REFLECTED)
+        refine_all([item], self.ms, asker=self.fake([{"line": 1, "kind": "미반영", "reason": "설명이 없음"}]))
+        self.assertEqual(item[0]["판정"], CHECK)
+
+    def test_unflagged_upgrades_weak_rule_evidence_but_not_whole_manuscript(self):
+        weak = self.item("<표 1-3>에는 클라우드 보안 인증(CSAP), 원격 접속 인증(RAS) 추가 필요")   # CSAP만 있음 → 확인 필요
+        self.assertEqual(weak[0]["판정"], CHECK)
+        refine_all([weak], self.ms, asker=self.fake([]))
+        self.assertEqual(weak[0]["판정"], REFLECTED)
+        self.assertIn("확인 필요 → 반영 후보", " ".join(weak[0]["비고"]))
+        whole = self.item("CSAP 인증 내용이 보완되면 좋을 것으로 생각됨", group="기타", lesson=None, part=None, page=None)
+        if whole[0]["찾은 범위"] == "원고 전체":                             # 자리를 못 정한 의견은 LLM이 지적하지 않아도 올리지 않는다
+            before = whole[0]["판정"]
+            refine_all([whole], self.ms, asker=self.fake([]))
+            self.assertEqual(whole[0]["판정"], CHECK if before != REFLECTED else REFLECTED)
+
+    def test_check_kind_and_same_region_in_one_call(self):
+        first = self.item("<표 1-3> 추가내용으로 보안기능 확인서도 추가되면 좋을 것으로 생각됨")
+        second = self.item("<표 1-3>에 원격 접속 인증도 추가 필요")
+        calls = []
+        stats = refine_all([first, second], self.ms, asker=self.fake([{"line": 2, "kind": "확인 필요", "reason": "일부만"}], calls))
+        self.assertEqual((len(calls), len(calls[0])), (1, 2))              # 같은 표를 가리키는 의견은 한 번에
+        self.assertEqual((first[0]["판정"], second[0]["판정"]), (REFLECTED, CHECK))
+        self.assertEqual(stats["물은 의견"], 2)
+
+    def test_term_form_and_summary_opinions_are_not_sent(self):
+        term = self.item("한국소프트웨어산업협회는 한국인공지능·소프트웨어산업협회로 명칭 변경됨", lesson=2)
+        form = self.item("제목 가운데 정렬 필요", group="학습모듈 개요", lesson=None, part=None)
+        calls = []
+        stats = refine_all([term, form], self.ms, asker=self.fake([], calls))
+        self.assertEqual((calls, stats["호출"]), ([], 0))
+        self.assertNotIn("LLM", term[0])
+
+    def test_call_failure_keeps_rule_verdict(self):
+        from ncs_core.llm import LlmError
+
+        def asker(lines):
+            raise LlmError("연결 실패")
+
+        item = self.item("<표 1-3>에 원격 접속 인증도 추가 필요")
+        stats = refine_all([item], self.ms, asker=asker)
+        self.assertEqual((item[0]["판정"], stats["실패"]), (NOT_REFLECTED, 1))
+        self.assertTrue(item[0]["LLM"]["상태"].startswith("LLM 호출 실패"))
 
 
 class PipelineTests(unittest.TestCase):
@@ -310,7 +353,7 @@ class PipelineTests(unittest.TestCase):
             result = review([sheet, sheet], final, use_llm=True)
         self.assertEqual(result["요약"], {"총 의견": 4, "조치 요구": 3, "반영 후보": 1, "미반영 후보": 1, "확인 필요": 1,
                                          "조치 불필요": 1, "용어 변경(집필자 확인)": 1})        # 같은 파일 두 번 → 한 번만
-        self.assertIn("ALLOWED_TASKS", result["LLM"])
+        self.assertTrue(result["LLM"].startswith("LLM 미사용"))     # 테스트 환경에는 키·승인이 없다
         verdicts = [r["판정"] for r in result["의견"]]
         self.assertEqual(verdicts, [REFLECTED, NOT_REFLECTED, CHECK, NO_ACTION])
         rate = error_rate(result["의견"], {1: "반영", 2: "반영", 3: "미반영"})

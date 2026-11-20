@@ -15,7 +15,7 @@ from ncs_core.pdf import PdfUnavailable, load_pdf
 from .config import CHECK, DEFAULT_CONFIG, KIND_TERM, LLM_TASK, NO_ACTION, NOT_REFLECTED, REFLECTED, VERDICTS, OpinionConfig
 from .judge import judge
 from .keys import compact, read_opinion
-from .llm_check import refine
+from .llm_check import refine_all
 from .regions import Manuscript, map_manuscript, print_pages
 from .sheet import OpinionSheet, flipped, parse_lines, parse_tables
 
@@ -94,7 +94,7 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
         notes.append(f"의견서의 학습모듈명이 서로 다름: {', '.join(sorted(names))}")
     llm_on, llm_state = _llm_status(asker) if use_llm else (False, "끔")
 
-    rows, seen = [], set()
+    rows, seen, judged = [], set(), []
     for sheet in sheets:
         for opinion in sheet.opinions:
             key = (opinion.round, compact(opinion.text))
@@ -102,25 +102,27 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
                 continue
             seen.add(key)
             reading = read_opinion(opinion.text, max_keys=config.max_keys)
-            row = judge(opinion, reading, final, previous=before, pages=pages, config=config)
-            if llm_on:
-                row = refine(row, opinion, reading, final, asker=asker, config=config)
-            row.pop("범위", None)
-            rows.append({
-                "번호": len(rows) + 1,
-                "차수": opinion.round,
-                "의견서": opinion.source,
-                "구분": opinion.group,
-                "구성": opinion.part or "",
-                "쪽": opinion.page or "",
-                "의견": opinion.text,
-                "유형": reading.kind,
-                "참조": [ref.label for ref in reading.refs],
-                "핵심어": reading.keys if reading.kind != KIND_TERM else [],
-                "용어 변경": {"옛": reading.old_terms, "새": reading.new_terms} if reading.kind == KIND_TERM else None,
-                "의견서 읽기 추정": opinion.notes,
-                **row,
-            })
+            judged.append((judge(opinion, reading, final, previous=before, pages=pages, config=config), opinion, reading))
+    if llm_on:      # 같은 범위를 가리키는 의견끼리 묶어 한 번에 묻는다(수행 ③·평가 ④와 같은 줄 번호 방식)
+        stats = refine_all(judged, final, asker=asker, config=config)
+        llm_state += f" · 호출 {stats['호출']}번, 의견 {stats['물은 의견']}개" + (f", 실패 {stats['실패']}번" if stats["실패"] else "")
+    for row, opinion, reading in judged:
+        row.pop("범위", None)
+        rows.append({
+            "번호": len(rows) + 1,
+            "차수": opinion.round,
+            "의견서": opinion.source,
+            "구분": opinion.group,
+            "구성": opinion.part or "",
+            "쪽": opinion.page or "",
+            "의견": opinion.text,
+            "유형": reading.kind,
+            "참조": [ref.label for ref in reading.refs],
+            "핵심어": reading.keys if reading.kind != KIND_TERM else [],
+            "용어 변경": {"옛": reading.old_terms, "새": reading.new_terms} if reading.kind == KIND_TERM else None,
+            "의견서 읽기 추정": opinion.notes,
+            **row,
+        })
     return {
         "원고": final.name,
         "의견서": [{"파일": s.source, "차수": s.round, "학습모듈명": s.module_name, "의견 수": len(s.opinions)} for s in sheets],
