@@ -90,7 +90,7 @@
 - **`lexicon.py`** — 행동명사 사전(`data/action_nouns.txt`) + 표준국어대사전 API(`W하다` 동사 표제어). 조회 결과를 파일에 바로 덧붙인다. 키 없으면 △.
 - **`ncs_catalog.py`** — `data/ncs_units.tsv`(세분류별 분류 명칭·능력단위) + `data/ncs_levels.tsv`(전 능력단위 수준). `NCS_CATALOG_FILE`로 교체·비활성화(합성 원고 테스트).
 - **`ncs_api.py`** — 공공데이터포털 B490007/ncsInfo 호출. 운용 전 표 갱신용. 검수 서버는 호출하지 않는다.
-- **`llm.py`** — 생성형 AI 호출(수행 ②). 응답은 `.llm_cache/`(git 제외)에 캐시한다.
+- **`llm.py`** — 생성형 AI 호출(수행 ②③, 평가 ④, 의견 반영 검토, 문장 추천). OpenAI 호환 API(`/chat/completions`)와 Claude API(`/messages`) 두 제공자를 부르며, `LLM_PROVIDER` 또는 키·모델 이름으로 고른다. 허용 목록(`ALLOWED_TASKS`)에 있는 작업만 호출하고, 응답은 `.llm_cache/`(git 제외)에 캐시한다.
 - **`field_terms.py`** — 모듈 코드 → 분야(NCS 분류 이름)와 `data/field_terms.tsv`의 공용 명칭. 수행 ② 프롬프트가 분야별 '상표로 보지 않을 것'을 담는 데 쓴다.
 - **`f02_items.py`** — F02 확인서 54항목 원문 문구(확인서 표의 '체크 항목' 열).
 

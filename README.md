@@ -154,7 +154,7 @@ pip install openpyxl               # scripts/batch/batch_review.py xlsx 출력�
 |---|---|
 | `STDICT_API_KEY` | 표준국어대사전 — 차례 ② 행동명사 조회(없으면 목록에 없는 단어는 △) |
 | `NCS_API_KEY` | 공공데이터포털 B490007/ncsInfo — 수준 표 갱신 스크립트만 사용(검수 서버는 호출하지 않음) |
-| `LLM_API_KEY`(또는 `OPENAI_API_KEY`), `LLM_MODEL`(기본 gpt-5.4-mini), `LLM_ALLOW_UPLOAD=1` | 수행 ② LLM 후보. 키와 반출 승인 스위치가 **둘 다** 있어야 원고 문장을 전송. `LLM_ALLOWED_TASKS`로 더 좁힐 수 있음 |
+| `LLM_API_KEY`(또는 `OPENAI_API_KEY`·`ANTHROPIC_API_KEY`), `LLM_MODEL`(기본 gpt-5.4-mini, Claude 키면 claude-opus-5-5), `LLM_ALLOW_UPLOAD=1` | LLM 후보(수행 ②③, 평가 ④, 의견 반영 검토, 문장 추천). OpenAI 호환 API와 Claude API를 부를 수 있고, 어느 쪽인지는 `LLM_PROVIDER`(openai·anthropic)로 정하거나 비워 두면 키(`sk-ant-…`)·모델 이름(`claude…`)으로 알아냄. Claude 모델은 `claude-sonnet-5-5`처럼 적고 추론 노력은 `LLM_EFFORT`(기본 low). 키와 제공자가 어긋나면 키를 보내지 않고 "LLM 미설정"으로 멈춤. 키와 반출 승인 스위치가 **둘 다** 있어야 원고 문장을 전송. `LLM_ALLOWED_TASKS`로 더 좁힐 수 있음 |
 | `DATABASE_URL`, `NCS_DB_*` | PostgreSQL 검수 이력(선택). `DATABASE_URL`이 있으면 웹 서버와 검수 CLI가 결과를 DB에 남기고, 없으면 파일로만 저장 |
 | `LLM_CACHE_TTL_DAYS` | LLM 응답 캐시(`.llm_cache/`, 원고 문장이 평문으로 들어 있음) 보관 일수. 기본 30, 지난 파일은 호출 때마다 삭제. `0`이면 캐시 안 씀 |
 | `NCS_WEB_ORIGINS` | 웹 API에 교차 출처 접근을 허용할 출처(쉼표 구분). 기본은 Vite dev 서버(`http://localhost:5173`, `http://127.0.0.1:5173`)뿐. 화면은 같은 출처(빌드본은 서버가 함께 냄, dev 서버는 `/api` 프록시)로 부르므로 보통 비워 둠 |
@@ -235,7 +235,7 @@ python scripts/data/build_action_nouns.py --from-manuscripts 원고.hwpx …   #
 
 ## 생성형 AI (수행 ②)
 
-`ncs_core.llm`이 OpenAI 호환 API를 표준 라이브러리로 호출합니다. 블록의 재료·기기 줄만 보내고, 결과는 항상 △(사람 확인) + 줄 번호·근거·일반 명칭 제안이며 자동 X는 없습니다. (모델, 프롬프트) 해시로 `.llm_cache/`(git 제외)에 캐시해 재검수는 과금되지 않고, `usage.jsonl`에 토큰이 기록됩니다. LLM을 부를 수 있는 작업은 `ncs_core.llm.ALLOWED_TASKS`에 명시된 것뿐입니다(지금은 수행 ② 하나).
+`ncs_core.llm`이 OpenAI 호환 API 또는 Claude API(Messages)를 표준 라이브러리로 호출합니다. 블록의 재료·기기 줄만 보내고, 결과는 항상 △(사람 확인) + 줄 번호·근거·일반 명칭 제안이며 자동 X는 없습니다. (모델, 프롬프트) 해시로 `.llm_cache/`(git 제외)에 캐시해 재검수는 과금되지 않고, `usage.jsonl`에 토큰이 기록됩니다. LLM을 부를 수 있는 작업은 `ncs_core.llm.ALLOWED_TASKS`에 명시된 것뿐입니다(지금은 수행 ② 하나).
 
 프롬프트는 원고 분야에 맞춰 만들어집니다. 모듈 코드의 세분류로 NCS 목록에서 분야 이름(예: 숙박서비스 > 연회관리)을 넣고, `src/ncs_core/data/field_terms.tsv`에서 그 분야의 공용 약어·문서명(상표로 보지 않을 것)을 모읍니다. 코드 앞자리로 고르므로 `*`(전 분야)·대분류 2자리·중분류 4자리·소분류 6자리·세분류 8자리 어디에나 둘 수 있습니다. 새 분야 원고에서 일반 명칭이 후보로 잡히면(오탐) 이 파일에 그 분야 코드로 한 줄 추가합니다. 프롬프트가 바뀌므로 그 분야의 캐시는 다음 검수 때 한 번 새로 호출됩니다.
 
