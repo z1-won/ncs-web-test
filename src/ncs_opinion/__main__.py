@@ -1,6 +1,7 @@
-"""python -m ncs_opinion 최종원고.hwp 1차의견서.pdf 2차의견서.pdf [--print 출력본.pdf] [--previous 반영전원고.hwp] [--llm] [--json 결과.json] [--labels 정답.json]
+"""python -m ncs_opinion 최종원고.hwp 1차의견서.pdf 2차의견서.pdf [--print 출력본.pdf] [--previous 반영전원고.hwp] [--json 결과.json] [--labels 정답.json]
 
-검토의견서의 의견별 반영 여부 후보(반영 후보·미반영 후보·확인 필요·조치 불필요)와 근거 문장을 출력한다(REQ-02-003).
+검토의견서의 의견별 반영 여부 후보(반영 후보·미반영 후보·확인 필요·조치 불필요)와 근거 문단을 출력한다(REQ-02-003).
+판정은 LLM이 한다 — .env의 LLM 설정·반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면 자동으로 부르고, 없으면 모든 의견이 '확인 필요'와 이유다.
 --labels: {의견 번호: "반영"|"미반영"} JSON을 주면 판단 오차율(기준 6% 이내)을 함께 낸다.
 """
 
@@ -31,6 +32,8 @@ def render(result: dict) -> str:
             out.append(f"       - {note}")
         if row["집필자 확인"]:
             out.append(f"       ? {row['집필자 확인']}")
+        if row["수정 제안"]:
+            out.append(f"       → 수정 제안: {row['수정 제안']}")
     out += [f"알림: {note}" for note in result["알림"]]
     return "\n".join(out)
 
@@ -42,13 +45,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rounds", nargs="+", help="의견서 차수를 순서대로(예: 1차 2차) — 없으면 의견서 제목에서 읽음")
     parser.add_argument("--print", dest="print_pdf", type=Path, help="최종 원고 출력본 PDF(근거 쪽 표시, 선택)")
     parser.add_argument("--previous", type=Path, help="의견 반영 전 원고(초고본·완성본, 선택)")
-    parser.add_argument("--llm", action="store_true", help="LLM 2차 판정 시도(.env 설정·반출 승인·허용 목록이 있을 때만 호출)")
     parser.add_argument("--json", type=Path, help="결과를 이 JSON 파일로도 저장")
     parser.add_argument("--labels", type=Path, help="사람이 정한 정답 {번호: 반영|미반영} JSON — 오차율을 낸다")
     args = parser.parse_args(argv)
     try:
-        result = review(args.opinions, args.manuscript, rounds=args.rounds, print_pdf=args.print_pdf, previous=args.previous,
-                        use_llm=args.llm)
+        result = review(args.opinions, args.manuscript, rounds=args.rounds, print_pdf=args.print_pdf, previous=args.previous)
         if args.labels:
             labels = {int(k): v for k, v in json.loads(args.labels.read_text(encoding="utf-8")).items()}
             result["오차율"] = error_rate(result["의견"], labels)
