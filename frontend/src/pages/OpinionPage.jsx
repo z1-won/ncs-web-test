@@ -1,5 +1,6 @@
-// 검토의견서 반영 여부 검토(REQ-02-003) — 1·2차 검토의견서와 최종 원고를 올리면 의견마다 반영 후보·미반영 후보·확인 필요를 근거 문장과 함께 보여 준다.
-// 판정은 모두 후보다(서버 ncs_opinion). 화면에서 사람이 의견마다 반영/미반영을 정하면 자동 후보와의 오차율(기준 6% 이내)을 바로 센다.
+// 검토의견서 반영 여부 검토(REQ-02-003) — 1·2차 검토의견서와 최종 원고를 올리면 의견마다 반영 후보·미반영 후보·확인 필요를 근거 문단과 함께 보여 준다.
+// 판정은 서버(ncs_opinion)가 LLM으로 내고 모두 후보다. LLM 설정이 없으면 서버가 모든 의견을 '확인 필요'와 이유로 돌려준다(체크박스 없음).
+// 화면에서 사람이 의견마다 반영/미반영을 정하면 자동 후보와의 오차율(기준 6% 이내)을 바로 센다.
 import React, { useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
@@ -22,7 +23,6 @@ export default function OpinionPage() {
   const [file, setFile] = useState(null);
   const [printCopy, setPrintCopy] = useState(null);
   const [previous, setPrevious] = useState(null);
-  const [useLlm, setUseLlm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -36,7 +36,7 @@ export default function OpinionPage() {
     setBusy(true);
     setError(null);
     const opinions = [first && { file: first, round: "1차" }, second && { file: second, round: "2차" }].filter(Boolean);
-    const { ok, data, error: message, aborted } = await api.opinion({ file, opinions, printCopy, previous, useLlm, signal: aborter.current.signal });
+    const { ok, data, error: message, aborted } = await api.opinion({ file, opinions, printCopy, previous, signal: aborter.current.signal });
     setBusy(false);
     if (aborted) return;
     if (!ok) { setError(message); setResult(null); return; }
@@ -49,9 +49,10 @@ export default function OpinionPage() {
     <main id="container" className="inner page opinion-page">
       <h1 className="page-title">검토의견서 반영 검토</h1>
       <p className="page-desc">
-        1·2차 검토의견서(PDF·hwp)와 의견을 반영한 최종 원고(hwp/hwpx)를 올리면, 의견이 가리키는 표·그림·학습 구성에서 핵심어를 찾아
-        의견마다 <strong>반영 후보 · 미반영 후보 · 확인 필요</strong>를 근거 문장과 함께 보여 줍니다. 용어 변경 의견은 바로 반영으로 보지 않고
-        집필자에게 확인할 항목으로 따로 표시합니다. 판정은 모두 후보이며 최종 판단은 사람이 합니다. 올린 파일은 검토 뒤 바로 지웁니다.
+        1·2차 검토의견서(PDF·hwp)와 의견을 반영한 최종 원고(hwp/hwpx)를 올리면, 의견이 가리키는 표·그림·학습 구성에서 고른 원고 문단을
+        LLM이 읽고 의견마다 <strong>반영 후보 · 미반영 후보 · 확인 필요</strong>를 근거 문단과 함께 보여 줍니다. 근거 문단이 없거나 원고 글로 확인할 수 없는
+        의견(형식·그림)은 확인 필요로, 용어 변경 의견은 바로 반영으로 보지 않고 집필자에게 확인할 항목으로 따로 표시합니다. 서버에 LLM 설정이 없으면
+        모든 의견을 확인 필요와 그 이유로 보여 줍니다. 판정은 모두 후보이며 최종 판단은 사람이 합니다. 올린 파일은 검토 뒤 바로 지웁니다.
       </p>
 
       <form className="fieldset review-form" onSubmit={submit}>
@@ -65,15 +66,6 @@ export default function OpinionPage() {
                   hint="최종 원고의 PDF — 올리면 근거 문장이 실린 쪽을 함께 보여 줍니다." />
         <FileSlot id="opinion-previous" label="반영 전 원고" accept=".hwp,.hwpx" file={previous} onChange={setPrevious} disabled={busy}
                   hint="초고본·완성본 — 올리면 원래 있던 표현을 반영으로 잘못 보지 않게 걸러 냅니다." />
-        <div className="form-group">
-          <div className="form-tit"><span>LLM 판정</span></div>
-          <div className="form-conts">
-            <div className="krds-form-check">
-              <input type="checkbox" id="opinion-llm" checked={useLlm} disabled={busy} onChange={(e) => setUseLlm(e.target.checked)} />
-              <label htmlFor="opinion-llm">LLM으로 한 번 더 판정 (서버에 키·원고 반출 승인이 있을 때만 호출, 없으면 규칙 판정만)</label>
-            </div>
-          </div>
-        </div>
         <div className="form-group form-actions">
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
@@ -84,7 +76,7 @@ export default function OpinionPage() {
         </div>
       </form>
 
-      {busy && <ResultHead status={<Spinner label="의견서와 원고를 대조하는 중" />} />}
+      {busy && <ResultHead status={<Spinner label="LLM이 의견서와 원고를 대조하는 중" />} />}
       {result && !busy && <OpinionResult result={result} />}
       <TopButton />
     </main>
@@ -118,7 +110,7 @@ function OpinionResult({ result }) {
       <ResultHead
         status={<span className="krds-badge large bg-light-gray">의견 {summary["총 의견"]}개</span>}
         meta={`${result.원고} · ${result.의견서.map((s) => `${s.차수 || "차수 모름"} ${s.파일}`).join(", ")}${result.출력본 ? ` · 출력본 ${result.출력본}` : ""}`}
-        badges={<span className="krds-badge bg-light-gray">LLM: {result.LLM}</span>}
+        badges={<span id="opinion-llm-state" className="krds-badge bg-light-gray">LLM: {result.LLM}</span>}
       />
       <dl className="upscale-summary">
         <div><dt>조치 요구 의견</dt><dd><strong>{summary["조치 요구"]}</strong>개</dd><dd className="meta">조치 불필요(적합 확인) {summary["조치 불필요"]}개 제외</dd></div>
@@ -147,7 +139,7 @@ function OpinionResult({ result }) {
         <table className="tbl col data opinion-table">
           <caption>의견별 판정 후보와 근거</caption>
           <thead>
-            <tr><th scope="col">번호</th><th scope="col">차수·위치</th><th scope="col">의견</th><th scope="col">유형</th><th scope="col">판정 후보</th><th scope="col">근거·비고</th><th scope="col">사람 확정</th></tr>
+            <tr><th scope="col">번호</th><th scope="col">차수·위치</th><th scope="col">의견</th><th scope="col">유형</th><th scope="col">판정 후보</th><th scope="col">근거 문단·비고</th><th scope="col">사람 확정</th></tr>
           </thead>
           <tbody>
             {rows.map((row) => (
@@ -168,7 +160,7 @@ function OpinionResult({ result }) {
                       <ul className="krds-info-list dash">{[...row.비고, ...row["의견서 읽기 추정"]].map((note, i) => <li key={i}>{note}</li>)}</ul>
                     </details>
                   )}
-                  {row.LLM && <p className="meta">LLM: {row.LLM.상태}{row.LLM.판정 ? ` · ${row.LLM.판정} — ${row.LLM.이유}` : ""}</p>}
+                  {row.LLM && <p className="meta">LLM: {row.LLM.상태 === "사용" ? `${row.LLM.모델} · ${row.LLM.판정}` : row.LLM.상태}</p>}
                 </td>
                 <td>
                   {row.판정 !== "조치 불필요" && (

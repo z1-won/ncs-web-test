@@ -1,5 +1,8 @@
 """검토의견서 반영 여부 검토(REQ-02-003) — 의견서 여러 개와 최종 원고(+ 출력본 PDF, 반영 전 원고)를 읽어 의견별 판정 후보표를 낸다.
 
+단계: 의견서 읽기(sheet) → 의견마다 원고 범위 정하기(regions.locate) → 같은 범위 의견끼리 LLM에 묻기(llm_check.ask_all)
+→ 답 검증·정책(judge.judge) → 요약. LLM을 부르지 못하면 모든 의견이 '확인 필요'와 그 이유다.
+
 읽기는 모두 ncs_core로 한다: 원고·hwp 의견서는 documents.load_document, PDF는 pdf.load_pdf(선택 extra pypdf).
 의견서 PDF는 머리말·꼬리말 띠를 나누지 않도록 band를 음수로 주어 모든 줄을 본문으로 받는다(의견서에는 띠가 없고,
 실물 PDF는 좌표계가 뒤집혀 있어 띠 계산이 맞지 않는다 — 코어 이슈로 보고). 줄 순서가 뒤집힌 PDF는 sheet.flipped로 바로 놓는다.
@@ -12,11 +15,11 @@ from pathlib import Path
 from ncs_core.documents import detect_format, load_document
 from ncs_core.pdf import PdfUnavailable, load_pdf
 
-from .config import CHECK, DEFAULT_CONFIG, KIND_TERM, LLM_TASK, NO_ACTION, NOT_REFLECTED, REFLECTED, VERDICTS, OpinionConfig
+from .config import CHECK, DEFAULT_CONFIG, KIND_TERM, NO_ACTION, NOT_REFLECTED, REFLECTED, VERDICTS, OpinionConfig
 from .judge import judge
-from .keys import compact, read_opinion
-from .llm_check import refine_all
-from .regions import Manuscript, map_manuscript, print_pages
+from .keys import compact, refs_of
+from .llm_check import ask_all, llm_status
+from .regions import Manuscript, locate, map_manuscript, print_pages
 from .sheet import OpinionSheet, flipped, parse_lines, parse_tables
 
 ALL_BAND = -100.0   # load_pdf의 띠 비율: 음수면 모든 줄이 본문으로 온다
@@ -42,19 +45,6 @@ def read_manuscript(path: Path | str) -> Manuscript:
     return map_manuscript(path.name, document.sections)
 
 
-def _llm_status(asker) -> tuple[bool, str]:
-    if asker is not None:
-        return True, "사용(주입된 응답)"
-    from ncs_core.llm import settings, task_allowed
-
-    if not task_allowed(LLM_TASK):
-        return False, f"LLM 미사용 — '{LLM_TASK}' 작업이 허용 목록(LLM_ALLOWED_TASKS)에서 빠져 있음"
-    cfg = settings()
-    if not cfg.ready:
-        return False, f"LLM 미사용 — {cfg.why_not}"
-    return True, f"사용({cfg.model})"
-
-
 def summarize(rows: list[dict]) -> dict:
     counts = {verdict: sum(1 for r in rows if r["판정"] == verdict) for verdict in VERDICTS}
     return {
@@ -69,13 +59,13 @@ def summarize(rows: list[dict]) -> dict:
 
 
 def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[str] | None = None,
-           print_pdf: Path | str | None = None, previous: Path | str | None = None, use_llm: bool = False,
-           asker=None, config: OpinionConfig = DEFAULT_CONFIG) -> dict:
+           print_pdf: Path | str | None = None, previous: Path | str | None = None, asker=None,
+           config: OpinionConfig = DEFAULT_CONFIG) -> dict:
     """의견서들 × 최종 원고 → 판정 후보표(JSON으로 그대로 내보낼 수 있는 dict).
 
     rounds: 의견서와 같은 순서의 차수('1차'·'2차') — 주면 파일 안의 표기 대신 쓴다. print_pdf: 최종 원고 출력본(근거 쪽 표시).
-    previous: 반영 전 원고(초고본·완성본, 선택). use_llm: LLM 2차 판정을 시도(설정·승인·허용 목록이 없으면 판정은 그대로).
-    asker: 테스트용 가짜 LLM.
+    previous: 반영 전 원고(초고본·완성본, 선택). 판정은 LLM이 한다 — 설정·반출 승인·허용 목록이 있으면 자동으로 부르고,
+    없으면 모든 의견을 '확인 필요'와 이유로 둔다. asker: 테스트용 가짜 LLM(llm_check.ask_all).
     """
     if not opinions:
         raise ValueError("검토의견서를 하나 이상 올려 주세요")
@@ -92,22 +82,27 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
     names = {s.module_name for s in sheets if s.module_name}
     if len(names) > 1:
         notes.append(f"의견서의 학습모듈명이 서로 다름: {', '.join(sorted(names))}")
-    llm_on, llm_state = _llm_status(asker) if use_llm else (False, "끔")
 
-    rows, seen, judged = [], set(), []
+    items, seen = [], set()
     for sheet in sheets:
         for opinion in sheet.opinions:
             key = (opinion.round, compact(opinion.text))
             if key in seen:       # 2차 의견서 파일에 1차 표가 함께 든 경우 — 같은 의견은 한 번만
                 continue
             seen.add(key)
-            reading = read_opinion(opinion.text, max_keys=config.max_keys)
-            judged.append((judge(opinion, reading, final, previous=before, pages=pages, config=config), opinion, reading))
-    if llm_on:      # 같은 범위를 가리키는 의견끼리 묶어 한 번에 묻는다(수행 ③·평가 ④와 같은 줄 번호 방식)
-        stats = refine_all(judged, final, asker=asker, config=config)
+            _, where, place_notes, _ = locate(opinion, final, config)
+            items.append((opinion, where, place_notes))
+    llm_on, llm_state = llm_status(asker)
+    answers: list[dict | None] = [None] * len(items)
+    if llm_on and items:
+        answers, stats = ask_all([(o, where) for o, where, _ in items], final, before, asker=asker, config=config)
+        if stats["모델"]:
+            llm_state = f"사용({stats['모델']})"
         llm_state += f" · 호출 {stats['호출']}번, 의견 {stats['물은 의견']}개" + (f", 실패 {stats['실패']}번" if stats["실패"] else "")
-    for row, opinion, reading in judged:
-        row.pop("범위", None)
+    rows = []
+    for (opinion, where, place_notes), answer in zip(items, answers):
+        row = judge(opinion, where, place_notes, answer, final, previous=before, llm_off="" if llm_on else llm_state,
+                    pages=pages, config=config)
         rows.append({
             "번호": len(rows) + 1,
             "차수": opinion.round,
@@ -116,10 +111,7 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
             "구성": opinion.part or "",
             "쪽": opinion.page or "",
             "의견": opinion.text,
-            "유형": reading.kind,
-            "참조": [ref.label for ref in reading.refs],
-            "핵심어": reading.keys if reading.kind != KIND_TERM else [],
-            "용어 변경": {"옛": reading.old_terms, "새": reading.new_terms} if reading.kind == KIND_TERM else None,
+            "참조": [ref.label for ref in refs_of(opinion.text)],
             "의견서 읽기 추정": opinion.notes,
             **row,
         })
@@ -132,7 +124,8 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
         "의견": rows,
         "LLM": llm_state,
         "알림": notes,
-        "판정 원칙": "모두 후보다(사람이 확정). 근거가 약하거나 원고 글로 확인할 수 없는 의견은 '확인 필요', 용어 변경은 집필자 확인.",
+        "판정 원칙": "판정은 LLM이 내고 모두 후보다(사람이 확정). 근거 문단이 없거나 원고 글로 확인할 수 없는 의견은 '확인 필요', "
+                    "용어 변경은 집필자 확인. LLM을 부르지 못하면 모든 의견이 '확인 필요'다.",
     }
 
 

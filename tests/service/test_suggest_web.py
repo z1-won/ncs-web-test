@@ -1,4 +1,6 @@
-"""원고 문장 추천 웹 경로(/api/suggest·/api/suggest/sentence·/api/suggest/kinds) — 원고 카드, 문장 하나, AI 요청(차단 이유), 잘못된 입력."""
+"""원고 문장 추천 웹 경로(/api/suggest·/api/suggest/sentence·/api/suggest/kinds) — AI 미설정(판단불가·이유, 200), 문장 하나, 잘못된 입력.
+
+웹 경로에는 가짜 LLM을 넣을 수 없으므로 테스트 환경(키 없음)의 미설정 경로만 본다. AI 판정은 tests/engines/test_suggest.py가 본다."""
 
 import tempfile
 import unittest
@@ -6,8 +8,6 @@ from pathlib import Path
 
 from tests.engines.test_suggest import write_manuscript
 
-ROOT = Path(__file__).resolve().parents[2]
-OK = ROOT / "tests" / "fixtures" / "원고_ok_LM1203020201_24v3.hwpx"
 
 
 class SuggestWebTests(unittest.TestCase):
@@ -29,29 +29,24 @@ class SuggestWebTests(unittest.TestCase):
         self.assertIn("교수 방법", names)
         self.assertEqual(len(names), 9)
 
-    def test_manuscript_cards(self):
+    def test_manuscript_without_ai_is_undecided(self):
         with tempfile.TemporaryDirectory() as folder:
             path = write_manuscript(Path(folder) / "원고_LM1203020201_24v3.hwpx")
             response = self.client.post("/api/suggest", files={"manuscript": (path.name, path.read_bytes())})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["원고"], "원고_LM1203020201_24v3.hwpx")
-        cards = [card for part in body["구성"] for card in part["문장"]]
-        self.assertTrue(cards and all(card["후보"][0]["순위"] == 1 for card in cards))
-        self.assertEqual(body["AI"]["상태"], "AI 미사용 — 요청하지 않음")
+        self.assertTrue(body["AI"]["상태"].startswith("AI 미설정"), body["AI"])   # 테스트 환경에는 키·승인이 없다
+        self.assertEqual(body["구성"], [])                                           # 규칙으로 대신 판정하지 않는다
+        self.assertGreater(body["요약"]["검사한 문장"], 0)
         self.assertFalse(any(Path(self.out.name).iterdir()))          # 결과를 저장하지 않는다
 
-    def test_clean_manuscript_has_no_cards(self):
-        body = self.client.post("/api/suggest", files={"manuscript": (OK.name, OK.read_bytes())}).json()
-        self.assertEqual(body["구성"], [])
-        self.assertGreater(body["요약"]["검사한 문장"], 0)
-
-    def test_sentence_and_ai_blocked(self):
-        response = self.client.post("/api/suggest/sentence", data={"text": "절차를 설명함.", "kind": "교수 방법", "use_llm": "true"})
+    def test_sentence_without_ai_is_undecided(self):
+        response = self.client.post("/api/suggest/sentence", data={"text": "절차를 설명함.", "kind": "교수 방법"})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
-        self.assertEqual(body["후보"][0]["문장"], "절차를 설명한다.")
-        self.assertTrue(body["AI"].startswith("AI 미사용"))     # 테스트 환경에는 키·승인이 없다
+        self.assertEqual((body["상태"], body["후보"]), ("판단불가", []))
+        self.assertTrue(body["AI"].startswith("AI 미설정"))
 
     def test_bad_inputs_are_400(self):
         with tempfile.TemporaryDirectory() as folder:

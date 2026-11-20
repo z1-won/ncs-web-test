@@ -1,4 +1,4 @@
-"""검토의견서 반영 여부 검토 웹 경로(/api/opinion) — 의견서 둘·원고 하나, 차수 지정, LLM 요청, 잘못된 입력."""
+"""검토의견서 반영 여부 검토 웹 경로(/api/opinion) — 의견서 둘·원고 하나, 차수 지정, LLM 미설정(판단불가·이유), 잘못된 입력."""
 
 import tempfile
 import unittest
@@ -47,19 +47,18 @@ class OpinionWebTests(unittest.TestCase):
         self.assertEqual(body["원고"], self.final.name)
         self.assertEqual([s["차수"] for s in body["의견서"]], ["1차", "2차"])
         self.assertEqual(body["요약"]["총 의견"], 4)
-        self.assertEqual(body["요약"]["반영 후보"], 1)
-        self.assertEqual(body["요약"]["용어 변경(집필자 확인)"], 1)
-        self.assertEqual(body["LLM"], "끔")
-        term = next(r for r in body["의견"] if r["유형"] == "용어")
-        self.assertEqual(term["판정"], "확인 필요")
-        self.assertTrue(term["집필자 확인"])
+        # 테스트 환경에는 키·승인이 없다 — 규칙으로 대신 판정하지 않고 모두 '확인 필요'와 이유
+        self.assertTrue(body["LLM"].startswith("LLM 미설정"), body["LLM"])
+        self.assertEqual((body["요약"]["확인 필요"], body["요약"]["반영 후보"], body["요약"]["조치 불필요"]), (4, 0, 0))
+        row = body["의견"][0]
+        self.assertEqual((row["판정"], row["유형"], row["LLM"]["상태"]), ("확인 필요", "미분류", body["LLM"]))
+        self.assertIn("사람이 대조", row["비고"][-1])
 
-    def test_rounds_override_and_llm_request(self):
-        response = self.post({"rounds": ["2차"], "use_llm": "true"}, opinions=(self.first,), manuscript=self.final)
+    def test_rounds_override(self):
+        response = self.post({"rounds": ["2차"]}, opinions=(self.first,), manuscript=self.final)
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["의견서"][0]["차수"], "2차")
-        self.assertTrue(body["LLM"].startswith("LLM 미사용"))     # 테스트 환경에는 키·승인이 없다
 
     def test_same_file_names_are_kept_apart(self):
         response = self.post(opinions=(self.first, self.first), manuscript=self.final)

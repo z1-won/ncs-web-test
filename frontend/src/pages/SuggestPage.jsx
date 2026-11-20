@@ -1,6 +1,6 @@
-// 원고 문장 추천(REQ-02-004) — 원고를 올리면 작성 규칙(종결형·표현)에 어긋난 문장을 구성별로 찾아 정정 후보를 순위와 함께 최대 5개 보여 준다.
+// 원고 문장 추천(REQ-02-004) — 원고를 올리면 AI가 작성 규칙(종결형·표현)에 어긋난 문장을 구성별로 찾아 정정 후보를 순위와 함께 최대 5개 보여 준다.
 // 집필자가 후보 하나를 '채택'하거나 '기각'하고, 채택률과 채택 결과(JSON·CSV)를 내려받는다. 원고 본문은 고치지 않는다. 계산은 서버(ncs_suggest)가 한다.
-// 후보마다 출처('규칙 기반'·'AI 생성')를 붙인다 — AI 문장은 집필자 서약서 고지 대상일 수 있다.
+// AI는 서버에 LLM 설정이 있으면 자동으로 부른다(체크박스 없음). 없으면 'AI 미설정 — 이유'만 보인다. 후보 출처는 모두 'AI 생성'이다 — 집필자 서약서 고지 대상일 수 있다.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
@@ -13,8 +13,12 @@ import { RawJson } from "../components/RawJson.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
-const STATUS_BADGE = { "규칙 위반": "bg-light-danger", "표현 다듬기": "bg-light-warning", "표현 확인(AI)": "bg-light-secondary", "확인 필요": "bg-light-gray", "규정에 맞음": "bg-light-success" };
-const SOURCE_BADGE = { "규칙 기반": "bg-light-primary", "AI 생성": "bg-light-secondary" };
+// 카드 상태 = AI가 준 사유 유형(서버 ncs_suggest.config.REASONS) · 문장 직접 입력의 판단불가·지적 없음
+const STATUS_BADGE = {
+  "종결형 위반": "bg-light-danger", "주어 군더더기": "bg-light-warning", "어색한 낱말": "bg-light-secondary", "중복 표현": "bg-light-warning",
+  "문장부호": "bg-light-warning", "기타 표현": "bg-light-warning", "판단불가": "bg-light-gray", "지적 없음": "bg-light-success",
+};
+const SOURCE_BADGE = { "AI 생성": "bg-light-secondary" };
 
 function saveFile(text, filename, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -48,7 +52,6 @@ function toCsv(rows) {
 export default function SuggestPage() {
   usePageTitle("문장 추천");
   const [file, setFile] = useState(null);
-  const [useLlm, setUseLlm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -71,7 +74,7 @@ export default function SuggestPage() {
     aborter.current = new AbortController();
     setBusy(true);
     setError(null);
-    const { ok, data, error: message, aborted } = await api.suggest.manuscript({ file, useLlm, signal: aborter.current.signal });
+    const { ok, data, error: message, aborted } = await api.suggest.manuscript({ file, signal: aborter.current.signal });
     setBusy(false);
     if (aborted) return;
     if (!ok) { setError(message); setResult(null); return; }
@@ -84,7 +87,7 @@ export default function SuggestPage() {
     if (!text.trim()) return;
     setTyping(true);
     setTypedError(null);
-    const { ok, data, error: message } = await api.suggest.sentence({ text, kind, useLlm });
+    const { ok, data, error: message } = await api.suggest.sentence({ text, kind });
     setTyping(false);
     if (!ok) { setTypedError(message); return; }
     setTyped((old) => [{ ...data, key: `입력-${old.length + 1}`, 원고명: "직접 입력" }, ...old]);
@@ -123,23 +126,16 @@ export default function SuggestPage() {
     <main id="container" className="inner page suggest-page">
       <h1 className="page-title">문장 추천</h1>
       <p className="page-desc">
-        원고(hwp/hwpx)를 올리면 학습모듈 작성 규칙(학습 목표 '~할 수 있다.', 수행 순서·교수·학습 방법 '~한다.', 학습명·수행 내용 제목 '~하기',
-        학습 내용명 행동명사, 평가 항목 명사형)과 표현(주어 군더더기·이중 피동·겹말·문장부호)에 어긋난 문장을 찾아 정정 후보를 순위와 함께 최대 5개 보여 줍니다.
-        후보 중 하나를 채택하거나 기각하세요. 직무 내용을 새로 쓰거나 교육 내용이 적절한지 판단하지 않으며, 원고는 고치지 않습니다. 올린 파일은 계산 뒤 바로 지웁니다.
+        원고(hwp/hwpx)를 올리면 AI가 학습모듈 작성 규칙(학습 목표 '~할 수 있다.', 수행 순서·교수·학습 방법 '~한다.', 학습명·수행 내용 제목 '~하기',
+        학습 내용명 행동명사, 평가 항목 명사형)과 표현(주어 군더더기·어색한 낱말·중복 표현·문장부호)에 어긋난 문장을 찾아 정정 후보를 순위와 함께 최대 5개 보여 줍니다.
+        AI 후보는 규정 꼴·원문에 없던 수치·영문·상호·원문과의 유사도로 다시 걸러 통과한 것만 보여 주고, 버린 후보는 이유와 함께 접어 둡니다.
+        후보 중 하나를 채택하거나 기각하세요. 직무 내용을 새로 쓰거나 교육 내용이 적절한지 판단하지 않으며, 원고는 고치지 않습니다.
+        서버에 AI(LLM) 설정이 없으면 고칠 문장을 찾지 않고 그 이유만 보여 줍니다. 올린 파일은 계산 뒤 바로 지웁니다.
       </p>
 
       <form className="fieldset review-form" onSubmit={submit}>
         <FileSlot id="suggest-file" label="원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
                   hint="집필 중인 원고(hwp/hwpx). hwpx면 수행 순서 번호를 더 정확히 찾습니다." />
-        <div className="form-group">
-          <div className="form-tit"><span>AI 후보</span></div>
-          <div className="form-conts">
-            <div className="krds-form-check">
-              <input type="checkbox" id="suggest-llm" checked={useLlm} disabled={busy} onChange={(e) => setUseLlm(e.target.checked)} />
-              <label htmlFor="suggest-llm">AI 후보도 묻기 (LLM 설정·원고 반출 승인·허용 목록이 있을 때만 — 없으면 이유를 보여 주고 규칙 후보만)</label>
-            </div>
-          </div>
-        </div>
         <div className="form-group form-actions">
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
@@ -176,7 +172,7 @@ export default function SuggestPage() {
       </form>
       {typed.map((card) => <SuggestCard key={card.key} card={card} decision={decisions[card.key]} onDecide={decide} />)}
 
-      {busy && <ResultHead status={<Spinner label="문장을 살피는 중" />} />}
+      {busy && <ResultHead status={<Spinner label="AI가 문장을 살피는 중" />} />}
       {result && !busy && (
         <SuggestResult result={result} cards={manuscriptCards} decisions={decisions} onDecide={decide} />
       )}
@@ -208,8 +204,8 @@ function SuggestResult({ result, cards, decisions, onDecide }) {
     <section className="suggest-result">
       <ResultHead
         status={<span className={`krds-badge large ${cards.length ? "bg-light-warning" : "bg-light-success"}`}>{cards.length ? `고칠 문장 ${cards.length}개` : "고칠 문장 없음"}</span>}
-        meta={`${result.원고} · 검사 ${summary["검사한 문장"]}문장 · 규칙 위반 ${summary["규칙 위반"]} · 표현 다듬기 ${summary["표현 다듬기"]} · 표현 확인(AI) ${summary["표현 확인(AI)"]} · 확인 필요 ${summary["확인 필요"]} · 추천 없음 ${summary["추천 없음"]}`}
-        badges={<span className="krds-badge bg-light-gray">{result.AI.상태}</span>}
+        meta={`${result.원고} · 검사 ${summary["검사한 문장"]}문장 · AI에 보낸 문장 ${summary["AI에 보낸 문장"]} · ${Object.entries(summary["사유별"]).map(([name, n]) => `${name} ${n}`).join(" · ") || "지적 없음"} · 추천 없음 ${summary["추천 없음"]} · 버린 AI 후보 ${summary["버린 AI 후보"]}`}
+        badges={<span id="suggest-ai-state" className="krds-badge bg-light-gray">{result.AI.상태}</span>}
       />
       {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
       {result.구성.map((part) => (
@@ -253,7 +249,7 @@ function SuggestCard({ card, decision, onDecide }) {
                     <p className="candidate-text">{card["앞 번호"] ? `${card["앞 번호"]} ` : ""}{item.문장}</p>
                     <p className="meta">
                       <span className={`krds-badge ${SOURCE_BADGE[item.출처] || "bg-light-gray"}`}>{item.출처}</span>{" "}
-                      신뢰도 {item.신뢰도} · {item.근거.join(" / ")}{item["바뀐 곳"] ? ` · ${item["바뀐 곳"]}` : ""}
+                      {item.근거.join(" / ")}
                     </p>
                   </div>
                   <button type="button" className={`krds-btn small ${chosen ? "primary" : "secondary"}`} aria-pressed={chosen}
@@ -266,7 +262,7 @@ function SuggestCard({ card, decision, onDecide }) {
                   onClick={() => onDecide(card, "기각")}>{decision?.choice === "기각" ? "모두 기각함" : "모두 기각"}</button>
         </fieldset>
       ) : (
-        <p className="suggest-none">{card["추천 없음"] || (card.상태 === "규정에 맞음" ? "규정에 맞는 문장입니다 — 고칠 것이 없습니다." : "추천 없음")}</p>
+        <p className="suggest-none">{card["추천 없음"] || (card.상태 === "지적 없음" ? "AI가 고칠 곳을 찾지 못했습니다." : card.상태 === "판단불가" ? "판단불가 — AI를 부르지 못해 고칠 곳을 판단하지 않았습니다." : "추천 없음")}</p>
       )}
       {card["참고 예문"].length > 0 && (
         <div className="suggest-examples">

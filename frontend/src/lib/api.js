@@ -143,10 +143,10 @@ export const api = {
   // 원고 문장 추천(REQ-02-004): 원고 → 구성별 정정 후보, 문장 하나 → 후보, 문장 종류 목록
   suggest: {
     kinds: () => request("/api/suggest/kinds"),
-    manuscript: ({ file, useLlm = false, signal }) =>
-      request("/api/suggest", { method: "POST", body: multipart({ use_llm: useLlm ? "true" : "false", manuscript: file }), signal }),
-    sentence: ({ text, kind, useLlm = false }) =>
-      request("/api/suggest/sentence", { method: "POST", body: multipart({ text, kind, use_llm: useLlm ? "true" : "false" }) }),
+    manuscript: ({ file, signal }) =>
+      request("/api/suggest", { method: "POST", body: multipart({ manuscript: file }), signal }),
+    sentence: ({ text, kind }) =>
+      request("/api/suggest/sentence", { method: "POST", body: multipart({ text, kind }) }),
   },
   groups: {
     list: () => request("/api/groups"),
@@ -154,13 +154,12 @@ export const api = {
     remove: (id) => request(`/api/groups/${id}`, { method: "DELETE" }),
   },
   // 검토의견서 반영 여부 검토(REQ-02-003): opinions = [{ file, round: "1차"|"2차" }], 최종 원고 file(+ 출력본·반영 전 원고)
-  opinion: ({ file, opinions, printCopy, previous, useLlm = false, signal }) => {
+  opinion: ({ file, opinions, printCopy, previous, signal }) => {
     const form = new FormData();
     form.append("manuscript", file, file.name);
     opinions.forEach(({ file: sheet, round }) => { form.append("opinions", sheet, sheet.name); form.append("rounds", round || ""); });
     if (printCopy) form.append("print_pdf", printCopy, printCopy.name);
     if (previous) form.append("previous", previous, previous.name);
-    form.append("use_llm", useLlm ? "true" : "false");
     return request("/api/opinion", { method: "POST", body: form, signal });
   },
 };

@@ -1,6 +1,7 @@
-"""python -m ncs_suggest 원고.hwp [--json 결과.json] [--ai]  |  python -m ncs_suggest --sentence "문장" --kind "교수 방법"
+"""python -m ncs_suggest 원고.hwp [--json 결과.json]  |  python -m ncs_suggest --sentence "문장" --kind "교수 방법"
 
-원고를 주면 구성별로 규정 꼴을 어긴 문장과 순위 붙인 정정 후보(최대 5개)·참고 예문을 출력한다. 원고는 고치지 않는다.
+원고를 주면 구성별로 AI가 고칠 문장이라고 본 문장과 순위 붙인 정정 후보(최대 5개)·참고 예문을 출력한다. 원고는 고치지 않는다.
+AI는 .env의 LLM 설정·반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면 자동으로 부르고, 없으면 이유만 출력한다(규칙으로 대신 판정하지 않음).
 """
 
 from __future__ import annotations
@@ -18,17 +19,20 @@ def render_card(card: dict) -> list[str]:
     out = [f"[{card['번호']}] {card['자리']} ({card['종류']}, {card['상태']}) {card['원문']}"]
     out += [f"    사유: {reason}" for reason in card["사유"]]
     for item in card["후보"]:
-        out.append(f"    {item['순위']}. {item['문장']}  [{item['출처']} · 신뢰도 {item['신뢰도']}] {' / '.join(item['근거'])}")
+        out.append(f"    {item['순위']}. {item['문장']}  [{item['출처']}] {' / '.join(item['근거'])}")
     if card["추천 없음"]:
         out.append(f"    {card['추천 없음']}")
     out += [f"    참고 예문({example['유사도']}): {example['문장']}  — {example['자리']}" for example in card["참고 예문"]]
+    out += [f"    버린 AI 후보: {dropped['문장']} — {dropped['이유']}" for dropped in card["버린 AI 후보"]]
     return out
 
 
 def render(result: dict) -> str:
     summary = result["요약"]
-    out = [f"[{result['원고']}] 검사 {summary['검사한 문장']}문장 · 규칙 위반 {summary['규칙 위반']} · 표현 다듬기 {summary['표현 다듬기']} · 표현 확인(AI) {summary['표현 확인(AI)']} · "
-           f"추천 있음 {summary['추천 있음']} · 추천 없음 {summary['추천 없음']} · {result['AI']['상태']}"]
+    reasons = " · ".join(f"{name} {count}" for name, count in summary["사유별"].items())
+    out = [f"[{result['원고']}] 검사 {summary['검사한 문장']}문장 · 고칠 문장 {summary['고칠 문장']}" + (f"({reasons})" if reasons else "")
+           + f" · 추천 있음 {summary['추천 있음']} · 추천 없음 {summary['추천 없음']} · 버린 AI 후보 {summary['버린 AI 후보']}"
+           + f" · {result['AI']['상태']}"]
     for part in result["구성"]:
         out.append(f"\n== {part['구성']} ({len(part['문장'])})")
         for card in part["문장"]:
@@ -42,7 +46,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("manuscript", nargs="?", type=Path, help="원고(hwp/hwpx)")
     parser.add_argument("--sentence", help="원고 대신 문장 하나를 추천받는다")
     parser.add_argument("--kind", choices=list(KINDS), help="--sentence의 문장 종류")
-    parser.add_argument("--ai", action="store_true", help="AI 후보도 묻는다(LLM 설정·반출 승인·허용 목록이 있을 때만 실제 호출)")
     parser.add_argument("--json", type=Path, help="결과를 이 JSON 파일로도 저장")
     args = parser.parse_args(argv)
     if bool(args.manuscript) == bool(args.sentence):
@@ -51,10 +54,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--sentence에는 --kind가 필요합니다")
     try:
         if args.sentence:
-            result = suggest_sentence(args.sentence, args.kind, use_llm=args.ai)
-            text = "\n".join(render_card(result)) if result["상태"] != "규정에 맞음" else f"규정에 맞음: {result['원문']}"
+            result = suggest_sentence(args.sentence, args.kind)
+            text = "\n".join(render_card(result) + [f"    {result['AI']}"])
         else:
-            result = suggest_manuscript(args.manuscript, use_llm=args.ai)
+            result = suggest_manuscript(args.manuscript)
             text = render(result)
     except (ValueError, OSError) as error:
         print(f"오류: {error}", file=sys.stderr)
