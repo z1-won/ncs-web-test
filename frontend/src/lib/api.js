@@ -145,4 +145,14 @@ export const api = {
     get: (id) => request(`/api/groups/${id}`),
     remove: (id) => request(`/api/groups/${id}`, { method: "DELETE" }),
   },
+  // 검토의견서 반영 여부 검토(REQ-02-003): opinions = [{ file, round: "1차"|"2차" }], 최종 원고 file(+ 출력본·반영 전 원고)
+  opinion: ({ file, opinions, printCopy, previous, useLlm = false, signal }) => {
+    const form = new FormData();
+    form.append("manuscript", file, file.name);
+    opinions.forEach(({ file: sheet, round }) => { form.append("opinions", sheet, sheet.name); form.append("rounds", round || ""); });
+    if (printCopy) form.append("print_pdf", printCopy, printCopy.name);
+    if (previous) form.append("previous", previous, previous.name);
+    form.append("use_llm", useLlm ? "true" : "false");
+    return request("/api/opinion", { method: "POST", body: form, signal });
+  },
 };

@@ -36,6 +36,7 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
 export const PAGES = [
   { path: "/plan", label: "개발계획서 작성" },
   { path: "/", label: "원고 검수" },
+  { path: "/opinion", label: "의견 반영 검토" },
   { path: "/upscale", label: "업스케일링" },
   { path: "/volume", label: "원고 분량" },
 ];

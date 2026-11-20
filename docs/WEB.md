@@ -7,6 +7,7 @@ FastAPI·Uvicorn 백엔드와 React(Vite) 화면으로 구성됩니다. **화면
 | 화면(React·Vite·KRDS) | `frontend/` — 소스 `src/`, 빌드 결과 `dist/`(git 제외) |
 | 웹 의존성 고정 목록 | `requirements/web.txt`·`test.txt`·`dev.txt` — `pyproject.toml`의 `web`·`test` extra가 읽음 |
 | 서버(FastAPI) | `src/ncs_web/` — `server.py`가 앱을 조립하고 기능별 경로는 `routes/`(review·history·export·plan·upscale·volume). 명령은 `ncs-web` |
+| 서버(FastAPI) | `src/ncs_web/` — `server.py`가 앱을 조립하고 기능별 경로는 `routes/`(review·history·export·plan·upscale·opinion). 명령은 `ncs-web` |
 | 검수 실행·저장 | `src/ncs_service/` |
 
 `src/ncs_core/`와 검수 패키지 10개는 웹 프레임워크 없이도 실행할 수 있습니다.
@@ -50,6 +51,9 @@ npm run dev
 ## 원고 분량 페이지
 
 메인 메뉴의 **원고 분량**(`/volume`)은 집필료 산정용 분량 산정 페이지입니다(REQ-02-013). 최종 원고(필수)와 기존 원고(선택)를 올리고, 수작업으로 센 쪽수(선택)와 부록 포함 여부(기본 포함 — 계약서 제13조 4항 ①)를 고릅니다. 서버는 `POST /api/volume`(multipart: `manuscript`, `previous`, `manual_pages`, `include_appendix`)으로 `src/ncs_volume`의 산정표 JSON을 돌려주며 파일은 저장하지 않습니다. 화면은 `frontend/src/pages/VolumePage.jsx`입니다.
+## 의견 반영 검토 페이지
+
+메인 메뉴의 **의견 반영 검토**(`/opinion`)는 검토의견서 반영 여부 검토 페이지입니다(REQ-02-003). 1차·2차 검토의견서(하나 이상), 최종 원고(필수), 출력본 PDF·반영 전 원고(선택)를 올리고 LLM 판정 여부를 고릅니다. 서버는 `POST /api/opinion`(multipart: `opinions` 여러 개, 같은 순서의 `rounds`, `manuscript`, `print_pdf`, `previous`, `use_llm`)으로 `src/ncs_opinion`의 판정 후보표 JSON을 돌려주며 파일은 저장하지 않습니다. 화면은 `frontend/src/pages/OpinionPage.jsx`입니다. LLM 판정은 `ncs_core.llm.ALLOWED_TASKS`에 `opinion_reflection`이 추가되기 전에는 호출되지 않고 규칙 판정만 나옵니다.
 
 ## 저장·화면 경로 분리
 
