@@ -147,7 +147,8 @@
 - **`cli.py`** — 엔진 공용 CLI `run_cli(check, 설명)`. 개발계획서 필수 여부는 `Engine.required`, `--body-section`은 엔진 `CheckConfig`에서 읽는다.
 - **`store.py` / `postgres.py` / `migrations.py` / `postgres_cli.py`** — 결과 zip 파일 저장소와 PostgreSQL 이력(`review_runs`·`review_results`·`review_inputs`·`review_files`). `postgres_cli import 결과`로 과거 결과 폴더를 이력으로 이관. DSN·비밀번호는 `.env`.
 - **`ncs_web/server.py`** — 앱 조립: 미들웨어, 오류 응답, 정적 `--dist`로 프런트 제공. 경로는 `routes/`의 모듈이 `register(app, services)`로 붙인다.
-- **`ncs_web/routes/`** — `review.py`(`POST /api/review`, `/api/uploads`, `GET /api/health`) · `history.py`(`/api/reviews`, `/api/groups`) · `export.py`(확인서·수정 메모 원고) · `plan.py`(개발계획서 작성) · `upscale.py`(그림 업스케일). 요청·응답 모델은 `schemas.py`, 함께 쓰는 도우미는 `common.py`.
+- **`ncs_opinion`**(검수 엔진이 아닌 기능 패키지, REQ-02-003 검토의견서 반영 여부) — `sheet.py`가 의견서를 의견 항목(차수·구분·학습·구성·쪽·의견)으로 읽고(PDF는 칸 가운데 찍힌 구분·쪽 표시를 가까운 의견에 붙이고, hwp/hwpx는 표 칸으로), `keys.py`가 유형(용어·형식·그림·내용·의견 아님)과 핵심어를, `regions.py`가 원고 문단에 학습·구성을 붙이고 표·그림 캡션 범위를 찾고, `judge.py`가 규칙 판정 후보를, `llm_check.py`가 선택 LLM 2차 판정(근거 줄 검증)을, `pipeline.py`가 묶음 실행·요약·오차율을 맡는다. 설정값과 근거는 `config.py`.
+- **`ncs_web/routes/`** — `review.py`(`POST /api/review`, `/api/uploads`, `GET /api/health`) · `history.py`(`/api/reviews`, `/api/groups`) · `export.py`(확인서·수정 메모 원고) · `plan.py`(개발계획서 작성) · `upscale.py`(그림 업스케일) · `opinion.py`(검토의견서 반영 검토 `POST /api/opinion`). 요청·응답 모델은 `schemas.py`, 함께 쓰는 도우미는 `common.py`.
 - **`frontend/src/`** — `main.jsx`(경로 등록), `pages/`(페이지: `ReviewPage` 원고 검수 · `PlanDraftPage` 개발계획서 작성 · `UpscalePage` 업스케일링 · `PrivacyPage`), `components/`(표·셀렉트·모달), `lib/checks.js`(`CHECKS`·`FILE_HINTS` — 서버 엔진 목록과 테스트가 일치를 검사), `lib/api.js`.
 
 ---
