@@ -23,8 +23,9 @@ def register(app: FastAPI, services: Services) -> None:
         return {"종류": [{"이름": name, "규정 꼴": form} for name, form in KINDS.items()]}
 
     @app.post("/api/suggest", responses={400: {"model": ErrorResponse}})
-    def suggest(manuscript: Annotated[UploadFile, File()], use_llm: Annotated[bool, Form()] = False) -> Any:
-        """원고(hwp/hwpx) → 추천 카드(ncs_suggest.suggest_manuscript). use_llm: AI 후보도 묻기(설정·승인·허용 목록이 있을 때만 실제 호출)."""
+    def suggest(manuscript: Annotated[UploadFile, File()]) -> Any:
+        """원고(hwp/hwpx) → 추천 카드(ncs_suggest.suggest_manuscript). 고칠 문장과 후보는 AI가 낸다 — 서버에 LLM 설정·반출 승인이
+        있으면 자동으로 부르고, 없으면 카드 없이 'AI 미설정 — 이유'(결과의 AI.상태)만 낸다."""
         from ncs_suggest import suggest_manuscript
 
         name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", Path(manuscript.filename or "원고.hwp").name).strip(" .") or "원고.hwp"
@@ -32,7 +33,7 @@ def register(app: FastAPI, services: Services) -> None:
             path = Path(folder) / name
             path.write_bytes(manuscript.file.read())
             try:
-                return suggest_manuscript(path, use_llm=use_llm)
+                return suggest_manuscript(path)
             except ValueError as error:
                 return error_response(400, str(error))
 
@@ -40,14 +41,11 @@ def register(app: FastAPI, services: Services) -> None:
     def suggest_one(
         text: Annotated[str, Form()],
         kind: Annotated[str, Form()],
-        before: Annotated[str, Form()] = "",
-        after: Annotated[str, Form()] = "",
-        use_llm: Annotated[bool, Form()] = False,
     ) -> Any:
-        """문장 하나 + 종류 → 추천 카드(ncs_suggest.suggest_sentence). before/after: AI 후보에 함께 보낼 앞뒤 문단(선택)."""
+        """문장 하나 + 종류 → 추천 카드(ncs_suggest.suggest_sentence). AI를 부르지 못하면 '판단불가'와 이유."""
         from ncs_suggest import suggest_sentence
 
         try:
-            return suggest_sentence(text, kind, before=before, after=after, use_llm=use_llm)
+            return suggest_sentence(text, kind)
         except ValueError as error:
             return error_response(400, str(error))

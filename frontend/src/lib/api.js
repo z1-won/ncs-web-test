@@ -143,10 +143,10 @@ export const api = {
   // 원고 문장 추천(REQ-02-004): 원고 → 구성별 정정 후보, 문장 하나 → 후보, 문장 종류 목록
   suggest: {
     kinds: () => request("/api/suggest/kinds"),
-    manuscript: ({ file, useLlm = false, signal }) =>
-      request("/api/suggest", { method: "POST", body: multipart({ use_llm: useLlm ? "true" : "false", manuscript: file }), signal }),
-    sentence: ({ text, kind, useLlm = false }) =>
-      request("/api/suggest/sentence", { method: "POST", body: multipart({ text, kind, use_llm: useLlm ? "true" : "false" }) }),
+    manuscript: ({ file, signal }) =>
+      request("/api/suggest", { method: "POST", body: multipart({ manuscript: file }), signal }),
+    sentence: ({ text, kind }) =>
+      request("/api/suggest/sentence", { method: "POST", body: multipart({ text, kind }) }),
   },
   groups: {
     list: () => request("/api/groups"),
