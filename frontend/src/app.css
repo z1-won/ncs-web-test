@@ -453,3 +453,7 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
   .upscale-bar .bar-actions { flex: 1 1 100%; flex-wrap: wrap; }
   .upscale-bar .bar-actions .krds-btn { flex: 1 1 100%; min-width: 0; white-space: normal; }
 }
+
+/* 원고 분량 산정 — 산정에서 빠지는 구성(표지·이해·개발진)은 흐리게 */
+.volume-result tr.muted th,
+.volume-result tr.muted td { color: var(--krds-light-color-text-subtle); }
