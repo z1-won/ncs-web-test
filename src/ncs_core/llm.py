@@ -43,6 +43,7 @@ ANTHROPIC_DEFAULT_MODEL = "claude-opus-5-5"
 ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
 ANTHROPIC_VERSION = "2026-10-21"
 ANTHROPIC_KEY_PREFIX = "sk-ant-"
+ANTHROPIC_JSON_TRIES = 2        # 응답 글에서 JSON 객체를 못 읽으면 다시 묻는 횟수(처음 포함)
 ANTHROPIC_MAX_TOKENS = 16000   # 추론(thinking) 토큰도 이 한도에 들어가므로 응답 한도(max_output_tokens)보다 넉넉히 준다
 # 안전 분류기가 거절했을 때 서버가 다른 모델로 같은 요청을 이어 주는 기능(서버 측 fallback)을 받는 모델
 ANTHROPIC_FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -237,18 +238,24 @@ def _ask_anthropic(cfg: LlmSettings, system: str, user: str, max_output_tokens: 
         body["output_config"] = {"effort": cfg.effort}
     if cfg.model in ANTHROPIC_FALLBACK_MODELS:
         body["fallbacks"] = "default"
-    payload = _post(cfg, "/messages", body)
-    if not isinstance(payload, dict):
-        raise LlmError("응답을 JSON으로 읽지 못함: 객체가 아님")
-    reason = payload.get("stop_reason")
-    if reason == "refusal":
-        category = (payload.get("stop_details") or {}).get("category") or "분류 없음"
-        raise LlmError(f"모델이 요청을 거절함({category})")
-    if reason == "max_tokens":
-        raise LlmError("응답이 길이 한도에서 잘림(max_tokens)")
-    blocks = payload.get("content") or []
-    text = "".join(block.get("text") or "" for block in blocks if isinstance(block, dict) and block.get("type") == "text")
-    data = _json_object(text)
+    for attempt in range(ANTHROPIC_JSON_TRIES):
+        payload = _post(cfg, "/messages", body)
+        if not isinstance(payload, dict):
+            raise LlmError("응답을 JSON으로 읽지 못함: 객체가 아님")
+        reason = payload.get("stop_reason")
+        if reason == "refusal":
+            category = (payload.get("stop_details") or {}).get("category") or "분류 없음"
+            raise LlmError(f"모델이 요청을 거절함({category})")
+        if reason == "max_tokens":
+            raise LlmError("응답이 길이 한도에서 잘림(max_tokens)")
+        blocks = payload.get("content") or []
+        text = "".join(block.get("text") or "" for block in blocks if isinstance(block, dict) and block.get("type") == "text")
+        try:
+            data = _json_object(text)
+            break
+        except LlmError:      # 가끔 JSON이 아닌 글이 온다(temperature를 못 정하므로) — 한 번 더 묻고, 또 그러면 오류로 올린다
+            if attempt + 1 == ANTHROPIC_JSON_TRIES:
+                raise
     usage = payload.get("usage") or {}
     tokens_in = sum(int(usage.get(name) or 0) for name in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
     return data, str(payload.get("model") or cfg.model), tokens_in, int(usage.get("output_tokens") or 0)

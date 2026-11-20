@@ -119,6 +119,14 @@ class AnthropicAskTests(unittest.TestCase):
             self.assertIn(word, str(caught.exception))
         self.assertEqual(llm.usage_summary()["calls"], 0)                   # 실패한 호출은 캐시·사용량에 남기지 않는다
 
+    def test_unreadable_json_is_asked_once_more(self):
+        with mock.patch.object(llm, "_post", side_effect=[self.message("JSON이 아닙니다"), self.message('{"findings": []}')]) as post:
+            self.assertEqual(llm.ask_json("perform2_brands", "s", "retry").data, {"findings": []})
+            self.assertEqual(post.call_count, 2)
+        with mock.patch.object(llm, "_post", return_value=self.message("JSON이 아닙니다")) as post, self.assertRaises(llm.LlmError):
+            llm.ask_json("perform2_brands", "s", "retry twice")
+        self.assertEqual(post.call_count, 2)                                # 두 번까지만 묻는다
+
     def test_effort_and_fallbacks_are_optional(self):
         with mock.patch.dict(os.environ, {"LLM_EFFORT": "", "LLM_MODEL": "claude-haiku-5-5"}, clear=False):
             with mock.patch.object(llm, "_post", return_value=self.message("{}")) as post:
