@@ -13,7 +13,7 @@ import { RawJson } from "../components/RawJson.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
-const STATUS_BADGE = { "규칙 위반": "bg-light-danger", "표현 다듬기": "bg-light-warning", "확인 필요": "bg-light-gray", "규정에 맞음": "bg-light-success" };
+const STATUS_BADGE = { "규칙 위반": "bg-light-danger", "표현 다듬기": "bg-light-warning", "표현 확인(AI)": "bg-light-secondary", "확인 필요": "bg-light-gray", "규정에 맞음": "bg-light-success" };
 const SOURCE_BADGE = { "규칙 기반": "bg-light-primary", "AI 생성": "bg-light-secondary" };
 
 function saveFile(text, filename, type) {
@@ -208,7 +208,7 @@ function SuggestResult({ result, cards, decisions, onDecide }) {
     <section className="suggest-result">
       <ResultHead
         status={<span className={`krds-badge large ${cards.length ? "bg-light-warning" : "bg-light-success"}`}>{cards.length ? `고칠 문장 ${cards.length}개` : "고칠 문장 없음"}</span>}
-        meta={`${result.원고} · 검사 ${summary["검사한 문장"]}문장 · 규칙 위반 ${summary["규칙 위반"]} · 표현 다듬기 ${summary["표현 다듬기"]} · 확인 필요 ${summary["확인 필요"]} · 추천 없음 ${summary["추천 없음"]}`}
+        meta={`${result.원고} · 검사 ${summary["검사한 문장"]}문장 · 규칙 위반 ${summary["규칙 위반"]} · 표현 다듬기 ${summary["표현 다듬기"]} · 표현 확인(AI) ${summary["표현 확인(AI)"]} · 확인 필요 ${summary["확인 필요"]} · 추천 없음 ${summary["추천 없음"]}`}
         badges={<span className="krds-badge bg-light-gray">{result.AI.상태}</span>}
       />
       {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}

@@ -33,7 +33,11 @@ SOURCE_RULE = "규칙 기반"
 SOURCE_AI = "AI 생성"
 NO_SUGGESTION = "추천 없음(사람이 고쳐야 함)"
 
-LLM_TASK = "sentence_suggest"   # ncs_core.llm.ALLOWED_TASKS에 아직 없음 — 추가되기 전에는 AI 후보가 만들어지지 않는다(팀장 요청 이슈)
+AI_STATUS = "표현 확인(AI)"       # AI가 낱말이 어색하다고 본 문장의 카드 상태
+
+# ncs_core.llm.ALLOWED_TASKS에 아직 없는 작업 이름 — 목록에 추가되기 전에는 AI를 부르지 않고 이유만 보여 준다(코드 리뷰로 추가)
+LLM_TASK = "sentence_suggest"      # 규칙에 걸린 문장의 정정 후보 — 걸린 문장 줄만 보낸다
+WORDING_TASK = "sentence_wording"  # 규정 꼴은 맞지만 낱말이 어색한 문장 — 같은 종류의 문장 줄만 보낸다
 
 
 @dataclass(frozen=True)
@@ -45,8 +49,8 @@ class SuggestConfig:
     medium: float = 0.6            # 신뢰도 '보통' 문턱(아래는 '낮음')
     ai_score: float = 0.55         # AI 후보의 정렬 점수(확신이 높은 규칙 후보보다 아래에 둔다)
     ai_min_similarity: float = 0.6  # AI 후보와 원문의 글자 유사도 하한 — 낮으면 내용을 바꾼 것으로 보고 버린다
-    llm_max_sentences: int = 30    # 원고 한 건에서 AI에 물을 문장 수 상한
-    llm_context_chars: int = 300   # AI에 함께 보내는 앞뒤 문단 길이
+    llm_max_sentences: int = 300   # 원고 한 건에서 AI에 물을 문장 수 상한
+    llm_batch: int = 20            # AI 한 번에 묻는 문장 수(같은 종류끼리)
 
     def confidence(self, score: float) -> str:
         return "높음" if score >= self.high else "보통" if score >= self.medium else "낮음"

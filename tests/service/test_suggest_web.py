@@ -51,7 +51,7 @@ class SuggestWebTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["후보"][0]["문장"], "절차를 설명한다.")
-        self.assertIn("ALLOWED_TASKS", body["AI"])
+        self.assertTrue(body["AI"].startswith("AI 미사용"))     # 테스트 환경에는 키·승인이 없다
 
     def test_bad_inputs_are_400(self):
         with tempfile.TemporaryDirectory() as folder:

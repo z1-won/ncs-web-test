@@ -27,7 +27,7 @@ def render_card(card: dict) -> list[str]:
 
 def render(result: dict) -> str:
     summary = result["요약"]
-    out = [f"[{result['원고']}] 검사 {summary['검사한 문장']}문장 · 규칙 위반 {summary['규칙 위반']} · 표현 다듬기 {summary['표현 다듬기']} · "
+    out = [f"[{result['원고']}] 검사 {summary['검사한 문장']}문장 · 규칙 위반 {summary['규칙 위반']} · 표현 다듬기 {summary['표현 다듬기']} · 표현 확인(AI) {summary['표현 확인(AI)']} · "
            f"추천 있음 {summary['추천 있음']} · 추천 없음 {summary['추천 없음']} · {result['AI']['상태']}"]
     for part in result["구성"]:
         out.append(f"\n== {part['구성']} ({len(part['문장'])})")

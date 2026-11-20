@@ -15,12 +15,12 @@ from xml.sax.saxutils import escape
 
 from ncs_suggest import KINDS, suggest_manuscript, suggest_sentence
 from ncs_suggest.__main__ import main
-from ncs_suggest.config import DEFAULT_CONFIG, SOURCE_AI, SOURCE_RULE
+from ncs_suggest.config import AI_STATUS, DEFAULT_CONFIG, SOURCE_AI, SOURCE_RULE
 from ncs_suggest.endings import read_predicate
 from ncs_suggest.examples import similar
 from ncs_suggest.extract import split_prefix
 from ncs_suggest.kinds import check
-from ncs_suggest.llm_suggest import ai_candidates, validate
+from ncs_suggest.llm_suggest import validate
 from ncs_suggest.rewrite import candidates
 
 HP = "http://www.hancom.co.kr/hwpml/2011/paragraph"
@@ -205,58 +205,72 @@ class SentenceModeTests(unittest.TestCase):
         self.assertTrue(result["추천 없음"].startswith("추천 없음(사람이 고쳐야 함)"))
 
 
-def fake(answer: dict, model="fake-model"):
+def fake(fix=(), wording=(), model="fake-model"):
+    """가짜 LLM — 규칙에 걸린 문장 줄을 받으면 fix, 규정에 맞는 문장 줄을 받으면 wording 지적을 돌려준다."""
     calls = []
 
-    def asker(system, user):
-        calls.append(user)
-        return {"data": answer, "model": model}
+    def asker(lines):
+        calls.append(list(lines))
+        violating = any(check(kind, line)[0] is not True for line in lines for kind in ("교수 방법",))
+        return {"data": {"findings": list(fix if violating else wording)}, "model": model}
 
     return asker, calls
 
 
 class AiTests(unittest.TestCase):
-    """AI 후보는 가짜 응답으로만 검사한다(실제 호출 없음)."""
+    """AI 후보는 가짜 응답으로만 검사한다(실제 호출 없음). 수행 ③·평가 ④와 같은 줄 번호 방식(line_findings)."""
 
     def test_valid_candidate_is_rechecked_and_marked(self):
-        asker, calls = fake({"후보": [{"문장": "사례를 중심으로 절차를 설명한다.", "이유": "종결 교정"}]})
+        asker, calls = fake(fix=[{"line": 1, "reason": "종결 교정", "suggestion": "사례를 중심으로 절차를 설명한다."}])
         result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", use_llm=True, asker=asker)
-        sources = [c["출처"] for c in result["후보"]]
-        self.assertEqual(sources, [SOURCE_RULE, SOURCE_AI])
+        self.assertEqual([c["출처"] for c in result["후보"]], [SOURCE_RULE, SOURCE_AI])
         ai = result["후보"][1]
-        self.assertEqual(ai["모델"], "fake-model")
-        self.assertIn("규칙 재검사 통과", ai["근거"])
-        self.assertIn("[문장] 사례 중심으로 절차를 설명함.", calls[0])
-        self.assertEqual(result["AI"], "AI 사용(fake-model)")
+        self.assertEqual((ai["모델"], ai["근거"]), ("fake-model", ["종결 교정", "규칙 재검사 통과"]))
+        self.assertEqual(calls, [["사례 중심으로 절차를 설명함."]])          # 문장 줄만 보낸다(앞뒤 문단 없음)
+        self.assertTrue(result["AI"].startswith("AI 사용(fake-model)"))
 
     def test_bad_ai_candidates_are_dropped_with_reasons(self):
-        answer = {"후보": [
-            {"문장": "사례 중심으로 절차를 설명함."},                        # 규정 위반(그대로)
-            {"문장": "사례 중심으로 절차를 3단계로 설명한다."},               # 새 수치
-            {"문장": "사례 중심으로 Agile 절차를 설명한다."},                 # 새 영문
-            {"문장": "학습자가 현장 전문가와 협업 프로젝트를 수행하도록 지도한다."},   # 내용을 바꿈
-            {"문장": "사례 중심으로 절차를 설명한다."},                       # 규칙 후보와 같음
-        ]}
-        asker, _ = fake(answer)
-        result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", use_llm=True, asker=asker)
-        self.assertEqual([c["출처"] for c in result["후보"]], [SOURCE_RULE])
-        reasons = [d["이유"] for d in result["버린 AI 후보"]]
-        self.assertEqual(len(reasons), 5)
-        self.assertIn("같음", reasons[0])
-        self.assertIn("수치", reasons[1])
-        self.assertIn("영문", reasons[2])
-        self.assertIn("너무 다름", reasons[3])
-        self.assertIn("이미 있는 후보", reasons[4])
+        cases = [
+            ("사례 중심으로 절차를 설명함.", "같음"),                              # 규정 위반(그대로)
+            ("사례 중심으로 절차를 3단계로 설명한다.", "수치"),                    # 새 수치
+            ("사례 중심으로 Agile 절차를 설명한다.", "영문"),                      # 새 영문
+            ("학습자가 현장 전문가와 협업 프로젝트를 수행하도록 지도한다.", "너무 다름"),   # 내용을 바꿈
+            ("사례 중심으로 절차를 설명한다.", "이미 있는 후보"),                  # 규칙 후보와 같음
+        ]
+        for text, why in cases:
+            asker, _ = fake(fix=[{"line": 1, "suggestion": text}])
+            result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", use_llm=True, asker=asker)
+            self.assertEqual([c["출처"] for c in result["후보"]], [SOURCE_RULE], text)
+            self.assertIn(why, result["버린 AI 후보"][0]["이유"], text)
 
     def test_validate_brand(self):
         self.assertIn("상호", validate("교수 방법", "프로그램으로 표를 작성함.", "엑셀로 표를 작성한다."))
         self.assertIsNone(validate("교수 방법", "프로그램으로 표를 작성함.", "프로그램으로 표를 작성한다."))
 
+    def test_wording_card_for_rule_compliant_sentence(self):
+        finding = {"line": 1, "kind": "어색한 낱말", "reason": "'저격한다'는 문맥에 맞지 않음", "suggestion": "절차를 단계별로 설명한다."}
+        asker, calls = fake(wording=[finding])
+        result = suggest_sentence("절차를 단계별로 저격한다.", "교수 방법", use_llm=True, asker=asker)
+        self.assertEqual(calls, [["절차를 단계별로 저격한다."]])
+        self.assertEqual((result["상태"], result["사유"]), (AI_STATUS, ["어색한 낱말 — '저격한다'는 문맥에 맞지 않음"]))
+        self.assertEqual([(c["문장"], c["출처"]) for c in result["후보"]], [("절차를 단계별로 설명한다.", SOURCE_AI)])
+
+    def test_wording_without_usable_sentence_is_honest(self):
+        asker, _ = fake(wording=[{"line": 1, "kind": "어색한 낱말", "reason": "낱말이 어색함", "suggestion": "절차를 5단계로 설명한다."}])
+        result = suggest_sentence("절차를 단계별로 저격한다.", "교수 방법", use_llm=True, asker=asker)
+        self.assertEqual((result["상태"], result["후보"]), (AI_STATUS, []))
+        self.assertTrue(result["추천 없음"].startswith("추천 없음(사람이 고쳐야 함)"))
+        self.assertIn("수치", result["버린 AI 후보"][0]["이유"])
+
+    def test_no_wording_finding_stays_compliant(self):
+        asker, _ = fake()
+        result = suggest_sentence("절차를 단계별로 설명한다.", "교수 방법", use_llm=True, asker=asker)
+        self.assertEqual(result["상태"], "규정에 맞음")
+
     def test_blocked_call_reports_reason(self):
-        accepted, dropped, state = ai_candidates("교수 방법", "절차를 설명함.", ["'~한다.'로 끝나지 않음"])
-        self.assertEqual((accepted, dropped), ([], []))
-        self.assertTrue(state.startswith("AI 미사용"))
-        self.assertIn("ALLOWED_TASKS", state)       # 허용 목록에 sentence_suggest가 아직 없다
+        result = suggest_sentence("절차를 설명함.", "교수 방법", use_llm=True)   # 키·승인 없음
+        self.assertTrue(result["AI"].startswith("AI 미사용"))
+        self.assertEqual([c["출처"] for c in result["후보"]], [SOURCE_RULE])
 
 
 def _p(text: str) -> str:
@@ -329,16 +343,19 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(self.result["AI"]["상태"], "AI 미사용 — 요청하지 않음")
         self.assertEqual(len({c["번호"] for c in self.cards.values()}), len(self.cards))
 
-    def test_ai_requested_but_blocked_stops_after_first(self):
+    def test_ai_requested_but_blocked_asks_nothing(self):
         result = suggest_manuscript(self.path, use_llm=True)
-        self.assertIn("ALLOWED_TASKS", result["AI"]["상태"])
-        self.assertEqual(result["AI"]["물은 문장 수"], 1)
+        self.assertTrue(result["AI"]["상태"].startswith("AI 미사용"))
+        self.assertEqual((result["AI"]["물은 문장 수"], result["AI"]["호출"]), (0, 0))
+        self.assertEqual(result["요약"]["규칙 위반"], len(self.cards))            # 규칙 결과는 그대로
 
     def test_ai_injected_for_manuscript(self):
-        asker, calls = fake({"후보": []})
+        asker, calls = fake()
         result = suggest_manuscript(self.path, use_llm=True, asker=asker)
-        self.assertEqual(result["AI"]["물은 문장 수"], len(self.cards))
-        self.assertTrue(any("[앞 문단]" in call for call in calls))
+        self.assertEqual(result["AI"]["물은 문장 수"], result["요약"]["검사한 문장"] - result["요약"]["확인 필요"])   # 걸린 문장 + 규정에 맞는 문장
+        self.assertEqual(result["AI"]["호출"], len(calls))
+        self.assertLess(len(calls), result["AI"]["물은 문장 수"])                # 같은 종류끼리 묶어 묻는다
+        self.assertEqual(result["요약"]["표현 확인(AI)"], 0)
 
     def test_cli(self):
         out = io.StringIO()
