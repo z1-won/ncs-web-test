@@ -100,7 +100,7 @@ function MenuGroup({ group, pathname }) {
 export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
   const location = useLocation();
   const { status, account, logOut } = useAuth();
-  const signedOut = status === "out";     // 로그인 화면: 로고만 보이고 메뉴는 숨긴다
+  const signedOut = status === "out";     // 로그인 전: 메뉴를 숨긴다. 처음 화면에는 [로그인]만, 로그인 화면에는 로고만 보인다
   const items = useMemo(
     () => anchors.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" ? hasResult : true)),
     [anchors, hasHistory, hasResult],
@@ -139,7 +139,11 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
                 </h2>
               </div>
               {/* 진행 현황은 작업 도구가 아니라 가끔 확인하는 화면이라 작업 메뉴 밖(머리글 오른쪽)에 둔다. 로그인이 생기면 이 자리가 '내 원고'가 된다 */}
-              {signedOut ? null : (
+              {signedOut ? (location.pathname === "/" && (
+              <div className="header-actions">
+                <Link to="/login" className="krds-btn small secondary">로그인</Link>
+              </div>
+              )) : (
               <div className="header-actions">
                 {account && <span className="header-account"><strong>{account.name}</strong> {account.role_name}</span>}
                 <Link to="/progress" className={`krds-btn small ${location.pathname === "/progress" ? "secondary" : "tertiary"}`}

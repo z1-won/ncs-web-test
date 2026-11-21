@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 
 import { api } from "../lib/api.js";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
+import { useAuth } from "../lib/auth.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 import { StageBar } from "./ProgressPage.jsx";
 
@@ -37,9 +38,12 @@ const GROUPS = [
 
 export default function HomePage() {
   usePageTitle("");
-  const [list, setList] = useState(null);      // null: DB 없음 또는 확인 전(미리 보기 자리를 그리지 않는다)
+  const [list, setList] = useState(null);      // null: DB 없음, 로그인 전 또는 확인 전(미리 보기 자리를 그리지 않는다)
+  const { status } = useAuth();
+  const signedOut = status === "out";            // 로그인 전에도 이 화면은 보인다 — 기능을 누르면 로그인 화면이 나온다
 
   useEffect(() => {
+    if (signedOut) { setList(null); return undefined; }
     let alive = true;
     (async () => {
       const health = await api.health();
@@ -48,7 +52,7 @@ export default function HomePage() {
       if (alive && ok) setList(data);
     })();
     return () => { alive = false; };
-  }, []);
+  }, [signedOut]);
 
   return (
     <>
@@ -57,9 +61,13 @@ export default function HomePage() {
       <div className="home-hero">
         <div>
           <h1 className="page-title">어떤 업무를 하시겠습니까?</h1>
-          <p className="page-desc">개발계획서 작성부터 원고 검수, 그림의 권리 확인까지 한곳에서 할 수 있습니다. 결과는 모두 참고용이며 최종 판단은 담당자가 합니다.</p>
+          <p className="page-desc">
+            개발계획서 작성부터 원고 검수, 그림의 권리 확인까지 한곳에서 할 수 있습니다. 결과는 모두 참고용이며 최종 판단은 담당자가 합니다.
+            {signedOut && " 기능을 쓰려면 로그인해 주세요."}
+          </p>
         </div>
-        <Link className="krds-btn large primary" to="/review">원고 검수 시작</Link>
+        {signedOut ? <Link className="krds-btn large primary" to="/login">로그인</Link>
+                   : <Link className="krds-btn large primary" to="/review">원고 검수 시작</Link>}
       </div>
 
       {list && (
