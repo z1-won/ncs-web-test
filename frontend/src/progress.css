@@ -30,43 +30,59 @@
   .progress-step-head { min-height: 3.2rem; }
 }
 
-/* 처음 화면(/) — 최근 원고 미리 보기와 기능 바로 가기 */
-.home-section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--krds-gap-3); margin-bottom: var(--krds-gap-4); }
-.home-section-head .section-title { margin-bottom: 0; }
-.home-section-head .section-title .meta { margin-left: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-subtle); }
-.home-hero {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-5);
-  margin-bottom: var(--krds-gap-8); padding: var(--krds-gap-7) var(--krds-gap-6);
-  border-radius: var(--krds-radius-large1, 1.2rem); background: var(--krds-light-color-surface-gray-subtler);
+/* 처음 화면(/) — app.css와 같은 규칙을 따른다: 색·간격·글자 크기는 KRDS 토큰, 카드는 요약 칸(.upscale-summary > div)과 같은 테두리·모서리·안쪽 여백,
+   격자는 열 수를 정해 둔다(3 → 1, 입력 격자 .form-section-grid와 같은 1023·599 경계). 창 폭에 따라 칸 수가 제멋대로 바뀌지 않는다. */
+.home-hero {   /* 위쪽 띠 — 업로드 칸(.review-form.fieldset)과 같은 테두리·모서리의 한 칸 */
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-6);
+  padding: var(--krds-padding-8) var(--krds-padding-6);
+  border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2);
+  background: var(--krds-light-color-surface-secondary-subtler);
 }
-.home-hero .page-title { margin: 0 0 var(--krds-gap-2); }
-.home-hero .page-desc { margin: 0; }
+.home-hero .page-title { margin-bottom: var(--krds-gap-3); }
+.home-hero .page-desc { margin-bottom: 0; }
 .home-hero .krds-btn { flex: none; }
-.home-recent { list-style: none; margin: 0 0 var(--krds-gap-8); padding: 0; display: grid; gap: var(--krds-gap-4); grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr)); }
-.home-groups { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--krds-gap-6); margin-bottom: var(--krds-gap-8); align-items: start; }
-@media (max-width: 1100px) { .home-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .home-groups { grid-template-columns: 1fr; } }
+.home-section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--krds-gap-3); margin: var(--krds-gap-9) 0 var(--krds-gap-5); }
+.home-section-head .section-title { margin: 0; }
+.home-section-head .section-title .meta { margin-left: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-subtle); }
+
+.home-grid { --home-cols: 3; display: grid; grid-template-columns: repeat(var(--home-cols), minmax(0, 1fr)); column-gap: var(--krds-gap-5); row-gap: var(--krds-gap-5); margin: 0; padding: 0; list-style: none; }
+@media (max-width: 599px) { .home-grid { --home-cols: 1; } }
+
+/* 기능 묶음 — 묶음 셋(열)마다 제목 한 줄 + 카드 석 줄(3 × 3). 줄은 묶음들이 함께 쓰고(subgrid) 카드 줄 높이는 모두 같게 해서(1fr),
+   글 길이가 달라도 카드 높이와 줄 위치가 열마다 어긋나지 않는다. */
+.home-groups { margin-top: var(--krds-gap-9); grid-template-rows: auto repeat(3, 1fr); grid-auto-flow: column; }
+.home-group { display: grid; grid-row: span 4; grid-template-rows: subgrid; min-width: 0; }
+.home-group ul { display: contents; }
+.home-group ul, .home-group li { margin: 0; padding: 0; list-style: none; }
 .home-group-title {
-  margin: 0 0 var(--krds-gap-4); padding-bottom: var(--krds-gap-3); font-size: var(--krds-pc-font-size-heading-medium);
-  border-bottom: 2px solid var(--krds-light-color-border-gray-darker, var(--krds-light-color-text-basic));
+  margin: 0; padding-bottom: var(--krds-gap-3); font-size: var(--krds-pc-font-size-heading-small); font-weight: var(--krds-font-weight-bold);
+  border-bottom: 2px solid var(--krds-light-color-border-gray-dark);
 }
-.home-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--krds-gap-4); }
-.home-recent a, .home-group a {
-  display: flex; flex-direction: column; gap: var(--krds-gap-2); height: 100%; padding: var(--krds-gap-5);
-  border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2, 0.8rem);
-  background: var(--krds-light-color-surface-white); color: inherit; text-decoration: none;
+@media (max-width: 1023px) {   /* 좁은 화면: 묶음을 세로로 쌓고, 묶음 안 카드 셋을 가로 한 줄로(같은 줄이라 높이가 같다) */
+  .home-groups { display: block; }
+  .home-group { display: block; }
+  .home-group + .home-group { margin-top: var(--krds-gap-8); }
+  .home-group-title { margin-bottom: var(--krds-gap-5); }
+  .home-group ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--krds-gap-5); }
 }
-.home-group a.is-main { border: 2px solid var(--krds-light-color-text-basic); }
-.home-recent a:hover, .home-group a:hover { border-color: var(--krds-light-color-border-primary); }
-.home-recent a:focus-visible, .home-group a:focus-visible { outline: 2px solid var(--krds-light-color-border-primary); outline-offset: 2px; }
-.home-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-2); }
-.home-card-head strong { font-size: var(--krds-pc-font-size-heading-small); }
+@media (max-width: 599px) { .home-group ul { grid-template-columns: minmax(0, 1fr); } }
+
+/* 카드 — 최근 원고와 기능 카드가 같은 모양. 안쪽 줄 순서를 고정한다: 제목 → 설명 → 필요한 파일 → (맨 아래) 표시 */
+.home-grid a {
+  display: flex; flex-direction: column; gap: var(--krds-gap-2); height: 100%; padding: var(--krds-padding-6);
+  border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2);
+  background: var(--krds-light-color-background-white); color: var(--krds-light-color-text-basic); text-decoration: none;
+}
+.home-grid a:hover { border-color: var(--krds-light-color-border-primary); }
+.home-grid a.is-main { border-color: var(--krds-light-color-border-primary); box-shadow: inset 0 0 0 1px var(--krds-light-color-border-primary); }   /* 주황은 강조선에만 */
+.home-card-title { font-size: var(--krds-pc-font-size-heading-xsmall); font-weight: var(--krds-font-weight-bold); }
 .home-card-desc { font-size: var(--krds-pc-font-size-body-small); }
-.home-card-files { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small, 1.3rem); }
-.home-recent-steps { display: flex; align-items: center; gap: 0.4rem; }
-.home-recent-steps i { width: 1.6rem; height: 0.6rem; border-radius: 0.3rem; background: var(--krds-light-color-border-gray-light); }
+.home-card-files { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.home-card-tags { display: flex; flex-wrap: wrap; gap: var(--krds-gap-2); margin-top: auto; padding-top: var(--krds-gap-2); min-height: calc(var(--krds-gap-2) + 2.4rem); }
+.home-recent-steps { display: flex; align-items: center; gap: var(--krds-gap-1); }
+.home-recent-steps i { flex: 1 1 0; max-width: 2.4rem; height: 0.6rem; border-radius: var(--krds-radius-max); background: var(--krds-light-color-border-gray-light); }
 .home-recent-steps i.is-on { background: var(--krds-light-color-border-primary); }
-.home-recent-steps b { margin-left: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); }
+.home-recent-steps b { margin-left: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-bold); }
 
 /* 머리글 오른쪽의 '진행 현황' — 작업 메뉴와 떨어진 자리 */
 #krds-header .header-container .inner { position: relative; }
