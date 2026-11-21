@@ -386,4 +386,16 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("014_review_version",
      "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS version_id uuid REFERENCES volume_versions(id) ON DELETE SET NULL;\n"
      "CREATE INDEX IF NOT EXISTS review_runs_version_idx ON review_runs (version_id)"),
+    # 015: 기록마다 돌린 계정(account_id)과, 세분류 건의 어느 권·어느 단계 것인지(case_volume_id, case_stage)를 적는다(ncs_service.access).
+    # 돌린 계정은 볼 수 있는 범위를 거르는 데 쓴다(집필진은 담당 권의 기록과 자기가 돌린 기록만). 원고 검수는 판본(version_id)으로 권에 붙으므로 권·단계 열이 없다.
+    ("015_record_owner_and_stage",
+     "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS account_id uuid REFERENCES accounts(id) ON DELETE SET NULL;\n"
+     "ALTER TABLE volume_runs ADD COLUMN IF NOT EXISTS account_id uuid REFERENCES accounts(id) ON DELETE SET NULL;\n"
+     "ALTER TABLE volume_runs ADD COLUMN IF NOT EXISTS case_volume_id uuid REFERENCES case_volumes(id) ON DELETE SET NULL;\n"
+     "ALTER TABLE volume_runs ADD COLUMN IF NOT EXISTS case_stage text;\n"
+     "ALTER TABLE work_records ADD COLUMN IF NOT EXISTS account_id uuid REFERENCES accounts(id) ON DELETE SET NULL;\n"
+     "ALTER TABLE work_records ADD COLUMN IF NOT EXISTS case_volume_id uuid REFERENCES case_volumes(id) ON DELETE SET NULL;\n"
+     "ALTER TABLE work_records ADD COLUMN IF NOT EXISTS case_stage text;\n"
+     "CREATE INDEX IF NOT EXISTS volume_runs_case_volume_idx ON volume_runs (case_volume_id);\n"
+     "CREATE INDEX IF NOT EXISTS work_records_case_volume_idx ON work_records (case_volume_id)"),
 )

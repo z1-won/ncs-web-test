@@ -7,11 +7,11 @@ import traceback
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, Form, Response, UploadFile
+from fastapi import FastAPI, File, Form, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from ..common import Services, error_response, logger, parse_roles
+from ..common import Services, error_response, logger, own_and_link, parse_roles
 from ..schemas import CheckName, ErrorResponse, ReviewResponse, SavedPaths, UploadResponse
 
 
@@ -79,6 +79,7 @@ def register(app: FastAPI, services: Services) -> None:
         responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     )
     def review(
+        request: Request,
         files: Annotated[list[UploadFile] | None, File()] = None,
         check: Annotated[CheckName, Form()] = "position",
         module_code: Annotated[str, Form()] = "",
@@ -105,6 +106,7 @@ def register(app: FastAPI, services: Services) -> None:
                     raise ValueError("roles는 업로드할 때 지정합니다. upload 토큰과 함께 보낼 수 없습니다")
                 payload = _run(kept.files, check, module_code, group or None, stage=stage, roles=kept.assigned or None, image_dpi=image_dpi,
                                work_stage=marked, version_id=kept.version_id)
+                own_and_link(request, store, "review", payload.id)
             else:
                 if group:
                     raise ValueError("group은 upload 토큰과 함께만 쓸 수 있습니다")
@@ -130,6 +132,7 @@ def register(app: FastAPI, services: Services) -> None:
                     if not saved:
                         raise ValueError("업로드된 파일이 없습니다")
                     payload = _run(saved, check, module_code, None, stage=stage, roles=assigned or None, image_dpi=image_dpi, work_stage=marked)
+                    own_and_link(request, store, "review", payload.id)
         except ValueError as error:
             return error_response(400, str(error))
         except Exception as error:

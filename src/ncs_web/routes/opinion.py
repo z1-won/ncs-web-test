@@ -10,9 +10,9 @@ import tempfile
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 
-from ..common import Services, error_response, logger
+from ..common import Services, error_response, logger, own_and_link
 from ..schemas import ErrorResponse
 
 
@@ -30,11 +30,14 @@ def _save(folder: Path, upload: UploadFile, fallback: str) -> Path:
 def register(app: FastAPI, services: Services) -> None:
     @app.post("/api/opinion", responses={400: {"model": ErrorResponse}})
     def opinion(
+        request: Request,
         manuscript: Annotated[UploadFile, File()],
         opinions: Annotated[list[UploadFile], File()],
         rounds: Annotated[list[str] | None, Form()] = None,
         print_pdf: Annotated[UploadFile | None, File()] = None,
         previous: Annotated[UploadFile | None, File()] = None,
+        case_volume: Annotated[str, Form()] = "",     # 세분류 건의 권에서 열어 돌린 것이면 그 권 id와 단계 — 개수 기록이 그 단계에 붙는다
+        case_stage: Annotated[str, Form()] = "",
     ) -> Any:
         """판정 후보표 JSON(ncs_opinion.review). opinions: 검토의견서·심의의견서(PDF·hwp·hwpx), rounds: 의견서 순서대로 '1차'·'2차'·'심의'(선택),
         print_pdf: 최종 원고 출력본(근거 쪽 표시), previous: 반영 전 원고. 판정은 LLM이 한다 — 서버에 LLM 설정·반출 승인이 있으면
@@ -52,7 +55,9 @@ def register(app: FastAPI, services: Services) -> None:
             except ValueError as error:
                 return error_response(400, str(error))
             files = [{"role": "manuscript", "filename": final.name}] + [{"role": "opinion", "filename": s.name} for s in sheets]
-        return {**result, "진행 현황 기록": _record(services, final.name, result, files)}
+        record = _record(services, final.name, result, files)
+        linked = own_and_link(request, services.store, "opinion", record["id"] if record else None, case_volume, case_stage)
+        return {**result, "진행 현황 기록": record, **({"건에 붙임": linked} if case_volume else {})}
 
 
 def _record(services: Services, manuscript: str, result: dict, files: list[dict]) -> dict | None:

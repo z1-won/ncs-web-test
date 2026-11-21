@@ -56,3 +56,33 @@ def actor(request, given: str = "") -> str:
     """변경 이력에 남길 '누가'. 로그인했으면 계정의 이름(아이디) — 화면이 보낸 이름은 쓰지 않는다. 로그인을 끈 서버(테스트)에서만 given을 쓴다."""
     account = getattr(request.state, "account", None)
     return f"{account['name']}({account['login']})" if account else (given or "").strip()
+
+
+def viewer(request) -> dict | None:
+    """로그인한 계정. 로그인을 쓰지 않는 서버면 None."""
+    return getattr(request.state, "account", None)
+
+
+def scope_of(request, store):
+    """이 요청이 볼 수 있는 기록의 범위(ncs_service.access.Scope). None이면 전부 — 에디터, 직능연, 로그인을 쓰지 않는 서버."""
+    from ncs_service import access
+
+    return access.scope(store.dsn, viewer(request))
+
+
+def own_and_link(request, store, tool: str, record_id: str | None, case_volume: str = "", case_stage: str = "") -> bool:
+    """방금 남긴 기록에 돌린 계정을 적고, 세분류 건의 권·단계에서 열어 돌린 것이면 거기에 붙인다. 붙였으면 True.
+    tool = review / volume / opinion / rights. 기록이 없으면(저장 실패, DB 없음) 아무것도 하지 않는다."""
+    from ncs_service import access
+
+    if not record_id or not store.supports_history:
+        return False
+    account = viewer(request)
+    kind = access.LINKABLE.get(tool, "review")
+    try:
+        access.set_owner(store.dsn, kind, record_id, account.get("id") if account else None)
+        if case_volume and case_stage and tool in access.LINKABLE:
+            return access.link(store.dsn, tool, record_id, case_volume, case_stage, account)
+    except Exception as error:      # 부가 정보라 결과를 막지 않는다
+        logger.exception("기록의 계정·단계 표시 실패: %s", error)
+    return False

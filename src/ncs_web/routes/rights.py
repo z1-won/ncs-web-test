@@ -17,7 +17,7 @@ from urllib.parse import quote
 from fastapi import FastAPI, File, Form, Request, Response, UploadFile
 from starlette.exceptions import HTTPException
 
-from ..common import Services, actor, logger
+from ..common import Services, actor, logger, own_and_link
 
 MAX_BYTES = 200 << 20      # 원고 + 서류 합계 상한(업로드 보관함과 같은 200MB)
 MAX_FORMS = 30
@@ -46,6 +46,8 @@ def register(app: FastAPI, services: Services) -> None:
         transfer_author: Annotated[bool, Form()] = False, transfer_maker: Annotated[bool, Form()] = False,
         portrait: Annotated[str, Form()] = "unknown", pledge: Annotated[bool, Form()] = False,
         save: Annotated[bool, Form()] = False, by: Annotated[str, Form()] = "", module_code: Annotated[str, Form()] = "",
+        case_volume: Annotated[str, Form()] = "",     # 세분류 건의 권에서 열어 돌린 것이면 그 권 id와 단계 — 개수 기록이 그 단계에 붙는다
+        case_stage: Annotated[str, Form()] = "",
     ) -> dict[str, Any]:
         from ncs_core.module_code import resolve_module_code
         from ncs_rights.check import Options
@@ -107,6 +109,10 @@ def register(app: FastAPI, services: Services) -> None:
                 files = [{"role": "manuscript", "filename": manuscript_path.name}] + [{"role": "form", "filename": p.name} for p in form_paths]
                 report["진행 현황 기록"] = store.save_work_record(RIGHTS, manuscript_path.name, summarize_rights(report), files,
                                                               module_code=module_code)
+                record = report["진행 현황 기록"]
+                linked = own_and_link(request, store, "rights", record["id"] if record else None, case_volume, case_stage)
+                if case_volume:
+                    report["건에 붙임"] = linked
             except Exception as error:      # 기록은 부가 기능이라 점검 결과를 막지 않는다
                 logger.exception("권리 증빙 점검 개수 기록 실패: %s", error)
         return report

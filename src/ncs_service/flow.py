@@ -53,10 +53,11 @@ class Stage:
     legacy: int | None = None     # 원고 진행 현황(모듈 코드별 7단계, ncs_service.progress)의 단계 번호
     manuscript: bool = False      # 제출할 때 원고 파일(판본)을 올리는 단계
     review: bool = False          # 그 판본으로 원고 검수를 돌리는 단계. 검수 기록 없이 보완 요청·완료를 하려면 사유를 적는다
+    tools: tuple[str, ...] = ()   # 이 단계의 근거를 만드는 도구(opinion 의견 반영 검토, volume 원고 분량, rights 권리 증빙 점검). 돌린 기록이 이 단계에 붙는다
 
     def public(self) -> dict:
         return {"key": self.key, "name": self.name, "unit": self.unit, "kind": self.kind, "who": self.who, "evidence": self.evidence,
-                "submit": list(self.submit), "confirm": list(self.confirm), "manuscript": self.manuscript, "review": self.review}
+                "submit": list(self.submit), "confirm": list(self.confirm), "manuscript": self.manuscript, "review": self.review, "tools": list(self.tools)}
 
 
 STAGES: tuple[Stage, ...] = (
@@ -66,17 +67,18 @@ STAGES: tuple[Stage, ...] = (
           manuscript=True, review=True),
     Stage("review1", "1차 검토", VOLUME, EXTERNAL, ("author",), ("reviewer",), "집필진 제출, 검토진 판정", "1차 검토의견서"),
     Stage("revision", "수정본과 1차 의견 반영", VOLUME, ROUNDTRIP, ("author",), ("editor", "krivet"), "집필진 제출, 에디터 확인, 직능연 확정",
-          "의견 반영 검토, 원고 검수", 3, manuscript=True, review=True),
+          "의견 반영 검토, 원고 검수", 3, manuscript=True, review=True, tools=("opinion",)),
     Stage("review2", "2차 검토", VOLUME, EXTERNAL, ("author",), ("reviewer",), "집필진 제출, 검토진 판정", "2차 검토의견서"),
     Stage("final", "최종본과 2차 의견 반영", VOLUME, ROUNDTRIP, ("author",), ("editor", "krivet"), "집필진 제출, 에디터 확인, 직능연 확정",
-          "의견 반영 검토", 4, manuscript=True),
+          "의견 반영 검토", 4, manuscript=True, tools=("opinion",)),
     Stage("deliberation", "심의", CASE, EXTERNAL, ("author",), ("committee",), "개발기관이 심의본 제출, 소위원회 위원 판정", "심의의견서"),
     Stage("polish", "심의 반영과 최종 윤문", VOLUME, ROUNDTRIP, ("author",), ("editor",), "집필진 제출, 에디터 확인", "심의의견 반영 검토, 원고 검수", 5,
-          manuscript=True, review=True),
+          manuscript=True, review=True, tools=("opinion",)),
     Stage("final_f02", "최종본 검수(F02)", VOLUME, HANDOFF, ("editor",), ("editor",), "에디터", "원고 검수(전체)", 6, review=True),
     Stage("final_f03", "최종 판정(F03)", VOLUME, HANDOFF, ("editor",), ("krivet",), "직능연", "F03 검수"),
-    Stage("volume", "분량", VOLUME, ROUNDTRIP, ("author",), ("krivet",), "개발기관 산정, 직능연 확인", "원고 분량", 7),
-    Stage("rights", "권리 증빙", VOLUME, ROUNDTRIP, ("author",), ("editor",), "개발기관 제출(1차 검토 후 4주 이내), 에디터 확인", "권리 증빙 점검", 7),
+    Stage("volume", "분량", VOLUME, ROUNDTRIP, ("author",), ("krivet",), "개발기관 산정, 직능연 확인", "원고 분량", 7, tools=("volume",)),
+    Stage("rights", "권리 증빙", VOLUME, ROUNDTRIP, ("author",), ("editor",), "개발기관 제출(1차 검토 후 4주 이내), 에디터 확인", "권리 증빙 점검", 7,
+          tools=("rights",)),
 )
 BY_KEY = {stage.key: stage for stage in STAGES}
 CASE_STAGES = tuple(stage for stage in STAGES if stage.unit == CASE)

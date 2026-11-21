@@ -6,8 +6,9 @@
 - 볼 수 있는 범위: 에디터와 직능연은 전부, 집필진은 자기가 담당인 권과 그 권의 사건만(건 단위 단계는 상태만). 검토진과 위원의 화면은 아직 없다.
 - 판본: 원고를 올리는 단계의 제출은 파일과 함께 한다(submit_version). 파일은 기한 없이 보관하고, 그 판본으로 돌린 원고 검수는
   review_runs.version_id로 이어진다. 검수하는 단계의 보완 요청과 완료는 그 검수 묶음을 근거로 가리키고, 검수 기록이 없으면 사유를 받는다.
-- 원고 진행 현황(모듈 코드별 7단계)의 완료 표시와의 관계: 권을 건에 넣을 때 이미 있던 완료 표시를 사건으로 옮겨 오고(adopt),
-  그 뒤 진행 현황에서 표시하거나 되돌리면 같은 트랜잭션에서 사건도 남긴다(mirror_stage_mark). 사건 쪽이 빠지는 일이 없다.
+- 근거 기록: 의견 반영 검토, 원고 분량, 권리 증빙 점검을 권의 단계에서 열어 돌리면 그 기록이 그 권과 단계에 붙는다(access.link).
+- 원고 진행 현황(모듈 코드별 7단계)과의 관계: 권을 건에 넣을 때 이미 있던 완료 표시를 사건으로 옮겨 온다(adopt). 건에 든 원고의 단계는
+  건 화면에서만 진행한다(진행 현황의 완료 표시는 막는다 — routes.progress). 단계가 두 군데에서 따로 움직이지 않게 하려는 것이다.
 """
 
 from __future__ import annotations
@@ -157,14 +158,22 @@ def _act(connection, case_id: str, definition: flow.Stage, action: str, account:
     now = flow.states(_stage_events(connection, case_id)).get((volume_id, definition.key), flow.blank())
     target = flow.next_state(definition, now["state"], action, note=note, before=now["before"])
     evidence = dict(evidence or {})
-    if volume_id and definition.review and action in (flow.REQUEST, flow.COMPLETE):
-        # 근거: 이 단계에 제출한 판본(없으면 그 권의 가장 최근 판본)과 그 판본의 검수 묶음. 검수 기록이 없으면 사유를 받는다 — 일관성 규칙 2
-        latest = _latest_version(connection, volume_id, definition.key if definition.manuscript else None)
-        if latest and latest["group"]:
-            evidence.update({"version": latest["id"], "review_group": latest["group"]})
-            version_id = version_id or latest["id"]
-        elif not note.strip():
-            raise flow.FlowError(f"이 판본으로 돌린 검수 기록이 없습니다. 검수를 먼저 실행하거나, 검수 없이 ‘{flow.ACTIONS[action]}’을 하는 사유를 적어 주세요")
+    if volume_id and (definition.review or definition.tools) and action in (flow.REQUEST, flow.COMPLETE):
+        # 근거: 이 단계에 제출한 판본(없으면 그 권의 가장 최근 판본)의 검수 묶음과, 이 단계에 붙은 기록. 하나도 없으면 사유를 받는다 — 일관성 규칙 2
+        found = False
+        if definition.review:
+            latest = _latest_version(connection, volume_id, definition.key if definition.manuscript else None)
+            if latest and latest["group"]:
+                evidence.update({"version": latest["id"], "review_group": latest["group"]})
+                version_id = version_id or latest["id"]
+                found = True
+        if definition.tools:
+            linked = _linked(connection, [volume_id]).get((volume_id, definition.key), [])
+            if linked:
+                evidence["records"] = [item["id"] for item in linked]
+                found = True
+        if not found and not note.strip():
+            raise flow.FlowError(f"이 단계에 붙은 검수나 점검 기록이 없습니다. 먼저 실행하거나, 기록 없이 ‘{flow.ACTIONS[action]}’을 하는 사유를 적어 주세요")
     connection.execute(
         "INSERT INTO case_events (id, case_id, volume_id, stage, action, actor_id, actor, proxy, note, evidence, version_id) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)",
@@ -248,30 +257,37 @@ def tag_review_version(dsn: str, run_id: str, version_id: str) -> None:
         connection.execute("UPDATE review_runs SET version_id = %s WHERE id = %s", (version_id, run_id))
 
 
-def mirror_stage_mark(connection, module_code: str, legacy_stage: int, *, done: bool, by: str, note: str = "") -> int:
-    """원고 진행 현황의 완료 표시·되돌림을 그 권이 든 건(가장 최근 연도)의 사건으로도 남긴다. set_stage의 트랜잭션 안에서 부른다.
-    connection은 기본(튜플) 행의 연결이다. 건에 없는 원고면 아무것도 하지 않는다. 이미 그 상태면 남기지 않는다. 남긴 사건 수를 돌려준다."""
-    volume = connection.execute(
-        "SELECT v.id, v.case_id FROM case_volumes v JOIN cases c ON c.id = v.case_id WHERE v.module_code = %s ORDER BY c.year DESC LIMIT 1",
-        (module_code,)).fetchone()
-    if volume is None:
-        return 0
-    volume_id, case_id = str(volume[0]), str(volume[1])
-    rows = connection.execute("SELECT volume_id, stage, action, at, actor, note FROM case_events WHERE case_id = %s AND stage <> '' ORDER BY seq",
-                              (case_id,)).fetchall()
-    events = [{"volume_id": str(row[0]) if row[0] else None, "stage": row[1], "action": row[2], "at": row[3], "actor": row[4], "note": row[5]}
-              for row in rows]
-    current = flow.states(events)
-    written = 0
-    for stage in flow.legacy_stages(legacy_stage):
-        key = (None if stage.unit == flow.CASE else volume_id, stage.key)
-        is_done = current.get(key, flow.blank())["state"] == flow.DONE
-        if is_done == done:
-            continue
-        _event(connection, case_id, action=flow.COMPLETE if done else flow.REOPEN, actor=by, stage=stage.key, volume_id=key[0],
-               note=" ".join(filter(None, [LEGACY_NOTE + ".", note])), evidence={"from": "manuscript_stages", "module_code": module_code})
-        written += 1
-    return written
+def volume_of(dsn: str, module_code: str) -> dict | None:
+    """이 모듈 코드가 든 건과 권(가장 최근 연도의 건). 없으면 None — 원고 진행 현황이 '건에서 진행하는 원고'인지 가리는 데 쓴다."""
+    with _connect(dsn) as connection:
+        row = connection.execute(
+            "SELECT v.id AS volume_id, c.id AS case_id, c.name, c.subclass, c.year FROM case_volumes v JOIN cases c ON c.id = v.case_id "
+            "WHERE v.module_code = %s ORDER BY c.year DESC LIMIT 1", (module_code,)).fetchone()
+    return {"case_id": str(row["case_id"]), "volume_id": str(row["volume_id"]), "name": row["name"] or row["subclass"], "year": row["year"]} if row else None
+
+
+def _linked(connection, volume_ids: list[str]) -> dict[tuple[str, str], list[dict]]:
+    """권과 단계에 붙은 기록(의견 반영 검토, 권리 증빙 점검, 분량 산정) — {(권 id, 단계 key): [{'tool', 'id', 'at', 'text'}]} 최근 것부터."""
+    out: dict[tuple[str, str], list[dict]] = {}
+    records = connection.execute(
+        "SELECT id, kind, created_at, counts, case_volume_id, case_stage FROM work_records WHERE case_volume_id = ANY(%s::uuid[])", (volume_ids,)).fetchall()
+    for row in records:
+        counts = row["counts"] or {}
+        if row["kind"] == "opinion":
+            total = counts.get("전체") or {}
+            text = f"의견 {total.get('총 의견', 0)}개 중 반영 후보 {total.get('반영 후보', 0)}, 미반영 후보 {total.get('미반영 후보', 0)}, 확인 필요 {total.get('확인 필요', 0)}"
+        else:
+            text = f"판정 {counts.get('판정') or '-'}, 원고 그림 {counts.get('원고 그림') or 0}개, 누락 {counts.get('누락') or 0}개"
+        out.setdefault((str(row["case_volume_id"]), row["case_stage"]), []).append(
+            {"tool": row["kind"], "id": str(row["id"]), "at": row["created_at"], "text": text})
+    runs = connection.execute(
+        "SELECT id, created_at, pages, case_volume_id, case_stage FROM volume_runs WHERE case_volume_id = ANY(%s::uuid[])", (volume_ids,)).fetchall()
+    for row in runs:
+        out.setdefault((str(row["case_volume_id"]), row["case_stage"]), []).append(
+            {"tool": "volume", "id": str(row["id"]), "at": row["created_at"], "text": f"분량 {row['pages']}매"})
+    for rows in out.values():
+        rows.sort(key=lambda item: item["at"], reverse=True)
+    return out
 
 
 def _visible(account: dict) -> tuple[str, tuple]:
@@ -345,7 +361,7 @@ def _standing(stage: flow.Stage | None, state: dict, role: str) -> dict | None:
     return {"key": stage.key, "name": stage.name, "unit": stage.unit, "kind": stage.kind, "state": state["state"], "at": state["at"], "by": state["by"],
             "note": state["note"], "turn": [ROLE_NAMES.get(r, r) for r in flow.turn(stage, state["state"])],
             "turn_roles": list(flow.turn(stage, state["state"])),
-            "manuscript": stage.manuscript, "review": stage.review, "actions": flow.available(stage, state["state"], role)}
+            "manuscript": stage.manuscript, "review": stage.review, "tools": list(stage.tools), "actions": flow.available(stage, state["state"], role)}
 
 
 def get_case(dsn: str, case_id: str, account: dict) -> dict | None:
@@ -366,6 +382,7 @@ def get_case(dsn: str, case_id: str, account: dict) -> dict | None:
         current = flow.states(_stage_events(connection, case_id))
         seen = [str(v["id"]) for v in volumes]
         versions = _versions(connection, seen)
+        linked = _linked(connection, seen)
         rows = connection.execute(
             "SELECT e.id, e.at, e.actor, e.proxy, e.volume_id, e.stage, e.action, e.note, e.version_id, v.module_code FROM case_events e "
             "LEFT JOIN case_volumes v ON v.id = e.volume_id WHERE e.case_id = %s AND (e.volume_id IS NULL OR e.volume_id = ANY(%s::uuid[])) "
@@ -383,7 +400,8 @@ def get_case(dsn: str, case_id: str, account: dict) -> dict | None:
             "stages": stage_states, "done": sum(s["state"] == flow.DONE for s in stage_states.values()), "total": len(stage_states),
             "current": _standing(standing, every[standing.key], role) if standing else None,
             "reopen": [key for key, state in stage_states.items() if flow.reopenable(flow.BY_KEY[key], state["state"], role)],
-            "versions": versions.get(str(volume["id"]), [])})
+            "versions": versions.get(str(volume["id"]), []),
+            "records": {stage.key: linked.get((str(volume["id"]), stage.key), []) for stage in flow.VOLUME_STAGES if stage.tools}})
     events = [{"id": str(row["id"]), "at": row["at"], "actor": row["actor"], "proxy": row["proxy"],
                "volume_id": str(row["volume_id"]) if row["volume_id"] else None, "module_code": row["module_code"],
                "stage": row["stage"], "stage_name": flow.BY_KEY[row["stage"]].name if row["stage"] in flow.BY_KEY else "",

@@ -154,7 +154,7 @@ class VolumeHistoryWebTests(unittest.TestCase):
              patch("ncs_service.postgres.delete_volume", side_effect=[True, False]) as delete:
             with self.client() as client:
                 self.assertEqual(client.get("/api/volumes?module_code=LM1203020201_24v3&limit=5").json(), [row])
-                self.assertEqual(listed.call_args.kwargs, {"module_code": "LM1203020201_24v3", "limit": 5, "offset": 0})
+                self.assertEqual(listed.call_args.kwargs, {"module_code": "LM1203020201_24v3", "limit": 5, "offset": 0, "visible": None})
                 self.assertEqual(client.get(f"/api/volumes/{RUN_ID}").json(), detail)
                 missing = client.get("/api/volumes/none")
                 self.assertEqual((missing.status_code, missing.json()["error"]), (404, "산정 이력을 찾을 수 없습니다"))

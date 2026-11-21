@@ -11,10 +11,10 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, Form, Query, Response, UploadFile
+from fastapi import FastAPI, File, Form, Query, Request, Response, UploadFile
 from starlette.exceptions import HTTPException
 
-from ..common import Services, error_response, logger
+from ..common import Services, error_response, logger, own_and_link, scope_of
 from ..schemas import ErrorResponse
 
 
@@ -33,6 +33,7 @@ def register(app: FastAPI, services: Services) -> None:
 
     @app.post("/api/volume", responses={400: {"model": ErrorResponse}})
     def volume(
+        request: Request,
         manuscript: Annotated[UploadFile, File()],
         previous: Annotated[UploadFile | None, File()] = None,
         manual_pages: Annotated[float | None, Form(gt=0)] = None,
@@ -40,6 +41,8 @@ def register(app: FastAPI, services: Services) -> None:
         print_copy: Annotated[UploadFile | None, File()] = None,
         unit_price: Annotated[int | None, Form(gt=0)] = None,
         contract_pages: Annotated[int | None, Form(gt=0)] = None,
+        case_volume: Annotated[str, Form()] = "",     # 세분류 건의 권에서 열어 돌린 것이면 그 권 id와 단계 — 산정 기록이 그 단계에 붙는다
+        case_stage: Annotated[str, Form()] = "",
     ) -> Any:
         """산정표 JSON(ncs_volume.measure). previous: 비교할 기존 원고, manual_pages: 수작업 산정 쪽수(오차율),
         include_appendix: 부록을 산정에 넣을지(기본: 계약서 제13조 4항대로 넣는다),
@@ -69,7 +72,9 @@ def register(app: FastAPI, services: Services) -> None:
             params = {"unit_price": unit_price, "contract_pages": contract_pages, "manual_pages": manual_pages,
                       "include_appendix": include_appendix}
             try:
-                return {**result, "id": store.save_volume(result, files, params)}
+                run_id = store.save_volume(result, files, params)
+                linked = own_and_link(request, store, "volume", run_id, case_volume, case_stage)
+                return {**result, "id": run_id, **({"건에 붙임": linked} if case_volume else {})}
             except Exception as error:
                 logger.exception("원고 분량 산정 이력 저장 실패: %s", error)
                 detail = (str(error).splitlines() or [""])[0]
@@ -78,20 +83,28 @@ def register(app: FastAPI, services: Services) -> None:
     if store.supports_history:
 
         @app.get("/api/volumes")
-        def volumes(module_code: str | None = None, limit: int = Query(50, ge=1, le=100),
+        def volumes(request: Request, module_code: str | None = None, limit: int = Query(50, ge=1, le=100),
                     offset: int = Query(0, ge=0)) -> list[dict]:
             """산정 이력 목록(최신순): 산정 시각·원고·분량·단가·집필료. 산정표 전체는 /api/volumes/{id}."""
-            return store.list_volumes(module_code=module_code, limit=limit, offset=offset)
+            return store.list_volumes(module_code=module_code, limit=limit, offset=offset, visible=scope_of(request, store))
 
         @app.get("/api/volumes/{run_id}")
-        def volume_detail(run_id: str) -> dict:
+        def volume_detail(request: Request, run_id: str) -> dict:
+            from ncs_service import access
+
+            if not access.allowed(store.dsn, scope_of(request, store), "volume", run_id):
+                raise HTTPException(404, "산정 이력을 찾을 수 없습니다")
             found = store.get_volume(run_id)
             if found is None:
                 raise HTTPException(404, "산정 이력을 찾을 수 없습니다")
             return found
 
         @app.delete("/api/volumes/{run_id}", status_code=204)
-        def volume_delete(run_id: str) -> Response:
+        def volume_delete(request: Request, run_id: str) -> Response:
+            from ncs_service import access
+
+            if not access.allowed(store.dsn, scope_of(request, store), "volume", run_id):
+                raise HTTPException(404, "산정 이력을 찾을 수 없습니다")
             if not store.delete_volume(run_id):
                 raise HTTPException(404, "산정 이력을 찾을 수 없습니다")
             return Response(status_code=204)

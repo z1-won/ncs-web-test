@@ -120,7 +120,8 @@ class CaseIntegrationTests(unittest.TestCase):
         self.assertEqual(asked["volumes"][0]["stages"]["rights"]["state"], flow.REQUESTED)
         self.assertEqual(asked["volumes"][1]["stages"]["rights"]["state"], flow.WAITING)
         act(author, "rights", "submit")
-        done = act(editor, "rights", "done").json()
+        self.assertEqual(act(editor, "rights", "done").status_code, 409)                            # 붙은 점검 기록이 없으면 사유가 있어야
+        done = act(editor, "rights", "done", note="서류를 종이로 확인").json()
         self.assertEqual((done["volumes"][0]["stages"]["rights"]["state"], done["volumes"][0]["done"], done["progress"]["done"]),
                          (flow.DONE, 1, 1))
         self.assertEqual(act(editor, "rights", "done").status_code, 409)
@@ -208,22 +209,88 @@ class CaseIntegrationTests(unittest.TestCase):
         cases.tag_review_version(DSN, run_id, version_id)
         return run_id
 
-    def test_progress_marks_are_adopted_and_mirrored(self):
+    def test_progress_marks_are_adopted_and_then_the_case_owns_the_stages(self):
         set_stage(DSN, A, 2, done=True, by="옛 표시(old)", note="초고본 확인")                      # 건에 넣기 전의 완료 표시
         editor = self.client(EDITOR)
+        self.assertIsNone(editor.get(f"/api/manuscripts/{A}").json()["건"])
         case = self.make(editor)
-        url, first = f"/api/cases/{case['id']}", case["volumes"][0]
-        self.assertEqual(first["stages"]["draft_edit"]["state"], flow.DONE)
+        first = case["volumes"][0]
+        self.assertEqual(first["stages"]["draft_edit"]["state"], flow.DONE)                         # 옮겨 왔다
         self.assertEqual(first["stages"]["draft_edit"]["by"], "옛 표시(old)")
-        marked = editor.post(f"/api/manuscripts/{A}/stages/7", json={"done": True, "note": "서류 받음"})   # 원고 진행 현황에서 표시
-        self.assertEqual(marked.status_code, 200, marked.text)
-        now = editor.get(url).json()["volumes"][0]["stages"]
-        self.assertEqual((now["volume"]["state"], now["rights"]["state"]), (flow.DONE, flow.DONE))
-        self.assertIn(cases.LEGACY_NOTE, now["rights"]["note"])
-        editor.post(f"/api/manuscripts/{A}/stages/7", json={"done": False})
-        again = editor.get(url).json()
-        self.assertEqual(again["volumes"][0]["stages"]["rights"]["state"], flow.WAITING)            # 되돌리면 완료하기 전의 상태로
-        self.assertEqual(again["volumes"][1]["stages"]["rights"]["state"], flow.WAITING)
+        self.assertIn(cases.LEGACY_NOTE, first["stages"]["draft_edit"]["note"])
+        self.assertEqual(editor.get(f"/api/manuscripts/{A}").json()["건"]["case_id"], case["id"])
+        marked = editor.post(f"/api/manuscripts/{A}/stages/7", json={"done": True, "note": "서류 받음"})
+        self.assertEqual(marked.status_code, 409)                                                   # 건에 든 원고의 단계는 건 화면에서만 진행한다
+        self.assertIn("세분류 건", marked.json()["error"])
+
+    def run_row(self, code: str, owner: str | None = None, group: str | None = None) -> str:
+        from uuid import uuid4
+
+        run_id = str(uuid4())
+        with psycopg.connect(DSN) as connection:
+            connection.execute("INSERT INTO review_runs (id, check_name, module_code, verdict, group_id, account_id) VALUES (%s, 'toc', %s, '적합', %s, %s)",
+                               (run_id, code, group, owner))
+        self.addCleanup(self.drop_run, run_id)
+        return run_id
+
+    def drop_run(self, run_id: str) -> None:
+        with psycopg.connect(DSN) as connection:
+            connection.execute("DELETE FROM review_runs WHERE id = %s", (run_id,))
+
+    def test_history_is_limited_to_own_volumes_and_own_runs(self):
+        """집필진은 담당 권의 기록과 자기가 돌린 기록만 본다. 볼 수 없는 기록은 없음으로 답하고 지우지도 못한다."""
+        from uuid import uuid4
+
+        editor, author, other, url, first, second = self.flow_setup()
+        mine, theirs = self.run_row(A), self.run_row(B)
+        group = str(uuid4())
+        grouped = self.run_row(B, group=group)
+        own_elsewhere = self.run_row("LM9999990199_26v1", owner=self.ids[AUTHOR])                   # 건 밖에서 자기가 돌린 것
+        elsewhere = self.run_row("LM9999990199_26v1")
+
+        def seen(client):
+            return {row["id"] for row in client.get("/api/reviews", params={"limit": 100}).json()} & {mine, theirs, grouped, own_elsewhere, elsewhere}
+
+        self.assertEqual(seen(editor), {mine, theirs, grouped, own_elsewhere, elsewhere})
+        self.assertEqual(seen(author), {mine, own_elsewhere})
+        self.assertEqual(seen(other), {theirs, grouped})
+        self.assertEqual(seen(self.client(REVIEWER)), set())
+        self.assertEqual(author.get(f"/api/reviews/{theirs}").status_code, 404)
+        self.assertEqual(author.delete(f"/api/reviews/{theirs}").status_code, 404)
+        self.assertEqual(author.get(f"/api/reviews/{theirs}/zip").status_code, 404)
+        self.assertEqual(author.get(f"/api/groups/{group}").status_code, 404)
+        self.assertNotIn(group, [g["group_id"] for g in author.get("/api/groups").json()])
+        self.assertIn(group, [g["group_id"] for g in other.get("/api/groups").json()])
+        # 원고 진행 현황도 담당 권만
+        self.assertEqual(author.get(f"/api/manuscripts/{A}").status_code, 200)
+        self.assertEqual(author.get(f"/api/manuscripts/{B}").status_code, 404)
+        self.assertEqual({row["module_code"] for row in author.get("/api/manuscripts").json()}, {A})
+        self.assertGreaterEqual({row["module_code"] for row in editor.get("/api/manuscripts").json()}, {A, B})
+
+    def test_tool_records_attach_to_the_stage_and_become_evidence(self):
+        """권의 단계에서 연 도구의 기록은 그 권과 단계에 붙고, 완료의 근거로 남는다."""
+        from ncs_service import access
+        from ncs_service.postgres import save_work_record
+
+        editor, author, other, url, first, second = self.flow_setup()
+        record = save_work_record(DSN, "rights", f"{A}_원고.hwpx", {"판정": "부적합", "원고 그림": 4, "누락": 1}, [])
+        self.addCleanup(lambda: self.drop("work_records", record["id"]))
+        account = {"id": self.ids[OTHER], "role": "author"}
+        self.assertFalse(access.link(DSN, "rights", record["id"], first, "rights", account))        # 남의 권에는 붙이지 못한다
+        self.assertFalse(access.link(DSN, "rights", record["id"], first, "volume", {"id": self.ids[AUTHOR], "role": "author"}))   # 그 단계의 도구가 아님
+        self.assertTrue(access.link(DSN, "rights", record["id"], first, "rights", {"id": self.ids[AUTHOR], "role": "author"}))
+        volume = editor.get(url).json()["volumes"][0]
+        self.assertEqual([(r["tool"], r["text"]) for r in volume["records"]["rights"]], [("rights", "판정 부적합, 원고 그림 4개, 누락 1개")])
+        author.post(f"{url}/events", json={"stage": "rights", "action": "submit", "volume_id": first})
+        done = editor.post(f"{url}/events", json={"stage": "rights", "action": "done", "volume_id": first})
+        self.assertEqual(done.status_code, 200, done.text)                                          # 붙은 기록이 있으니 사유 없이 완료된다
+        with psycopg.connect(DSN) as connection:
+            evidence = connection.execute("SELECT evidence FROM case_events WHERE action = 'done' AND volume_id = %s", (first,)).fetchone()[0]
+        self.assertEqual(evidence["records"], [record["id"]])
+
+    def drop(self, table: str, record_id: str) -> None:
+        with psycopg.connect(DSN) as connection:
+            connection.execute(f"DELETE FROM {table} WHERE id = %s", (record_id,))
 
 
 if __name__ == "__main__":

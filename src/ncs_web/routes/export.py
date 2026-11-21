@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import quote
 
-from fastapi import FastAPI, Form, Query, Response
+from fastapi import FastAPI, Form, Query, Request, Response
 
 from ..common import Services, error_response
 from ..schemas import ErrorResponse, SheetExportRequest
@@ -37,6 +37,7 @@ def register(app: FastAPI, services: Services) -> None:
 
     @app.post("/api/export/annotated", responses={400: {"model": ErrorResponse}})
     def export_annotated(
+        request: Request,
         rows: Annotated[str, Form()],
         upload: Annotated[str, Form()] = "",
         run_id: Annotated[str, Form()] = "",
@@ -67,7 +68,12 @@ def register(app: FastAPI, services: Services) -> None:
             if source is None:
                 return error_response(400, "메모는 hwpx 원고에만 달 수 있습니다(hwp는 한글에서 hwpx로 저장 후 다시 올리세요)")
         elif run_id:
-            found = store.get_manuscript(run_id)
+            from ncs_service import access
+
+            from ..common import scope_of
+
+            visible = not store.supports_history or access.allowed(store.dsn, scope_of(request, store), "review", run_id)
+            found = store.get_manuscript(run_id) if visible else None
             if found is None:
                 return error_response(404, "이 실행에는 보관된 원고 hwpx가 없습니다(원고 보관 기능 이전의 실행이거나 hwp 원고, 또는 파일 저장소 모드)")
             name, source = found

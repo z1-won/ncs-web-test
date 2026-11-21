@@ -131,10 +131,14 @@ def _sweep_files(connection) -> int:
 
 
 def list_reviews(dsn: str, *, module_code: str | None = None, check: str | None = None,
-                 verdict: str | None = None, standalone: bool = False, limit: int = 50, offset: int = 0) -> list[dict]:
-    """실행 목록(최신순). standalone=True면 전체 실행 묶음에 속하지 않은 단독 실행만."""
+                 verdict: str | None = None, standalone: bool = False, limit: int = 50, offset: int = 0, visible=None) -> list[dict]:
+    """실행 목록(최신순). standalone=True면 전체 실행 묶음에 속하지 않은 단독 실행만. visible = access.Scope(볼 수 있는 범위) 또는 None(전부)."""
     clauses = []
     values: list = []
+    if visible is not None:
+        sql, extra = visible.clause()
+        clauses.append(sql)
+        values.extend(extra)
     for column, value in (("module_code", module_code), ("check_name", check), ("verdict", verdict)):
         if value:
             clauses.append(f"{column} = %s")
@@ -163,10 +167,14 @@ def group_verdict(verdicts: list[str]) -> str:
     return verdicts[0] if verdicts else "미검사"
 
 
-def list_groups(dsn: str, *, module_code: str | None = None, limit: int = 50, offset: int = 0) -> list[dict]:
+def list_groups(dsn: str, *, module_code: str | None = None, limit: int = 50, offset: int = 0, visible=None) -> list[dict]:
     """전체 실행 묶음 목록(최신순). 한 묶음 = 한 행: 시작 시각, 모듈, 들어 있는 검수 이름·판정, 묶음 판정."""
     where = " AND module_code = %s" if module_code else ""
     values: list = [module_code] if module_code else []
+    if visible is not None:
+        sql, extra = visible.clause()
+        where += " AND " + sql
+        values.extend(extra)
     with psycopg.connect(dsn, row_factory=dict_row) as connection:
         rows = connection.execute(
             "SELECT group_id, min(created_at) AS created_at, module_code, "
@@ -305,10 +313,14 @@ def save_volume(dsn: str, result: dict, inputs: list[dict], params: dict, *, sou
     return run_id
 
 
-def list_volumes(dsn: str, *, module_code: str | None = None, limit: int = 50, offset: int = 0) -> list[dict]:
+def list_volumes(dsn: str, *, module_code: str | None = None, limit: int = 50, offset: int = 0, visible=None) -> list[dict]:
     """산정 이력 목록(최신순). 산정표 전체는 싣지 않는다 — 한 건은 get_volume."""
     where = " WHERE module_code = %s" if module_code else ""
     values: list = [module_code] if module_code else []
+    if visible is not None:
+        sql, extra = visible.clause()
+        where += (" AND " if where else " WHERE ") + sql
+        values.extend(extra)
     with psycopg.connect(dsn, row_factory=dict_row) as connection:
         rows = connection.execute(
             "SELECT id, created_at, module_code, manuscript, sha256, pages, unit_price, fee, estimated, "
@@ -366,8 +378,9 @@ def save_work_record(dsn: str, kind: str, manuscript: str, counts: dict, files: 
     return {"id": record_id, "module_code": code}
 
 
-def list_manuscripts(dsn: str, *, limit: int = 50, offset: int = 0) -> list[dict]:
-    """기록이 있는 원고(모듈 코드) 목록 — 최근 기록순. 한 줄: 모듈 코드, 처음·최근 기록 시각, 기록 수, 기록 종류."""
+def list_manuscripts(dsn: str, *, limit: int = 50, offset: int = 0, codes: list[str] | None = None) -> list[dict]:
+    """기록이 있는 원고(모듈 코드) 목록 — 최근 기록순. 한 줄: 모듈 코드, 처음·최근 기록 시각, 기록 수, 기록 종류.
+    codes를 주면 그 모듈 코드만(집필진은 담당 권만 본다)."""
     with psycopg.connect(dsn, row_factory=dict_row) as connection:
         rows = connection.execute(
             "SELECT module_code, min(created_at) AS first_at, max(created_at) AS last_at, "
@@ -381,8 +394,9 @@ def list_manuscripts(dsn: str, *, limit: int = 50, offset: int = 0) -> list[dict
             " UNION ALL SELECT w.module_code, w.created_at, 'opinion:' || k.name, false FROM work_records w,"
             "  jsonb_object_keys(CASE WHEN jsonb_typeof(w.counts->'차수별') = 'object' THEN w.counts->'차수별' ELSE '{}'::jsonb END) AS k(name)"
             "  WHERE w.kind = 'opinion'"
-            ") t WHERE module_code <> '' GROUP BY module_code ORDER BY max(created_at) DESC, module_code LIMIT %s OFFSET %s",
-            (limit, offset),
+            ") t WHERE module_code <> '' AND (%s::text[] IS NULL OR module_code = ANY(%s::text[])) "
+            "GROUP BY module_code ORDER BY max(created_at) DESC, module_code LIMIT %s OFFSET %s",
+            (codes, codes, limit, offset),
         ).fetchall()
     return [{"module_code": row["module_code"], "first_at": row["first_at"].isoformat(), "last_at": row["last_at"].isoformat(),
              "records": row["records"], "kinds": sorted(row["kinds"])} for row in rows]
@@ -467,9 +481,6 @@ def set_stage(dsn: str, module_code: str, stage: int, *, done: bool, by: str, no
             connection.execute(
                 "INSERT INTO manuscript_stage_history (id, module_code, stage, action, changed_by, note) VALUES (%s, %s, %s, %s, %s, %s)",
                 (str(uuid4()), module_code, stage, "done" if done else "undone", by, note))
-            from .cases import mirror_stage_mark
-
-            mirror_stage_mark(connection, module_code, stage, done=done, by=by, note=note)     # 세분류 건에 든 원고면 사건으로도 남긴다
     return changed
 
 
