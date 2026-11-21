@@ -61,13 +61,17 @@ function LoadSection({ by, onLoaded }) {
         JSON은 이미지 레코드와 공공누리 수집 자료 두 가지 형식을 받으며, 어느 쪽인지는 자동으로 알아봅니다. 형식이 궁금하면 관리자에게 예시 파일을 요청해 주세요.
         같은 자료를 다시 넣어도 중복되지 않고, 기관이 확정한 권리 정보는 덮어쓰지 않습니다.
       </p>
-      <div className="fieldset review-form">
+      {/* 칸이 하나(폭 전체)라 구획 제목 없이 격자와 실행 줄만 쓴다(다른 화면의 입력 묶음과 같은 구조) */}
+      <div className="fieldset review-form is-sectioned">
+        <div className="form-section-grid">
         <MultiFileSlot id="image-load-files" label="JSON과 그림 파일" required wide accept=".json,image/*" files={files} disabled={!!busy}
                        onChange={(picked) => { setFiles(picked); setReport(null); setError(null); }}
                        countNote={`JSON ${jsonCount}개, 그림 ${files.length - jsonCount}개`}
                        invalid={files.length > 0 && jsonCount !== 1 ? `JSON은 1개여야 합니다(지금 ${jsonCount}개).` : null}
-                       hint="JSON 1개와 그림 파일 여러 개를 한 번에 고릅니다(합계 50MB까지)." />
-        <div className="form-group form-group-wide form-actions">
+                       hint="JSON 1개와 그림 파일 여러 개. 합계 50MB까지 올릴 수 있습니다." />
+        </div>
+        {/* form-group: 버튼 아래 안내(form-hint)가 KRDS 도움말 모양을 쓰도록 */}
+        <div className="form-group form-actions">
           {error && <PageAlert kind="danger">{error}</PageAlert>}
           <div className="run-buttons image-actions">
             <button type="button" className="krds-btn large secondary" disabled={!!busy || jsonCount !== 1} onClick={() => run(true)}>{busy === "check" ? "확인하는 중" : "형식만 확인"}</button>
@@ -252,14 +256,16 @@ export default function ImageDbPage() {
           <div><dt>추천 목록에 나옴</dt><dd><strong>{counts?.recommendable ?? "…"}</strong>건</dd><dd className="meta">확정했고 재사용 범위가 정해졌고 비공개가 아닌 그림</dd></div>
         </dl>
 
-        <div className="fieldset review-form image-by">
+        <div className="fieldset review-form is-sectioned image-by">
+          <div className="form-section-grid">
           <div className="form-group">
             <div className="form-tit"><label htmlFor="image-by">변경한 사람</label></div>
             <div className="form-conts">
               <input id="image-by" type="text" className="krds-input" maxLength={50} value={by} placeholder="예: 에디팅기관 홍길동"
                      onChange={(e) => { setBy(e.target.value); saveName(e.target.value); }} aria-describedby="image-by-hint" />
             </div>
-            <p className="form-hint" id="image-by-hint">등록, 수정, 확정을 할 때마다 변경 이력에 이 이름이 남습니다. 로그인이 없어 직접 적습니다.</p>
+            <p className="form-hint" id="image-by-hint">등록, 수정, 확정할 때 변경 이력에 남는 이름입니다.</p>
+          </div>
           </div>
         </div>
 
