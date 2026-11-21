@@ -131,9 +131,38 @@ export const api = {
     proposal: (token, moduleCode, filename, targetDpi) =>
       download(`/api/uploads/${token}/proposal`, multipart({ module_code: moduleCode || "", target_dpi: targetDpi ? String(targetDpi) : undefined }), filename),
   },
+  // 원고 분량 산정(REQ-02-013): 최종 원고(+ 기존 원고, 출력본 PDF)의 구성별 행·쪽 산정표와 계약서 기준 집필료
+  volume: ({ file, previous, printCopy, manualPages, unitPrice, contractPages, includeAppendix = true, signal }) => {
+    const form = new FormData();
+    form.append("manuscript", file, file.name);
+    if (previous) form.append("previous", previous, previous.name);
+    if (printCopy) form.append("print_copy", printCopy, printCopy.name);
+    if (manualPages) form.append("manual_pages", String(manualPages));
+    if (unitPrice) form.append("unit_price", String(unitPrice));
+    if (contractPages) form.append("contract_pages", String(contractPages));
+    form.append("include_appendix", includeAppendix ? "true" : "false");
+    return request("/api/volume", { method: "POST", body: form, signal });
+  },
+  // 원고 문장 추천(REQ-02-004): 원고 → 구성별 정정 후보, 문장 하나 → 후보, 문장 종류 목록
+  suggest: {
+    kinds: () => request("/api/suggest/kinds"),
+    manuscript: ({ file, signal }) =>
+      request("/api/suggest", { method: "POST", body: multipart({ manuscript: file }), signal }),
+    sentence: ({ text, kind }) =>
+      request("/api/suggest/sentence", { method: "POST", body: multipart({ text, kind }) }),
+  },
   groups: {
     list: () => request("/api/groups"),
     get: (id) => request(`/api/groups/${id}`),
     remove: (id) => request(`/api/groups/${id}`, { method: "DELETE" }),
+  },
+  // 검토의견서 반영 여부 검토(REQ-02-003): opinions = [{ file, round: "1차"|"2차" }], 최종 원고 file(+ 출력본·반영 전 원고)
+  opinion: ({ file, opinions, printCopy, previous, signal }) => {
+    const form = new FormData();
+    form.append("manuscript", file, file.name);
+    opinions.forEach(({ file: sheet, round }) => { form.append("opinions", sheet, sheet.name); form.append("rounds", round || ""); });
+    if (printCopy) form.append("print_pdf", printCopy, printCopy.name);
+    if (previous) form.append("previous", previous, previous.name);
+    return request("/api/opinion", { method: "POST", body: form, signal });
   },
 };
