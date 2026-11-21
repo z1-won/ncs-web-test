@@ -249,7 +249,11 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
         <PageAlert kind="danger">확정됐지만 재사용 범위가 ‘미확인’이라 추천에 나오지 않습니다. 아래 ‘확정 취소’를 누르고 재사용 범위를 고른 뒤 다시 확정하세요.</PageAlert>
       )}
       {confirmed && <PageAlert kind="info">기관 확정된 권리 정보라 고칠 수 없습니다. 고치려면 확정을 취소한 뒤 수정하고 다시 확정하세요.</PageAlert>}
-      <div className="fieldset review-form image-rights-form">
+      {/* 입력 묶음은 구획 넷: 권리 → 출처 → 생성형 AI 활용 → 실행(다른 화면과 같은 구조). 구획 안에서만 3열 격자(.form-section-grid)를 쓴다 */}
+      <div className="fieldset review-form is-sectioned image-rights-form">
+        <div className="form-section" role="group" aria-labelledby="image-rights-title">
+        <h4 className="form-section-title" id="image-rights-title">권리</h4>
+        <div className="form-section-grid">
         {select("category", "분류 체계", termOptions(terms?.category, "선택 안 함"), "확정하려면 필요합니다.")}
         {select("ownership", "권리 귀속", termOptions(terms?.ownership, "선택 안 함"), "확정하려면 필요합니다.")}
         {select("reuse_scope", "재사용 범위", termOptions(terms?.reuse_scope), "‘미확인’이면 확정해도 추천 목록에 나오지 않습니다.")}
@@ -264,16 +268,22 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
           <p className="form-hint">공공누리와 CC는 유형을 고르면 자동으로 정해집니다. AI유형이 붙어도 조건은 그대로입니다.</p>
         </div>
         {input("license_note", "라이선스 메모", { placeholder: "예: 공유마당 보호기간 만료 저작물" })}
+        </div>
+        </div>
+        <div className="form-section" role="group" aria-labelledby="image-source-title">
+        <h4 className="form-section-title" id="image-source-title">출처</h4>
+        <div className="form-section-grid">
         {input("author", "저작자")}
         {input("source_org", "원 출처 기관")}
         {input("source_url", "출처 URL")}
         {input("retrieved_on", "확인 일자", { type: "date" })}
         {input("credit_line", "출처 문구")}
-        <div className="form-group form-group-wide">
-          <div className="form-tit"><span>생성형 AI 활용</span></div>
-          <div className="form-conts">{check("ai_used", "AI로 생성하거나 수정 보완한 그림입니다")}</div>
         </div>
-        {form.ai_used && <>
+        </div>
+        <div className="form-section" role="group" aria-labelledby="image-ai-title">
+        <h4 className="form-section-title" id="image-ai-title">생성형 AI 활용</h4>
+        <div className="form-section-lead">{check("ai_used", "AI로 생성하거나 수정 보완한 그림입니다")}</div>
+        {form.ai_used && <div className="form-section-grid">
           {select("ai_usage", "AI 활용 유형", usageOptions, "AI 도구 사용 표기 예 1~5. 고르면 ‘생성함/수정 보완함’이 정해집니다.")}
           {input("ai_tool", "활용 도구")}
           {input("ai_date", "활용 일자", { type: "date" })}
@@ -283,8 +293,9 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
             <div className="form-tit"><span>서약서</span></div>
             <div className="form-conts">{check("ai_pledge_submitted", "생성형 AI 결과물 집필자 서약서 제출됨")}</div>
           </div>
-        </>}
-        <div className="form-group form-group-wide form-actions">
+        </div>}
+        </div>
+        <div className="form-actions">
           {needName && <PageAlert kind="info">저장하거나 확정하려면 화면 위쪽의 ‘변경한 사람’에 이름을 적어 주세요. 변경 이력에 남습니다.</PageAlert>}
           {message && message.at !== "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
           {!confirmed && form.reuse_scope === "unknown" && (
@@ -319,15 +330,23 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
           </table>
         </div>
       )}
-      <div className="fieldset review-form image-evidence-form">
+      {/* 칸이 넷이라 구획 제목 없이 3열 격자만: 종류, 서류, 제출일을 한 줄에, 비고는 다음 줄에 폭 전체 */}
+      <div className="fieldset review-form is-sectioned image-evidence-form">
+        <div className="form-section-grid">
         {field("evidence-kind", "증빙 종류", <KrdsSelect id="evidence-kind" value={evidence.kind} options={evidenceOptions} onChange={(value) => setEvidence((prev) => ({ ...prev, kind: value }))} title="증빙 종류 선택" />)}
         {field("evidence-file", "서류", <input id="evidence-file" type="text" className="krds-input" maxLength={200} value={evidence.fileRef} placeholder="예: 원고집필계약서_붙임3.hwp"
                                               onChange={(e) => setEvidence((prev) => ({ ...prev, fileRef: e.target.value }))} />,
                "파일 이름이나 보관 위치를 적습니다. 서류 파일 자체는 올리지 않습니다.")}
         <KrdsDateField id="evidence-date" label="제출일" value={evidence.submittedOn} onChange={(value) => setEvidence((prev) => ({ ...prev, submittedOn: value }))} disabled={!!busy} />
-        {field("evidence-note", "비고", <input id="evidence-note" type="text" className="krds-input" maxLength={500} value={evidence.note}
-                                              onChange={(e) => setEvidence((prev) => ({ ...prev, note: e.target.value }))} />)}
-        <div className="form-group form-group-wide form-actions">
+        <div className="form-group form-group-wide is-full">
+          <div className="form-tit"><label htmlFor="evidence-note">비고</label></div>
+          <div className="form-conts">
+            <input id="evidence-note" type="text" className="krds-input" maxLength={500} value={evidence.note}
+                   onChange={(e) => setEvidence((prev) => ({ ...prev, note: e.target.value }))} />
+          </div>
+        </div>
+        </div>
+        <div className="form-actions">
           {message && message.at === "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
           <div className="run-buttons image-actions">
             <button type="button" className="krds-btn large secondary" onClick={addEvidence} disabled={!!busy || needName || !evidence.kind}>{busy === "evidence" ? "처리하는 중" : "증빙 등록"}</button>
