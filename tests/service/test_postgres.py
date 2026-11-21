@@ -45,7 +45,7 @@ class PostgresModeTests(unittest.TestCase):
             output = Path(folder) / "results"
             with patch("ncs_service.postgres.migrate"), patch("ncs_service.postgres.save_review") as save:
                 save.return_value = ("12345678-1234-1234-1234-123456789abc", {"검수결과": "적합", "항목": {}})
-                app = create_app(out_dir=output, database_url="postgresql://example")
+                app = create_app(out_dir=output, database_url="postgresql://example", require_login=False)
                 with TestClient(app) as client:
                     response = client.post("/api/review", files=[
                         ("files", (path.name, path.read_bytes())) for path in (MANUSCRIPT, PLAN)
