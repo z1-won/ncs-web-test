@@ -198,6 +198,12 @@ export const api = {
     form.append("include_appendix", includeAppendix ? "true" : "false");
     return request("/api/volume", { method: "POST", body: form, signal });
   },
+  // 원고 분량 산정 이력(DB 모드에서만 — /api/health의 history). get은 방금 산정한 결과와 같은 모양(+ id, created_at, 입력)
+  volumes: {
+    list: () => request("/api/volumes"),
+    get: (id) => request(`/api/volumes/${id}`),
+    remove: (id) => request(`/api/volumes/${id}`, { method: "DELETE" }),
+  },
   // 원고 문장 추천(REQ-02-004): 원고 → 구성별 정정 후보, 문장 하나 → 후보, 문장 종류 목록
   suggest: {
     kinds: () => request("/api/suggest/kinds"),

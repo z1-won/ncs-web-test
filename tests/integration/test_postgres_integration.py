@@ -1,5 +1,6 @@
 """NCS_TEST_DATABASE_URL을 지정하면 실제 PostgreSQL 저장·조회·이관을 검사한다."""
 
+import hashlib
 import os
 import re
 import subprocess
@@ -13,8 +14,8 @@ import psycopg
 from fastapi.testclient import TestClient
 
 from ncs_service import ReviewRequest, execute_review, persist_review
-from ncs_service.postgres import (delete_review, get_manuscript, get_review, input_metadata, list_reviews, migrate,
-                                  save_review)
+from ncs_service.postgres import (delete_review, delete_volume, get_manuscript, get_review, get_volume, input_metadata,
+                                  list_reviews, list_volumes, migrate, save_review)
 from ncs_service.postgres_cli import import_directory
 from ncs_web.server import create_app
 
@@ -52,6 +53,48 @@ class PostgresIntegrationTests(unittest.TestCase):
         finally:
             if run_id:
                 delete_review(DSN, run_id)
+
+    @staticmethod
+    def _kept_files() -> int:
+        with psycopg.connect(DSN) as connection:
+            return connection.execute("SELECT count(*) FROM review_files").fetchone()[0]
+
+    def test_volume_history_save_list_open_delete(self):
+        """원고 분량 산정 이력: 웹에서 산정 → volume_runs에 산정표·넣은 값·입력 파일 해시가 남고(원고 파일은 남지 않는다) 다시 열고 지운다."""
+        run_id = None
+        kept = self._kept_files()
+        try:
+            with TestClient(create_app(database_url=DSN)) as client:
+                response = client.post("/api/volume", data={"unit_price": "46200", "contract_pages": "1"},
+                                       files={"manuscript": (MANUSCRIPT.name, MANUSCRIPT.read_bytes())})
+                self.assertEqual(response.status_code, 200, response.text)
+                body = response.json()
+                run_id = body["id"]
+                self.assertRegex(run_id, r"^[0-9a-f-]{36}$")
+                row = next(item for item in client.get("/api/volumes").json() if item["id"] == run_id)
+                self.assertEqual((row["manuscript"], row["module_code"], row["unit_price"], row["unit_given"]),
+                                 (MANUSCRIPT.name, "LM1203020201_24v3", 46200, True))
+                self.assertEqual((row["pages"], row["fee"]), (body["집필료"]["산정 분량"], body["집필료"]["집필료"]))
+                detail = client.get(f"/api/volumes/{run_id}").json()
+                sheet = {key: value for key, value in body.items() if key != "id"}
+                self.assertEqual({key: detail[key] for key in sheet}, sheet)        # 다시 연 산정표 = 산정 때 돌려준 산정표
+                self.assertEqual(detail["입력"]["값"]["contract_pages"], 1)
+                self.assertEqual(detail["입력"]["파일"][0]["sha256"], hashlib.sha256(MANUSCRIPT.read_bytes()).hexdigest())
+                default = client.post("/api/volume", files={"manuscript": (MANUSCRIPT.name, MANUSCRIPT.read_bytes())}).json()
+                try:
+                    listed = {item["id"]: item for item in list_volumes(DSN, module_code="LM1203020201_24v3")}
+                    self.assertFalse(listed[default["id"]]["unit_given"])
+                    self.assertEqual([item["id"] for item in list_volumes(DSN)][:2], [default["id"], run_id])   # 최신순
+                finally:
+                    delete_volume(DSN, default["id"])
+                self.assertEqual(client.delete(f"/api/volumes/{run_id}").status_code, 204)
+                self.assertEqual(client.get(f"/api/volumes/{run_id}").status_code, 404)
+            self.assertIsNone(get_volume(DSN, run_id))
+            self.assertFalse(delete_volume(DSN, "not-a-uuid"))
+            self.assertEqual(self._kept_files(), kept, "원고 보관 표(review_files)에는 아무것도 넣지 않는다")
+        finally:
+            if run_id:
+                delete_volume(DSN, run_id)
 
     def test_save_query_export_and_import(self):
         ids = []

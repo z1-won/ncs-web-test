@@ -1,18 +1,23 @@
 // 원고 분량 산정(REQ-02-013) — 최종 원고를 올리면 구성별 행·쪽과 계약서에 기입할 분량(매)을 낸다.
 // 기존 원고를 함께 올리면 올해 바뀐 분량(1자 이상 바뀐 행)을, 수작업 산정 쪽수를 넣으면 오차율을 함께 보여 준다.
 // 출력본 PDF를 함께 올리면 쪽을 PDF에서 재어 한글 계산값과 나란히 보여 주고, 계약서 기준 집필료(분량 × 단가)를 낸다. 계산은 서버(ncs_volume)가 한다.
-import React, { useRef, useState } from "react";
+// 서버가 DB 이력을 쓰면(/api/health의 history) 산정할 때마다 이력에 남고, 아래 '산정 이력'에서 다시 열거나 지운다(원고 파일은 남기지 않는다).
+import React, { useEffect, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
+import { formatDate, formatDateLines } from "../lib/format.jsx";
 import { Spinner } from "../components/Badge.jsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { FileSlot } from "../components/FileSlot.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
+import { Pagination } from "../components/Pagination.jsx";
 import { RawJson } from "../components/RawJson.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
 // 권고 분량 상태 → KRDS 배지 색
+const HISTORY_PAGE = 10;   // 이력 표 한 쪽 행 수(원고 검수 이력과 같다)
 const RANGE_BADGE = { "권고 범위 안": "bg-light-success", "권고보다 적음": "bg-light-warning", "권고보다 많음": "bg-light-warning", 판단불가: "bg-light-gray" };
 
 export default function VolumePage() {
@@ -28,6 +33,46 @@ export default function VolumePage() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const aborter = useRef(null);
+  const [history, setHistory] = useState(null);          // null = 이력 없음(파일 저장 모드) → 이력 영역을 그리지 않는다
+  const [historyPage, setHistoryPage] = useState(1);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function refreshHistory() {
+    const { ok, data } = await api.volumes.list();
+    if (ok) setHistory(data);
+  }
+
+  useEffect(() => {
+    let alive = true;
+    api.health().then(({ data }) => { if (alive && data?.history) refreshHistory(); });
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    const pages = Math.max(1, Math.ceil((history?.length || 0) / HISTORY_PAGE));
+    if (historyPage > pages) setHistoryPage(pages);
+  }, [history, historyPage]);
+
+  async function openHistory(id) {
+    setError(null);
+    const { ok, data, error: message } = await api.volumes.get(id);
+    if (!ok) return setError(message);
+    setResult(data);
+    document.getElementById("volume-result")?.scrollIntoView({ block: "start" });
+  }
+
+  async function deleteHistory(row) {
+    setError(null);
+    setDeleting(true);
+    const { ok, error: message } = await api.volumes.remove(row.id);
+    if (!ok) setError(message);
+    else {
+      if (result?.id === row.id) setResult(null);   // 지운 이력의 결과가 화면에 열려 있으면 함께 내린다
+      await refreshHistory();
+    }
+    setDeleting(false);
+    setPendingDelete(null);
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -40,6 +85,7 @@ export default function VolumePage() {
     if (aborted) return;
     if (!ok) { setError(message); setResult(null); return; }
     setResult(data);
+    if (data.id) refreshHistory();
   }
 
   return (
@@ -51,6 +97,7 @@ export default function VolumePage() {
         최종 원고(hwp/hwpx)를 올리면 집필료 산정 기준(계약서 제13조 4항)대로 구성별 행·쪽을 세어 계약서에 기입할 분량(매)을 냅니다.
         1행에 1자 이상이면 1행, ½쪽 이상이면 1쪽이며 행 띄움·표·출처 밝힌 인용은 넣고 사진·삽화 등 시각 자료와 표지·NCS학습모듈의 이해·개발진은 뺍니다.
         기존 학습모듈 원고를 함께 올리면 올해 바뀐 분량을 따로 셉니다. 올린 파일은 계산 뒤 바로 지웁니다.
+        {history && " 산정 결과와 넣은 값은 산정 이력에 남습니다(원고 파일은 남기지 않고 이름과 해시만 적습니다)."}
       </p>
 
       <form className="fieldset review-form" onSubmit={submit}>
@@ -105,9 +152,72 @@ export default function VolumePage() {
 
       {busy && <ResultHead status={<Spinner label="원고 분량을 세는 중" />} />}
       {result && !busy && <VolumeResult result={result} />}
+
+      {history && (
+        <section id="volume-history" className="history volume-history">
+          <div className="section-head">
+            <h2 className="section-title">산정 이력</h2>
+          </div>
+          {history.length === 0 ? <p className="empty">저장된 산정 이력이 없습니다.</p> : (
+            <div className="krds-table-wrap">
+              <table className="tbl col data history-table">
+                <caption>최근 원고 분량 산정</caption>
+                <colgroup>
+                  <col className="col-when" />
+                  <col />
+                  <col className="col-num" />
+                  <col className="col-num" />
+                  <col className="col-num" />
+                  <col className="col-action" />
+                  <col className="col-action" />
+                </colgroup>
+                <thead><tr><th scope="col">산정 시각</th><th scope="col">원고</th><th scope="col">기입 분량</th><th scope="col">단가</th><th scope="col">집필료</th><th scope="col">열기</th><th scope="col">삭제</th></tr></thead>
+                <tbody>{history.slice((historyPage - 1) * HISTORY_PAGE, historyPage * HISTORY_PAGE).map((row) => (
+                  <tr key={row.id} className={row.id === result?.id ? "is-open" : undefined}>
+                    <td className="when">{formatDateLines(row.created_at).map((line, i) => <span key={i}>{line}</span>)}</td>
+                    <td className="module" title={row.manuscript}>{row.manuscript}</td>
+                    <td>{row.pages}매{row.estimated && " (추정)"}</td>
+                    <td>{row.unit_price.toLocaleString()}원{!row.unit_given && <span className="meta"> 기본값</span>}</td>
+                    <td>{row.fee.toLocaleString()}원</td>
+                    <td><button className="krds-btn small tertiary" type="button" onClick={() => openHistory(row.id)}>결과 보기</button></td>
+                    <td>
+                      <button className="krds-btn small tertiary btn-delete-history" type="button" onClick={() => setPendingDelete(row)}>
+                        <i className="svg-icon ico-del" aria-hidden="true"></i>삭제
+                      </button>
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+          <Pagination page={historyPage} total={Math.ceil(history.length / HISTORY_PAGE)} onChange={setHistoryPage} label="산정 이력 쪽" />
+        </section>
+      )}
       <TopButton />
+
+      {pendingDelete && (
+        <ConfirmDialog title="산정 이력 삭제" confirmLabel="삭제" busy={deleting}
+                       onConfirm={() => deleteHistory(pendingDelete)} onCancel={() => setPendingDelete(null)}>
+          <p>정말 삭제하시겠습니까?</p>
+          <p className="meta">{formatDate(pendingDelete.created_at)} · {pendingDelete.manuscript} · {pendingDelete.pages}매 · {pendingDelete.fee.toLocaleString()}원</p>
+          <p className="meta">삭제한 이력은 되돌릴 수 없습니다.</p>
+        </ConfirmDialog>
+      )}
     </main>
     <Footer />
+    </>
+  );
+}
+
+// 알림 묶음: 경고(산정값·금액을 그대로 믿거나 쓰기 전에 확인할 것)는 경고색 상자로 먼저, 나머지는 안내색 상자로.
+// warnings는 서버가 알림 가운데 경고로 표시한 문장들(예전에 저장된 이력에는 없을 수 있다). children은 안내 상자 끝에 붙는다(버튼 등).
+function Notes({ notes, warnings = [], children }) {
+  const warn = notes.filter((note) => warnings.includes(note));
+  const info = notes.filter((note) => !warnings.includes(note));
+  return (
+    <>
+      <PageAlert kind="warning">{warn.length > 0 && warn.map((note) => <p key={note}>{note}</p>)}</PageAlert>
+      <PageAlert kind="info">{info.length > 0 && <>{info.map((note) => <p key={note}>{note}</p>)}{children}</>}</PageAlert>
     </>
   );
 }
@@ -120,12 +230,13 @@ function VolumeResult({ result }) {
   const adopted = result["채택 분량"];
   const gap = adopted["출력본 측정"] != null ? adopted["출력본 측정"] - total["기입 분량"] : null;
   return (
-    <section className="volume-result">
+    <section id="volume-result" className="volume-result nav-anchor">
       <ResultHead
         status={<span className={`krds-badge large ${RANGE_BADGE[band.상태] || "bg-light-gray"}`}>{band.상태}</span>}
-        meta={`${result.원고} · ${band.비고}`}
+        meta={`${result.원고} · ${band.비고}${result.created_at ? ` · ${formatDate(result.created_at)} 산정(이력)` : ""}`}
         badges={result.추정 && <span className="krds-badge bg-light-warning">추정치 — 줄 배치 정보 없음</span>}
       />
+      <PageAlert kind="danger">{result["저장 오류"] && <p>{result["저장 오류"]} 이 화면의 산정 결과는 정상이며, 이력에만 남지 않았습니다.</p>}</PageAlert>
       <dl className="upscale-summary">
         <div><dt>기입 분량(산정에 씀)</dt><dd><strong>{adopted["기입 분량"]}매</strong> — {adopted.근거}</dd></div>
         {gap != null && <div><dt>한글 줄 배치 계산</dt><dd>{total["기입 분량"]}매 (출력본 측정과 차이 {gap > 0 ? "+" : ""}{gap}매)</dd></div>}
@@ -136,7 +247,7 @@ function VolumeResult({ result }) {
         {change && <div><dt>변경 분량</dt><dd><strong>{change["변경 분량"]["기입 분량"]}매</strong> ({change["변경 행"].toLocaleString()}행, {change["변경 비율"]})</dd></div>}
         {manual && <div><dt>수작업 대조</dt><dd>오차율 {manual.오차율} — {manual.결과}</dd></div>}
       </dl>
-      {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
+      <Notes notes={result.알림} warnings={result.경고} />
 
       <FeeCard fee={result.집필료} />
       {result.출력본 && <PrintedResult printed={result.출력본} />}
@@ -180,21 +291,31 @@ function VolumeResult({ result }) {
 }
 
 // 집필료 카드: 금액, 산식 한 줄, 쓴 값과 근거 조항. 기존 원고가 있으면 개선 기준(변경 분량) 금액도.
+// 알림은 금액보다 먼저 읽히도록 카드 위에 둔다(경고 — 상한 초과·계약 분량 초과/미달·추정 — 는 경고색). 단가를 넣지 않았으면 입력 칸으로 가는 버튼을 붙인다.
 function FeeCard({ fee }) {
+  const defaultUnit = !fee["단가 입력"];
+  const toUnitPrice = () => document.getElementById("volume-unit-price")?.focus();
   return (
     <section id="volume-fee" className="volume-fee" aria-labelledby="volume-fee-title">
       <h2 className="section-title" id="volume-fee-title">집필료 (계약서 기준)</h2>
+      <Notes notes={fee.알림} warnings={fee.경고}>
+        {defaultUnit && <button type="button" className="krds-btn small tertiary" onClick={toUnitPrice}>단가 입력하기</button>}
+      </Notes>
       <dl className="upscale-summary">
         <div><dt>집필료</dt><dd><strong>{fee.집필료.toLocaleString()}원</strong>{fee.추정 && " (추정 분량 기준 — 참고값)"}</dd></div>
         <div><dt>산식</dt><dd>{fee.산식}</dd></div>
-        <div><dt>단가</dt><dd>{fee.단가.toLocaleString()}원/쪽 — {fee["단가 근거"]}</dd></div>
+        <div>
+          <dt>단가 <span className={`krds-badge ${defaultUnit ? "bg-light-warning" : "bg-light-gray"}`}>{defaultUnit ? "기본값 · 지침 상한" : "입력값"}</span></dt>
+          <dd>{fee.단가.toLocaleString()}원/쪽</dd>
+          {defaultUnit && <dd className="meta">{fee["단가 근거"]}</dd>}
+        </div>
         <div><dt>분량</dt><dd>산정 {fee["산정 분량"]}매{fee["계약 분량"] != null && ` · 계약 ${fee["계약 분량"]}매 → 인정 ${fee["인정 분량"]}매`} ({fee["분량 근거"]})</dd></div>
         {fee["개선 기준"] && <div><dt>개선 기준(변경 분량)</dt><dd><strong>{fee["개선 기준"].집필료.toLocaleString()}원</strong> — {fee["개선 기준"].산식}</dd></div>}
         <div><dt>세금</dt><dd>{fee.세금}</dd></div>
       </dl>
-      {fee.알림.length > 0 && <PageAlert kind="info">{fee.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
+      <h3 className="table-title" id="volume-fee-basis-title">집필료 산정 근거 <span className="meta">계약서(F07)·예산집행 및 정산지침(F16)</span></h3>
       <div className="krds-table-wrap">
-        <table className="tbl col data">
+        <table className="tbl col data" aria-labelledby="volume-fee-basis-title">
           <caption>집필료 산정 근거(계약서 F07·예산집행 및 정산지침 F16)</caption>
           <thead><tr><th scope="col">근거</th><th scope="col">내용</th></tr></thead>
           <tbody>
@@ -229,8 +350,9 @@ function PrintedResult({ printed }) {
         <div><dt>같은 원고 확인</dt><dd>모듈 코드 {show(printed["모듈 코드"])} · 원고 문단 일치 {show(printed["같은 글 비율"])}</dd></div>
       </dl>
       {printed.알림.length > 0 && <PageAlert kind="info">{printed.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
+      <h3 className="table-title" id="volume-print-method-title">측정과 계산의 구분 <span className="meta">출력본에서 직접 잰 값과 계산한 값</span></h3>
       <div className="krds-table-wrap">
-        <table className="tbl col data">
+        <table className="tbl col data" aria-labelledby="volume-print-method-title">
           <caption>측정과 계산의 구분</caption>
           <thead><tr><th scope="col">항목</th><th scope="col">방법</th><th scope="col">설명</th></tr></thead>
           <tbody>
@@ -238,8 +360,9 @@ function PrintedResult({ printed }) {
           </tbody>
         </table>
       </div>
+      <h3 className="table-title" id="volume-print-segments-title">구성별 쪽 <span className="meta">출력본 측정과 한글 계산 비교</span></h3>
       <div className="krds-table-wrap">
-        <table className="tbl col data">
+        <table className="tbl col data" aria-labelledby="volume-print-segments-title">
           <caption>구성별 쪽 — 출력본 측정과 한글 계산</caption>
           <thead>
             <tr><th scope="col">구성</th><th scope="col">출력본 쪽</th><th scope="col">인쇄 쪽</th><th scope="col">쪽 환산(출력본)</th><th scope="col">쪽 환산(한글)</th><th scope="col">차이</th><th scope="col">한글 물리 쪽</th></tr>

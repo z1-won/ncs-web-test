@@ -1,4 +1,4 @@
-"""PostgreSQL 검수 이력 저장소. 검수 엔진과 웹 프레임워크에 의존하지 않는다."""
+"""PostgreSQL 이력 저장소 — 검수 이력(review_*)과 원고 분량 산정 이력(volume_runs). 검수 엔진과 웹 프레임워크에 의존하지 않는다."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from uuid import UUID, uuid4
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+
+from ncs_core.module_code import CODE_IN_NAME
 
 from .migrations import MIGRATIONS
 from .models import ExecutedReview
@@ -270,3 +272,73 @@ def import_review(dsn: str, *, run_id: str, created_at, check: str, module_code:
                     (run_id, role, filename),
                 )
     return True
+
+
+# ── 원고 분량 산정 이력(volume_runs) ── 산정표(ncs_volume.measure의 결과 dict)를 그대로 보관한다. 원고 파일은 보관하지 않는다.
+def file_metadata(files: list[tuple[str, str, Path]]) -> list[dict]:
+    """[(역할, 올린 파일 이름, 임시 경로)] → [{role, filename, sha256, byte_size}]. 요청이 끝나면 사라지는 경로 대신 남길 값."""
+    result = []
+    for role, filename, path in files:
+        digest = hashlib.sha256()
+        with Path(path).open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        result.append({"role": role, "filename": filename, "sha256": digest.hexdigest(), "byte_size": Path(path).stat().st_size})
+    return result
+
+
+def save_volume(dsn: str, result: dict, inputs: list[dict], params: dict, *, source: str = "web") -> str:
+    """산정 한 건을 저장하고 id를 돌려준다. inputs는 file_metadata()의 값(역할 manuscript가 있어야 한다),
+    params는 산정에 넣은 값(단가·계약 분량·수작업 쪽수·부록 포함 여부). 모듈 코드는 원고 파일 이름에서 읽고 없으면 빈 값."""
+    manuscript = next(item for item in inputs if item["role"] == "manuscript")
+    codes = list(dict.fromkeys(CODE_IN_NAME.findall(manuscript["filename"])))
+    fee = result["집필료"]
+    run_id = str(uuid4())
+    with psycopg.connect(dsn) as connection:
+        connection.execute(
+            "INSERT INTO volume_runs (id, module_code, manuscript, sha256, byte_size, pages, unit_price, fee, estimated, "
+            "params, inputs, result, engine_version, source) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (run_id, codes[0] if len(codes) == 1 else "", manuscript["filename"], manuscript["sha256"], manuscript["byte_size"],
+             fee["산정 분량"], fee["단가"], fee["집필료"], bool(fee["추정"]), Jsonb(params), Jsonb(inputs), Jsonb(result),
+             version("ncs-f02-review"), source),
+        )
+    return run_id
+
+
+def list_volumes(dsn: str, *, module_code: str | None = None, limit: int = 50, offset: int = 0) -> list[dict]:
+    """산정 이력 목록(최신순). 산정표 전체는 싣지 않는다 — 한 건은 get_volume."""
+    where = " WHERE module_code = %s" if module_code else ""
+    values: list = [module_code] if module_code else []
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        rows = connection.execute(
+            "SELECT id, created_at, module_code, manuscript, sha256, pages, unit_price, fee, estimated, "
+            "(params->>'unit_price') IS NOT NULL AS unit_given, source "
+            "FROM volume_runs" + where + " ORDER BY created_at DESC, id DESC LIMIT %s OFFSET %s",
+            (*values, limit, offset),
+        ).fetchall()
+    return [{**row, "id": str(row["id"]), "created_at": row["created_at"].isoformat()} for row in rows]
+
+
+def get_volume(dsn: str, run_id: str) -> dict | None:
+    """산정 한 건: 저장한 산정표에 id·created_at·입력 파일·넣은 값을 붙여 돌려준다(화면이 방금 산정한 결과와 같은 모양으로 그린다)."""
+    try:
+        UUID(run_id)
+    except ValueError:
+        return None
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        row = connection.execute(
+            "SELECT id, created_at, params, inputs, result, source FROM volume_runs WHERE id = %s", (run_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    return {**row["result"], "id": str(row["id"]), "created_at": row["created_at"].isoformat(),
+            "입력": {"파일": row["inputs"], "값": row["params"]}, "source": row["source"]}
+
+
+def delete_volume(dsn: str, run_id: str) -> bool:
+    try:
+        UUID(run_id)
+    except ValueError:
+        return False
+    with psycopg.connect(dsn) as connection:
+        return connection.execute("DELETE FROM volume_runs WHERE id = %s", (run_id,)).rowcount > 0

@@ -243,4 +243,27 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "    created_at timestamptz NOT NULL DEFAULT now(),\n"
      "    PRIMARY KEY (image_id, model)\n"
      ")"),
+    # 009: 원고 분량 산정(REQ-02-013) 이력 — 집필료 정산 근거라 언제·어느 원고를·어떤 단가와 계약 분량으로 산정했는지 남긴다.
+    # 검수 이력(review_runs)은 항목별 판정 구조라 모양이 달라 따로 둔다. 원고 파일은 보관하지 않고 이름·sha256·크기만 남긴다
+    # (같은 원고인지 확인하는 데는 해시면 충분하다). 목록에 쓰는 값(분량·단가·집필료)은 열로, 산정표 전체는 result에 둔다.
+    ("009_volume_runs",
+     "CREATE TABLE IF NOT EXISTS volume_runs (\n"
+     "    id uuid PRIMARY KEY,\n"
+     "    created_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    module_code text NOT NULL DEFAULT '',\n"
+     "    manuscript text NOT NULL,\n"
+     "    sha256 text,\n"
+     "    byte_size bigint,\n"
+     "    pages integer NOT NULL,\n"
+     "    unit_price integer NOT NULL,\n"
+     "    fee bigint NOT NULL,\n"
+     "    estimated boolean NOT NULL DEFAULT false,\n"
+     "    params jsonb NOT NULL,\n"
+     "    inputs jsonb NOT NULL,\n"
+     "    result jsonb NOT NULL,\n"
+     "    engine_version text,\n"
+     "    source text NOT NULL DEFAULT 'web'\n"
+     ");\n"
+     "CREATE INDEX IF NOT EXISTS volume_runs_created_idx ON volume_runs (created_at DESC, id DESC);\n"
+     "CREATE INDEX IF NOT EXISTS volume_runs_module_idx ON volume_runs (module_code, created_at DESC)"),
 )

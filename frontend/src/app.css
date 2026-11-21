@@ -366,6 +366,7 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
           mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-5h2v2h-2zm0-8h2v6h-2z'/></svg>") no-repeat center / contain; }
 .page-alert.danger  { background: var(--krds-light-color-surface-danger-subtler); border-color: var(--krds-light-color-border-danger); color: var(--krds-light-color-text-danger); }
 .page-alert.success { background: var(--krds-light-color-surface-success-subtler); border-color: var(--krds-light-color-border-success); color: var(--krds-light-color-text-success); }
+.page-alert.warning { background: var(--krds-light-color-surface-warning-subtler); border-color: var(--krds-light-color-border-warning); color: var(--krds-light-color-text-warning); }
 .page-alert.info    { background: var(--krds-light-color-surface-information-subtler); border-color: var(--krds-light-color-border-information); color: var(--krds-light-color-text-information); }
 .page-alert.success .svg-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.5 14.5-3.8-3.8 1.4-1.4 2.4 2.4 5.9-5.9 1.4 1.4z'/></svg>");
                                         mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.5 14.5-3.8-3.8 1.4-1.4 2.4 2.4 5.9-5.9 1.4 1.4z'/></svg>"); }
@@ -611,6 +612,21 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 /* 원고 분량 산정 — 산정에서 빠지는 구성(표지·이해·개발진)은 흐리게 */
 .volume-result tr.muted th,
 .volume-result tr.muted td { color: var(--krds-light-color-text-subtle); }
+/* 집필료 — 알림은 제목 바로 아래(금액 카드 위), 알림 안 '단가 입력하기' 버튼, 단가 칸의 기본값/입력값 배지 */
+.volume-fee > .page-alert { margin: 0 0 var(--krds-gap-5); }
+.volume-fee .page-alert .krds-btn { margin-top: var(--krds-gap-3); }
+.volume-fee dt .krds-badge { margin-left: var(--krds-gap-2); vertical-align: middle; }
+/* 집필료·출력본 — 요약 칸·알림·앞 표와 표 사이를 띄운다(붙어 있으면 알림이 표 머리처럼 보인다) */
+.volume-fee .krds-table-wrap,
+.volume-printed .krds-table-wrap { margin-top: var(--krds-gap-7); }
+/* 표 제목 — 표의 caption은 화면낭독기용으로 숨겨져 있어, 한 영역에 표가 여럿이면 무슨 표인지 보이게 제목을 둔다. 옆의 흐린 글은 부연 */
+.table-title { margin: var(--krds-gap-7) 0 var(--krds-gap-4); font-size: var(--krds-pc-font-size-body-large); font-weight: var(--krds-font-weight-bold); }
+.table-title .meta { margin-left: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-subtle); }
+.volume-result .table-title + .krds-table-wrap { margin-top: 0; }
+.volume-printed details > summary { margin-top: var(--krds-gap-5); cursor: pointer; font-weight: var(--krds-font-weight-bold); }
+/* 산정 이력 — 원고 검수 이력 표(.history-table)와 같은 틀. 숫자 칸(분량·단가·집필료) 폭만 따로 */
+.history-table .col-num { width: 13rem; }
+.history-table td .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
 /* 검토의견서 반영 검토 — 판정 거르기 버튼 줄, 의견·근거 칸 */
 .opinion-filter { display: flex; flex-wrap: wrap; gap: var(--krds-gap-2); margin: var(--krds-gap-4) 0; }
 .opinion-table td.opinion-text { min-width: 24rem; }

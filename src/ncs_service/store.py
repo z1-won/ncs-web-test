@@ -3,6 +3,7 @@
 웹 서버는 open_store()로 하나를 고른 뒤 save()만 부른다. 이력 조회(list/get/export_zip)는
 supports_history가 True인 저장소만 제공한다. HTTP·업로드 객체는 여기 들어오지 않는다.
 검수 CLI는 save_cli_review()로 같은 저장소를 쓴다(--out을 주면 폴더, 안 주면 open_store 규칙).
+원고 분량 산정 이력(save_volume·list_volumes·get_volume·delete_volume)도 PostgresStore만 남긴다 — 파일 저장소는 남기지 않는다.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from .models import ExecutedReview
 from .service import persist_review
 
 UploadedInput = tuple[str, Path]  # (사용자가 올린 파일 이름, 임시 저장 경로)
+VolumeInput = tuple[str, str, Path]  # (역할 manuscript/previous/print, 사용자가 올린 파일 이름, 임시 저장 경로)
 DEFAULT_OUT = "결과"
 
 
@@ -48,6 +50,10 @@ class FileStore:
         target = self.out_dir / group_id if group_id else self.out_dir
         saved = persist_review(review, target)
         return StoredReview(saved.summary, directory=saved.directory, zip_path=saved.zip_path)
+
+    def save_volume(self, result: dict, files: list[VolumeInput], params: dict, *, source: str = "web") -> str | None:
+        """원고 분량 산정은 파일로 남기지 않는다(이력은 DB 모드에서만). 저장하지 않았다는 뜻으로 None."""
+        return None
 
 
 class PostgresStore:
@@ -107,6 +113,27 @@ class PostgresStore:
         from . import postgres
 
         return postgres.get_manuscript(self.dsn, run_id)
+
+    # 원고 분량 산정 이력(volume_runs) — 산정표와 넣은 값·입력 파일의 이름·해시를 남긴다(원고 파일은 보관하지 않는다)
+    def save_volume(self, result: dict, files: list[VolumeInput], params: dict, *, source: str = "web") -> str | None:
+        from . import postgres
+
+        return postgres.save_volume(self.dsn, result, postgres.file_metadata(list(files)), params, source=source)
+
+    def list_volumes(self, **filters) -> list[dict]:
+        from . import postgres
+
+        return postgres.list_volumes(self.dsn, **filters)
+
+    def get_volume(self, run_id: str) -> dict | None:
+        from . import postgres
+
+        return postgres.get_volume(self.dsn, run_id)
+
+    def delete_volume(self, run_id: str) -> bool:
+        from . import postgres
+
+        return postgres.delete_volume(self.dsn, run_id)
 
     def export_zip(self, run_id: str) -> tuple[bytes, str] | None:
         """저장된 이력을 해당 엔진의 save_results로 다시 만들어 (ZIP 바이트, 파일 이름)을 돌려준다."""

@@ -33,19 +33,21 @@ def compute_fee(pages: int, basis: str, *, config: VolumeConfig, unit: int | Non
     given = unit is not None
     unit = unit if given else config.fee_unit
     notes = []
+    warnings = []   # notes 가운데 금액이 달라지거나 믿기 어려운 것(화면이 경고색으로 보인다). 기본 단가로 계산했다는 안내는 넣지 않는다
     if not given:
         notes.append(f"단가를 넣지 않아 예산지침 상한 {_won(unit)}/쪽으로 계산했습니다. 계약서 제2조 계약금액의 단가가 다르면 단가를 넣으세요.")
     if unit > FEE_UNIT_DEFAULT:
-        notes.append(f"단가 {_won(unit)}은 예산지침 상한 {_won(FEE_UNIT_DEFAULT)}/쪽보다 큽니다(F16 인쇄 18쪽 — 상한선 기준).")
+        warnings.append(f"단가 {_won(unit)}은 예산지침 상한 {_won(FEE_UNIT_DEFAULT)}/쪽보다 큽니다(F16 인쇄 18쪽 — 상한선 기준).")
     if estimated:
-        notes.append("분량이 추정치(줄 배치 정보 없음)라 집필료도 참고값입니다. 한글에서 저장한 원고나 출력본 PDF로 다시 산정하세요.")
+        warnings.append("분량이 추정치(줄 배치 정보 없음)라 집필료도 참고값입니다. 한글에서 저장한 원고나 출력본 PDF로 다시 산정하세요.")
     allowed = pages
     if contract_pages is not None:
         allowed = min(pages, contract_pages)
         if pages > contract_pages:
-            notes.append(f"산정 {pages}매가 계약 분량 {contract_pages}매보다 많아 {contract_pages}매만 인정합니다(초과분 추가금 없음 — F16 인쇄 17·18쪽).")
+            warnings.append(f"산정 {pages}매가 계약 분량 {contract_pages}매보다 많아 {contract_pages}매만 인정합니다(초과분 추가금 없음 — F16 인쇄 17·18쪽).")
         elif pages < contract_pages:
-            notes.append(f"산정 {pages}매가 계약 분량 {contract_pages}매에 미달해 제출 분량만큼 정산합니다(F07 제13조 1항, F16 인쇄 18쪽).")
+            warnings.append(f"산정 {pages}매가 계약 분량 {contract_pages}매에 미달해 제출 분량만큼 정산합니다(F07 제13조 1항, F16 인쇄 18쪽).")
+    notes.extend(warnings)
     main = _line(allowed, unit)
     return {
         "단가": unit, "단가 입력": given, "단가 근거": "입력값" if given else FEE_UNIT_SOURCE,
@@ -53,5 +55,5 @@ def compute_fee(pages: int, basis: str, *, config: VolumeConfig, unit: int | Non
         "집필료": main["집필료"], "산식": main["산식"],
         "개선 기준": None if changed_pages is None else {**_line(changed_pages, unit), "근거": "F16 정산지침 인쇄 20쪽 — (개선) 새로 수정한 부분만 모아 산정"},
         "세금": "계약금액(집필료)은 관련 세금을 포함한 금액(F07 제13조 1항). 원천징수율은 계약서·지침에 없어 계산하지 않음",
-        "추정": estimated, "근거": [{"조항": clause, "내용": text} for clause, text in FEE_BASIS], "알림": notes,
+        "추정": estimated, "근거": [{"조항": clause, "내용": text} for clause, text in FEE_BASIS], "알림": notes, "경고": warnings,
     }

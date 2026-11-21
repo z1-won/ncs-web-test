@@ -71,6 +71,7 @@ class FeeRules(unittest.TestCase):
         self.assertFalse(fee["단가 입력"])
         self.assertIn("상한", fee["단가 근거"])
         self.assertTrue(any("단가를 넣지 않아" in note for note in fee["알림"]))
+        self.assertEqual(fee["경고"], [])     # 기본 단가로 계산했다는 것은 안내이지 경고가 아니다
         self.assertIn("제13조 1항", fee["세금"])
         clauses = [row["조항"] for row in fee["근거"]]
         self.assertIn("F07 계약서 제13조 4항", clauses)
@@ -83,6 +84,10 @@ class FeeRules(unittest.TestCase):
         under = compute_fee(75, "x", config=DEFAULT_CONFIG, unit=46200, contract_pages=80)
         self.assertEqual((under["인정 분량"], under["집필료"]), (75, 75 * 46200))    # 미달이면 제출 분량만큼
         self.assertTrue(any("미달" in note for note in under["알림"]))
+        # 금액이 달라지는 알림(계약 분량 초과·미달)은 경고로도 표시한다. 경고는 언제나 알림에 들어 있는 문장이다
+        for fee, word in ((over, "많아"), (under, "미달")):
+            self.assertTrue(any(word in note for note in fee["경고"]), fee["경고"])
+            self.assertTrue(set(fee["경고"]) <= set(fee["알림"]))
 
     def test_changed_pages_give_improvement_basis(self):
         fee = compute_fee(80, "x", config=DEFAULT_CONFIG, unit=50000, changed_pages=12)
@@ -93,6 +98,7 @@ class FeeRules(unittest.TestCase):
     def test_above_ceiling_and_estimate_are_noted_and_bad_values_rejected(self):
         fee = compute_fee(10, "추정", config=DEFAULT_CONFIG, unit=60000, estimated=True)
         self.assertTrue(any("상한" in note for note in fee["알림"]))
+        self.assertEqual(len(fee["경고"]), 2)      # 상한 초과 + 추정 분량
         self.assertTrue(fee["추정"])
         with self.assertRaises(ValueError):
             compute_fee(10, "x", config=DEFAULT_CONFIG, unit=0)

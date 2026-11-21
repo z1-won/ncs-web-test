@@ -85,12 +85,15 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
     names, found = assign(layout.blocks)
     body_mm = round(config.body_height * MM_PER_UNIT, 1)
     notes = []
+    warnings = []   # notes 가운데 산정값을 그대로 믿기 어려운 것(추정·판단불가) — 화면이 경고색으로 보인다
     if not layout.measured:
-        notes.append("줄 배치 정보가 없어(한글이 아닌 도구로 만든 파일 등) 행·쪽은 추정치입니다. 한글에서 저장한 hwp/hwpx로 다시 산정하세요.")
+        warnings.append("줄 배치 정보가 없어(한글이 아닌 도구로 만든 파일 등) 행·쪽은 추정치입니다. 한글에서 저장한 hwp/hwpx로 다시 산정하세요.")
+        notes.append(warnings[-1])
     counted_names = [name for name, counted in SEGMENTS if config.counted(name)]
     missing = [name for name in counted_names if name not in found]
     if not any(name.startswith("학습 —") for name in found):
-        notes.append(f"{UNDECIDED}: 학습(내비게이터·필요 지식) 제목을 찾지 못해 구성 구분을 믿을 수 없습니다. 합계는 표지 뒤 전체를 센 값입니다.")
+        warnings.append(f"{UNDECIDED}: 학습(내비게이터·필요 지식) 제목을 찾지 못해 구성 구분을 믿을 수 없습니다. 합계는 표지 뒤 전체를 센 값입니다.")
+        notes.append(warnings[-1])
     if missing:
         notes.append("찾지 못한 구성(원고에 없거나 제목을 읽지 못함): " + ", ".join(missing))
     if not config.include_appendix:
@@ -125,13 +128,14 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
         "물리 쪽 수": layout.pages if layout.measured else None,
         "구성": rows,
         "합계": total,
-        "권고 분량": None, "변경": None, "수작업 대조": None, "알림": notes,
+        "권고 분량": None, "변경": None, "수작업 대조": None, "알림": notes, "경고": warnings,
         "출력본": None, "채택 분량": None, "집필료": None,
     }
     if print_pdf is not None:
         result["출력본"] = _printed(print_pdf, layout, rows, total, config)
         if not result["출력본"]["사용"]:
-            notes.append(result["출력본"]["사유"] + " — 한글 줄 배치 값으로 산정합니다.")
+            warnings.append(result["출력본"]["사유"] + " — 한글 줄 배치 값으로 산정합니다.")
+            notes.append(warnings[-1])
     use_pdf = bool(result["출력본"] and result["출력본"]["사용"])
     if use_pdf:
         adopted, basis = result["출력본"]["합계"]["기입 분량"], "출력본 PDF 측정(쪽 수·쪽 범위·쪽별 채움) + 남은 행 계산"
