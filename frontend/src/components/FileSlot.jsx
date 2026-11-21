@@ -2,7 +2,7 @@
 // KRDS 파일 업로드(.krds-file-upload) 구조를 따른다: 레이블 → 놓는 자리(.file-upload: 안내 글 + 파일 선택 버튼) → 파일 목록(.file-list › ul.upload-list › li(.is-error)
 // › .file-info(.file-name + .btn-wrap) + p.file-hint-invalid) → 도움말. 상태는 업로드 중 스피너(.krds-spinner) → 완료 아이콘(.ico-invalid.complete), 삭제는 .krds-btn.medium.text + ico-delete-fill.
 // KRDS 가이드(컴포넌트 › 파일 업로드)에서 지키는 것:
-// - 끌어다 놓기는 파일 선택 버튼과 함께 둔다. 놓는 자리는 평소에도 보이고(회색 면), 파일을 화면으로 끌어오면 모든 칸의 자리에 점선이, 그 칸 위에 오면 강조색이 든다
+// - 끌어다 놓기는 파일 선택 버튼과 함께 둔다. 버튼은 small(40px) — 칸이 여럿 나란히 놓여 medium(48px)은 실행 버튼만큼 눈에 띄었다. 누르는 대상이라 더 줄이지는 않는다. 놓는 자리는 평소에도 보이고(회색 면), 파일을 화면으로 끌어오면 모든 칸의 자리에 점선이, 그 칸 위에 오면 강조색이 든다
 // - 파일을 올린 뒤에도 버튼과 놓는 자리는 그대로 둔다(글도 '파일 선택' 하나). 한 칸짜리는 다시 고르면 바뀐다
 // - 형식 제한은 도움말에 적는다(페이지가 hint를 주지 않으면 accept에서 만든다)
 // - 오류는 무엇이 왜 안 되는지 적는다: 형식이 다름, 빈 파일, 개수 초과. 버튼으로 골라도 끌어다 놓아도 같은 검사를 거친다(버튼의 accept는 '모든 파일'로 바꿔 고르면 막지 못한다)
@@ -150,7 +150,7 @@ function DropArea({ id, label, accept, multiple, required, disabled, invalid, de
                  event.target.value = "";   // 같은 파일을 다시 골라도 change가 나도록
                  intake.take(picked);
                }} />
-        <button type="button" className="krds-btn medium tertiary" disabled={disabled} aria-describedby={describedBy} onClick={() => input.current?.click()}>
+        <button type="button" className="krds-btn small tertiary" disabled={disabled} aria-describedby={describedBy} onClick={() => input.current?.click()}>
           <i className="svg-icon ico-upload" aria-hidden="true"></i>파일 선택<span className="sr-only">: {label}</span>
         </button>
       </div>
