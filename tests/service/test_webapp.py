@@ -46,7 +46,10 @@ class WebappTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         os.environ.pop("NCS_CATALOG_FILE", None)
-        duty = self.client.get("/api/plan/subclasses").json()["subclasses"][0]["duty"]
+        listed = self.client.get("/api/plan/subclasses").json()
+        self.assertGreater(len(listed["subclasses"]), 1000)      # NCS 목록의 세분류 전부(받아 두지 않은 것도 보인다)
+        self.assertFalse(listed["can_fetch"])                    # 테스트에는 NCS 키도 기준정보 폴더도 없다
+        duty = next(s["duty"] for s in listed["subclasses"] if s["ready"])
         response = self.client.post("/api/plan/draft", json={"duty": duty})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertNotIn("x-plan-check", response.headers)

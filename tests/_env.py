@@ -9,5 +9,6 @@
 
 import os
 
-for name in ("LLM_API_KEY", "OPENAI_API_KEY", "LLM_ALLOW_UPLOAD", "STDICT_API_KEY"):
+# NCS·법제처 조회도 막는다: 기준정보 폴더가 정해지면 점검·개발계획서 작성이 운영 중 조회를 하므로(ncs_fetch·law_lookup) 키와 폴더를 비운다.
+for name in ("LLM_API_KEY", "OPENAI_API_KEY", "LLM_ALLOW_UPLOAD", "STDICT_API_KEY", "NCS_API_KEY", "LAW_API_OC", "NCS_DATA_DIR"):
     os.environ[name] = ""

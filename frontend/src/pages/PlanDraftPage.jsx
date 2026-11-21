@@ -24,6 +24,7 @@ const ANCHORS = [
 ];
 
 const STAGES = [["final", "최종본 (개발기관)"], ["draft", "1차본 (직능연)"]];
+const MAX_OPTIONS = 100;   // 세분류 목록에 한 번에 펴는 수 — 넘으면 검색어를 더 적게 한다
 
 export default function PlanDraftPage() {
   usePageTitle("개발계획서 작성");
@@ -38,6 +39,12 @@ export default function PlanDraftPage() {
   const [error, setError] = useState(null);
   const [check, setCheck] = useState(null);          // 초안 점검 요약 [{번호, 검수결과, 비고}]
   const [made, setMade] = useState(null);            // 마지막으로 만든 세분류·개수
+  const [query, setQuery] = useState("");            // 세분류 검색어
+  const [detail, setDetail] = useState(null);        // 고른 세분류의 상세(/api/plan/subclasses/{duty}) — 능력단위·요소 수·받아 온 날
+  const [fetching, setFetching] = useState(false);   // NCS에서 기준정보를 받아 오는 중
+  const [fetchError, setFetchError] = useState(null);
+  const [fetchNote, setFetchNote] = useState(null);  // 받아 온 결과 안내(처음 받음 / 달라진 능력단위)
+  const loadSeq = useRef(0);                         // 세분류 상세 요청의 순번
   // 개발계획서 점검 — 작성한(또는 받은) 개발계획서 파일 하나를 올려 ①~⑩을 점검한다
   const [reviewFile, setReviewFile] = useState(null);
   const [stage, setStage] = useState("final");       // 점검 단계: final 최종본 / draft 1차본
@@ -50,18 +57,67 @@ export default function PlanDraftPage() {
     api.plan.subclasses().then(({ ok, data, error: message }) => {
       if (!ok) { setLoadError(message); return; }
       setCatalog(data);
-      if (data.subclasses?.length) setDuty(data.subclasses[0].duty);
+      // 처음에는 바로 초안을 만들 수 있는(기준정보를 받아 둔) 세분류를 고른다. 없으면 비워 두고 검색해서 고르게 한다
+      const first = data.subclasses?.find((s) => s.ready);
+      if (first) setDuty(first.duty);
     });
   }, []);
 
-  const subclass = useMemo(() => catalog?.subclasses?.find((s) => s.duty === duty) || null, [catalog, duty]);
+  // 고른 세분류의 능력단위(요소·수행준거 수)를 읽는다. 아직 받아 두지 않은 세분류면 서버가 NCS에서 받아 온다(받을 수 있는 서버일 때).
+  async function loadDetail(code, { refresh = false } = {}) {
+    const mine = ++loadSeq.current;   // 받아 오는 사이에 다른 세분류를 고르면 늦게 온 응답은 버린다
+    const stale = () => mine !== loadSeq.current;
+    setFetchError(null); setFetchNote(null); setFetching(false);
+    if (!refresh) {
+      const found = await api.plan.subclass(code);
+      if (stale()) return;
+      if (!found.ok) { setDetail(null); setFetchError(found.error); return; }
+      if (found.data.ready || !catalog?.can_fetch) { setDetail(found.data); return; }
+      setDetail(found.data);   // 받아 오는 동안 분류 이름은 보이게
+    }
+    setFetching(true);
+    const { ok, data, error: message } = await api.plan.fetchSubclass(code, refresh);
+    if (stale()) return;
+    setFetching(false);
+    if (!ok) { setFetchError(message); return; }
+    setDetail(data);
+    setCatalog((prev) => prev && { ...prev, subclasses: prev.subclasses.map((s) => (s.duty === code ? { ...s, ready: true, units: data.units.length } : s)) });
+    const change = data.변화;
+    if (data.처음) setFetchNote(`NCS에서 능력단위 ${data.units.length}개의 요소와 수행준거를 받아 왔습니다.`);
+    else if (change) {
+      const parts = [["추가", change.추가], ["삭제", change.삭제], ["변경", change.변경]].filter(([, list]) => list.length)
+        .map(([name, list]) => `${name} ${list.length}개(${list.join(", ")})`);
+      setFetchNote(parts.length ? `NCS에서 다시 받아 왔습니다. 달라진 능력단위: ${parts.join(", ")}` : "NCS에서 다시 받아 왔습니다. 달라진 내용이 없습니다.");
+    }
+  }
+  useEffect(() => {
+    if (!duty || !catalog) return;
+    setDetail(null);
+    loadDetail(duty);
+    // 세분류를 바꿀 때만 다시 읽는다(catalog는 목록이 처음 올 때와 받아 온 뒤 표시만 바뀐다)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duty, !!catalog]);
+
+  const subclass = detail?.ready && detail.duty === duty ? detail : null;   // 초안을 만들 수 있는 상태의 세분류
   useEffect(() => {   // 세분류를 바꾸면 능력단위는 전부 선택
     if (!subclass) return;
     setPicked(Object.fromEntries(subclass.units.map((u) => [u.code, true])));
     setCheck(null);
   }, [subclass]);
 
-  const options = (catalog?.subclasses || []).map((s) => ({ value: s.duty, label: `${s.name} (${s.duty}), 능력단위 ${s.units.length}개` }));
+  // 세분류는 천 개가 넘어 검색해서 고른다: 이름·코드·분류 이름에 검색어가 든 것만, 받아 둔 세분류를 먼저. 목록은 MAX_OPTIONS개까지만 편다
+  const matches = useMemo(() => {
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const all = catalog?.subclasses || [];
+    const hit = words.length
+      ? all.filter((s) => { const text = `${s.name} ${s.duty} ${Object.values(s.classes || {}).join(" ")}`.toLowerCase(); return words.every((w) => text.includes(w)); })
+      : all;
+    return [...hit].sort((a, b) => (a.ready === b.ready ? 0 : a.ready ? -1 : 1));
+  }, [catalog, query]);
+  const shown = matches.slice(0, MAX_OPTIONS);
+  const current = catalog?.subclasses?.find((s) => s.duty === duty);
+  const options = [...(current && !shown.some((s) => s.duty === duty) ? [current] : []), ...shown]
+    .map((s) => ({ value: s.duty, label: `${s.name} (${s.duty}), 능력단위 ${s.units}개${s.ready ? "" : ", NCS에서 받아 와야 함"}` }));
   const chosen = subclass ? subclass.units.filter((u) => picked[u.code]) : [];
 
   async function submit(e) {
@@ -128,18 +184,56 @@ export default function PlanDraftPage() {
 
       <PageAlert kind="danger">{loadError}</PageAlert>
       {catalog && !catalog.subclasses?.length && (
-        <p className="empty">초안을 만들 수 있는 세분류가 없습니다. 관리자에게 NCS 기준 자료(요소와 수행준거) 등록을 요청해 주세요.</p>
+        <p className="empty">NCS 세분류 목록을 읽지 못했습니다. 관리자에게 문의해 주세요.</p>
       )}
 
       <form id="plan-form" className="fieldset review-form nav-anchor" onSubmit={submit}>
+        <div className="form-group">
+          <div className="form-tit"><label htmlFor="duty-query">세분류 검색</label></div>
+          <div className="form-conts">
+            <input id="duty-query" type="search" className="krds-input" value={query} onChange={(e) => setQuery(e.target.value)}
+                   placeholder="예: 숙박, 12030202" aria-describedby="duty-query-hint" />
+          </div>
+          <p className="form-hint" id="duty-query-hint">
+            세분류 이름, 코드, 분류 이름으로 찾습니다. {query.trim() ? `찾은 세분류 ${matches.length}개` : `전체 ${matches.length}개`}
+            {matches.length > MAX_OPTIONS ? ` 가운데 ${MAX_OPTIONS}개만 목록에 보입니다. 검색어를 더 적어 주세요.` : "."}
+          </p>
+        </div>
+
         <div className="form-group">
           <div className="form-tit"><label htmlFor="duty">세분류</label></div>
           <div className="form-conts">
             <KrdsSelect id="duty" value={duty} options={options} onChange={setDuty} title="세분류 선택" describedBy="duty-hint" />
           </div>
           <p className="form-hint" id="duty-hint">
-            {subclass ? `${subclass.classes?.대분류 || ""} › ${subclass.classes?.중분류 || ""} › ${subclass.classes?.소분류 || ""} › ${subclass.name}` : "NCS 기준 자료가 등록된 세분류만 보입니다"}
+            {detail ? `${detail.classes?.대분류 || ""} › ${detail.classes?.중분류 || ""} › ${detail.classes?.소분류 || ""} › ${detail.name}` : "세분류를 선택해 주세요."}
           </p>
+        </div>
+
+        {/* NCS 기준정보 — 이 세분류의 요소와 수행준거를 언제 받았는지, 다시 받기. 아직 없는 세분류는 고르는 즉시 받아 온다 */}
+        <div className="form-group form-group-wide plan-refdata" id="plan-refdata">
+          <div className="form-tit"><span>NCS 기준정보</span></div>
+          <div className="form-conts">
+            {fetching ? <Spinner label="NCS에서 요소와 수행준거를 받아 오는 중" />
+              : subclass ? (
+                <p className="plan-refdata-line">
+                  <span>{subclass.fetched ? `${subclass.fetched}에 NCS에서 받아 온 자료입니다.` : "프로그램에 들어 있는 기본 자료입니다(받아 온 날 기록 없음)."}</span>
+                  {catalog?.can_fetch && (
+                    <button type="button" className="krds-btn small tertiary" disabled={busy} onClick={() => loadDetail(duty, { refresh: true })}>NCS에서 다시 받아 오기</button>
+                  )}
+                </p>
+              ) : detail && !detail.ready && !fetchError ? (
+                <p className="plan-refdata-line"><span>이 세분류는 요소와 수행준거를 아직 받아 두지 않았습니다. {catalog?.can_fetch ? "" : "이 서버는 NCS에서 받아 오도록 설정되어 있지 않습니다. 관리자에게 문의해 주세요."}</span></p>
+              ) : null}
+            <PageAlert kind="danger">{fetchError && (
+              <>
+                <p>{fetchError}</p>
+                {catalog?.can_fetch && duty && <button type="button" className="krds-btn small tertiary" onClick={() => loadDetail(duty, { refresh: !!subclass })}>다시 시도</button>}
+              </>
+            )}</PageAlert>
+            <PageAlert kind="success">{fetchNote}</PageAlert>
+          </div>
+          <p className="form-hint">NCS가 개정되면 [NCS에서 다시 받아 오기]로 최신 내용을 받습니다. 달라진 능력단위를 알려 줍니다.</p>
         </div>
 
         <div className="form-group">

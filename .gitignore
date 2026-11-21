@@ -7,6 +7,9 @@ __pycache__/
 # Generated review reports
 /결과/
 
+# 운영 중에 NCS·법제처에서 받아 온 기준정보(ncs-web --data, 기본 기준정보/)
+/기준정보/
+
 # Python package build artifacts
 /build/
 /dist/

@@ -86,6 +86,10 @@ html { scrollbar-gutter: stable; }
 .review-form .file-slot .file-name .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .review-form .file-slot .file-name .info { flex: none; white-space: nowrap; color: var(--krds-light-color-text-subtle); }
 .review-form .file-slot .file-hint-invalid { font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+/* 개발계획서 작성 — NCS 기준정보 줄: 받아 온 날과 [다시 받아 오기] 버튼을 한 줄에 */
+.review-form .plan-refdata .plan-refdata-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-4); margin: 0; }
+.review-form .plan-refdata .krds-btn { width: auto; }
+.review-form .plan-refdata .page-alert { margin-top: var(--krds-gap-3); }
 /* 끌어다 놓기: 파일을 화면으로 끌어오면 모든 칸의 놓는 자리에 점선이 들고(KRDS .active), 그 칸 위에 오면 강조색 점선과 옅은 바탕으로 바뀐다. 테두리 자리는 평소에도 있어(투명) 칸 크기가 변하지 않는다 */
 .review-form .file-slot .file-upload.is-over { border-color: var(--krds-light-color-border-primary) !important; background-color: var(--krds-light-color-surface-primary-subtler); }
 .review-form .form-group.file-drop.is-dragover * { pointer-events: none; }   /* 놓는 동안 안쪽 요소가 끌기 이벤트를 가로채 강조가 깜빡이지 않게 */

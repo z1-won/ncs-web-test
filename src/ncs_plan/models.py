@@ -21,3 +21,4 @@ class ReviewContext:
     lexicon: ActionNounLexicon
     module_cells: list[str]          # 모듈 표의 모든 셀 글(자리표시 탐지용)
     laws: LawCatalog | None          # 법령명 표(law_names.tsv). 없으면 ⑩ 판단불가
+    law_lookup: dict | None = None   # 이번 점검에서 법제처에 새로 조회한 결과(ncs_core.law_lookup.ensure). 조회하지 않는 환경이면 None

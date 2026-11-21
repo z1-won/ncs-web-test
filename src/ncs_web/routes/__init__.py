@@ -3,7 +3,7 @@
   review   검수 실행(/api/review) · 업로드 토큰(/api/uploads) · 상태(/api/health)
   history  검수 이력(/api/reviews, /api/groups) — 이력을 지원하는 저장소일 때만
   export   확인서·수정 메모 원고 내려받기(/api/export/…)
-  plan     개발계획서 작성(/api/plan/…)
+  plan     개발계획서 작성(/api/plan/…) — 세분류 목록·상세, NCS에서 기준정보 받아 오기(/fetch), 초안
   upscale  그림 업스케일(/api/uploads/{token}/pictures…, /proposal)
   rights   권리 증빙 제출 현황 점검(/api/rights/…)
   images   이미지 저작권 DB 조회·수정·확정(/api/images…) — PostgreSQL 저장소일 때만

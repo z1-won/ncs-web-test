@@ -6,6 +6,8 @@
 없는 세분류(목록 갱신 전 신규 등)는 개발계획서로 돌아간다.
 
 파일 위치는 NCS_CATALOG_FILE 환경 변수로 바꿀 수 있다(기본: 패키지 data/ncs_units.tsv).
+요소·수행준거 표(ncs_elements.tsv)는 기준정보 폴더(ncs_core.refdata)에 같은 이름 파일이 있으면 그 위에 덧씌운다 — 운영 중에
+NCS에서 받아 온 세분류(ncs_core.ncs_fetch)가 거기에 있다. 덧쓰는 파일에 든 세분류는 통째로 그 파일의 것을 쓴다.
 """
 
 from __future__ import annotations
@@ -15,6 +17,8 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+
+from .refdata import overlay_path
 
 CATALOG_FILE = "ncs_units.tsv"
 LEVELS_FILE = "ncs_levels.tsv"   # 세분류코드  능력단위코드  능력단위명  수준  훈련시간 (scripts/data/build_ncs_levels.py)
@@ -56,7 +60,8 @@ class Subclass:
 
 
 def read_elements(path: Path) -> dict[str, dict]:
-    """ncs_elements.tsv → {능력단위 10자리: {'duty','code','name','level','definition','elements':[{'code','no','name','criteria':[…]}]}}."""
+    """ncs_elements.tsv → {능력단위 10자리: {'duty','code','name','level','definition','fetched','elements':[{'code','no','name','criteria':[…]}]}}.
+    fetched는 받아 온 날(YYYY-MM-DD, 아홉째 열) — 패키지 표에는 없어 None."""
     out: dict[str, dict] = {}
     rows: list[str] = []
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -67,9 +72,9 @@ def read_elements(path: Path) -> dict[str, dict]:
         else:   # 문장 안 줄바꿈으로 쪼개진 조각 — 앞 행에 붙인다
             rows[-1] += " " + line.strip()
     for line in rows:
-        duty, code, name, level, definition, element_code, element_name, criteria = (line.split("\t") + [""] * 8)[:8]
+        duty, code, name, level, definition, element_code, element_name, criteria, fetched = (line.split("\t") + [""] * 9)[:9]
         unit = out.setdefault(code[:10], {"duty": duty, "code": code, "name": name, "level": int(level) if level.strip() else None,
-                                          "definition": definition, "elements": []})
+                                          "definition": definition, "fetched": fetched.strip() or None, "elements": []})
         unit["elements"].append({"code": element_code, "no": int(element_code.rsplit(".", 1)[-1] or 0), "name": element_name,
                                  "criteria": [c for c in criteria.split(CRITERIA_SEP) if c]})
     return out
@@ -89,7 +94,7 @@ def read_levels(path: Path) -> dict[str, dict]:
 
 
 class Catalog:
-    def __init__(self, path: Path, levels_path: Path | None = None):
+    def __init__(self, path: Path, levels_path: Path | None = None, elements_overlay: Path | None = None):
         self.path = path
         self.subclasses: dict[str, Subclass] = {}
         self._units: dict[str, Unit] = {}        # 10자리 → Unit
@@ -97,6 +102,11 @@ class Catalog:
         self.levels: dict[str, dict] = read_levels(levels_path) if levels_path.is_file() else {}
         elements_path = path.with_name(ELEMENTS_FILE)
         self.element_units: dict[str, dict] = read_elements(elements_path) if elements_path.is_file() else {}
+        if elements_overlay is not None and elements_overlay.is_file():
+            extra = read_elements(elements_overlay)
+            fetched_duties = {unit["duty"] for unit in extra.values()}   # 받아 온 세분류는 통째로 바꾼다(없어진 능력단위가 남지 않게)
+            self.element_units = {key: unit for key, unit in self.element_units.items() if unit["duty"] not in fetched_duties}
+            self.element_units.update(extra)
         rows: dict[str, list] = {}
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line or line.startswith("#"):
@@ -147,10 +157,16 @@ def _default_path() -> Path:
 
 
 @lru_cache(maxsize=4)
-def _load(path: str) -> Catalog | None:
-    return Catalog(Path(path)) if Path(path).is_file() else None
+def _load(path: str, overlay: str = "") -> Catalog | None:
+    return Catalog(Path(path), elements_overlay=Path(overlay) if overlay else None) if Path(path).is_file() else None
 
 
 def catalog() -> Catalog | None:
     """경로당 한 번 읽는다. 파일이 없으면 None(기준은 개발계획서로). NCS_CATALOG_FILE을 없는 경로로 두면 목록을 끈다(합성 원고 테스트)."""
-    return _load(str(_default_path()))
+    overlay = overlay_path(ELEMENTS_FILE)
+    return _load(str(_default_path()), str(overlay) if overlay is not None else "")
+
+
+def reload() -> None:
+    """읽어 둔 목록을 버린다 — 기준정보 폴더의 표를 새로 썼을 때 부른다(다음 catalog()가 다시 읽는다)."""
+    _load.cache_clear()

@@ -4,6 +4,8 @@
 열: 표기 \\t 정식명칭 \\t 법령ID \\t 시행일자 \\t 제개정구분 \\t 상태 \\t 현행명칭 \\t 조회일
 상태: 현행 / 폐지 / 명칭변경 / 미검색 / 현행목록없음(연혁 조회 불가). 명칭변경이면 현행명칭에 지금 이름.
 파일 위치는 LAW_NAMES_FILE 환경 변수로 바꿀 수 있다(기본: 패키지 data/law_names.tsv).
+기준정보 폴더(ncs_core.refdata)에 같은 이름 파일이 있으면 그 위에 덧씌운다 — 점검 중에 법제처에서 새로 조회한 결과
+(ncs_core.law_lookup)가 거기에 쌓인다. 같은 법령명은 덧쓰는 파일의 것(더 최근 조회)이 이긴다.
 """
 
 from __future__ import annotations
@@ -13,6 +15,8 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+
+from .refdata import overlay_path
 
 LAW_FILE = "law_names.tsv"
 QUOTED = re.compile(r"[「『]([^」』]{2,80})[」』]")
@@ -78,18 +82,24 @@ class LawEntry:
     checked: str
 
 
+def read_law_table(path: Path) -> list[LawEntry]:
+    return [LawEntry(*(line.split("\t") + [""] * 8)[:8])
+            for line in path.read_text(encoding="utf-8").splitlines() if line and not line.startswith("#")]
+
+
 class LawCatalog:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, overlay: Path | None = None):
         self.path = path
         self.entries: dict[str, LawEntry] = {}
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if not line or line.startswith("#"):
-                continue
-            parts = (line.split("\t") + [""] * 8)[:8]
-            entry = LawEntry(*parts)
+        for entry in read_law_table(path):
             self.entries[normalize(entry.written)] = entry
             if entry.name:
                 self.entries.setdefault(normalize(entry.name), entry)
+        if overlay is not None and overlay.is_file():
+            for entry in read_law_table(overlay):   # 운영 중 조회 결과 — 같은 표기는 나중 줄(더 최근 조회)이 이긴다
+                self.entries[normalize(entry.written)] = entry
+                if entry.name:
+                    self.entries[normalize(entry.name)] = entry
 
     def lookup(self, name: str) -> LawEntry | None:
         return self.entries.get(normalize(name))
@@ -101,10 +111,16 @@ def _default_path() -> Path:
 
 
 @lru_cache(maxsize=4)
-def _load(path: str) -> LawCatalog | None:
-    return LawCatalog(Path(path)) if Path(path).is_file() else None
+def _load(path: str, overlay: str = "") -> LawCatalog | None:
+    return LawCatalog(Path(path), Path(overlay) if overlay else None) if Path(path).is_file() else None
 
 
 def law_catalog() -> LawCatalog | None:
     """표가 없으면 None(⑩은 판단불가)."""
-    return _load(str(_default_path()))
+    overlay = overlay_path(LAW_FILE)
+    return _load(str(_default_path()), str(overlay) if overlay is not None else "")
+
+
+def reload() -> None:
+    """읽어 둔 표를 버린다 — 기준정보 폴더의 표에 조회 결과를 덧붙였을 때 부른다."""
+    _load.cache_clear()

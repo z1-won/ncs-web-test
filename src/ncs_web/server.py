@@ -22,12 +22,18 @@ def create_app(
     *, out_dir: str | Path = "결과",
     dist_dir: str | Path | None = None,
     database_url: str | None = None,
+    data_dir: str | Path | None = None,
 ) -> FastAPI:
     """경로는 앱 생성 시 실행 위치를 기준으로 확정한다. dist_dir 생략 시 API만 제공한다.
 
     저장소는 open_store()가 고른다: database_url이 있으면 PostgreSQL 이력, 없으면 out_dir의 파일 폴더.
+    data_dir는 기준정보 폴더(ncs_core.refdata) — 운영 중에 NCS·법제처에서 받아 온 기준정보를 두는 곳. 주지 않으면(None)
+    환경 변수 NCS_DATA_DIR를 따르고, 그것도 없으면 운영 중 조회를 하지 않는다(패키지에 든 표만 쓴다).
     """
+    from ncs_core import refdata
     from ncs_service import open_store
+
+    refdata.set_data_dir(data_dir)
 
     app = FastAPI(title="F02 검수 API")
     app.add_middleware(
@@ -104,9 +110,11 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--out", default="결과", help="결과 저장 폴더 (기본: 실행 위치의 결과/)")
     parser.add_argument("--dist", help="React 빌드 폴더. 생략하면 API만 제공")
+    parser.add_argument("--data", default=os.getenv("NCS_DATA_DIR") or "기준정보",
+                        help="기준정보 폴더 — 운영 중에 NCS·법제처에서 받아 온 기준정보를 두는 곳 (기본: NCS_DATA_DIR 또는 실행 위치의 기준정보/)")
     args = parser.parse_args()
     try:
-        app = create_app(out_dir=args.out, dist_dir=args.dist, database_url=os.getenv("DATABASE_URL"))
+        app = create_app(out_dir=args.out, dist_dir=args.dist, database_url=os.getenv("DATABASE_URL"), data_dir=args.data)
     except ValueError as error:
         parser.exit(2, f"서버 실행 실패: {error}\n")
     uvicorn.run(app, host="127.0.0.1", port=args.port)

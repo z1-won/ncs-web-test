@@ -13,7 +13,7 @@ from .common import row
 LABEL = "⑩ 법령 명칭 현행"
 
 
-def _texts(module: dict) -> list[tuple[str, str, bool]]:
+def law_texts(module: dict) -> list[tuple[str, str, bool]]:
     """(자리, 글, NCS 쪽인가)"""
     out = [("능력단위 정의", module["정의"], True), ("학습모듈의 목표", module["목표"], False)]
     for element in module["요소"]:
@@ -28,7 +28,7 @@ def _texts(module: dict) -> list[tuple[str, str, bool]]:
 
 def check_laws(module: dict, catalog: LawCatalog | None) -> list[dict]:
     found: dict[str, tuple[str, bool, bool]] = {}   # 표기 → (자리, 따옴표, NCS 쪽)
-    for where, text, ncs_side in _texts(module):
+    for where, text, ncs_side in law_texts(module):
         for name, quoted in extract_law_names(text):
             found.setdefault(name, (where, quoted, ncs_side))
     region = f"개발계획서 > 모듈 표 {module['코드'] or '(코드 없음)'}"

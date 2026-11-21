@@ -20,35 +20,12 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ncs_core import load_document  # noqa: E402
-from ncs_core.law_api import LawApiError, history, raw, search  # noqa: E402
+from ncs_core.law_api import LawApiError, raw  # noqa: E402
 from ncs_core.law_catalog import LAW_FILE, LawCatalog, extract_law_names, normalize  # noqa: E402
+from ncs_core.law_lookup import judge  # noqa: E402 — 판정은 점검 중 조회(ncs_core.law_lookup.ensure)와 같은 함수
 
 TABLE = ROOT / "src" / "ncs_core" / "data" / LAW_FILE
 HEADER = "# 법령명 표 — 법제처 Open API(open.law.go.kr) 조회 결과. 갱신: scripts/data/build_law_names.py\n# 표기\t정식명칭\t법령ID\t시행일자\t제개정구분\t상태\t현행명칭\t조회일\n"
-
-
-def judge(name: str) -> tuple[str, str, str, str, str, str]:
-    """→ (정식명칭, 법령ID, 시행일자, 제개정구분, 상태, 현행명칭)"""
-    key = normalize(name)
-    current = [r for r in search(name) if normalize(r.name) == key or normalize(r.abbreviation) == key]
-    if current:
-        r = sorted(current, key=lambda x: x.effective)[-1]
-        return r.name, r.law_id, r.effective, r.revision, "현행", r.name
-    try:
-        past = [r for r in history(name) if normalize(r.name) == key]
-    except LawApiError:
-        # 연혁 서비스를 못 쓰면 '현행 목록에 없음'까지만 안다(폐지·명칭 변경·오기 중 무엇인지는 사람이 확인)
-        return "", "", "", "", "현행목록없음", ""
-    if not past:
-        return "", "", "", "", "미검색", ""
-    last = sorted(past, key=lambda x: (x.promulgated, x.serial))[-1]
-    if last.repealed:
-        return last.name, last.law_id, last.effective, last.revision, "폐지", ""
-    # 같은 법령ID의 현행 이름을 찾는다(명칭 변경)
-    renamed = [r for r in search(last.name[:6]) if r.law_id == last.law_id and normalize(r.name) != key]
-    if renamed:
-        return last.name, last.law_id, last.effective, last.revision, "명칭변경", renamed[0].name
-    return last.name, last.law_id, last.effective, last.revision, "연혁만", ""
 
 
 def main() -> None:

@@ -119,6 +119,10 @@ export const api = {
   // 개발계획서 작성(REQ-02-001): 초안을 만들 수 있는 세분류와 초안 내려받기
   plan: {
     subclasses: () => request("/api/plan/subclasses"),
+    // 세분류 한 건: 능력단위(요소·수행준거 수), ready(받아 둠), fetched(받아 온 날)
+    subclass: (duty) => request(`/api/plan/subclasses/${duty}`),
+    // NCS에서 요소·수행준거 받아 오기. 이미 받아 둔 세분류는 refresh일 때만 다시 받는다. 응답: 상세 + 변화 + 처음
+    fetchSubclass: (duty, refresh = false) => request(`/api/plan/subclasses/${duty}/fetch${refresh ? "?refresh=true" : ""}`, { method: "POST" }),
     draft: planDraft,
   },
   // 그림 업스케일: 업로드 토큰의 원고 그림 목록 → 원본 보기 → 한 장씩 업스케일(20~40초) → 업스케일한 그림으로 제안본 hwpx
