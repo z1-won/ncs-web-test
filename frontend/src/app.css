@@ -51,6 +51,7 @@ html { scrollbar-gutter: stable; }
   color: var(--krds-light-color-text-subtle);
   font-size: var(--krds-pc-font-size-body-medium);
 }
+.page-desc:has(+ .page-desc) { margin-bottom: var(--krds-gap-3); }   /* 설명이 두 문단이면 문단 사이는 좁게 */
 .section-title {
   margin: var(--krds-gap-9) 0 var(--krds-gap-5);
   font-size: var(--krds-pc-font-size-heading-small);
@@ -371,6 +372,12 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
   .form-section-grid > .form-group { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: subgrid; grid-row: span 3; row-gap: var(--krds-form-group--gap); align-content: start; }
 }
 .form-section-grid > .form-group > * { min-width: 0; }
+/* 입력 폭은 들어갈 내용 길이에 맞춘다(날짜 10자, 셀렉트는 가장 긴 선택지) — 모든 입력이 열 폭을 꽉 채우면 내용에 비해 칸이 길어 화면이 무겁다.
+   칸(.form-group)은 격자 열을 그대로 차지하므로 줄 맞춤과 도움말 폭은 그대로다. 한 열로 쌓이는 좁은 화면에서는 누르기 쉽게 폭 전체를 쓴다 */
+@media (min-width: 600px) {
+  .form-section-grid .calendar-input { max-width: 22rem; }
+  .form-section-grid .check-select { max-width: 32rem; }
+}
 /* 실행 줄: 알림은 폭 전체, 버튼은 오른쪽 끝(글자 폭, 최소 16rem) */
 .review-form.is-sectioned > .form-actions { align-items: stretch; }
 .review-form.is-sectioned > .form-actions .run-buttons { justify-content: flex-end; }

@@ -105,6 +105,11 @@ export default function RightsPage() {
         이용허락 동의서, 생성형 AI 결과물 집필자 서약서)을 올리면 그림마다 필요한 증빙과 제출 여부를 표로 보여 줍니다.
         서류는 파일 이름과 상관없이 안에 든 표로 알아보므로, 계약서 한 파일에 붙임이 여러 개 있어도 됩니다.
       </p>
+      {/* 칸 아래 도움말은 한 줄로 두고, 긴 설명은 여기에 모은다 */}
+      <p className="page-desc">
+        출력본 PDF를 올리면 그림이 놓인 쪽을 읽어 생성형 AI 결과물 현황의 쪽수와 대조합니다. 수록 현황 목록은 1차 검토 이후 4주 이내에 내야 하므로,
+        1차 검토일을 넣으면 제출 기한을 계산합니다. 사진에 인물이 있는지는 자동으로 알 수 없어 초상권 확인 상태를 직접 선택합니다.
+      </p>
 
       <section id="rights-run" className="nav-anchor">
         {/* 입력 묶음은 구획 셋: 파일 올리기 → 점검 조건 → 실행. 구획 안에서만 3열 격자(.form-section-grid)를 쓴다. 구획 제목은 보이는 h2 — KRDS가 legend를 화면에서 숨기므로 fieldset 대신 role=group으로 묶는다 */}
@@ -116,16 +121,16 @@ export default function RightsPage() {
                     hint="hwp, hwpx. 이미지 저작권 DB에 등록하려면 hwpx여야 합니다." />
           <MultiFileSlot id="rights-forms" label="제출 서류" accept=".hwp,.hwpx" files={forms} disabled={!!busy}
                          onChange={(picked) => { setForms(picked); setReport(null); }}
-                         hint="작성한 한글 양식을 한 번에 여러 개 고릅니다. 없으면 원고만으로 점검합니다." />
+                         hint="hwp, hwpx 여러 개. 없으면 원고만으로 점검합니다." />
           <FileSlot id="rights-print" label="출력본 PDF" accept=".pdf" file={printCopy} disabled={!!busy} onChange={(file) => { setPrintCopy(file); setReport(null); }}
-                    hint="올리면 그림이 놓인 쪽을 읽어 생성형 AI 결과물 현황의 쪽수와 대조합니다." />
+                    hint="pdf. 올리면 결과물 현황의 쪽수와 대조합니다." />
           </div>
           </div>
           <div className="form-section" role="group" aria-labelledby="rights-options-title">
           <h2 className="form-section-title" id="rights-options-title">점검 조건</h2>
           <div className="form-section-grid">
           <KrdsDateField id="rights-first" label="1차 검토일" value={options.firstReviewOn} onChange={set("firstReviewOn")} disabled={!!busy}
-                         hint="수록 현황 목록은 1차 검토 이후 4주 이내에 내야 합니다. 이 날짜로 기한을 계산합니다." />
+                         hint="이 날짜에서 4주 뒤가 제출 기한입니다." />
           <KrdsDateField id="rights-submitted" label="수록 현황 목록 제출일" value={options.submittedOn} onChange={set("submittedOn")} disabled={!!busy}
                          hint="아직 제출하지 않았으면 비워 둡니다." />
           <div className="form-group">
@@ -133,7 +138,7 @@ export default function RightsPage() {
             <div className="form-conts">
               <KrdsSelect id="rights-portrait" value={options.portrait} options={PORTRAIT_OPTIONS} onChange={set("portrait")} title="초상권 확인 상태 선택" />
             </div>
-            <p className="form-hint">사진에 인물이 있는지는 자동으로 알 수 없습니다. 확인하지 않았으면 사진마다 ‘확인 필요’로 나옵니다.</p>
+            <p className="form-hint">확인하지 않으면 사진마다 ‘확인 필요’로 나옵니다.</p>
           </div>
           <div className="form-group form-group-wide">
             <div className="form-tit"><span id="rights-signed-label">서명 서류 제출 여부</span></div>
