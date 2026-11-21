@@ -104,7 +104,7 @@ def register(app: FastAPI, services: Services) -> None:
                 if roles:
                     raise ValueError("roles는 업로드할 때 지정합니다. upload 토큰과 함께 보낼 수 없습니다")
                 payload = _run(kept.files, check, module_code, group or None, stage=stage, roles=kept.assigned or None, image_dpi=image_dpi,
-                               work_stage=marked)
+                               work_stage=marked, version_id=kept.version_id)
             else:
                 if group:
                     raise ValueError("group은 upload 토큰과 함께만 쓸 수 있습니다")
@@ -149,7 +149,7 @@ def register(app: FastAPI, services: Services) -> None:
         return int(value)
 
     def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None, *, stage: str = "",
-             roles: dict[str, str] | None = None, image_dpi: str = "", work_stage: int | None = None) -> ReviewResponse:
+             roles: dict[str, str] | None = None, image_dpi: str = "", work_stage: int | None = None, version_id: str = "") -> ReviewResponse:
         paths = tuple(path for _, path in saved)
         config = None
         if check == "plan" and stage:
@@ -170,6 +170,10 @@ def register(app: FastAPI, services: Services) -> None:
                 store.tag_review_stage(stored.run_id, work_stage)
             except Exception as error:      # 단계 표시는 부가 정보라 검수 결과를 막지 않는다
                 logger.exception("검수 단계 표시 실패: %s", error)
+        if version_id and stored.run_id is not None:     # 세분류 건의 판본으로 돌린 검수 — 그 판본에 붙인다. 붙이지 못하면 근거가 끊기므로 실패로 알린다
+            from ncs_service import cases
+
+            cases.tag_review_version(store.dsn, stored.run_id, version_id)
         saved_paths = (
             SavedPaths(folder=str(stored.directory), zip=str(stored.zip_path))
             if stored.directory is not None else None

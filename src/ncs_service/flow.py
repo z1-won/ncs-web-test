@@ -9,6 +9,7 @@ DB를 읽지 않는다. 화면과 상태 전이는 STAGES를 읽어 움직이므
 - 누가 할 수 있는가: 제출은 submit 역할, 보완 요청·판정 도착·완료·되돌림은 confirm 역할. PoC에서는 직능연·검토진·위원의 화면이 없으므로
   에디터가 그 확인을 대신 적을 수 있고, 그 사건에는 '대신 기록'이 남는다(PROXY_ROLE). 집필진은 대신 적지 못한다.
 - 순서를 건너뛴 완료(제출이나 판정 없이 완료)는 막지 않되 사유(메모)를 받는다 — 일관성 규칙 2.
+- 권은 단계 순서대로 흐른다: 완료가 아닌 첫 단계가 그 권이 지금 서 있는 곳이다(current). 건 단위 단계(개발계획서, 심의)는 그 건의 모든 권이 함께 지난다.
 
 정하지 못한 것: 심의가 세분류 전체에 하나인지 권마다인지, 개선 유형별로 건너뛰는 단계. 사건은 건에도 권에도 붙을 수 있게 되어 있어
 심의의 단위가 정해지면 STAGES의 unit만 바꾸면 된다. 개선 유형은 건에 적어 두기만 하고 아직 단계를 줄이지 않는다.
@@ -50,24 +51,29 @@ class Stage:
     who: str                      # 화면에 보일 담당 설명
     evidence: str                 # 근거가 되는 기록(기능)
     legacy: int | None = None     # 원고 진행 현황(모듈 코드별 7단계, ncs_service.progress)의 단계 번호
+    manuscript: bool = False      # 제출할 때 원고 파일(판본)을 올리는 단계
+    review: bool = False          # 그 판본으로 원고 검수를 돌리는 단계. 검수 기록 없이 보완 요청·완료를 하려면 사유를 적는다
 
     def public(self) -> dict:
         return {"key": self.key, "name": self.name, "unit": self.unit, "kind": self.kind, "who": self.who, "evidence": self.evidence,
-                "submit": list(self.submit), "confirm": list(self.confirm)}
+                "submit": list(self.submit), "confirm": list(self.confirm), "manuscript": self.manuscript, "review": self.review}
 
 
 STAGES: tuple[Stage, ...] = (
     Stage("plan", "개발계획서", CASE, ROUNDTRIP, ("krivet", "author"), ("krivet",), "직능연 전달, 집필진 정정, 직능연 확인", "개발계획서 점검", 1),
-    Stage("draft_edit", "초고본 편집 검수", VOLUME, HANDOFF, ("author",), ("editor",), "집필진 제출, 에디터 확인(F02)", "원고 검수", 2),
+    # 초고본 편집 검수는 설계 초안에서 넘기기였으나, 집필진이 초고본을 올리고 에디터가 보완을 요청하는 왕복으로 바꿨다(2026-11-21)
+    Stage("draft_edit", "초고본 편집 검수", VOLUME, ROUNDTRIP, ("author",), ("editor",), "집필진 제출, 에디터 확인(F02)", "원고 검수", 2,
+          manuscript=True, review=True),
     Stage("review1", "1차 검토", VOLUME, EXTERNAL, ("author",), ("reviewer",), "집필진 제출, 검토진 판정", "1차 검토의견서"),
     Stage("revision", "수정본과 1차 의견 반영", VOLUME, ROUNDTRIP, ("author",), ("editor", "krivet"), "집필진 제출, 에디터 확인, 직능연 확정",
-          "의견 반영 검토, 원고 검수", 3),
+          "의견 반영 검토, 원고 검수", 3, manuscript=True, review=True),
     Stage("review2", "2차 검토", VOLUME, EXTERNAL, ("author",), ("reviewer",), "집필진 제출, 검토진 판정", "2차 검토의견서"),
     Stage("final", "최종본과 2차 의견 반영", VOLUME, ROUNDTRIP, ("author",), ("editor", "krivet"), "집필진 제출, 에디터 확인, 직능연 확정",
-          "의견 반영 검토", 4),
+          "의견 반영 검토", 4, manuscript=True),
     Stage("deliberation", "심의", CASE, EXTERNAL, ("author",), ("committee",), "개발기관이 심의본 제출, 소위원회 위원 판정", "심의의견서"),
-    Stage("polish", "심의 반영과 최종 윤문", VOLUME, ROUNDTRIP, ("author",), ("editor",), "집필진 제출, 에디터 확인", "심의의견 반영 검토, 원고 검수", 5),
-    Stage("final_f02", "최종본 검수(F02)", VOLUME, HANDOFF, ("editor",), ("editor",), "에디터", "원고 검수(전체)", 6),
+    Stage("polish", "심의 반영과 최종 윤문", VOLUME, ROUNDTRIP, ("author",), ("editor",), "집필진 제출, 에디터 확인", "심의의견 반영 검토, 원고 검수", 5,
+          manuscript=True, review=True),
+    Stage("final_f02", "최종본 검수(F02)", VOLUME, HANDOFF, ("editor",), ("editor",), "에디터", "원고 검수(전체)", 6, review=True),
     Stage("final_f03", "최종 판정(F03)", VOLUME, HANDOFF, ("editor",), ("krivet",), "직능연", "F03 검수"),
     Stage("volume", "분량", VOLUME, ROUNDTRIP, ("author",), ("krivet",), "개발기관 산정, 직능연 확인", "원고 분량", 7),
     Stage("rights", "권리 증빙", VOLUME, ROUNDTRIP, ("author",), ("editor",), "개발기관 제출(1차 검토 후 4주 이내), 에디터 확인", "권리 증빙 점검", 7),
@@ -141,6 +147,40 @@ def states(events: list[dict]) -> dict[tuple[str | None, str], dict]:
         before = now if (target == DONE and now != DONE) else last["before"]
         out[key] = {"state": target, "at": event["at"], "by": event["actor"], "note": event.get("note", ""), "before": before}
     return out
+
+
+def turn(stage: Stage, state: str) -> tuple[str, ...]:
+    """지금 누구 차례인가(역할). 완료된 단계는 빈 값."""
+    if state == DONE:
+        return ()
+    if stage.kind == HANDOFF:
+        return stage.confirm
+    return stage.submit if state in (WAITING, REQUESTED) else stage.confirm
+
+
+def available(stage: Stage, state: str, role: str) -> list[dict]:
+    """이 역할이 지금 할 수 있는 행동: [{'action', 'name', 'proxy'(대신 기록), 'needs_note'(사유가 있어야 함)}]. 되돌림은 넣지 않는다(reopenable)."""
+    out = []
+    for (at, action) in TRANSITIONS[stage.kind]:
+        if at != state or action == REOPEN:
+            continue
+        ok, proxy = allowed(stage, action, role)
+        if ok:
+            out.append({"action": action, "name": ACTIONS[action], "proxy": proxy, "needs_note": False})
+    if state != DONE and (state, COMPLETE) not in TRANSITIONS[stage.kind]:
+        ok, proxy = allowed(stage, COMPLETE, role)
+        if ok:
+            out.append({"action": COMPLETE, "name": "사유를 적고 완료", "proxy": proxy, "needs_note": True})
+    return out
+
+
+def reopenable(stage: Stage, state: str, role: str) -> bool:
+    return state == DONE and allowed(stage, REOPEN, role)[0]
+
+
+def current(states_of: dict[str, dict]) -> Stage | None:
+    """단계 순서대로 보아 아직 완료가 아닌 첫 단계 — 그 권(또는 건)이 지금 서 있는 곳. states_of = {단계 key: 상태}. 모두 끝났으면 None."""
+    return next((stage for stage in STAGES if states_of.get(stage.key, {}).get("state", WAITING) != DONE), None)
 
 
 def blank() -> dict:

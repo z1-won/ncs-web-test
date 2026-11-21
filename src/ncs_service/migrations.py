@@ -381,4 +381,9 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "    evidence jsonb NOT NULL DEFAULT '{}'::jsonb\n"
      ");\n"
      "CREATE INDEX IF NOT EXISTS case_events_case_idx ON case_events (case_id, seq)"),
+    # 014: 원고 검수 실행이 어느 판본의 것인지(review_runs.version_id) — 세분류 건의 권 화면에서 판본마다 검수 결과를 보이고,
+    # 보완 요청·완료의 근거로 가리킨다. 건 밖에서 돌린 검수(단독 실행)는 NULL.
+    ("014_review_version",
+     "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS version_id uuid REFERENCES volume_versions(id) ON DELETE SET NULL;\n"
+     "CREATE INDEX IF NOT EXISTS review_runs_version_idx ON review_runs (version_id)"),
 )

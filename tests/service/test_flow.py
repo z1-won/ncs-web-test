@@ -52,14 +52,14 @@ class TransitionTests(unittest.TestCase):
             self.assertEqual(state, expected)
 
     def test_handoff_and_external(self):
-        self.assertEqual(flow.next_state(flow.BY_KEY["draft_edit"], flow.WAITING, flow.COMPLETE), flow.DONE)
+        self.assertEqual(flow.next_state(flow.BY_KEY["final_f02"], flow.WAITING, flow.COMPLETE), flow.DONE)
         stage = flow.BY_KEY["review1"]
         self.assertEqual(flow.next_state(stage, flow.SUBMITTED, flow.JUDGE), flow.VERDICT)
         self.assertEqual(flow.next_state(stage, flow.VERDICT, flow.COMPLETE), flow.DONE)
 
     def test_wrong_moves_say_why(self):
         with self.assertRaisesRegex(flow.FlowError, "넘기기 단계"):
-            flow.next_state(flow.BY_KEY["draft_edit"], flow.WAITING, flow.REQUEST)
+            flow.next_state(flow.BY_KEY["final_f02"], flow.WAITING, flow.REQUEST)
         with self.assertRaisesRegex(flow.FlowError, "지금 ‘대기’"):
             flow.next_state(flow.BY_KEY["revision"], flow.WAITING, flow.REQUEST)
         with self.assertRaisesRegex(flow.FlowError, "지금 ‘완료’"):
@@ -82,18 +82,42 @@ class TransitionTests(unittest.TestCase):
         self.assertEqual(flow.allowed(flow.BY_KEY["volume"], flow.COMPLETE, "reviewer"), (False, False))
 
 
+    def test_turn_and_available_actions(self):
+        stage = flow.BY_KEY["draft_edit"]
+        self.assertEqual((stage.kind, stage.manuscript, stage.review), (flow.ROUNDTRIP, True, True))
+        self.assertEqual(flow.turn(stage, flow.WAITING), ("author",))
+        self.assertEqual(flow.turn(stage, flow.SUBMITTED), ("editor",))
+        self.assertEqual(flow.turn(stage, flow.REQUESTED), ("author",))
+        self.assertEqual(flow.turn(stage, flow.DONE), ())
+        self.assertEqual([a["action"] for a in flow.available(stage, flow.WAITING, "author")], [flow.SUBMIT])
+        waiting = flow.available(stage, flow.WAITING, "editor")                       # 에디터: 대신 제출, 사유를 적고 완료
+        self.assertEqual([(a["action"], a["proxy"], a["needs_note"]) for a in waiting], [(flow.SUBMIT, True, False), (flow.COMPLETE, False, True)])
+        submitted = flow.available(stage, flow.SUBMITTED, "editor")
+        self.assertEqual({a["action"] for a in submitted if not a["proxy"]}, {flow.REQUEST, flow.COMPLETE})
+        self.assertEqual(flow.available(stage, flow.SUBMITTED, "reviewer"), [])
+        self.assertTrue(flow.reopenable(stage, flow.DONE, "editor"))
+        self.assertFalse(flow.reopenable(stage, flow.DONE, "author"))
+
+    def test_current_is_the_first_stage_not_done(self):
+        done = {"state": flow.DONE}
+        self.assertEqual(flow.current({}).key, "plan")
+        self.assertEqual(flow.current({"plan": done}).key, "draft_edit")
+        self.assertEqual(flow.current({"plan": done, "draft_edit": done, "revision": done}).key, "review1")
+        self.assertIsNone(flow.current({stage.key: done for stage in flow.STAGES}))
+
+
 class FoldTests(unittest.TestCase):
     def test_events_fold_into_states_per_volume_and_stage(self):
         current = flow.states([
             event("revision", flow.SUBMIT, actor="이집필(lee)"), event("revision", flow.REQUEST, note="표 3 다시"),
             event("revision", flow.SUBMIT, volume="v2"), event("plan", flow.COMPLETE, volume=None, note="건너뜀"),
-            event("", flow.CREATED, volume=None), event("draft_edit", flow.COMPLETE), event("draft_edit", flow.REOPEN),
+            event("", flow.CREATED, volume=None), event("final_f02", flow.COMPLETE), event("final_f02", flow.REOPEN),
         ])
         self.assertEqual(current[("v1", "revision")]["state"], flow.REQUESTED)
         self.assertEqual(current[("v1", "revision")]["note"], "표 3 다시")
         self.assertEqual(current[("v2", "revision")]["state"], flow.SUBMITTED)
         self.assertEqual(current[(None, "plan")]["state"], flow.DONE)
-        self.assertEqual(current[("v1", "draft_edit")]["state"], flow.WAITING)
+        self.assertEqual(current[("v1", "final_f02")]["state"], flow.WAITING)
         skipped = flow.states([event("revision", flow.COMPLETE, note="종이로 확인"), event("revision", flow.REOPEN)])
         self.assertEqual(skipped[("v1", "revision")]["state"], flow.WAITING)                      # 건너뛴 완료를 되돌리면 제출됨이 아니라 대기
         self.assertEqual(len(current), 4)
