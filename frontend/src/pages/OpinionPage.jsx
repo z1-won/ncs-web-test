@@ -10,6 +10,7 @@ import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { RawJson } from "../components/RawJson.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
+import { CaseLinkNote } from "../components/CaseLink.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
 // 판정 후보 → KRDS 배지 색
@@ -55,6 +56,7 @@ export default function OpinionPage() {
         의견(형식, 그림)은 확인 필요로, 용어 변경 의견은 바로 반영으로 보지 않고 집필자에게 확인할 항목으로 따로 표시합니다. 생성형 AI를 쓸 수 없을 때는
         모든 의견을 확인 필요로 표시하고 이유를 함께 보여 줍니다. 이 화면의 판정은 참고용이며 최종 판단은 담당자가 합니다. 올린 파일은 검토 뒤 바로 지웁니다.
       </p>
+      <CaseLinkNote />
 
       {/* 입력 묶음은 구획 셋: 원고 → 의견서 → 실행(권리 증빙 점검과 같은 구조). 필수인 최종 원고를 맨 앞에 둔다 */}
       <form className="fieldset review-form is-sectioned" onSubmit={submit}>

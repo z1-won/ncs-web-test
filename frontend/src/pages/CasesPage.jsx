@@ -13,11 +13,13 @@ import { FileSlot } from "../components/FileSlot.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { usePageTitle } from "../lib/hooks.js";
+import { ProgressFigures } from "./ProgressPage.jsx";
 
 const ANCHORS = [{ id: "cases-list", label: "건 목록" }, { id: "cases-detail", label: "권과 단계" }];
 const DONE = "완료", WAITING = "대기";
 const CHECK_NAMES = { toc: "차례", overview: "개요", knowledge: "필요 지식", perform: "수행 내용", teaching: "교수학습 방법", evaluation: "평가",
                       references: "참고 자료", colophon: "판권", misc: "기타" };
+const TOOLS = { opinion: ["/opinion", "의견 반영 검토"], volume: ["/volume", "원고 분량"], rights: ["/rights", "권리 증빙 점검"] };
 const sizeText = (bytes) => (bytes >= 1 << 20 ? `${(bytes / (1 << 20)).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`);
 const when = (iso) => (iso ? formatDate(iso) : "");
 
@@ -281,6 +283,7 @@ function StageAction({ detail, volume, standing, onChange }) {
   const canSubmitFile = standing.manuscript && actions.some((a) => a.action === "submit");
   const latest = volume ? (standing.manuscript ? volume.versions.find((v) => v.stage === standing.key) : volume.versions[0]) : null;
   const canReview = detail.can_manage && standing.review && latest && standing.state !== WAITING;
+  const records = volume ? (volume.records[standing.key] || []) : [];
   const id = `act-${volume ? volume.id : "case"}-${standing.key}`;
 
   async function send(action) {
@@ -346,6 +349,24 @@ function StageAction({ detail, volume, standing, onChange }) {
         </div>
       )}
 
+      {volume && standing.tools.length > 0 && (
+        <div className="cases-review">
+          <p>이 단계의 근거 기록{records.length === 0 && <span className="meta"> 아직 없습니다. 아래 도구를 여기서 열어 돌리면 이 단계에 붙습니다.</span>}</p>
+          {records.length > 0 && (
+            <ul className="cases-records">
+              {records.map((record) => <li key={record.id}>{TOOLS[record.tool]?.[1] || record.tool}: {record.text} <span className="meta">{when(record.at)}</span></li>)}
+            </ul>
+          )}
+          <p>
+            {standing.tools.map((tool) => (
+              <Link key={tool} className="krds-btn medium secondary" to={`${TOOLS[tool][0]}?case=${detail.id}&volume=${volume.id}&stage=${standing.key}&label=${encodeURIComponent(`${volume.title || volume.module_code}, ${standing.name}`)}`}>
+                {TOOLS[tool][1]} 열기
+              </Link>
+            ))}
+          </p>
+        </div>
+      )}
+
       {actions.length > 0 && (
         <form className="review-form cases-action-form" onSubmit={(e) => e.preventDefault()}>
           {canSubmitFile && (
@@ -378,7 +399,14 @@ function StageAction({ detail, volume, standing, onChange }) {
 // 권 하나: 단계를 순서대로(건 단위 단계 포함) 보이고, 지금 서 있는 단계에 할 일을 둔다. 아래에 판본과 이 권의 기록
 function VolumePanel({ detail, volume, onChange, onClose }) {
   const [error, setError] = useState(null);
+  const [figures, setFigures] = useState(null);       // 이 원고의 검수 진행도(편집·내용·저작권 검수, 분량) — 원고 진행 현황과 같은 값
   const current = volume.current;
+  const stamp = `${volume.versions.length}-${volume.versions[0]?.review?.at || ""}-${Object.values(volume.records).flat().length}`;
+  useEffect(() => {
+    let alive = true;
+    api.manuscripts.get(volume.module_code).then(({ ok, data }) => { if (alive && ok) setFigures(data); });
+    return () => { alive = false; };
+  }, [volume.module_code, stamp]);
   const stateOf = (stage) => (stage.unit === "건" ? detail.case_stages[stage.key] : volume.stages[stage.key]);
   const events = detail.events.filter((event) => event.volume_id === volume.id || (!event.volume_id && event.stage));
 
@@ -443,7 +471,7 @@ function VolumePanel({ detail, volume, onChange, onClose }) {
 
       <h4 className="table-title">이 권의 기록 <span className="meta">최근 것부터. 지우거나 고칠 수 없습니다</span></h4>
       <EventTable events={events} showVolume={false} />
-      <p className="form-hint"><Link to={`/progress?code=${encodeURIComponent(volume.module_code)}`}>이 원고의 검수, 분량, 권리 증빙 기록 모아 보기</Link></p>
+      {figures && <ProgressFigures detail={figures} />}
     </section>
   );
 }

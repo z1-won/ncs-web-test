@@ -11,6 +11,7 @@ import { KrdsDateField } from "../components/KrdsDateField.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
+import { CaseLinkNote } from "../components/CaseLink.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
 const ANCHORS = [{ id: "rights-run", label: "점검 실행" }, { id: "rights-result", label: "점검 결과" }];
@@ -108,6 +109,7 @@ export default function RightsPage() {
         출력본 PDF를 올리면 그림이 놓인 쪽을 읽어 생성형 AI 결과물 현황의 쪽수와 대조합니다. 수록 현황 목록은 1차 검토 이후 4주 이내에 내야 하므로,
         1차 검토일을 넣으면 제출 기한을 계산합니다. 사진에 인물이 있는지는 자동으로 알 수 없어 초상권 확인 상태를 직접 선택합니다.
       </p>
+      <CaseLinkNote />
 
       <section id="rights-run" className="nav-anchor">
         {/* 입력 묶음은 구획 셋: 파일 올리기 → 점검 조건 → 실행. 구획 안에서만 3열 격자(.form-section-grid)를 쓴다. 구획 제목은 보이는 h2 — KRDS가 legend를 화면에서 숨기므로 fieldset 대신 role=group으로 묶는다 */}

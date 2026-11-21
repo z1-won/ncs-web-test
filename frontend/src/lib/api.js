@@ -39,6 +39,16 @@ function multipart(fields, files = []) {
   return form;
 }
 
+// 세분류 건의 권·단계에서 연 도구 화면이면(주소의 ?volume=&stage=) 그 값을 요청에 실어, 돌린 기록이 그 단계에 붙게 한다
+function caseLink(form) {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("volume") && params.get("stage")) {
+    form.append("case_volume", params.get("volume"));
+    form.append("case_stage", params.get("stage"));
+  }
+  return form;
+}
+
 function queryString(params) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== "") query.set(key, value); });
@@ -199,7 +209,7 @@ export const api = {
         portrait: options.portrait || "unknown", pledge: options.pledge ? "true" : "false",
         save: options.save ? "true" : "false", module_code: options.moduleCode || "",
       }).forEach(([key, value]) => form.append(key, value));
-      return request("/api/rights/check", { method: "POST", body: form });
+      return request("/api/rights/check", { method: "POST", body: caseLink(form) });
     },
     exportXlsx: (report) => download("/api/rights/export", report, `권리증빙_제출현황_${(report.원고?.파일 || "원고").replace(/\.[^.]+$/, "")}.xlsx`),
   },
@@ -213,7 +223,7 @@ export const api = {
     if (unitPrice) form.append("unit_price", String(unitPrice));
     if (contractPages) form.append("contract_pages", String(contractPages));
     form.append("include_appendix", includeAppendix ? "true" : "false");
-    return request("/api/volume", { method: "POST", body: form, signal });
+    return request("/api/volume", { method: "POST", body: caseLink(form), signal });
   },
   // 원고 진행 현황(REQ-02-007, DB 모드에서만 — /api/health의 history): 원고(모듈 코드) 목록과 한 원고의 단계·진행도
   // 세분류 건(REQ-02-007): 건 → 권(담당 집필자) → 사건. 볼 수 있는 범위와 권한은 서버가 로그인한 계정으로 거른다
@@ -272,6 +282,6 @@ export const api = {
     opinions.forEach(({ file: sheet, round }) => { form.append("opinions", sheet, sheet.name); form.append("rounds", round || ""); });
     if (printCopy) form.append("print_pdf", printCopy, printCopy.name);
     if (previous) form.append("previous", previous, previous.name);
-    return request("/api/opinion", { method: "POST", body: form, signal });
+    return request("/api/opinion", { method: "POST", body: caseLink(form), signal });
   },
 };

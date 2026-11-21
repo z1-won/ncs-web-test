@@ -181,12 +181,6 @@ function ProgressDetail({ detail, onChange, onClose }) {
     onChange(data);
   }
 
-  const progress = detail.진행도;
-  const editing = progress["편집 검수"];
-  const content = progress["내용 검수"];
-  const rights = progress["저작권 검수"]["권리 증빙"];
-  const images = progress["저작권 검수"]["이미지 저작권 DB"];
-  const volume = progress.분량;
   return (
     <section className="progress-detail" aria-labelledby="progress-detail-title">
       <div className="section-head">
@@ -195,8 +189,15 @@ function ProgressDetail({ detail, onChange, onClose }) {
         </h2>
         <button type="button" className="krds-btn small tertiary" onClick={onClose}>닫기</button>
       </div>
-      <p className="progress-overall"><StageBar done={detail["완료 단계 수"]} /></p>
+      {!detail.건 && <p className="progress-overall"><StageBar done={detail["완료 단계 수"]} /></p>}
 
+      {detail.건 ? (
+        <PageAlert kind="info">
+          이 원고는 세분류 건 ‘{detail.건.name} {detail.건.year}년’에 들어 있습니다. 단계는 건 화면에서 진행합니다.{" "}
+          <Link to={`/cases?case=${detail.건.case_id}&volume=${detail.건.volume_id}`}>건 화면에서 이 권 열기</Link>
+        </PageAlert>
+      ) : (
+        <>
       <h3 className="table-title" id="progress-steps-title">단계 <span className="meta">{detail["단계 근거"]}</span></h3>
       <PageAlert kind="danger">{markError}</PageAlert>
       <ol className="progress-steps" aria-labelledby="progress-steps-title">
@@ -260,6 +261,24 @@ function ProgressDetail({ detail, onChange, onClose }) {
         </details>
       )}
 
+        </>
+      )}
+
+      <ProgressFigures detail={detail} />
+    </section>
+  );
+}
+
+// 검수 진행도 — 남아 있는 기록에서 모은 값(편집·내용·저작권 검수, 분량)과 그 표. 세분류 건의 권 화면도 같은 것을 쓴다
+export function ProgressFigures({ detail }) {
+  const progress = detail.진행도;
+  const editing = progress["편집 검수"];
+  const content = progress["내용 검수"];
+  const rights = progress["저작권 검수"]["권리 증빙"];
+  const images = progress["저작권 검수"]["이미지 저작권 DB"];
+  const volume = progress.분량;
+  return (
+    <>
       <h3 className="table-title" id="progress-numbers-title">검수 진행도 <span className="meta">남아 있는 기록에서 모은 값</span></h3>
       <dl className="upscale-summary" aria-labelledby="progress-numbers-title">
         <div>
@@ -339,6 +358,6 @@ function ProgressDetail({ detail, onChange, onClose }) {
           <p className="meta">의견 문장과 원고 문단은 저장하지 않고 개수만 남깁니다. 반영 후보와 미반영 후보는 담당자가 확정하기 전의 값입니다.</p>
         </>
       )}
-    </section>
+    </>
   );
 }

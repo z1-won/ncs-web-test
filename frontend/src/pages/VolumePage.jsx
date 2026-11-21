@@ -14,6 +14,7 @@ import { PageAlert } from "../components/PageAlert.jsx";
 import { Pagination } from "../components/Pagination.jsx";
 import { RawJson } from "../components/RawJson.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
+import { CaseLinkNote } from "../components/CaseLink.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
 // 권고 분량 상태 → KRDS 배지 색
@@ -99,6 +100,7 @@ export default function VolumePage() {
         기존 학습모듈 원고를 함께 올리면 올해 바뀐 분량을 따로 셉니다. 올린 파일은 계산 뒤 바로 지웁니다.
         {history && " 산정 결과와 입력한 값은 산정 이력에 저장합니다. 원고 파일은 저장하지 않고 파일 이름만 기록합니다."}
       </p>
+      <CaseLinkNote />
 
       {/* 입력 묶음은 구획 셋: 파일 올리기 → 산정 조건 → 실행(다른 화면과 같은 구조). 칸 아래 도움말은 한 줄로 두고, 긴 설명은 구획 설명(.form-section-desc)에 모은다 */}
       <form className="fieldset review-form is-sectioned" onSubmit={submit}>
