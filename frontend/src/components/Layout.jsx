@@ -32,14 +32,17 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
   { id: "review-history", label: "검수 이력" },
 ];
 
-/* 페이지 메뉴 — 라우트 단위. 화면이 다섯(개발계획서 작성 / 원고 검수 / 업스케일링 / 이미지 저작권 DB / 권리 증빙 점검 — 작업 순서)이라 1Depth 링크형. 메인 메뉴에는 이것만 두고, 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
+/* 페이지 메뉴 — 라우트 단위. 화면이 아홉(개발계획서 작성 / 원고 검수 / 의견 반영 검토 / 업스케일링 / 이미지 저작권 DB / 이미지 추천 / 권리 증빙 점검 / 원고 분량 / 문장 추천 — 작업 순서)이라 1Depth 링크형. 메인 메뉴에는 이것만 두고, 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
 export const PAGES = [
   { path: "/plan", label: "개발계획서 작성" },
   { path: "/", label: "원고 검수" },
+  { path: "/opinion", label: "의견 반영 검토" },
   { path: "/upscale", label: "업스케일링" },
   { path: "/images", label: "이미지 저작권 DB" },
   { path: "/recommend", label: "이미지 추천" },
   { path: "/rights", label: "권리 증빙 점검" },
+  { path: "/volume", label: "원고 분량" },
+  { path: "/suggest", label: "문장 추천" },
 ];
 
 export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {

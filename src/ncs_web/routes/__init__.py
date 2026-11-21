@@ -7,4 +7,7 @@
   upscale  그림 업스케일(/api/uploads/{token}/pictures…, /proposal)
   rights   권리 증빙 제출 현황 점검(/api/rights/…)
   images   이미지 저작권 DB 조회·수정·확정(/api/images…) — PostgreSQL 저장소일 때만
+  volume   원고 분량 산정(/api/volume)
+  opinion  검토의견서 반영 여부 검토(/api/opinion)
+  suggest  원고 문장 추천(/api/suggest, /api/suggest/sentence, /api/suggest/kinds)
 """

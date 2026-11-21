@@ -31,6 +31,112 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(cfg.model, "x-model")
 
 
+class ProviderTests(unittest.TestCase):
+    """제공자 고르기 — LLM_PROVIDER, 없으면 키·모델 이름. 어긋난 설정으로는 키를 보내지 않는다."""
+
+    CLEAN = {"LLM_API_KEY": "", "OPENAI_API_KEY": "", "ANTHROPIC_API_KEY": "", "LLM_PROVIDER": "", "LLM_MODEL": "", "LLM_BASE_URL": "",
+             "LLM_ALLOW_UPLOAD": "1", "LLM_EFFORT": "low"}
+
+    def cfg(self, **env):
+        with mock.patch.dict(os.environ, {**self.CLEAN, **env}, clear=False):
+            return llm.settings()
+
+    def test_openai_stays_the_default(self):
+        cfg = self.cfg(LLM_API_KEY="sk-proj-x")
+        self.assertEqual((cfg.provider, cfg.model, cfg.base_url), ("openai", "gpt-5.4-mini", "https://api.openai.com/v1"))
+        self.assertTrue(cfg.ready)
+        self.assertEqual(llm._headers(cfg)["Authorization"], "Bearer sk-proj-x")
+
+    def test_claude_key_or_model_selects_anthropic(self):
+        cfg = self.cfg(LLM_API_KEY="sk-ant-x", LLM_MODEL="sonnet-5.5")
+        self.assertEqual((cfg.provider, cfg.model, cfg.base_url), ("anthropic", "claude-sonnet-5-5", "https://api.anthropic.com/v1"))
+        headers = llm._headers(cfg)
+        self.assertEqual((headers["x-api-key"], headers["anthropic-version"]), ("sk-ant-x", llm.ANTHROPIC_VERSION))
+        self.assertNotIn("Authorization", headers)                       # Claude 키를 Bearer로 보내지 않는다
+        self.assertEqual(self.cfg(LLM_API_KEY="sk-ant-x").model, "claude-opus-5-5")
+        self.assertEqual(self.cfg(ANTHROPIC_API_KEY="sk-ant-y").provider, "anthropic")
+        self.assertEqual(self.cfg(LLM_API_KEY="k", LLM_MODEL="claude-haiku-5-5", LLM_BASE_URL="http://proxy.test/v1").provider, "anthropic")
+
+    def test_mismatched_key_and_destination_is_not_ready(self):
+        forced = self.cfg(LLM_API_KEY="sk-ant-x", LLM_PROVIDER="openai")
+        self.assertFalse(forced.ready)
+        self.assertIn("Claude(Anthropic) 키", forced.why_not)
+        wrong_url = self.cfg(LLM_API_KEY="sk-ant-x", LLM_BASE_URL="https://api.openai.com/v1")
+        self.assertFalse(wrong_url.ready)
+        with mock.patch.dict(os.environ, {**self.CLEAN, "LLM_API_KEY": "sk-ant-x", "LLM_PROVIDER": "openai"}, clear=False):
+            with mock.patch.object(llm, "_post") as post, self.assertRaises(llm.LlmError):
+                llm.ask_json("perform2_brands", "s", "u")
+            post.assert_not_called()                                     # 키가 다른 회사 서버로 나가지 않는다
+        self.assertFalse(self.cfg(LLM_API_KEY="sk-proj-x", LLM_PROVIDER="anthropic").ready)
+
+
+class AnthropicAskTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = mock.patch.dict(os.environ, {"LLM_API_KEY": "sk-ant-k", "OPENAI_API_KEY": "", "LLM_PROVIDER": "", "LLM_BASE_URL": "",
+                                                "LLM_ALLOW_UPLOAD": "1", "LLM_CACHE_DIR": self.tmp.name, "LLM_MODEL": "claude-sonnet-5-5",
+                                                "LLM_EFFORT": "low"}, clear=False)
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        self.tmp.cleanup()
+
+    @staticmethod
+    def message(text, **extra):
+        return {"model": "claude-sonnet-5-5", "stop_reason": "end_turn", "content": [{"type": "thinking", "thinking": ""}, {"type": "text", "text": text}],
+                "usage": {"input_tokens": 100, "cache_read_input_tokens": 20, "output_tokens": 30}, **extra}
+
+    def test_request_shape_and_answer(self):
+        with mock.patch.object(llm, "_post", return_value=self.message('{"findings": [{"line": 1}]}')) as post:
+            answer = llm.ask_json("perform2_brands", "sys", "user")
+            again = llm.ask_json("perform2_brands", "sys", "user")
+        self.assertEqual(post.call_count, 1)                                # 두 번째는 캐시
+        _, path, body = post.call_args.args
+        self.assertEqual(path, "/messages")
+        self.assertEqual((body["system"], body["messages"]), ("sys", [{"role": "user", "content": "user"}]))
+        self.assertEqual((body["output_config"], body["fallbacks"]), ({"effort": "low"}, "default"))
+        self.assertGreaterEqual(body["max_tokens"], 16000)                  # 추론 토큰까지 들어가는 한도
+        for removed in ("temperature", "response_format", "max_completion_tokens"):
+            self.assertNotIn(removed, body)
+        self.assertEqual((answer.data, answer.model, answer.input_tokens, answer.output_tokens), ({"findings": [{"line": 1}]}, "claude-sonnet-5-5", 120, 30))
+        self.assertTrue(again.cached)
+
+    def test_json_inside_fence_or_prose_is_read(self):
+        fenced = '```json\n{"findings": []}\n```'
+        with mock.patch.object(llm, "_post", return_value=self.message(fenced)):
+            self.assertEqual(llm.ask_json("perform2_brands", "s", "fenced").data, {"findings": []})
+        with mock.patch.object(llm, "_post", return_value=self.message('결과입니다: {"findings": []} 이상입니다.')):
+            self.assertEqual(llm.ask_json("perform2_brands", "s", "prose").data, {"findings": []})
+
+    def test_refusal_truncation_and_non_json_are_errors(self):
+        cases = [(self.message("", stop_reason="refusal", stop_details={"category": "cyber"}), "거절"),
+                 (self.message('{"findings": [', stop_reason="max_tokens"), "잘림"),
+                 (self.message("JSON이 아닙니다"), "JSON")]
+        for no, (payload, word) in enumerate(cases):
+            with mock.patch.object(llm, "_post", return_value=payload), self.assertRaises(llm.LlmError) as caught:
+                llm.ask_json("perform2_brands", "s", f"case {no}")
+            self.assertIn(word, str(caught.exception))
+        self.assertEqual(llm.usage_summary()["calls"], 0)                   # 실패한 호출은 캐시·사용량에 남기지 않는다
+
+    def test_unreadable_json_is_asked_once_more(self):
+        with mock.patch.object(llm, "_post", side_effect=[self.message("JSON이 아닙니다"), self.message('{"findings": []}')]) as post:
+            self.assertEqual(llm.ask_json("perform2_brands", "s", "retry").data, {"findings": []})
+            self.assertEqual(post.call_count, 2)
+        with mock.patch.object(llm, "_post", return_value=self.message("JSON이 아닙니다")) as post, self.assertRaises(llm.LlmError):
+            llm.ask_json("perform2_brands", "s", "retry twice")
+        self.assertEqual(post.call_count, 2)                                # 두 번까지만 묻는다
+
+    def test_effort_and_fallbacks_are_optional(self):
+        with mock.patch.dict(os.environ, {"LLM_EFFORT": "", "LLM_MODEL": "claude-haiku-5-5"}, clear=False):
+            with mock.patch.object(llm, "_post", return_value=self.message("{}")) as post:
+                llm.ask_json("perform2_brands", "s", "u")
+            body = post.call_args.args[2]
+            self.assertNotIn("output_config", body)
+            self.assertNotIn("fallbacks", body)                             # 서버 측 fallback을 받는 모델에만 보낸다
+            self.assertNotIn("anthropic-beta", llm._headers(llm.settings()))
+
+
 class AskJsonTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

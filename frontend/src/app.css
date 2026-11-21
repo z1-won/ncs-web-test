@@ -608,3 +608,28 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 }
 .krds-date-field .krds-calendar-area .calendar-wrap .calendar-body .calendar-table-wrap .calendar-tbl th { padding-bottom: var(--krds-padding-4); }   /* 제목이 있던 자리(4.6rem)를 비워 두지 않는다 */
 .recommend-context .recommend-method + .recommend-method { margin-top: var(--krds-gap-2); }
+/* 원고 분량 산정 — 산정에서 빠지는 구성(표지·이해·개발진)은 흐리게 */
+.volume-result tr.muted th,
+.volume-result tr.muted td { color: var(--krds-light-color-text-subtle); }
+/* 검토의견서 반영 검토 — 판정 거르기 버튼 줄, 의견·근거 칸 */
+.opinion-filter { display: flex; flex-wrap: wrap; gap: var(--krds-gap-2); margin: var(--krds-gap-4) 0; }
+.opinion-table td.opinion-text { min-width: 24rem; }
+.opinion-table td.opinion-evidence { min-width: 28rem; font-size: var(--krds-pc-font-size-body-small); }
+.opinion-table td.opinion-evidence p { margin: 0 0 var(--krds-gap-2); }
+.opinion-table .opinion-ask { color: var(--krds-light-color-text-warning, var(--krds-light-color-text-subtle)); }
+.opinion-table .opinion-suggest { color: var(--krds-light-color-text-subtle); }
+/* 문장 추천 — 문장마다 카드(원문 · 순위 붙인 후보 · 채택/기각 · 참고 예문) */
+.suggest-card { margin: var(--krds-gap-4) 0; padding: var(--krds-padding-5) var(--krds-padding-6); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: 0.8rem; }
+.suggest-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); }
+.suggest-original { margin: var(--krds-gap-3) 0 var(--krds-gap-2); }
+.suggest-candidates { margin: var(--krds-gap-3) 0 0; border: 0; padding: 0; }
+.suggest-candidates ol { list-style: none; margin: 0 0 var(--krds-gap-3); padding: 0; }
+.suggest-candidates li { display: flex; align-items: flex-start; gap: var(--krds-gap-3); padding: var(--krds-padding-3) 0; border-top: 1px solid var(--krds-light-color-border-gray-light); }
+.suggest-candidates li.chosen { background: var(--krds-light-color-surface-primary-subtler); }
+.suggest-candidates .rank { flex: none; width: 2.4rem; font-weight: 700; text-align: center; }
+.suggest-candidates .candidate-body { flex: 1 1 auto; min-width: 0; }
+.suggest-candidates .candidate-text { margin: 0; overflow-wrap: anywhere; }
+.suggest-candidates li .krds-btn { flex: none; }
+.suggest-none { margin: var(--krds-gap-3) 0 0; color: var(--krds-light-color-text-subtle); }
+.suggest-examples { margin-top: var(--krds-gap-3); }
+.suggest-direct textarea { width: 100%; }
