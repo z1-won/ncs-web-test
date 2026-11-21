@@ -187,7 +187,11 @@ export default function PlanDraftPage() {
         <p className="empty">NCS 세분류 목록을 읽지 못했습니다. 관리자에게 문의해 주세요.</p>
       )}
 
-      <form id="plan-form" className="fieldset review-form nav-anchor" onSubmit={submit}>
+      {/* 입력 묶음은 구획 셋: 세분류 선택 → 개발계획서에 적을 내용 → 실행(다른 화면과 같은 구조). 구획 안에서만 3열 격자(.form-section-grid)를 쓴다 */}
+      <form id="plan-form" className="fieldset review-form is-sectioned nav-anchor" onSubmit={submit}>
+        <div className="form-section" role="group" aria-labelledby="plan-duty-title">
+        <h2 className="form-section-title" id="plan-duty-title">세분류 선택</h2>
+        <div className="form-section-grid">
         <div className="form-group">
           <div className="form-tit"><label htmlFor="duty-query">세분류 검색</label></div>
           <div className="form-conts">
@@ -200,7 +204,8 @@ export default function PlanDraftPage() {
           </p>
         </div>
 
-        <div className="form-group">
+        {/* 세분류 이름이 길어 두 열을 쓰고 셀렉트는 칸 폭 전체 */}
+        <div className="form-group form-group-span2 is-full">
           <div className="form-tit"><label htmlFor="duty">세분류</label></div>
           <div className="form-conts">
             <KrdsSelect id="duty" value={duty} options={options} onChange={setDuty} title="세분류 선택" describedBy="duty-hint" />
@@ -235,13 +240,19 @@ export default function PlanDraftPage() {
           </div>
           <p className="form-hint">NCS가 개정되면 [NCS에서 다시 받아 오기]로 최신 내용을 받습니다. 달라진 능력단위를 알려 줍니다.</p>
         </div>
+        </div>
+        </div>
 
+        <div className="form-section" role="group" aria-labelledby="plan-content-title" aria-describedby="plan-content-desc">
+        <h2 className="form-section-title" id="plan-content-title">개발계획서에 적을 내용</h2>
+        <p className="form-section-desc" id="plan-content-desc">개발기관명과 영문 세분류명은 최종본에 꼭 적어야 하는 항목입니다(점검 ⑧). 초안 점검은 1차본(직능연) 기준이라 비워 두어도 됩니다.</p>
+        <div className="form-section-grid">
         <div className="form-group">
           <div className="form-tit"><label htmlFor="agency">개발기관명 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></label></div>
           <div className="form-conts">
             <input id="agency" type="text" className="krds-input" placeholder="예: (사)한국호텔전문경영인협회" value={agency} onChange={(e) => setAgency(e.target.value)} aria-describedby="agency-hint" aria-required="true" />
           </div>
-          <p className="form-hint" id="agency-hint">최종본에는 꼭 적어야 하는 항목입니다(점검 ⑧). 초안 점검은 1차본(직능연) 기준이라 비워 두어도 됩니다.</p>
+          <p className="form-hint" id="agency-hint">초안에서는 비워 두어도 됩니다.</p>
         </div>
 
         <div className="form-group">
@@ -249,7 +260,7 @@ export default function PlanDraftPage() {
           <div className="form-conts">
             <input id="english" type="text" className="krds-input" placeholder="예: Rooms Operation" value={english} onChange={(e) => setEnglish(e.target.value)} aria-describedby="english-hint" aria-required="true" />
           </div>
-          <p className="form-hint" id="english-hint">최종본에는 꼭 적어야 하는 항목입니다(점검 ⑧). NCS 누리집 ‘환경 분석’의 영문명을 적습니다. 1차본 점검에서는 비워 두어도 됩니다.</p>
+          <p className="form-hint" id="english-hint">NCS 누리집 ‘환경 분석’의 영문명을 적습니다.</p>
         </div>
 
         {subclass && (
@@ -300,8 +311,11 @@ export default function PlanDraftPage() {
           </div>
         )}
 
+        </div>
+        </div>
+
+        {/* form-group: 버튼 아래 안내(form-hint)가 KRDS 도움말 모양을 쓰도록 */}
         <div className="form-group form-actions">
-          <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
             <button className="krds-btn primary large" type="submit" disabled={busy || !chosen.length}>
               {busy ? "만드는 중" : "초안 만들어 내려받기"}
@@ -336,8 +350,9 @@ export default function PlanDraftPage() {
       {/* ── 개발계획서 점검 ── 작성한 파일을 올려 ①~⑩ 점검. 예전에는 원고 검수 페이지의 선택 목록에 있었다 */}
       <section id="plan-review" className="nav-anchor plan-review">
         <h2 className="section-title">개발계획서 점검</h2>
-        <p className="meta section-desc">작성한 개발계획서(hwp, hwpx)를 올리면 점검 ①~⑩을 실행합니다. 원고는 필요하지 않습니다.</p>
-        <form className="fieldset review-form" onSubmit={runReview}>
+        <p className="meta section-desc">작성한 개발계획서(hwp, hwpx)를 올리면 점검 ①~⑩을 실행합니다. 원고는 필요하지 않습니다. 1차본은 학습모듈명, 영문명, 기관명, 집필진, 학습 내용명이 비어 있어도 부적합으로 보지 않습니다. 이 칸들은 최종 단계에서 기관이 적습니다.</p>
+        <form className="fieldset review-form is-sectioned" onSubmit={runReview}>
+          <div className="form-section-grid">
           {/* 다른 페이지의 업로드 칸과 같은 부품 — 파일 선택, 끌어다 놓기, 고른 파일 표시와 삭제 */}
           <FileSlot id="plan-file" label="개발계획서 파일" required accept=".hwp,.hwpx" file={reviewFile} disabled={reviewing}
                     onChange={(picked) => { setReviewFile(picked); setReviewError(null); }} />
@@ -352,11 +367,11 @@ export default function PlanDraftPage() {
                 </div>
               ))}
             </div>
-            <p className="form-hint">1차본은 학습모듈명, 영문명, 기관명, 집필진, 학습 내용명이 비어 있어도 부적합으로 보지 않습니다. 이 칸들은 최종 단계에서 기관이 적습니다.</p>
+            <p className="form-hint">1차본은 기관이 적는 칸이 비어 있어도 됩니다.</p>
+          </div>
           </div>
 
-          <div className="form-group form-actions">
-            <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
+          <div className="form-actions">
             <div className="run-buttons">
               <button className="krds-btn primary large" type="submit" disabled={reviewing || !reviewFile}>
                 {reviewing ? "점검하는 중" : "점검 실행"}
