@@ -51,6 +51,10 @@ class FileStore:
         saved = persist_review(review, target)
         return StoredReview(saved.summary, directory=saved.directory, zip_path=saved.zip_path)
 
+    def save_work_record(self, kind: str, manuscript: str, counts: dict, files: list[dict], *, module_code: str = "") -> dict | None:
+        """진행 현황용 개수 기록은 DB 모드에서만 남긴다. 남기지 않았다는 뜻으로 None."""
+        return None
+
     def save_volume(self, result: dict, files: list[VolumeInput], params: dict, *, source: str = "web") -> str | None:
         """원고 분량 산정은 파일로 남기지 않는다(이력은 DB 모드에서만). 저장하지 않았다는 뜻으로 None."""
         return None
@@ -134,6 +138,26 @@ class PostgresStore:
         from . import postgres
 
         return postgres.delete_volume(self.dsn, run_id)
+
+    # 원고 진행 현황(REQ-02-007) — 의견 반영 검토·권리 증빙 점검은 개수만 남기고, 원고(모듈 코드)별로 기록을 모아 단계와 진행도로 보인다
+    def save_work_record(self, kind: str, manuscript: str, counts: dict, files: list[dict], *, module_code: str = "") -> dict | None:
+        from . import postgres
+
+        return postgres.save_work_record(self.dsn, kind, manuscript, counts, files, module_code=module_code)
+
+    def list_manuscripts(self, **filters) -> list[dict]:
+        from . import postgres
+        from .progress import stages_recorded
+
+        rows = postgres.list_manuscripts(self.dsn, **filters)
+        return [{**row, "stages_recorded": stages_recorded(set(row["kinds"]))} for row in rows]
+
+    def get_progress(self, module_code: str, *, name: str = "") -> dict | None:
+        from . import postgres
+        from .progress import build
+
+        sources = postgres.progress_sources(self.dsn, module_code)
+        return build(module_code, sources, name=name) if sources is not None else None
 
     def export_zip(self, run_id: str) -> tuple[bytes, str] | None:
         """저장된 이력을 해당 엔진의 save_results로 다시 만들어 (ZIP 바이트, 파일 이름)을 돌려준다."""

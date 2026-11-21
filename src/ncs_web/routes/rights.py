@@ -17,7 +17,7 @@ from urllib.parse import quote
 from fastapi import FastAPI, File, Form, Response, UploadFile
 from starlette.exceptions import HTTPException
 
-from ..common import Services
+from ..common import Services, logger
 
 MAX_BYTES = 200 << 20      # 원고 + 서류 합계 상한(업로드 보관함과 같은 200MB)
 MAX_FORMS = 30
@@ -97,6 +97,16 @@ def register(app: FastAPI, services: Services) -> None:
                     raise HTTPException(400, f"이미지 저작권 DB에 반영하려면 모듈 코드가 필요합니다: {error}") from None
                 report["저장"] = {"모듈 코드": code, **save_to_image_db(
                     store.dsn, manuscript_path, code, report, by=by, submitted_on=options.submitted_on)}
+            # 원고 진행 현황(REQ-02-007)에 쓸 개수만 남긴다(판정·그림 수·누락 수와 파일 이름). 현황표·지적사항은 남기지 않는다
+            report["진행 현황 기록"] = None
+            try:
+                from ncs_service.progress import RIGHTS, summarize_rights
+
+                files = [{"role": "manuscript", "filename": manuscript_path.name}] + [{"role": "form", "filename": p.name} for p in form_paths]
+                report["진행 현황 기록"] = store.save_work_record(RIGHTS, manuscript_path.name, summarize_rights(report), files,
+                                                              module_code=module_code)
+            except Exception as error:      # 기록은 부가 기능이라 점검 결과를 막지 않는다
+                logger.exception("권리 증빙 점검 개수 기록 실패: %s", error)
         return report
 
     @app.post("/api/rights/export")

@@ -342,3 +342,95 @@ def delete_volume(dsn: str, run_id: str) -> bool:
         return False
     with psycopg.connect(dsn) as connection:
         return connection.execute("DELETE FROM volume_runs WHERE id = %s", (run_id,)).rowcount > 0
+
+
+# --- 원고 진행 현황(REQ-02-007) -------------------------------------------------------
+
+def save_work_record(dsn: str, kind: str, manuscript: str, counts: dict, files: list[dict], *, module_code: str = "",
+                     source: str = "web") -> dict:
+    """의견 반영 검토·권리 증빙 점검의 개수 기록 한 건을 남긴다. 모듈 코드는 준 값, 없으면 원고 파일 이름에서 읽고 그것도 없으면 빈 값
+    (빈 값이면 어느 원고의 진행 현황에도 붙지 않는다). 돌려주는 값: {'id', 'module_code'}."""
+    from .progress import KINDS
+
+    if kind not in KINDS:
+        raise ValueError(f"모르는 기록 종류: {kind}")
+    given = CODE_IN_NAME.findall(module_code.strip())
+    found = given if given == [module_code.strip()] else list(dict.fromkeys(CODE_IN_NAME.findall(manuscript)))
+    code = found[0] if len(found) == 1 else ""
+    record_id = str(uuid4())
+    with psycopg.connect(dsn) as connection:
+        connection.execute(
+            "INSERT INTO work_records (id, kind, module_code, manuscript, counts, files, source) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (record_id, kind, code, manuscript, Jsonb(counts), Jsonb(files), source),
+        )
+    return {"id": record_id, "module_code": code}
+
+
+def list_manuscripts(dsn: str, *, limit: int = 50, offset: int = 0) -> list[dict]:
+    """기록이 있는 원고(모듈 코드) 목록 — 최근 기록순. 한 줄: 모듈 코드, 처음·최근 기록 시각, 기록 수, 기록 종류."""
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        rows = connection.execute(
+            "SELECT module_code, min(created_at) AS first_at, max(created_at) AS last_at, "
+            "count(*) FILTER (WHERE counted) AS records, array_agg(DISTINCT kind) AS kinds FROM ("
+            " SELECT module_code, created_at, CASE WHEN check_name = 'plan' THEN 'plan' ELSE 'review' END AS kind, true AS counted FROM review_runs"
+            " UNION ALL SELECT module_code, created_at, 'group', false FROM review_runs WHERE group_id IS NOT NULL AND check_name <> 'plan'"
+            " UNION ALL SELECT module_code, created_at, 'volume', true FROM volume_runs"
+            " UNION ALL SELECT module_code, created_at, 'rights', true FROM work_records WHERE kind = 'rights'"
+            " UNION ALL SELECT module_code, created_at, 'opinion', true FROM work_records WHERE kind = 'opinion'"
+            " UNION ALL SELECT w.module_code, w.created_at, 'opinion:' || k.name, false FROM work_records w,"
+            "  jsonb_object_keys(CASE WHEN jsonb_typeof(w.counts->'차수별') = 'object' THEN w.counts->'차수별' ELSE '{}'::jsonb END) AS k(name)"
+            "  WHERE w.kind = 'opinion'"
+            ") t WHERE module_code <> '' GROUP BY module_code ORDER BY max(created_at) DESC, module_code LIMIT %s OFFSET %s",
+            (limit, offset),
+        ).fetchall()
+    return [{"module_code": row["module_code"], "first_at": row["first_at"].isoformat(), "last_at": row["last_at"].isoformat(),
+             "records": row["records"], "kinds": sorted(row["kinds"])} for row in rows]
+
+
+def progress_sources(dsn: str, module_code: str) -> dict | None:
+    """한 원고(모듈 코드)의 기록을 진행 현황(ncs_service.progress.build)의 재료로 모은다. 기록이 하나도 없으면 None."""
+    def iso(value):
+        return value.isoformat() if value is not None else None
+
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        totals = connection.execute(
+            "SELECT check_name = 'plan' AS is_plan, count(*) AS n, min(created_at) AS first_at, max(created_at) AS last_at "
+            "FROM review_runs WHERE module_code = %s GROUP BY 1", (module_code,)).fetchall()
+        latest = connection.execute(
+            "SELECT DISTINCT ON (r.check_name) r.id, r.check_name, r.created_at, r.verdict, d.sheet "
+            "FROM review_runs r LEFT JOIN review_results d ON d.run_id = r.id WHERE r.module_code = %s "
+            "ORDER BY r.check_name, r.created_at DESC, r.id DESC", (module_code,)).fetchall()
+        group = connection.execute(
+            "SELECT group_id, min(created_at) AS created_at, array_agg(check_name ORDER BY created_at, id) AS checks, "
+            "array_agg(verdict ORDER BY created_at, id) AS verdicts FROM review_runs "
+            "WHERE module_code = %s AND group_id IS NOT NULL AND check_name <> 'plan' "
+            "GROUP BY group_id ORDER BY min(created_at) DESC LIMIT 1", (module_code,)).fetchone()
+        volume = connection.execute(
+            "SELECT id, created_at, manuscript, pages, unit_price, fee, estimated, count(*) OVER () AS total "
+            "FROM volume_runs WHERE module_code = %s ORDER BY created_at DESC, id DESC LIMIT 1", (module_code,)).fetchone()
+        records = connection.execute(
+            "SELECT id, created_at, kind, manuscript, counts FROM work_records WHERE module_code = %s "
+            "ORDER BY created_at DESC, id DESC LIMIT 100", (module_code,)).fetchall()
+        images = connection.execute(
+            "SELECT count(DISTINCT p.image_id) AS total, count(DISTINCT p.image_id) FILTER (WHERE r.status = 'confirmed') AS confirmed "
+            "FROM image_placements p LEFT JOIN image_rights r ON r.image_id = p.image_id WHERE p.module_code = %s", (module_code,)).fetchone()
+    if not (totals or volume or records or images["total"]):
+        return None
+    by_plan = {row["is_plan"]: row for row in totals}
+    reviews, plans = by_plan.get(False), by_plan.get(True)
+    plan_latest = next((row for row in latest if row["check_name"] == "plan"), None)
+    return {
+        "reviews": {"count": reviews["n"], "first": iso(reviews["first_at"]), "last": iso(reviews["last_at"])} if reviews else {},
+        "plan": {"count": plans["n"], "last": iso(plans["last_at"]), "verdict": plan_latest["verdict"] if plan_latest else None} if plans else {},
+        "latest_checks": [{"id": str(row["id"]), "check": row["check_name"], "created_at": iso(row["created_at"]),
+                           "verdict": row["verdict"], "sheet": row["sheet"] or []} for row in latest],
+        "last_group": {"group_id": str(group["group_id"]), "created_at": iso(group["created_at"]), "checks": list(group["checks"]),
+                       "verdict": group_verdict(list(group["verdicts"]))} if group else None,
+        "volume": {"id": str(volume["id"]), "created_at": iso(volume["created_at"]), "manuscript": volume["manuscript"],
+                   "pages": volume["pages"], "unit_price": volume["unit_price"], "fee": volume["fee"],
+                   "estimated": volume["estimated"]} if volume else None,
+        "volume_count": volume["total"] if volume else 0,
+        "records": [{"id": str(row["id"]), "created_at": iso(row["created_at"]), "kind": row["kind"],
+                     "manuscript": row["manuscript"], "counts": row["counts"]} for row in records],
+        "images": {"total": images["total"], "confirmed": images["confirmed"]},
+    }

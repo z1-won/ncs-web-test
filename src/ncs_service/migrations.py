@@ -266,4 +266,19 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      ");\n"
      "CREATE INDEX IF NOT EXISTS volume_runs_created_idx ON volume_runs (created_at DESC, id DESC);\n"
      "CREATE INDEX IF NOT EXISTS volume_runs_module_idx ON volume_runs (module_code, created_at DESC)"),
+    # 010: 원고 진행 현황(REQ-02-007)에 쓰는 개수 기록 — 의견 반영 검토(opinion)와 권리 증빙 점검(rights)은 결과를 보관하지 않으므로
+    # 원고별 진행도(총 의견·반영·미반영, 판정·누락 수)를 보여 줄 숫자만 남긴다. 의견 문장·원고 문단·지적 내용은 넣지 않는다
+    # (counts의 모양은 ncs_service.progress.summarize_opinion·summarize_rights). files는 올린 파일의 역할과 이름뿐이다.
+    ("010_work_records",
+     "CREATE TABLE IF NOT EXISTS work_records (\n"
+     "    id uuid PRIMARY KEY,\n"
+     "    created_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    kind text NOT NULL,\n"
+     "    module_code text NOT NULL DEFAULT '',\n"
+     "    manuscript text NOT NULL,\n"
+     "    counts jsonb NOT NULL,\n"
+     "    files jsonb NOT NULL,\n"
+     "    source text NOT NULL DEFAULT 'web'\n"
+     ");\n"
+     "CREATE INDEX IF NOT EXISTS work_records_module_idx ON work_records (module_code, created_at DESC)"),
 )
