@@ -27,7 +27,7 @@ export function RawJson({ data, title }) {
       <summary>{title}</summary>
       <div className="raw-body">
         <button type="button" className={`krds-btn small icon btn-copy${copied ? " is-copied" : ""}`} onClick={copy}
-                title={copied ? "복사됨" : "JSON 복사"} aria-label={copied ? "복사됨" : "JSON 복사"}>
+                title={copied ? "복사됨" : "복사"} aria-label={copied ? "복사됨" : "원본 데이터 복사"}>
           <i className="svg-icon" aria-hidden="true"></i>
         </button>
         <span className="copy-toast" role="status" aria-live="polite">{copied ? "복사됨" : ""}</span>

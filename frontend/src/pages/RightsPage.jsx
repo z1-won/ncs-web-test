@@ -109,7 +109,7 @@ export default function RightsPage() {
       <section id="rights-run" className="nav-anchor">
         <div className="fieldset review-form">
           <FileSlot id="rights-manuscript" label="원고" required accept=".hwpx,.hwp" file={manuscript} onChange={(file) => { setManuscript(file); setReport(null); }}
-                    hint="hwpx 또는 hwp. 이미지 저작권 DB에 반영하려면 hwpx여야 합니다." />
+                    hint="hwp, hwpx. 이미지 저작권 DB에 등록하려면 hwpx여야 합니다." />
           <MultiFileSlot id="rights-forms" label="제출 서류" accept=".hwp,.hwpx" files={forms} disabled={!!busy}
                          onChange={(picked) => { setForms(picked); setReport(null); }}
                          hint="작성한 한글 양식을 한 번에 여러 개 고릅니다. 없으면 원고만으로 점검합니다." />
@@ -138,7 +138,7 @@ export default function RightsPage() {
           <div className="form-group form-group-wide form-actions">
             {error && <PageAlert kind="danger">{error}</PageAlert>}
             <div className="run-buttons image-actions">
-              <button type="button" className="krds-btn large primary" disabled={!manuscript || !!busy} onClick={run}>{busy === "check" ? "점검하는 중…" : "점검 실행"}</button>
+              <button type="button" className="krds-btn large primary" disabled={!manuscript || !!busy} onClick={run}>{busy === "check" ? "점검하는 중" : "점검 실행"}</button>
             </div>
           </div>
         </div>
@@ -148,14 +148,14 @@ export default function RightsPage() {
         <section id="rights-result" className="nav-anchor rights-result" ref={result}>
           <div className="section-head">
             <h2 className="section-title">점검 결과 <Badge value={summary.판정} large /></h2>
-            <button type="button" className="krds-btn small tertiary" disabled={!!busy} onClick={exportXlsx}>{busy === "export" ? "만드는 중…" : "현황표 xlsx 받기"}</button>
+            <button type="button" className="krds-btn small tertiary" disabled={!!busy} onClick={exportXlsx}>{busy === "export" ? "만드는 중" : "현황표 내려받기(엑셀)"}</button>
           </div>
           <dl className="upscale-summary image-summary">
             <div><dt>원고의 그림</dt><dd><strong>{summary["원고 그림"]}</strong>개</dd>
               <dd className="meta">{summary["목록 행"] === null ? "수록 현황 목록 없음" : `수록 현황 목록 ${summary["목록 행"]}행${summary.학습모듈명 ? ` · ${summary.학습모듈명}` : ""}`}</dd></div>
             <div><dt>적합</dt><dd><strong>{summary.적합}</strong>개</dd></div>
             <div><dt>부적합</dt><dd><strong>{summary.부적합}</strong>개</dd><dd className="meta">누락·불일치 {summary.누락}건</dd></div>
-            <div><dt>판단불가</dt><dd><strong>{summary.판단불가}</strong>개</dd><dd className="meta">사람 확인 {summary["확인 필요"]}건</dd></div>
+            <div><dt>판단불가</dt><dd><strong>{summary.판단불가}</strong>개</dd><dd className="meta">담당자 확인 {summary["확인 필요"]}건</dd></div>
           </dl>
           <PageAlert kind={ALERT_KIND[deadline.판정]}>
             <strong>제출 기한 — {deadline.판정}</strong>{"\n"}{deadline.내용}
@@ -224,8 +224,8 @@ export default function RightsPage() {
             ))}
           </div>
 
-          <h3 className="sub-title">이미지 저작권 DB에 반영</h3>
-          {!imageDb ? <p className="empty">데이터베이스가 연결되어 있지 않아 반영할 수 없습니다. 점검 결과는 위 표와 xlsx로 확인하세요.</p> : (
+          <h3 className="sub-title">이미지 저작권 DB에 등록</h3>
+          {!imageDb ? <p className="empty">데이터베이스가 연결되어 있지 않아 등록할 수 없습니다. 점검 결과는 위 표와 엑셀 현황표로 확인해 주세요.</p> : (
             <div className="fieldset review-form">
               <div className="form-group">
                 <div className="form-tit"><label htmlFor="rights-by">변경한 사람</label></div>
@@ -243,7 +243,7 @@ export default function RightsPage() {
                   이미 있는 그림은 합쳐지고, 기관이 확정한 권리 정보는 바뀌지 않습니다.</p>
                 {saved && <PageAlert kind={saved.kind}>{saved.text}</PageAlert>}
                 <div className="run-buttons image-actions">
-                  <button type="button" className="krds-btn large secondary" disabled={!!busy || !by.trim()} onClick={saveToDb}>{busy === "save" ? "반영하는 중…" : "이미지 저작권 DB에 반영"}</button>
+                  <button type="button" className="krds-btn large secondary" disabled={!!busy || !by.trim()} onClick={saveToDb}>{busy === "save" ? "등록하는 중" : "이미지 저작권 DB에 등록"}</button>
                 </div>
               </div>
             </div>

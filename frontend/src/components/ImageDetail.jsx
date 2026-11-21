@@ -292,10 +292,10 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
           )}
           <div className="run-buttons image-actions">
             {confirmed
-              ? <button type="button" className="krds-btn large secondary" onClick={unconfirm} disabled={!!busy || needName}>{busy === "unconfirm" ? "취소하는 중…" : "확정 취소"}</button>
+              ? <button type="button" className="krds-btn large secondary" onClick={unconfirm} disabled={!!busy || needName}>{busy === "unconfirm" ? "취소하는 중" : "확정 취소"}</button>
               : <>
-                  <button type="button" className="krds-btn large secondary" onClick={save} disabled={!!busy || needName || !dirty}>{busy === "save" ? "저장하는 중…" : "저장"}</button>
-                  <button type="button" className="krds-btn large primary" onClick={confirm} disabled={!!busy || needName}>{busy === "confirm" ? "확정하는 중…" : dirty ? "저장하고 기관 확정" : "기관 확정"}</button>
+                  <button type="button" className="krds-btn large secondary" onClick={save} disabled={!!busy || needName || !dirty}>{busy === "save" ? "저장하는 중" : "저장"}</button>
+                  <button type="button" className="krds-btn large primary" onClick={confirm} disabled={!!busy || needName}>{busy === "confirm" ? "확정하는 중" : dirty ? "저장하고 기관 확정" : "기관 확정"}</button>
                 </>}
           </div>
         </div>
@@ -330,7 +330,7 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
         <div className="form-group form-group-wide form-actions">
           {message && message.at === "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
           <div className="run-buttons image-actions">
-            <button type="button" className="krds-btn large secondary" onClick={addEvidence} disabled={!!busy || needName || !evidence.kind}>{busy === "evidence" ? "처리하는 중…" : "증빙 등록"}</button>
+            <button type="button" className="krds-btn large secondary" onClick={addEvidence} disabled={!!busy || needName || !evidence.kind}>{busy === "evidence" ? "처리하는 중" : "증빙 등록"}</button>
           </div>
         </div>
       </div>

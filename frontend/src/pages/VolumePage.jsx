@@ -94,15 +94,15 @@ export default function VolumePage() {
     <main id="container" className="inner page volume-page">
       <h1 className="page-title">원고 분량 산정</h1>
       <p className="page-desc">
-        최종 원고(hwp/hwpx)를 올리면 집필료 산정 기준(계약서 제13조 4항)대로 구성별 행·쪽을 세어 계약서에 기입할 분량(매)을 냅니다.
+        최종 원고(hwp, hwpx)를 올리면 집필료 산정 기준(계약서 제13조 4항)대로 구성별 행·쪽을 세어 계약서에 기입할 분량(매)을 냅니다.
         1행에 1자 이상이면 1행, ½쪽 이상이면 1쪽이며 행 띄움·표·출처 밝힌 인용은 넣고 사진·삽화 등 시각 자료와 표지·NCS학습모듈의 이해·개발진은 뺍니다.
         기존 학습모듈 원고를 함께 올리면 올해 바뀐 분량을 따로 셉니다. 올린 파일은 계산 뒤 바로 지웁니다.
-        {history && " 산정 결과와 넣은 값은 산정 이력에 남습니다(원고 파일은 남기지 않고 이름과 해시만 적습니다)."}
+        {history && " 산정 결과와 입력한 값은 산정 이력에 저장합니다. 원고 파일은 저장하지 않고 파일 이름만 기록합니다."}
       </p>
 
       <form className="fieldset review-form" onSubmit={submit}>
         <FileSlot id="volume-final" label="최종 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
-                  hint="3차 검토까지 반영한 최종 완성본(hwp/hwpx). 한글에서 저장한 파일이어야 줄·쪽을 정확히 셉니다." />
+                  hint="3차 검토까지 반영한 최종 완성본(hwp, hwpx). 한글에서 저장한 파일이어야 줄·쪽을 정확히 셉니다." />
         <FileSlot id="volume-previous" label="기존 원고" accept=".hwp,.hwpx" file={previous} onChange={setPrevious} disabled={busy}
                   hint="비교할 기존 학습모듈 원고 — 올리면 1자 이상 바뀐 행을 변경 분량으로 셉니다." />
         <FileSlot id="volume-print" label="출력본 PDF" accept=".pdf" file={printCopy} onChange={setPrintCopy} disabled={busy}
@@ -143,7 +143,7 @@ export default function VolumePage() {
         <div className="form-group form-actions">
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
-            <button className="krds-btn primary large" type="submit" disabled={busy || !file}>{busy ? "세는 중…" : "분량 산정"}</button>
+            <button className="krds-btn primary large" type="submit" disabled={busy || !file}>{busy ? "세는 중" : "분량 산정"}</button>
             {busy && <button className="krds-btn tertiary large" type="button" onClick={() => aborter.current?.abort()}>취소</button>}
           </div>
           <PageAlert kind="danger">{error}</PageAlert>
@@ -190,7 +190,7 @@ export default function VolumePage() {
               </table>
             </div>
           )}
-          <Pagination page={historyPage} total={Math.ceil(history.length / HISTORY_PAGE)} onChange={setHistoryPage} label="산정 이력 쪽" />
+          <Pagination page={historyPage} total={Math.ceil(history.length / HISTORY_PAGE)} onChange={setHistoryPage} label="산정 이력 페이지" />
         </section>
       )}
       <TopButton />
@@ -238,12 +238,12 @@ function VolumeResult({ result }) {
       />
       <PageAlert kind="danger">{result["저장 오류"] && <p>{result["저장 오류"]} 이 화면의 산정 결과는 정상이며, 이력에만 남지 않았습니다.</p>}</PageAlert>
       <dl className="upscale-summary">
-        <div><dt>기입 분량(산정에 씀)</dt><dd><strong>{adopted["기입 분량"]}매</strong> — {adopted.근거}</dd></div>
+        <div><dt>기입 분량(계약서에 적을 분량)</dt><dd><strong>{adopted["기입 분량"]}매</strong> — {adopted.근거}</dd></div>
         {gap != null && <div><dt>한글 줄 배치 계산</dt><dd>{total["기입 분량"]}매 (출력본 측정과 차이 {gap > 0 ? "+" : ""}{gap}매)</dd></div>}
-        <div><dt>쪽 + 남은 행</dt><dd>{total.쪽}쪽 {total.행}행</dd></div>
+        <div><dt>꽉 찬 쪽과 남은 행</dt><dd>{total.쪽}쪽 {total.행}행</dd></div>
         <div><dt>행 합계</dt><dd>{total["행 합계"].toLocaleString()}행</dd></div>
-        <div><dt>쪽 환산(높이 기준)</dt><dd>{total["쪽 환산"]}쪽</dd></div>
-        {result["물리 쪽 수"] != null && <div><dt>물리 쪽 수(전체)</dt><dd>{result["물리 쪽 수"]}쪽</dd></div>}
+        <div><dt>높이로 환산한 쪽수</dt><dd>{total["쪽 환산"]}쪽</dd></div>
+        {result["물리 쪽 수"] != null && <div><dt>원고 전체 쪽수</dt><dd>{result["물리 쪽 수"]}쪽</dd></div>}
         {change && <div><dt>변경 분량</dt><dd><strong>{change["변경 분량"]["기입 분량"]}매</strong> ({change["변경 행"].toLocaleString()}행, {change["변경 비율"]})</dd></div>}
         {manual && <div><dt>수작업 대조</dt><dd>오차율 {manual.오차율} — {manual.결과}</dd></div>}
       </dl>
@@ -258,7 +258,7 @@ function VolumeResult({ result }) {
         <table className="tbl col data">
           <caption>구성별 행·쪽 산정표</caption>
           <thead>
-            <tr><th scope="col">구성</th><th scope="col">산정</th><th scope="col">행</th><th scope="col">쪽 환산</th><th scope="col">물리 쪽</th><th scope="col">시각 자료 제외(쪽)</th>{change && <th scope="col">변경 행</th>}</tr>
+            <tr><th scope="col">구성</th><th scope="col">산정</th><th scope="col">행</th><th scope="col">환산 쪽수</th><th scope="col">원고 쪽</th><th scope="col">시각 자료 제외(쪽)</th>{change && <th scope="col">변경 행</th>}</tr>
           </thead>
           <tbody>
             {result.구성.map((row) => (
@@ -285,7 +285,7 @@ function VolumeResult({ result }) {
       <ul className="krds-info-list dash">
         {Object.entries(result.가정).map(([key, value]) => <li key={key}>{key}: {String(value)}</li>)}
       </ul>
-      <RawJson data={result} title="원본 JSON" />
+      <RawJson data={result} title="원본 데이터 보기(개발자용)" />
     </section>
   );
 }
@@ -365,7 +365,7 @@ function PrintedResult({ printed }) {
         <table className="tbl col data" aria-labelledby="volume-print-segments-title">
           <caption>구성별 쪽 — 출력본 측정과 한글 계산</caption>
           <thead>
-            <tr><th scope="col">구성</th><th scope="col">출력본 쪽</th><th scope="col">인쇄 쪽</th><th scope="col">쪽 환산(출력본)</th><th scope="col">쪽 환산(한글)</th><th scope="col">차이</th><th scope="col">한글 물리 쪽</th></tr>
+            <tr><th scope="col">구성</th><th scope="col">출력본 쪽</th><th scope="col">인쇄 쪽</th><th scope="col">환산 쪽수(출력본)</th><th scope="col">환산 쪽수(한글)</th><th scope="col">차이</th><th scope="col">한글 원고 쪽</th></tr>
           </thead>
           <tbody>
             {printed.구성.map((row) => (

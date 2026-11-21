@@ -11,7 +11,7 @@ import { formatDate } from "../lib/format.jsx";
 // 아코디언 머리의 상태 표시: 대기 / 검사 중 / 건너뜀 / 오류 / 판정 + 항목 수
 export function ItemStatus({ item }) {
   if (item.status === "pending") return <span className="krds-badge bg-light-gray">대기</span>;
-  if (item.status === "running") return <Spinner label="검사 중…" />;
+  if (item.status === "running") return <Spinner label="검수하는 중" />;
   if (item.status === "skipped") return <span className="krds-badge bg-light-gray">미실행 — 개발계획서 없음</span>;
   if (item.status === "cancelled") return <span className="krds-badge bg-light-gray">취소됨</span>;
   if (item.status === "error") return <span className="krds-badge bg-light-danger">오류</span>;
@@ -50,7 +50,7 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken }) {
     <section className="all-results" aria-live="polite">
       <ResultHead
         status={run.running
-          ? <Spinner label={`검사 중 — ${items.filter((i) => i.status === "done" || i.status === "error" || i.status === "skipped").length}/${items.length} 구성요소 완료`} />
+          ? <Spinner label={`검수하는 중: ${items.filter((i) => i.status === "done" || i.status === "error" || i.status === "skipped").length}/${items.length} 구성요소 완료`} />
           : verdict ? <Badge value={verdict} large /> : <span className="krds-badge large bg-light-gray">결과 없음</span>}
         meta={`${moduleCode}${moduleCode ? " · " : ""}전체 실행${run.created_at ? ` · ${formatDate(run.created_at)}` : ""} · 적합 ${total.적합} · 부적합 ${total.부적합} · 판단불가 ${total.판단불가} 항목`}
         badges={
@@ -121,7 +121,7 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken }) {
                 <div className="accordion-body">
                   {open && item.status === "cancelled" && <p className="empty">취소되어 실행하지 않았습니다.</p>}
                   {open && item.status === "skipped" && (
-                    <p className="empty">개발계획서가 없어 실행하지 않았습니다. 위치 ①~⑤는 원고와 개발계획서를 함께 올렸을 때만 검사합니다.</p>
+                    <p className="empty">개발계획서가 없어 실행하지 않았습니다. 위치 ①~⑤는 원고와 개발계획서를 함께 올렸을 때만 검수합니다.</p>
                   )}
                   {open && item.status === "error" && (
                     <p className="form-hint-invalid" role="alert" style={{ whiteSpace: "pre-wrap" }}>{item.error}</p>
@@ -144,7 +144,7 @@ function FullSheet({ items }) {
   const sheet = done.flatMap((i) => (i.data.검수확인서 || []).map((row) => ({ ...row, _check: i.check })));
   const findings = done.flatMap((i) => (i.data.지적사항 || []).map((f) => ({ ...f, _check: i.check })));
   const missing = items.filter((i) => i.status !== "done");
-  const label = { skipped: "미실행(개발계획서 없음)", error: "오류", pending: "대기", running: "검사 중", cancelled: "취소됨" };
+  const label = { skipped: "미실행(개발계획서 없음)", error: "오류", pending: "대기", running: "검수하는 중", cancelled: "취소됨" };
   return (
     <>
       <h2 className="section-title">검수 확인서 (구성요소 {done.length}/{items.length})</h2>
@@ -170,7 +170,7 @@ export function ComponentResult({ result, showSave = true }) {
         </ul>
       )}
       <div className="component-foot">
-        {showSave && (result.id ? <a href={api.reviews.zipUrl(result.id)}>ZIP 다운로드</a> : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null)}
+        {showSave && (result.id ? <a href={api.reviews.zipUrl(result.id)}>결과 파일 내려받기(ZIP)</a> : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null)}
         <details>
           <summary>지적사항 {result.지적사항?.length || 0}건 · 전체 체크리스트 {result.전체?.length || 0}행</summary>
           <FindingsTable findings={result.지적사항 || []} />

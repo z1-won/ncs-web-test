@@ -126,7 +126,7 @@ export default function ReviewPage() {
 
   // 실행 전 확인: 원고가 없거나, 개발계획서가 필요한 구성요소인데 없으면 실행하지 않고 오류 문구를 보인다(#13). 통과하면 null.
   function missingInput() {
-    if (!slots.manuscript) return "원고 파일이 없습니다. ‘원고’ 칸에 원고(.hwp/.hwpx)를 올리세요.";
+    if (!slots.manuscript) return "원고 파일이 없습니다. ‘원고’ 칸에 원고(hwp, hwpx)를 올려 주세요.";
     if (needsPlan && !slots.plan) return `${selected.label} 검수는 개발계획서가 필요합니다. ‘개발계획서’ 칸에 파일을 올리세요.`;
     return null;
   }
@@ -243,9 +243,9 @@ export default function ReviewPage() {
     <>
     <Header hasHistory={!!history} hasResult={!!(allRun || result)} />
     <main id="container" className="inner page">
-      <h1 className="page-title">NCS 학습모듈 검수 확인 (로컬 테스트)</h1>
+      <h1 className="page-title">NCS 학습모듈 원고 검수</h1>
       <p className="page-desc">
-        원고(.hwp/.hwpx)를 올리면 검수 패키지를 그대로 실행해 검수 확인서 형식과 결과 JSON을 보여줍니다. 개발계획서와 출력본 PDF는 각자의 칸에 따로 올립니다 — 개발계획서가 있으면 ‘위치’와 대조 항목을, 원고를 한글에서 PDF로 저장한 출력본이 있으면 차례 ⑦(쪽수)을 확정합니다.
+        원고(hwp, hwpx)를 올리면 검수 확인서 양식에 맞춰 항목별 검수 결과를 보여 줍니다. 개발계획서와 출력본 PDF는 선택 사항이며 각자의 칸에 따로 올립니다. 개발계획서를 올리면 ‘위치’와 대조 항목을, 원고를 한글에서 PDF로 저장한 출력본을 올리면 차례 ⑦(쪽수)을 함께 검수합니다.
       </p>
 
       <form id="review-run" className="fieldset review-form nav-anchor" onSubmit={submit}>
@@ -258,7 +258,7 @@ export default function ReviewPage() {
                     uploading={upload.status === "uploading"}
                     invalid={
                       (slot.role === "manuscript" && upload.status === "error" ? upload.error : null)
-                      || (slot.role === "manuscript" && tried && !slots.manuscript ? "원고 파일이 없습니다. 원고(.hwp/.hwpx)를 올리세요." : null)
+                      || (slot.role === "manuscript" && tried && !slots.manuscript ? "원고 파일이 없습니다. 원고(hwp, hwpx)를 올려 주세요." : null)
                       || (slot.role === "plan" && !slots.plan && needsPlan ? "이 구성요소는 개발계획서가 필요합니다. 개발계획서를 올리세요." : null)
                     }
                     hint={
@@ -279,7 +279,7 @@ export default function ReviewPage() {
           </div>
           <p className="form-hint" id="check-hint">
             필요한 파일: {selected.files}
-            {selected.items && selected.total ? ` · 확인서 항목 ${selected.total}개 중 ${selected.items.length}개 검사` : ""}
+            {selected.items && selected.total ? ` · 확인서 항목 ${selected.total}개 중 ${selected.items.length}개 검수` : ""}
           </p>
         </div>
 
@@ -307,7 +307,7 @@ export default function ReviewPage() {
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
             <button className="krds-btn primary large" type="submit" disabled={busy || upload.status === "uploading"}>
-              {busy ? "검사 중…" : check === ALL_CHECK ? "전체 검사 실행" : "검사 실행"}
+              {busy ? "검수하는 중" : check === ALL_CHECK ? "전체 검수 실행" : "검수 실행"}
             </button>
             {busy && <button className="krds-btn tertiary large" type="button" onClick={cancel}>취소</button>}
           </div>
@@ -320,7 +320,7 @@ export default function ReviewPage() {
       <div id="review-result" ref={resultsRef} className="results-anchor nav-anchor" />
 
       {busy && !allRun && (
-        <ResultHead status={<Spinner label={`검사 중 — ${selected.label}`} />} />
+        <ResultHead status={<Spinner label={`${selected.label} 검수하는 중`} />} />
       )}
       {allRun && <AllResults run={allRun} checks={reviewChecks} onError={setError} onNotice={setNotice}
                              uploadToken={upload.status === "ready" ? upload.token : null} />}
@@ -337,7 +337,7 @@ export default function ReviewPage() {
                                annotate={{ upload: upload.status === "ready" ? upload.token : null, runId: result.id,
                                            rows: (result.전체 || []).filter((r) => r.판정 !== "적합") }} />
                 {result.id
-                  ? <a href={api.reviews.zipUrl(result.id)} className="krds-btn small tertiary" title="결과 JSON 묶음">ZIP</a>
+                  ? <a href={api.reviews.zipUrl(result.id)} className="krds-btn small tertiary" title="결과 파일 내려받기(ZIP)">결과 파일 내려받기(ZIP)</a>
                   : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null}
               </>
             }
@@ -347,7 +347,7 @@ export default function ReviewPage() {
           {/* 전체 실행의 아코디언 몸통과 같은 구성: 확인서(행마다 지적사항 펼치기) + 진단 경고 + 접힌 지적사항·전체 체크리스트 */}
           <ComponentResult result={result} showSave={false} />
 
-          <RawJson data={result} title="원본 JSON (요약·진단·검수확인서·지적사항·전체)" />
+          <RawJson data={result} title="원본 데이터 보기(개발자용)" />
         </section>
       )}
 
@@ -390,7 +390,7 @@ export default function ReviewPage() {
               </table>
             </div>
           )}
-          <Pagination page={historyPage} total={Math.ceil(history.length / HISTORY_PAGE)} onChange={setHistoryPage} label="검수 이력 쪽" />
+          <Pagination page={historyPage} total={Math.ceil(history.length / HISTORY_PAGE)} onChange={setHistoryPage} label="검수 이력 페이지" />
         </section>
       )}
 

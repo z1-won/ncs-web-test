@@ -2,7 +2,7 @@
 // error는 사용자에게 바로 보여 줄 문장: 서버가 준 error 메시지(+ 개발용 traceback) 또는 연결 실패 안내.
 
 const CONNECT_FAILED = "서버에 연결하지 못했습니다";
-const CONNECT_HINT = "(가상환경의 ncs-web 서버가 실행 중인지 확인)";
+const CONNECT_HINT = "잠시 후 다시 시도해 주세요. 계속되면 관리자에게 문의해 주세요.";
 
 export async function request(path, options = {}) {
   let response;
@@ -10,7 +10,8 @@ export async function request(path, options = {}) {
     response = await fetch(path, options);
   } catch (e) {
     if (e.name === "AbortError") return { ok: false, status: 0, data: null, error: "취소됨", aborted: true };
-    return { ok: false, status: 0, data: null, error: `${CONNECT_FAILED}: ${e.message}\n${CONNECT_HINT}` };
+    console.error("서버 연결 실패:", e);   // 원인(브라우저가 준 메시지)은 개발자 도구에만 남긴다 — 이용자가 할 수 있는 일이 아니다
+    return { ok: false, status: 0, data: null, error: `${CONNECT_FAILED}. ${CONNECT_HINT}` };
   }
   if (response.status === 204) return { ok: true, status: 204, data: null, error: null };
   let data = null;
@@ -54,7 +55,8 @@ export async function download(path, body, filename) {
       : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
     response = await fetch(path, init);
   } catch (e) {
-    return { ok: false, error: `${CONNECT_FAILED}: ${e.message}` };
+    console.error("서버 연결 실패:", e);
+    return { ok: false, error: `${CONNECT_FAILED}. ${CONNECT_HINT}` };
   }
   if (!response.ok) {
     const data = await response.json().catch(() => null);

@@ -1,6 +1,6 @@
 // 그림 해상도·업스케일: 원고(hwpx)의 목표 DPI 미만 그림을 원고에 나오는 순서로 한 줄씩 보여 준다(작은 그림 + 이름 + DPI + 상태).
 // 줄을 펼치면 원본·결과를 나란히 본다. 체크한 그림을 한 번에 차례로 업스케일하고(서버는 한 번에 한 장), 화면 아래 실행 바에서 제안본 hwpx를 받는다.
-// 결과 그림은 자동으로 내려받지 않는다 — 그림 파일이 필요하면 펼친 줄의 [결과 받기]를 누른다.
+// 결과 그림은 자동으로 내려받지 않는다 — 그림 파일이 필요하면 펼친 줄의 [결과 내려받기]를 누른다.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
@@ -284,7 +284,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                                   <figcaption>
                                     {choice.label} · {side.out_px[0]}×{side.out_px[1]}px · {side.out_dpi} DPI · {side.seconds}초
                                     {sides.length > 1 && done && result.engine === choice.name ? " · 제안본에 들어감" : ""}
-                                    {" · "}<a href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${name}_${choice.name}`, choice.name)} download>받기</a>
+                                    {" · "}<a href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${name}_${choice.name}`, choice.name)} download>내려받기</a>
                                   </figcaption>
                                 </figure>
                               ))
@@ -302,14 +302,14 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                               <button key={choice.name || "default"} type="button" className="krds-btn small secondary"
                                       disabled={!choice.available || working} onClick={() => upscale(p, choice.name)}
                                       title={choice.available ? choice.note : choice.problem}>
-                                {running && (busyEngine || "") === choice.name ? "업스케일 중…"
+                                {running && (busyEngine || "") === choice.name ? "업스케일하는 중"
                                   : choice.label ? `${choice.label}로 업스케일링`
                                   : done ? "다시 업스케일링" : "이 그림만 업스케일링"}
                               </button>
                             ))}
                             {done && (
                               <a className="krds-btn small tertiary" href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${name}_업스케일`)} download>
-                                결과 받기
+                                결과 내려받기
                               </a>
                             )}
                           </div>
@@ -343,7 +343,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                 </button>}
             <button type="button" className="krds-btn medium primary" disabled={!ready || working} onClick={proposal}
                     title="업스케일한 그림만 원고의 같은 자리에 넣은 사본(hwpx). 본문·그림 크기·위치는 그대로">
-              {busy === "proposal" ? "만드는 중…" : `제안본 hwpx 받기 (그림 ${ready}장)`}
+              {busy === "proposal" ? "만드는 중" : `제안본 내려받기(그림 ${ready}장)`}
             </button>
           </div>
           </div>

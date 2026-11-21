@@ -14,7 +14,7 @@ import { usePageTitle } from "../lib/hooks.js";
 import { conditionsLabel, licenseLabel, loadName, saveName, statusBadge, termOptions } from "../lib/imageTerms.js";
 
 const ANCHORS = [
-  { id: "image-load", label: "자료 적재" },
+  { id: "image-load", label: "자료 등록" },
   { id: "image-list", label: "이미지 목록·확정" },
   { id: "image-recommend", label: "추천용 조회" },
 ];
@@ -55,11 +55,10 @@ function LoadSection({ by, onLoaded }) {
   const rejected = report?.거부 || [];
   return (
     <section id="image-load" className="nav-anchor image-section">
-      <h2 className="section-title">자료 적재</h2>
+      <h2 className="section-title">자료 등록</h2>
       <p className="section-desc">
         JSON 1개와 그 안에서 가리키는 그림 파일들을 함께 고릅니다. 그림은 파일 이름으로 짝짓습니다.
-        JSON은 두 가지를 받습니다 — 이미지 레코드(<code>docs/IMAGE_RECORD.md</code>, 예시 <code>docs/examples/image_records/</code>)와
-        공공누리 수집 JSON 0.1-PoC(<code>docs/KOGL_IMPORT.md</code>, 예시 <code>docs/examples/kogl_samples/</code>). 어느 쪽인지는 자동으로 알아봅니다.
+        JSON은 이미지 레코드와 공공누리 수집 자료 두 가지 형식을 받으며, 어느 쪽인지는 자동으로 알아봅니다. 형식이 궁금하면 관리자에게 예시 파일을 요청해 주세요.
         같은 자료를 다시 넣어도 중복되지 않고, 기관이 확정한 권리 정보는 덮어쓰지 않습니다.
       </p>
       <div className="fieldset review-form">
@@ -71,10 +70,10 @@ function LoadSection({ by, onLoaded }) {
         <div className="form-group form-group-wide form-actions">
           {error && <PageAlert kind="danger">{error}</PageAlert>}
           <div className="run-buttons image-actions">
-            <button type="button" className="krds-btn large secondary" disabled={!!busy || jsonCount !== 1} onClick={() => run(true)}>{busy === "check" ? "검사하는 중…" : "형식만 검사"}</button>
-            <button type="button" className="krds-btn large primary" disabled={!!busy || jsonCount !== 1 || !by.trim()} onClick={() => run(false)}>{busy === "load" ? "적재하는 중…" : "적재"}</button>
+            <button type="button" className="krds-btn large secondary" disabled={!!busy || jsonCount !== 1} onClick={() => run(true)}>{busy === "check" ? "확인하는 중" : "형식만 확인"}</button>
+            <button type="button" className="krds-btn large primary" disabled={!!busy || jsonCount !== 1 || !by.trim()} onClick={() => run(false)}>{busy === "load" ? "등록하는 중" : "등록"}</button>
           </div>
-          {jsonCount === 1 && !by.trim() && <p className="form-hint">적재하려면 화면 위쪽의 ‘변경한 사람’에 이름을 적어 주세요.</p>}
+          {jsonCount === 1 && !by.trim() && <p className="form-hint">자료를 등록하려면 화면 위쪽의 ‘변경한 사람’에 이름을 적어 주세요.</p>}
         </div>
       </div>
       {report && (
@@ -83,8 +82,8 @@ function LoadSection({ by, onLoaded }) {
           <dl className="upscale-summary">
             <div><dt>전체</dt><dd><strong>{report.전체}</strong>건</dd></div>
             {report.check_only
-              ? <div><dt>형식 검사 통과</dt><dd><strong>{report.통과}</strong>건</dd><dd className="meta">DB에는 넣지 않았습니다</dd></div>
-              : <div><dt>적재</dt><dd><strong>{report.적재}</strong>건</dd><dd className="meta">새 그림 {report["새 그림"]} · 기존 그림에 합침 {report["기존 그림에 합침"]}</dd></div>}
+              ? <div><dt>형식 확인 통과</dt><dd><strong>{report.통과}</strong>건</dd><dd className="meta">DB에는 넣지 않았습니다</dd></div>
+              : <div><dt>등록</dt><dd><strong>{report.적재}</strong>건</dd><dd className="meta">새 그림 {report["새 그림"]} · 기존 그림에 합침 {report["기존 그림에 합침"]}</dd></div>}
             <div><dt>거부</dt><dd><strong>{rejected.length}</strong>건</dd>
               {!report.check_only && report["필수 항목 충족률"] !== null && <dd className="meta">필수 항목 충족률 {(report["필수 항목 충족률"] * 100).toFixed(1)}%</dd>}</div>
             {!report.check_only && (
@@ -94,8 +93,8 @@ function LoadSection({ by, onLoaded }) {
           </dl>
           {report["그림 임베딩"] && (
             <p className="form-hint">{report["그림 임베딩"].오류
-              ? `그림 임베딩을 계산하지 못했습니다(${report["그림 임베딩"].오류}). 적재는 끝났고, 나중에 python -m ncs_service.image_embed로 채울 수 있습니다.`
-              : `그림 임베딩 ${report["그림 임베딩"]["새로 계산"]}건 계산(${report["그림 임베딩"].모델}, 이 컴퓨터에서 계산)`}</p>
+              ? `자료 등록은 끝났습니다. 다만 그림 유사도 계산은 하지 못했습니다(${report["그림 임베딩"].오류}). 관리자에게 알려 주세요.`
+              : `그림 유사도 계산 ${report["그림 임베딩"]["새로 계산"]}건(${report["그림 임베딩"].모델}, 이 서버 안에서 계산)`}</p>
           )}
           {rejected.length > 0 && (
             <ul className="image-rejected">
@@ -166,7 +165,7 @@ function RecommendSection({ terms, refreshKey }) {
             </table>
           </div>
         ))}
-      {state.data && <Pagination page={page} total={Math.ceil(state.data.total / PAGE_SIZE)} onChange={setPage} label="추천 목록 쪽" />}
+      {state.data && <Pagination page={page} total={Math.ceil(state.data.total / PAGE_SIZE)} onChange={setPage} label="추천 목록 페이지" />}
     </section>
   );
 }
@@ -232,16 +231,16 @@ export default function ImageDbPage() {
     <main id="container" className="inner page image-db-page">
       <h1 className="page-title">이미지 저작권 DB</h1>
       <p className="page-desc">
-        원고에서 뽑거나 수집한 이미지의 권리 정보를 모아 두고 기관이 확정하는 곳입니다. 자료를 적재하면 ‘자동 태깅’ 상태로 들어오고,
+        원고에서 뽑거나 수집한 이미지의 권리 정보를 모아 두고 기관이 확정하는 곳입니다. 자료를 등록하면 ‘자동 태깅’ 상태로 들어오고,
         그림을 열어 분류·귀속·라이선스를 확인한 뒤 ‘기관 확정’을 하면 추천 목록에 쓸 수 있게 됩니다.
       </p>
 
       {ready === null && <Spinner label="서버 상태를 확인하는 중" />}
-      {ready === "error" && <PageAlert kind="danger">서버에 연결하지 못했습니다. 가상환경의 ncs-web 서버가 실행 중인지 확인하세요.</PageAlert>}
+      {ready === "error" && <PageAlert kind="danger">서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요. 계속되면 관리자에게 문의해 주세요.</PageAlert>}
       {ready === false && (
         <PageAlert kind="info">
-          이미지 저작권 DB는 데이터베이스(PostgreSQL)가 연결되어 있을 때만 쓸 수 있습니다.{"\n"}
-          .env에 DATABASE_URL을 두고 서버를 다시 띄우세요(docs/WEB.md의 데이터베이스 안내).
+          지금은 이미지 저작권 DB를 쓸 수 없습니다. 데이터베이스가 연결되어 있지 않습니다.{"\n"}
+          관리자에게 문의해 주세요.
         </PageAlert>
       )}
 
@@ -260,7 +259,7 @@ export default function ImageDbPage() {
               <input id="image-by" type="text" className="krds-input" maxLength={50} value={by} placeholder="예: 에디팅기관 홍길동"
                      onChange={(e) => { setBy(e.target.value); saveName(e.target.value); }} aria-describedby="image-by-hint" />
             </div>
-            <p className="form-hint" id="image-by-hint">적재·수정·확정을 할 때마다 변경 이력에 이 이름이 남습니다. 로그인이 없어 직접 적습니다.</p>
+            <p className="form-hint" id="image-by-hint">등록·수정·확정을 할 때마다 변경 이력에 이 이름이 남습니다. 로그인이 없어 직접 적습니다.</p>
           </div>
         </div>
 
@@ -283,7 +282,7 @@ export default function ImageDbPage() {
           {list.status === "loading" && <Spinner label="목록을 읽는 중" />}
           {list.status === "error" && <PageAlert kind="danger">{list.error}</PageAlert>}
           {list.status === "ready" && (items.length === 0
-            ? <p className="empty">{counts?.all ? "조건에 맞는 그림이 없습니다." : "등록된 그림이 없습니다. 위 ‘자료 적재’에서 레코드를 넣어 주세요."}</p>
+            ? <p className="empty">{counts?.all ? "조건에 맞는 그림이 없습니다." : "등록된 그림이 없습니다. 위 ‘자료 등록’에서 자료를 등록해 주세요."}</p>
             : (
               <div className="krds-table-wrap">
                 <table className="tbl col data image-table">
@@ -309,7 +308,7 @@ export default function ImageDbPage() {
                 </table>
               </div>
             ))}
-          {list.data && <Pagination page={page} total={Math.ceil(list.data.total / PAGE_SIZE)} onChange={setPage} label="이미지 목록 쪽" />}
+          {list.data && <Pagination page={page} total={Math.ceil(list.data.total / PAGE_SIZE)} onChange={setPage} label="이미지 목록 페이지" />}
 
           <div ref={detail} className="nav-anchor">
             {openId && <ImageDetail key={openId} imageId={openId} terms={terms} by={by} onChanged={refresh} onClose={() => setOpenId(null)} />}

@@ -126,20 +126,20 @@ export default function SuggestPage() {
     <main id="container" className="inner page suggest-page">
       <h1 className="page-title">문장 추천</h1>
       <p className="page-desc">
-        원고(hwp/hwpx)를 올리면 AI가 학습모듈 작성 규칙(학습 목표 '~할 수 있다.', 수행 순서·교수·학습 방법 '~한다.', 학습명·수행 내용 제목 '~하기',
+        원고(hwp, hwpx)를 올리면 생성형 AI가 학습모듈 작성 규칙(학습 목표 '~할 수 있다.', 수행 순서·교수·학습 방법 '~한다.', 학습명·수행 내용 제목 '~하기',
         학습 내용명 행동명사, 평가 항목 명사형)과 표현(주어 군더더기·어색한 낱말·중복 표현·문장부호)에 어긋난 문장을 찾아 정정 후보를 순위와 함께 최대 5개 보여 줍니다.
-        AI 후보는 규정 꼴·원문에 없던 수치·영문·상호·원문과의 유사도로 다시 걸러 통과한 것만 보여 주고, 버린 후보는 이유와 함께 접어 둡니다.
+        생성형 AI가 낸 후보는 규정 꼴·원문에 없던 수치·영문·상호·원문과의 유사도로 다시 걸러 통과한 것만 보여 주고, 버린 후보는 이유와 함께 접어 둡니다.
         후보 중 하나를 채택하거나 기각하세요. 직무 내용을 새로 쓰거나 교육 내용이 적절한지 판단하지 않으며, 원고는 고치지 않습니다.
-        서버에 AI(LLM) 설정이 없으면 고칠 문장을 찾지 않고 그 이유만 보여 줍니다. 올린 파일은 계산 뒤 바로 지웁니다.
+        생성형 AI를 쓸 수 없을 때는 고칠 문장을 찾지 않고 그 이유만 보여 줍니다. 올린 파일은 계산 뒤 바로 지웁니다.
       </p>
 
       <form className="fieldset review-form" onSubmit={submit}>
         <FileSlot id="suggest-file" label="원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
-                  hint="집필 중인 원고(hwp/hwpx). hwpx면 수행 순서 번호를 더 정확히 찾습니다." />
+                  hint="집필 중인 원고(hwp, hwpx). hwpx면 수행 순서 번호를 더 정확히 찾습니다." />
         <div className="form-group form-actions">
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
-            <button className="krds-btn primary large" type="submit" disabled={busy || !file}>{busy ? "찾는 중…" : "문장 추천"}</button>
+            <button className="krds-btn primary large" type="submit" disabled={busy || !file}>{busy ? "찾는 중" : "문장 추천"}</button>
             {busy && <button className="krds-btn tertiary large" type="button" onClick={() => aborter.current?.abort()}>취소</button>}
           </div>
           <PageAlert kind="danger">{error}</PageAlert>
@@ -165,14 +165,14 @@ export default function SuggestPage() {
         <div className="form-group form-actions">
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
-            <button className="krds-btn secondary large" type="submit" disabled={typing || !text.trim()}>{typing ? "찾는 중…" : "이 문장 추천받기"}</button>
+            <button className="krds-btn secondary large" type="submit" disabled={typing || !text.trim()}>{typing ? "찾는 중" : "이 문장 추천받기"}</button>
           </div>
           <PageAlert kind="danger">{typedError}</PageAlert>
         </div>
       </form>
       {typed.map((card) => <SuggestCard key={card.key} card={card} decision={decisions[card.key]} onDecide={decide} />)}
 
-      {busy && <ResultHead status={<Spinner label="AI가 문장을 살피는 중" />} />}
+      {busy && <ResultHead status={<Spinner label="생성형 AI가 문장을 살피는 중" />} />}
       {result && !busy && (
         <SuggestResult result={result} cards={manuscriptCards} decisions={decisions} onDecide={decide} />
       )}
@@ -186,7 +186,7 @@ export default function SuggestPage() {
             <div><dt>채택률</dt><dd><strong>{rate == null ? "-" : `${rate}%`}</strong></dd></div>
           </dl>
           <div className="run-buttons">
-            <button className="krds-btn tertiary medium" type="button" onClick={() => download("json")}>채택 기록 JSON</button>
+            <button className="krds-btn tertiary medium" type="button" onClick={() => download("json")}>채택 기록 내려받기(JSON)</button>
             <button className="krds-btn tertiary medium" type="button" onClick={() => download("csv")}>채택 기록 표(CSV)</button>
           </div>
         </section>
@@ -204,7 +204,7 @@ function SuggestResult({ result, cards, decisions, onDecide }) {
     <section className="suggest-result">
       <ResultHead
         status={<span className={`krds-badge large ${cards.length ? "bg-light-warning" : "bg-light-success"}`}>{cards.length ? `고칠 문장 ${cards.length}개` : "고칠 문장 없음"}</span>}
-        meta={`${result.원고} · 검사 ${summary["검사한 문장"]}문장 · AI에 보낸 문장 ${summary["AI에 보낸 문장"]} · ${Object.entries(summary["사유별"]).map(([name, n]) => `${name} ${n}`).join(" · ") || "지적 없음"} · 추천 없음 ${summary["추천 없음"]} · 버린 AI 후보 ${summary["버린 AI 후보"]}`}
+        meta={`${result.원고} · 확인한 문장 ${summary["검사한 문장"]}개 · 생성형 AI에 보낸 문장 ${summary["AI에 보낸 문장"]}개 · ${Object.entries(summary["사유별"]).map(([name, n]) => `${name} ${n}`).join(" · ") || "지적 없음"} · 추천 없음 ${summary["추천 없음"]} · 제외한 생성형 AI 후보 ${summary["버린 AI 후보"]}`}
         badges={<span id="suggest-ai-state" className="krds-badge bg-light-gray">{result.AI.상태}</span>}
       />
       {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
@@ -221,7 +221,7 @@ function SuggestResult({ result, cards, decisions, onDecide }) {
       <ul className="krds-info-list dash">
         {Object.entries(result.가정).map(([key, value]) => <li key={key}>{key}: {value}</li>)}
       </ul>
-      <RawJson data={result} title="원본 JSON" />
+      <RawJson data={result} title="원본 데이터 보기(개발자용)" />
     </section>
   );
 }
@@ -262,7 +262,7 @@ function SuggestCard({ card, decision, onDecide }) {
                   onClick={() => onDecide(card, "기각")}>{decision?.choice === "기각" ? "모두 기각함" : "모두 기각"}</button>
         </fieldset>
       ) : (
-        <p className="suggest-none">{card["추천 없음"] || (card.상태 === "지적 없음" ? "AI가 고칠 곳을 찾지 못했습니다." : card.상태 === "판단불가" ? "판단불가 — AI를 부르지 못해 고칠 곳을 판단하지 않았습니다." : "추천 없음")}</p>
+        <p className="suggest-none">{card["추천 없음"] || (card.상태 === "지적 없음" ? "생성형 AI가 고칠 곳을 찾지 못했습니다." : card.상태 === "판단불가" ? "생성형 AI를 쓸 수 없어 고칠 곳을 찾지 못했습니다(판단불가)." : "추천 없음")}</p>
       )}
       {card["참고 예문"].length > 0 && (
         <div className="suggest-examples">
@@ -274,7 +274,7 @@ function SuggestCard({ card, decision, onDecide }) {
       )}
       {card["버린 AI 후보"].length > 0 && (
         <details className="suggest-dropped">
-          <summary>버린 AI 후보 {card["버린 AI 후보"].length}개</summary>
+          <summary>제외한 생성형 AI 후보 {card["버린 AI 후보"].length}개</summary>
           <ul>{card["버린 AI 후보"].map((d, i) => <li key={i}>{d.문장} — {d.이유}</li>)}</ul>
         </details>
       )}

@@ -85,7 +85,7 @@ export default function PlanDraftPage() {
 
   async function runReview(e) {
     e.preventDefault();
-    if (!reviewFile) { setReviewError("점검할 개발계획서 파일(.hwp/.hwpx)을 선택하세요."); return; }
+    if (!reviewFile) { setReviewError("점검할 개발계획서 파일(hwp, hwpx)을 선택해 주세요."); return; }
     setReviewing(true); setReviewError(null); setReview(null);
     const controller = new AbortController();
     aborter.current = controller;
@@ -121,14 +121,14 @@ export default function PlanDraftPage() {
     <main id="container" className="inner page">
       <h1 className="page-title">NCS 학습모듈 개발계획서 작성 지원</h1>
       <p className="page-desc">
-        세분류를 고르면 NCS 능력단위·요소·수행준거를 개발계획서 양식(T01)에 자동으로 채운 초안(.hwpx)을 내려받습니다.
+        세분류를 고르면 NCS 능력단위·요소·수행준거를 개발계획서 양식(T01)에 자동으로 채운 초안(hwpx)을 내려받습니다.
         학습 내용명·선수학습 등 집필자가 정할 칸은 비워 두며, 초안은 바로 개발계획서 점검 ①~⑩을 거칩니다.
         이어서 작성한 개발계획서는 아래 ‘개발계획서 점검’에 올려 다시 점검합니다.
       </p>
 
       <PageAlert kind="danger">{loadError}</PageAlert>
       {catalog && !catalog.subclasses?.length && (
-        <p className="empty">초안을 만들 수 있는 세분류가 없습니다. 운용 전에 <code>{catalog.build}</code>로 요소·수행준거 표를 받아 두세요.</p>
+        <p className="empty">초안을 만들 수 있는 세분류가 없습니다. 관리자에게 NCS 기준 자료(요소와 수행준거) 등록을 요청해 주세요.</p>
       )}
 
       <form id="plan-form" className="fieldset review-form nav-anchor" onSubmit={submit}>
@@ -210,7 +210,7 @@ export default function PlanDraftPage() {
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
             <button className="krds-btn primary large" type="submit" disabled={busy || !chosen.length}>
-              {busy ? "만드는 중…" : "초안 만들기 (hwpx 내려받기)"}
+              {busy ? "만드는 중" : "초안 만들어 내려받기"}
             </button>
           </div>
           {missing.length > 0 && !busy && (
@@ -242,7 +242,7 @@ export default function PlanDraftPage() {
       {/* ── 개발계획서 점검 ── 작성한 파일을 올려 ①~⑩ 점검. 예전에는 원고 검수 페이지의 선택 목록에 있었다 */}
       <section id="plan-review" className="nav-anchor plan-review">
         <h2 className="section-title">개발계획서 점검</h2>
-        <p className="meta section-desc">작성한 개발계획서(.hwp/.hwpx)를 올리면 점검 ①~⑩을 실행합니다. 원고는 필요하지 않습니다.</p>
+        <p className="meta section-desc">작성한 개발계획서(hwp, hwpx)를 올리면 점검 ①~⑩을 실행합니다. 원고는 필요하지 않습니다.</p>
         <form className="fieldset review-form" onSubmit={runReview}>
           <div className="form-group">
             <div className="form-tit"><label htmlFor="plan-file">개발계획서 파일 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></label></div>
@@ -271,7 +271,7 @@ export default function PlanDraftPage() {
             <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
             <div className="run-buttons">
               <button className="krds-btn primary large" type="submit" disabled={reviewing || !reviewFile}>
-                {reviewing ? "점검 중…" : "점검 실행"}
+                {reviewing ? "점검하는 중" : "점검 실행"}
               </button>
               {reviewing && <button className="krds-btn tertiary large" type="button" onClick={() => aborter.current?.abort()}>취소</button>}
             </div>
@@ -288,12 +288,12 @@ export default function PlanDraftPage() {
               meta={[review.data.module_code, "개발계획서 점검 ①~⑩", STAGES.find(([value]) => value === review.stage)?.[1],
                      review.data.created_at && formatDate(review.data.created_at)].filter(Boolean).join(" · ")}
               downloads={review.data.id
-                ? <a href={api.reviews.zipUrl(review.data.id)} className="krds-btn small tertiary" title="결과 JSON 묶음">ZIP</a>
+                ? <a href={api.reviews.zipUrl(review.data.id)} className="krds-btn small tertiary" title="결과 파일 내려받기(ZIP)">결과 파일 내려받기(ZIP)</a>
                 : review.data.저장?.zip ? <span className="meta">저장: {review.data.저장.zip}</span> : null}
             />
             <h3 className="section-title">개발계획서 점검 확인서</h3>
             <ComponentResult result={review.data} showSave={false} />
-            <RawJson data={review.data} title="원본 JSON (요약·진단·검수확인서·지적사항·전체)" />
+            <RawJson data={review.data} title="원본 데이터 보기(개발자용)" />
           </section>
         )}
       </section>

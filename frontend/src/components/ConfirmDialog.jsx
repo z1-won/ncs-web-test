@@ -23,7 +23,7 @@ export function ConfirmDialog({ title, children, confirmLabel = "확인", busy =
           </div>
           <div className="modal-btn btn-wrap">
             <button ref={firstButton} type="button" className="krds-btn medium tertiary" onClick={onCancel} disabled={busy}>취소</button>
-            <button type="button" className="krds-btn medium primary" onClick={onConfirm} disabled={busy}>{busy ? "삭제 중…" : confirmLabel}</button>
+            <button type="button" className="krds-btn medium primary" onClick={onConfirm} disabled={busy}>{busy ? "삭제하는 중" : confirmLabel}</button>
           </div>
           <button type="button" className="krds-btn medium icon btn-close" onClick={onCancel} disabled={busy}>
             <span className="sr-only">닫기</span>

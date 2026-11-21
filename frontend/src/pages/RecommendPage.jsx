@@ -98,15 +98,15 @@ export default function RecommendPage() {
       <p className="page-desc">
         집필 중인 문단과 수행준거를 넣으면 이미지 저작권 DB에서 실을 수 있는 그림을 권합니다.
         기관이 확정했고 재사용 범위가 확인된 그림만 나오며, 그림마다 출처·라이선스·이용조건과 원고에 넣을 출처 문구를 함께 보여 줍니다.
-        그림 임베딩이 켜져 있으면 그림에 달린 키워드뿐 아니라 그림 자체를 문단과 견주어 찾습니다(이 컴퓨터에서 계산, 외부 전송 없음).
+        그림 유사도 기능이 켜져 있으면 그림에 달린 키워드뿐 아니라 그림 자체를 문단과 견주어 찾습니다. 이 계산은 서버 안에서만 하며 외부로 보내지 않습니다.
       </p>
 
       {ready === null && <Spinner label="서버 상태를 확인하는 중" />}
-      {ready === "error" && <PageAlert kind="danger">서버에 연결하지 못했습니다. 가상환경의 ncs-web 서버가 실행 중인지 확인하세요.</PageAlert>}
+      {ready === "error" && <PageAlert kind="danger">서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요. 계속되면 관리자에게 문의해 주세요.</PageAlert>}
       {ready === false && (
         <PageAlert kind="info">
-          이미지 추천은 데이터베이스(PostgreSQL)가 연결되어 있을 때만 쓸 수 있습니다.{"\n"}
-          .env에 DATABASE_URL을 두고 서버를 다시 띄우세요(docs/WEB.md의 데이터베이스 안내).
+          지금은 이미지 추천을 쓸 수 없습니다. 데이터베이스가 연결되어 있지 않습니다.{"\n"}
+          관리자에게 문의해 주세요.
         </PageAlert>
       )}
 
@@ -148,14 +148,14 @@ export default function RecommendPage() {
               <div className="krds-form-check">
                 <input type="checkbox" id="recommend-llm" checked={form.useLlm} onChange={(e) => set("useLlm")(e.target.checked)} />
                 <label htmlFor="recommend-llm"><span className="check-text">생성형 AI로 문단을 요약해 핵심어 뽑기
-                  <span className="check-hint">켜면 위 문단과 수행준거 글이 외부 AI 서비스로 전송됩니다(서버에 키와 전송 승인이 있을 때만). 끄면 규칙으로 핵심어를 뽑습니다.</span></span></label>
+                  <span className="check-hint">켜면 위 문단과 수행준거 글이 외부 생성형 AI 서비스로 전송됩니다(관리자가 외부 전송을 허용해 둔 경우에만). 끄면 규칙으로 핵심어를 뽑습니다.</span></span></label>
               </div>
               </div>
             </div>
             <div className="form-group form-group-wide form-actions">
               {error && <PageAlert kind="danger">{error}</PageAlert>}
               <div className="run-buttons image-actions">
-                <button type="submit" className="krds-btn large primary" disabled={busy || !canRun}>{busy ? "찾는 중…" : "그림 추천"}</button>
+                <button type="submit" className="krds-btn large primary" disabled={busy || !canRun}>{busy ? "찾는 중" : "그림 추천"}</button>
               </div>
             </div>
           </form>
@@ -182,7 +182,7 @@ export default function RecommendPage() {
                   ? `견준 글: “${result.embedding.query}”${result.embedding.note ? ` · ${result.embedding.note}` : ""}`
                   : `핵심어와 수행준거 연결로만 찾았습니다. ${result.embedding.note}`}</span>
               </p>
-              {context.dropped.length > 0 && <p className="form-hint">AI가 냈지만 글에 없어 쓰지 않은 말: {context.dropped.join(", ")}</p>}
+              {context.dropped.length > 0 && <p className="form-hint">생성형 AI가 제시했지만 문단에 없어 쓰지 않은 낱말: {context.dropped.join(", ")}</p>}
               {result.criterion.criterion_no && (result.criterion.found
                 ? <p><strong>수행준거 {result.criterion.criterion_no}</strong> {result.criterion.text}<span className="meta"> ({result.criterion.unit_name})</span></p>
                 : <p className="form-hint">수행준거 {result.criterion.criterion_no}의 글을 NCS 목록에서 찾지 못했습니다. 번호가 같은 연결만 봅니다.</p>)}

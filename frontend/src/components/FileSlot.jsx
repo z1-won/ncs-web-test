@@ -103,7 +103,7 @@ export function MultiFileSlot({ id, label, required, accept, files, onChange, di
             <div className="file-list">
               <div className="total">
                 <span><span className="current">{files.length}개</span>{countNote ? ` — ${countNote}` : ""}</span>
-                <button type="button" className="krds-btn small text" disabled={disabled} onClick={() => onChange([])}>모두 지우기<span className="sr-only"> — {label}</span></button>
+                <button type="button" className="krds-btn small text" disabled={disabled} onClick={() => onChange([])}>모두 삭제<span className="sr-only"> — {label}</span></button>
               </div>
               <ul className="upload-list">
                 {files.map((file, index) => (

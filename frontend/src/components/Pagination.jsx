@@ -21,7 +21,7 @@ export function Pagination({ page, total, onChange, label = "페이지" }) {
         {pageList(page, total).map((n, i) => n === "dot"
           ? <span key={`dot-${i}`} className="page-link link-dot" aria-hidden="true"></span>
           : <button key={n} type="button" className={`page-link${n === page ? " active" : ""}`} aria-current={n === page ? "page" : undefined} onClick={() => onChange(n)}>
-              {n === page && <span className="sr-only">현재페이지 </span>}{n}
+              {n === page && <span className="sr-only">현재 페이지 </span>}{n}
             </button>)}
       </div>
       <button type="button" className={`page-navi next${page >= total ? " disabled" : ""}`} disabled={page >= total} onClick={() => onChange(page + 1)}>다음</button>
