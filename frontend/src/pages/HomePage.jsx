@@ -8,28 +8,30 @@ import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 import "../progress.css";
 
-const PREVIEW = 3;        // 미리 보기에 보이는 원고 수 — 아래 기능 묶음과 같은 3열 한 줄
+const PREVIEW = 4;        // 미리 보기에 보이는 원고 수 — 아래 기능 묶음과 같은 4열 한 줄
 const STAGE_COUNT = 7;
-// 기능 묶음 셋, 묶음마다 카드 셋(3 × 3이라 빈 자리가 없다). 번호를 붙이지 않는다(이미지 작업은 검수와 나란히 가고, 묶음이 곧 순서는 아니다). 카드: 무엇을 하는지 한 줄 + 필요한 파일.
+// 기능 묶음 넷(집필·검수·이미지·마무리 — 묶음 구성은 정해진 것이라 배치 때문에 바꾸지 않는다). 번호를 붙이지 않는다(이미지 작업은 검수와 나란히 가고, 묶음이 곧 순서는 아니다). 카드: 무엇을 하는지 한 줄 + 필요한 파일.
 // ai: 원고 문장이나 입력한 글 일부가 생성형 AI 서비스로 나가는 기능(개인정보처리방침 '외부로 보내는 내용'과 같아야 한다)
 const GROUPS = [
-  { title: "집필과 정산", items: [
+  { title: "집필", items: [
     { path: "/plan", label: "개발계획서 작성", desc: "세분류를 고르면 NCS 기준정보를 채운 초안을 만들고, 작성한 계획서를 점검합니다.",
       files: "초안은 파일 없이 세분류 선택. 점검은 개발계획서(hwp, hwpx)" },
     { path: "/suggest", label: "문장 추천", desc: "작성 규칙에 맞지 않는 문장을 찾아 고칠 후보를 보여 줍니다.", files: "원고(hwp, hwpx)", ai: "생성형 AI 사용" },
-    { path: "/volume", label: "원고 분량", desc: "계약서 기준으로 원고 분량(매)과 집필료를 산정합니다.", files: "최종 원고(hwp, hwpx). 기존 원고와 출력본 PDF는 선택" },
   ] },
   { title: "검수", items: [
     { path: "/review", label: "원고 검수", desc: "검수 확인서 항목별로 적합 여부와 위치, 사유를 보여 줍니다.", main: true,
       files: "원고(hwp, hwpx). 개발계획서와 출력본 PDF는 선택", ai: "일부 항목에 생성형 AI 사용" },
     { path: "/opinion", label: "의견 반영 검토", desc: "검토의견서와 심의의견서의 의견이 최종 원고에 반영되었는지 대조합니다.",
       files: "검토의견서 또는 심의의견서, 최종 원고", ai: "생성형 AI 사용" },
-    { path: "/rights", label: "권리 증빙 점검", desc: "원고의 그림과 제출 서류를 대조해 빠진 증빙과 기한을 알려 줍니다.", files: "원고, 제출 서류(수록 현황 목록, 동의서, 서약서)" },
   ] },
   { title: "이미지", items: [
     { path: "/upscale", label: "업스케일링", desc: "해상도가 낮은 그림의 화질을 높인 제안본을 만듭니다.", files: "원고(hwpx)" },
     { path: "/images", label: "이미지 저작권 DB", desc: "그림과 권리 정보를 등록하고 기관이 확정합니다.", files: "그림 파일과 권리 정보(JSON)" },
     { path: "/recommend", label: "이미지 추천", desc: "문단에 어울리는 그림을 이미지 저작권 DB에서 찾아 줍니다.", files: "파일 없이 문단을 화면에 입력", ai: "켰을 때만 생성형 AI 사용" },
+  ] },
+  { title: "마무리", items: [
+    { path: "/rights", label: "권리 증빙 점검", desc: "원고의 그림과 제출 서류를 대조해 빠진 증빙과 기한을 알려 줍니다.", files: "원고, 제출 서류(수록 현황 목록, 동의서, 서약서)" },
+    { path: "/volume", label: "원고 분량", desc: "계약서 기준으로 원고 분량(매)과 집필료를 산정합니다.", files: "최종 원고(hwp, hwpx). 기존 원고와 출력본 PDF는 선택" },
   ] },
 ];
 
