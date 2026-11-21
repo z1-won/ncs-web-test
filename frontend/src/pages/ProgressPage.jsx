@@ -13,7 +13,6 @@ import { Badge, Spinner } from "../components/Badge.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { usePageTitle } from "../lib/hooks.js";
-import "../progress.css";
 
 const STAGE_COUNT = 7;
 const CHECK_LABEL = Object.fromEntries(CHECKS.map((c) => [c.value, c.label]));

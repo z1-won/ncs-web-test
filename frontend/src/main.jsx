@@ -18,7 +18,6 @@ import VolumePage from "./pages/VolumePage.jsx";
 import "pretendard-gov/dist/web/static/pretendard-gov.css";
 import "krds-uiux/resources/cdn/krds.min.css";
 import "./app.css";
-import "./progress.css";   // 머리글의 진행 현황 자리, 처음 화면, 진행 현황 화면
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

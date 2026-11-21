@@ -7,7 +7,6 @@ import { api } from "../lib/api.js";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 import { StageBar } from "./ProgressPage.jsx";
-import "../progress.css";
 
 const PREVIEW = 4;        // 미리 보기에 보이는 원고 수 — 아래 기능 묶음과 같은 4열 한 줄
 const STAGE_COUNT = 7;
