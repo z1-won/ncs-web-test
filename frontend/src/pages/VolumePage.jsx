@@ -14,7 +14,7 @@ import { PageAlert } from "../components/PageAlert.jsx";
 import { Pagination } from "../components/Pagination.jsx";
 import { RawJson } from "../components/RawJson.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
-import { CaseLinkNote } from "../components/CaseLink.jsx";
+import { CaseLinkNote, useCaseManuscript } from "../components/CaseLink.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
 // 권고 분량 상태 → KRDS 배지 색
@@ -24,6 +24,7 @@ const RANGE_BADGE = { "권고 범위 안": "bg-light-success", "권고보다 적
 export default function VolumePage() {
   usePageTitle("원고 분량 산정");
   const [file, setFile] = useState(null);
+  useCaseManuscript(setFile);
   const [previous, setPrevious] = useState(null);
   const [printCopy, setPrintCopy] = useState(null);
   const [manual, setManual] = useState("");

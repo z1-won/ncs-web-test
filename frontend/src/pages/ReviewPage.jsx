@@ -224,12 +224,13 @@ export default function ReviewPage() {
   }
 
   // 세분류 건의 판본 검수 결과에서 넘어오면(?group=) 그 묶음을 바로 연다. 검수 목록(reviewChecks)이 준비된 뒤 한 번만
-  const linkedGroup = useRef(new URLSearchParams(window.location.search).get("group"));
+  // 실행 하나(?run=)도 같다 — 건의 개발계획서 점검 결과가 이 길로 온다
+  const linked = useRef({ group: new URLSearchParams(window.location.search).get("group"), run: new URLSearchParams(window.location.search).get("run") });
   useEffect(() => {
-    if (!linkedGroup.current || !history || !reviewChecks.length) return;
-    const id = linkedGroup.current;
-    linkedGroup.current = null;
-    openGroup(id);
+    const { group, run } = linked.current;
+    if ((!group && !run) || !history || !reviewChecks.length) return;
+    linked.current = {};
+    if (group) openGroup(group); else openHistory(run);
   }, [history, reviewChecks]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   async function openHistory(id) {

@@ -35,3 +35,9 @@ export function AuthProvider({ children }) {
   }
   return <AuthContext.Provider value={{ ...state, logIn, logOut }}>{children}</AuthContext.Provider>;
 }
+
+// 건을 만들고 이미지 저작권 DB를 바꾸는 역할(에디터, 직능연). 로그인을 쓰지 않는 서버에서는 누구나 — 서버의 flow.MANAGER_ROLES와 같다
+export function useCanManage() {
+  const { status, account } = useAuth();
+  return status === "open" || ["editor", "krivet"].includes(account?.role);
+}

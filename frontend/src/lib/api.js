@@ -45,6 +45,7 @@ function caseLink(form) {
   if (params.get("volume") && params.get("stage")) {
     form.append("case_volume", params.get("volume"));
     form.append("case_stage", params.get("stage"));
+    if (params.get("version")) form.append("case_version", params.get("version"));
   }
   return form;
 }
@@ -245,6 +246,16 @@ export const api = {
       return request(`/api/cases/${encodeURIComponent(id)}/volumes/${encodeURIComponent(volumeId)}/versions`, { method: "POST", body: form });
     },
     // 보관한 판본으로 검수를 돌릴 준비: { upload, group, module_code, checks } — 이 토큰으로 api.review를 돌리면 결과가 그 판본에 붙는다
+    // 건 단위 단계의 문서(개발계획서)를 올려 제출 / 그 문서로 개발계획서 점검을 돌릴 준비({ upload, checks: ["plan"] })
+    submitFile: (id, { stage, note = "", file }) => {
+      const form = new FormData();
+      form.append("stage", stage);
+      form.append("note", note);
+      form.append("file", file, file.name);
+      return request(`/api/cases/${encodeURIComponent(id)}/files`, { method: "POST", body: form });
+    },
+    fileUpload: (id, fileId) => request(`/api/cases/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}/upload`, { method: "POST" }),
+    fileUrl: (id, fileId) => `/api/cases/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}/file`,
     versionUpload: (id, versionId) => request(`/api/cases/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/upload`, { method: "POST" }),
     versionFileUrl: (id, versionId) => `/api/cases/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/file`,
     assignAuthor: (id, volumeId, authorId) => postJson(`/api/cases/${encodeURIComponent(id)}/volumes/${encodeURIComponent(volumeId)}/author`, { author_id: authorId }),

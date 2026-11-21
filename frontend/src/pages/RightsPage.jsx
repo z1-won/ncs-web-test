@@ -11,7 +11,8 @@ import { KrdsDateField } from "../components/KrdsDateField.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
-import { CaseLinkNote } from "../components/CaseLink.jsx";
+import { CaseLinkNote, useCaseManuscript } from "../components/CaseLink.jsx";
+import { useCanManage } from "../lib/auth.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
 const ANCHORS = [{ id: "rights-run", label: "점검 실행" }, { id: "rights-result", label: "점검 결과" }];
@@ -30,7 +31,9 @@ function mark(value) {
 
 export default function RightsPage() {
   usePageTitle("권리 증빙 점검");
+  const canManage = useCanManage();
   const [manuscript, setManuscript] = useState(null);
+  useCaseManuscript(setManuscript);
   const [forms, setForms] = useState([]);
   const [printCopy, setPrintCopy] = useState(null);   // 출력본 PDF(선택)
   const [copied, setCopied] = useState(null);         // 방금 복사한 알림의 받는 곳
@@ -253,7 +256,7 @@ export default function RightsPage() {
                   이미 있는 그림은 합쳐지고, 기관이 확정한 권리 정보는 바뀌지 않습니다.</p>
                 {saved && <PageAlert kind={saved.kind}>{saved.text}</PageAlert>}
                 <div className="run-buttons image-actions">
-                  <button type="button" className="krds-btn large secondary" disabled={!!busy} onClick={saveToDb}>{busy === "save" ? "등록하는 중" : "이미지 저작권 DB에 등록"}</button>
+                  <button type="button" className="krds-btn large secondary" disabled={!!busy || !canManage} title={canManage ? undefined : "에디터와 직능연 계정만 등록할 수 있습니다"} onClick={saveToDb}>{busy === "save" ? "등록하는 중" : "이미지 저작권 DB에 등록"}</button>
                 </div>
               </div>
             </div>

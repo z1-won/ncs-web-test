@@ -10,7 +10,7 @@ import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { RawJson } from "../components/RawJson.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
-import { CaseLinkNote } from "../components/CaseLink.jsx";
+import { CaseLinkNote, useCaseManuscript } from "../components/CaseLink.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
 // 판정 후보 → KRDS 배지 색
@@ -23,6 +23,7 @@ export default function OpinionPage() {
   const [second, setSecond] = useState(null);
   const [third, setThird] = useState(null);
   const [file, setFile] = useState(null);
+  useCaseManuscript(setFile);
   const [printCopy, setPrintCopy] = useState(null);
   const [previous, setPrevious] = useState(null);
   const [busy, setBusy] = useState(false);

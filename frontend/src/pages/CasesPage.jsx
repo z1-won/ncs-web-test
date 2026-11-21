@@ -17,7 +17,7 @@ import { ProgressFigures } from "./ProgressPage.jsx";
 
 const ANCHORS = [{ id: "cases-list", label: "건 목록" }, { id: "cases-detail", label: "권과 단계" }];
 const DONE = "완료", WAITING = "대기";
-const CHECK_NAMES = { toc: "차례", overview: "개요", knowledge: "필요 지식", perform: "수행 내용", teaching: "교수학습 방법", evaluation: "평가",
+const CHECK_NAMES = { position: "위치", plan: "개발계획서", toc: "차례", overview: "개요", knowledge: "필요 지식", perform: "수행 내용", teaching: "교수학습 방법", evaluation: "평가",
                       references: "참고 자료", colophon: "판권", misc: "기타" };
 const TOOLS = { opinion: ["/opinion", "의견 반영 검토"], volume: ["/volume", "원고 분량"], rights: ["/rights", "권리 증빙 점검"] };
 const sizeText = (bytes) => (bytes >= 1 << 20 ? `${(bytes / (1 << 20)).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`);
@@ -280,7 +280,9 @@ function StageAction({ detail, volume, standing, onChange }) {
   const [running, setRunning] = useState(null);       // 검수 진행: { done, total, name }
   // 이미 제출된 것을 다른 역할이 대신 다시 내는 버튼은 보이지 않는다(확인할 차례에 제출 칸이 끼어들지 않게)
   const actions = standing.actions.filter((a) => !(a.action === "submit" && a.proxy && standing.state === "제출됨"));
-  const canSubmitFile = standing.manuscript && actions.some((a) => a.action === "submit");
+  const needsFile = volume ? standing.manuscript : standing.document;      // 제출할 때 파일을 올리는 단계(원고 또는 개발계획서)
+  const canSubmitFile = needsFile && actions.some((a) => a.action === "submit");
+  const document = !volume && standing.document ? (detail.case_files[standing.key] || [])[0] : null;   // 건 단계에 올린 가장 최근 문서
   const latest = volume ? (standing.manuscript ? volume.versions.find((v) => v.stage === standing.key) : volume.versions[0]) : null;
   const canReview = detail.can_manage && standing.review && latest && standing.state !== WAITING;
   const records = volume ? (volume.records[standing.key] || []) : [];
@@ -289,10 +291,11 @@ function StageAction({ detail, volume, standing, onChange }) {
   async function send(action) {
     setError(null);
     if (action.needs_note && !note.trim()) { setError("순서를 건너뛰어 완료하려면 사유를 메모에 적어 주세요."); return; }
-    if (action.action === "submit" && standing.manuscript && !file) { setError("제출할 원고 파일을 골라 주세요."); return; }
+    if (action.action === "submit" && needsFile && !file) { setError("제출할 파일을 골라 주세요."); return; }
     setBusy(action.action);
-    const result = action.action === "submit" && standing.manuscript
-      ? await api.cases.submitVersion(detail.id, volume.id, { stage: standing.key, note: note.trim(), file })
+    const result = action.action === "submit" && needsFile
+      ? await (volume ? api.cases.submitVersion(detail.id, volume.id, { stage: standing.key, note: note.trim(), file })
+        : api.cases.submitFile(detail.id, { stage: standing.key, note: note.trim(), file }))
       : await api.cases.act(detail.id, { stage: standing.key, action: action.action, volumeId: volume ? volume.id : null, note: note.trim() });
     setBusy(null);
     if (!result.ok) { setError(result.error); return; }
@@ -322,6 +325,28 @@ function StageAction({ detail, volume, standing, onChange }) {
     if (fresh.ok) onChange(fresh.data);
   }
 
+  // 건에 올린 개발계획서로 개발계획서 점검을 돌린다. 결과는 그 문서에 붙는다
+  async function checkPlan() {
+    setError(null);
+    setBusy("review");
+    const ready = await api.cases.fileUpload(detail.id, document.id);
+    if (!ready.ok) { setBusy(null); setError(ready.error); return; }
+    setRunning({ done: 0, total: 1, name: CHECK_NAMES.plan });
+    const result = await api.review({ check: "plan", upload: ready.data.upload });
+    await api.uploads.remove(ready.data.upload);
+    setRunning(null);
+    setBusy(null);
+    if (!result.ok) setError(`개발계획서 점검을 마치지 못했습니다. ${result.error}`);
+    const fresh = await api.cases.get(detail.id);
+    if (fresh.ok) onChange(fresh.data);
+  }
+
+  const toolLink = (tool) => {
+    const query = new URLSearchParams({ case: detail.id, volume: volume.id, stage: standing.key, label: `${volume.title || volume.module_code}, ${standing.name}` });
+    if (volume.versions[0]) { query.set("version", volume.versions[0].id); query.set("file", volume.versions[0].filename); }
+    return `${TOOLS[tool][0]}?${query}`;
+  };
+
   return (
     <div className="cases-action">
       <p className="cases-action-state">
@@ -349,6 +374,31 @@ function StageAction({ detail, volume, standing, onChange }) {
         </div>
       )}
 
+      {document && (
+        <div className="cases-review">
+          <p>
+            올린 문서: <a href={api.cases.fileUrl(detail.id, document.id)}>{document.filename}</a> <span className="meta">{document.number}차, {document.by}, {when(document.at)}</span>
+          </p>
+          {document.review ? (
+            <p>
+              점검 결과: <Badge value={document.review.verdict} /> <span className="meta">{when(document.review.at)}</span>{" "}
+              <Link to={`/review?run=${document.review.run}`} className="krds-btn small text">결과 자세히 보기</Link>
+            </p>
+          ) : <p className="meta">이 문서는 아직 점검하지 않았습니다.</p>}
+          {detail.can_manage && standing.state !== WAITING && (
+            <button type="button" className="krds-btn medium secondary" disabled={!!busy} onClick={checkPlan}>
+              {running ? "점검하는 중" : document.review ? "개발계획서 점검 다시 실행" : "이 문서로 개발계획서 점검 실행"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {volume && !standing.review && standing.kind === "외부 판정" && volume.versions[0] && (
+        <div className="cases-review">
+          <p>판정할 원고: <a href={api.cases.versionFileUrl(detail.id, volume.versions[0].id)}>{volume.versions[0].filename}</a> <span className="meta">{volume.versions[0].stage_name} {volume.versions[0].number}차, {when(volume.versions[0].at)}</span></p>
+        </div>
+      )}
+
       {volume && standing.tools.length > 0 && (
         <div className="cases-review">
           <p>이 단계의 근거 기록{records.length === 0 && <span className="meta"> 아직 없습니다. 아래 도구를 여기서 열어 돌리면 이 단계에 붙습니다.</span>}</p>
@@ -359,7 +409,7 @@ function StageAction({ detail, volume, standing, onChange }) {
           )}
           <p>
             {standing.tools.map((tool) => (
-              <Link key={tool} className="krds-btn medium secondary" to={`${TOOLS[tool][0]}?case=${detail.id}&volume=${volume.id}&stage=${standing.key}&label=${encodeURIComponent(`${volume.title || volume.module_code}, ${standing.name}`)}`}>
+              <Link key={tool} className="krds-btn medium secondary" to={toolLink(tool)}>
                 {TOOLS[tool][1]} 열기
               </Link>
             ))}
@@ -370,7 +420,7 @@ function StageAction({ detail, volume, standing, onChange }) {
       {actions.length > 0 && (
         <form className="review-form cases-action-form" onSubmit={(e) => e.preventDefault()}>
           {canSubmitFile && (
-            <FileSlot id={`${id}-file`} label="제출할 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={!!busy}
+            <FileSlot id={`${id}-file`} label={volume ? "제출할 원고" : "제출할 개발계획서"} required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={!!busy}
                       hint="hwp, hwpx. 올린 파일은 판본으로 보관됩니다." />
           )}
           <div className="form-group">
@@ -437,9 +487,11 @@ function VolumePanel({ detail, volume, onChange, onClose }) {
                   <h4>{stage.name}</h4>
                   <span className="progress-step-who">{stage.unit === "건" ? "건 전체, " : ""}{stage.kind}. {stage.who}</span>
                   {!isCurrent && state.state !== WAITING && <Badge value={state.state} />}
+                  {state.changed && <span className="krds-badge bg-light-warning">완료 후 변경됨</span>}
                   {canReopen && <button type="button" className="krds-btn small text" onClick={() => reopen(stage)}>되돌리기</button>}
                 </div>
                 {!isCurrent && state.state === DONE && <p className="meta">{state.by}, {when(state.at)}{state.note ? `. ${state.note}` : ""}</p>}
+                {state.changed && <p className="meta">완료한 뒤에 이 단계의 판본, 검수, 붙은 기록이 새로 생겼습니다. 다시 확인하려면 되돌려 주세요.</p>}
                 {isCurrent && <StageAction key={`${volume.id}-${stage.key}-${state.state}`} detail={detail} volume={stage.unit === "건" ? null : volume} standing={current} onChange={onChange} />}
               </div>
             </li>

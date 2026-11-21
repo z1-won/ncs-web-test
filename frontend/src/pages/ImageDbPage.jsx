@@ -11,6 +11,7 @@ import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { Pagination } from "../components/Pagination.jsx";
 import { usePageTitle } from "../lib/hooks.js";
+import { useCanManage } from "../lib/auth.jsx";
 import { conditionsLabel, licenseLabel, statusBadge, termOptions } from "../lib/imageTerms.js";
 
 const ANCHORS = [
@@ -174,6 +175,7 @@ function RecommendSection({ terms, refreshKey }) {
 }
 
 export default function ImageDbPage() {
+  const canManage = useCanManage();
   usePageTitle("이미지 저작권 DB");
   const [ready, setReady] = useState(null);       // null 확인 중 | true | false(DB 없음) | "error"
   const [terms, setTerms] = useState(null);
@@ -254,7 +256,8 @@ export default function ImageDbPage() {
           <div><dt>추천 목록에 나옴</dt><dd><strong>{counts?.recommendable ?? "…"}</strong>건</dd><dd className="meta">확정했고 재사용 범위가 정해졌고 비공개가 아닌 그림</dd></div>
         </dl>
 
-        <LoadSection onLoaded={refresh} />
+        {canManage ? <LoadSection onLoaded={refresh} />
+          : <PageAlert kind="info">이미지 저작권 DB는 볼 수만 있습니다. 자료 등록, 권리 정보 수정, 확정은 에디터와 직능연 계정이 합니다.</PageAlert>}
 
         <section id="image-list" className="nav-anchor image-section">
           <div className="section-head">
@@ -302,7 +305,7 @@ export default function ImageDbPage() {
           {list.data && <Pagination page={page} total={Math.ceil(list.data.total / PAGE_SIZE)} onChange={setPage} label="이미지 목록 페이지" />}
 
           <div ref={detail} className="nav-anchor">
-            {openId && <ImageDetail key={openId} imageId={openId} terms={terms} onChanged={refresh} onClose={() => setOpenId(null)} />}
+            {openId && <ImageDetail key={openId} imageId={openId} terms={terms} readOnly={!canManage} onChanged={refresh} onClose={() => setOpenId(null)} />}
           </div>
         </section>
 

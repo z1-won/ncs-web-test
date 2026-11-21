@@ -79,7 +79,7 @@ function changeText(entry, terms) {
   return parts.join(", ");
 }
 
-export function ImageDetail({ imageId, terms, onChanged, onClose }) {
+export function ImageDetail({ imageId, terms, readOnly = false, onChanged, onClose }) {
   const [state, setState] = useState({ status: "loading" });   // { status: loading|ready|error, data, error }
   const [form, setForm] = useState(() => toForm(null));
   const [busy, setBusy] = useState(null);     // "save" | "confirm" | "unconfirm" | "evidence"
@@ -301,10 +301,10 @@ export function ImageDetail({ imageId, terms, onChanged, onClose }) {
           )}
           <div className="run-buttons image-actions">
             {confirmed
-              ? <button type="button" className="krds-btn large secondary" onClick={unconfirm} disabled={!!busy}>{busy === "unconfirm" ? "취소하는 중" : "확정 취소"}</button>
+              ? <button type="button" className="krds-btn large secondary" onClick={unconfirm} disabled={!!busy || readOnly}>{busy === "unconfirm" ? "취소하는 중" : "확정 취소"}</button>
               : <>
-                  <button type="button" className="krds-btn large secondary" onClick={save} disabled={!!busy || !dirty}>{busy === "save" ? "저장하는 중" : "저장"}</button>
-                  <button type="button" className="krds-btn large primary" onClick={confirm} disabled={!!busy}>{busy === "confirm" ? "확정하는 중" : dirty ? "저장하고 기관 확정" : "기관 확정"}</button>
+                  <button type="button" className="krds-btn large secondary" onClick={save} disabled={!!busy || readOnly || !dirty}>{busy === "save" ? "저장하는 중" : "저장"}</button>
+                  <button type="button" className="krds-btn large primary" onClick={confirm} disabled={!!busy || readOnly}>{busy === "confirm" ? "확정하는 중" : dirty ? "저장하고 기관 확정" : "기관 확정"}</button>
                 </>}
           </div>
         </div>
@@ -322,7 +322,7 @@ export function ImageDetail({ imageId, terms, onChanged, onClose }) {
                 <td>{item.file_ref || "-"}</td>
                 <td>{item.submitted_on || "-"}</td>
                 <td>{item.note || "-"}</td>
-                <td className="center"><button type="button" className="krds-btn small text" disabled={!!busy} onClick={() => removeEvidence(item)}>삭제<span className="sr-only">: {terms?.evidence_kind?.[item.kind] || item.kind}</span></button></td>
+                <td className="center"><button type="button" className="krds-btn small text" disabled={!!busy || readOnly} onClick={() => removeEvidence(item)}>삭제<span className="sr-only">: {terms?.evidence_kind?.[item.kind] || item.kind}</span></button></td>
               </tr>
             ))}</tbody>
           </table>
@@ -347,7 +347,7 @@ export function ImageDetail({ imageId, terms, onChanged, onClose }) {
         <div className="form-actions">
           {message && message.at === "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
           <div className="run-buttons image-actions">
-            <button type="button" className="krds-btn large secondary" onClick={addEvidence} disabled={!!busy || !evidence.kind}>{busy === "evidence" ? "처리하는 중" : "증빙 등록"}</button>
+            <button type="button" className="krds-btn large secondary" onClick={addEvidence} disabled={!!busy || readOnly || !evidence.kind}>{busy === "evidence" ? "처리하는 중" : "증빙 등록"}</button>
           </div>
         </div>
       </div>
