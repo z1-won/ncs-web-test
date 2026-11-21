@@ -112,7 +112,7 @@ class ProgressIntegrationTests(unittest.TestCase):
             undone = client.post(f"/api/manuscripts/{CODE}/stages/2", json={"done": False, "by": "김에디터"})
             self.assertFalse(undone.json()["단계"][1]["완료"])
             self.assertEqual([h["action"] for h in undone.json()["이력"]], ["undone", "done"])
-            self.assertEqual(client.post(f"/api/manuscripts/{CODE}/stages/2", json={"done": True, "by": "  "}).status_code, 400)
+            self.assertEqual(client.post(f"/api/manuscripts/{CODE}/stages/2", json={"done": True, "by": "  "}).status_code, 400)      # 로그인도 이름도 없으면
             self.assertEqual(client.post(f"/api/manuscripts/{CODE}/stages/9", json={"done": True, "by": "가"}).status_code, 400)
             # 기록이 없는 원고도 표시하면 목록에 나온다
             client.post("/api/manuscripts/LM9999999902_26v1/stages/1", json={"done": True, "by": "가"})

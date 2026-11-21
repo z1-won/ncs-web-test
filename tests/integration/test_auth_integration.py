@@ -86,3 +86,31 @@ class AuthIntegrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(DSN, "NCS_TEST_DATABASE_URL 미설정")
+class StageMarkByAccountTests(unittest.TestCase):
+    """단계 완료 표시의 '누가'는 로그인한 계정에서 읽는다 — 화면이 다른 이름을 보내도 쓰지 않는다."""
+    CODE = "LM9999999904_26v1"
+
+    def setUp(self):
+        migrate(DSN)
+        self.clean()
+        accounts.create_account(DSN, login=LOGIN, name="김에디터", role="editor", password=PASSWORD)
+
+    def tearDown(self):
+        self.clean()
+
+    def clean(self):
+        with psycopg.connect(DSN) as connection:
+            connection.execute("DELETE FROM accounts WHERE login LIKE 'auth-test-%'")
+            connection.execute("DELETE FROM manuscript_stages WHERE module_code = %s", (self.CODE,))
+            connection.execute("DELETE FROM manuscript_stage_history WHERE module_code = %s", (self.CODE,))
+
+    def test_name_comes_from_the_session(self):
+        with TestClient(create_app(database_url=DSN)) as client:
+            self.assertEqual(client.post(f"/api/manuscripts/{self.CODE}/stages/1", json={"done": True}).status_code, 401)
+            client.post("/api/login", json={"login": LOGIN, "password": PASSWORD})
+            done = client.post(f"/api/manuscripts/{self.CODE}/stages/1", json={"done": True, "by": "남의 이름", "note": "확인"})
+            self.assertEqual(done.status_code, 200, done.text)
+            self.assertEqual(done.json()["단계"][0]["완료한 사람"], f"김에디터({LOGIN})")

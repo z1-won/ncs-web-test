@@ -1,6 +1,7 @@
 // 원고 진행 현황(REQ-02-007 '원고별 편집·내용·저작권 검수 진행도 확인') — 원고(모듈 코드)마다 남은 기록을 단계 7개와 진행도로 보여 준다.
 // 단계의 완료는 담당자가 여기서 직접 표시한다(누가·언제·메모, 되돌릴 수 있고 이력이 남는다). 기록은 완료를 판단할 근거로 옆에 보일 뿐이다.
-// 화면 짜임은 이미지 저작권 DB와 같다: 위쪽 입력 묶음(표시한 사람 — 한 번 적으면 브라우저가 기억, 모듈 코드로 열기) → 목록 → 고른 원고의 상세가 목록 아래에 열리고 [닫기].
+// 누가 표시했는지는 로그인한 계정에서 서버가 읽는다(화면에서 이름을 받지 않는다).
+// 화면 짜임은 이미지 저작권 DB와 같다: 위쪽 입력 묶음(모듈 코드로 열기) → 목록 → 고른 원고의 상세가 목록 아래에 열리고 [닫기].
 // 서버가 DB 이력을 쓸 때만(/api/health의 history) 목록이 있다. 고른 원고는 주소(?code=)에 남아 새로 고침·공유에도 같은 화면이 열린다.
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -8,7 +9,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { CHECKS } from "../lib/checks.js";
 import { formatDate } from "../lib/format.jsx";
-import { loadName, saveName } from "../lib/imageTerms.js";
 import { Badge, Spinner } from "../components/Badge.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
@@ -42,8 +42,6 @@ export default function ProgressPage() {
   const [detailError, setDetailError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [typed, setTyped] = useState("");            // 목록에 없는 원고를 모듈 코드로 여는 칸
-  const [by, setBy] = useState(loadName);            // 표시한 사람 — 이미지 저작권 DB의 '변경한 사람'과 같은 값을 쓴다
-  const byInput = useRef(null);
   const detailBox = useRef(null);
 
   async function refreshList() {
@@ -103,14 +101,6 @@ export default function ProgressPage() {
         <form className="fieldset review-form is-sectioned" onSubmit={openTyped}>
           <div className="form-section-grid">
             <div className="form-group">
-              <div className="form-tit"><label htmlFor="progress-by">표시한 사람</label></div>
-              <div className="form-conts">
-                <input id="progress-by" ref={byInput} type="text" className="krds-input" maxLength={50} value={by} placeholder="예: 에디팅기관 홍길동"
-                       onChange={(e) => { setBy(e.target.value); saveName(e.target.value); }} aria-describedby="progress-by-hint" />
-              </div>
-              <p className="form-hint" id="progress-by-hint">단계를 완료로 표시하거나 되돌릴 때 이력에 남는 이름입니다.</p>
-            </div>
-            <div className="form-group">
               <div className="form-tit"><label htmlFor="progress-code">모듈 코드로 원고 열기</label></div>
               <div className="form-conts progress-open">
                 <input id="progress-code" type="text" className="krds-input" placeholder="예: LM1203020201_24v3" value={typed}
@@ -163,7 +153,7 @@ export default function ProgressPage() {
         {loading && <Spinner label="진행 현황을 불러오는 중" />}
         <PageAlert kind="danger">{detailError}</PageAlert>
         {detail && !loading && (
-          <ProgressDetail detail={detail} by={by} onNeedName={() => byInput.current?.focus()}
+          <ProgressDetail detail={detail}
                           onChange={(next) => { setDetail(next); refreshList(); }} onClose={() => setParams({})} />
         )}
       </div>
@@ -174,17 +164,16 @@ export default function ProgressPage() {
   );
 }
 
-function ProgressDetail({ detail, by, onNeedName, onChange, onClose }) {
+function ProgressDetail({ detail, onChange, onClose }) {
   const [marking, setMarking] = useState(null);      // 메모를 적으려고 연 단계 번호
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [markError, setMarkError] = useState(null);
 
   async function mark(stage, done) {
-    if (!by.trim()) { setMarkError("위쪽 ‘표시한 사람’에 이름을 적어 주세요."); onNeedName(); return; }
     setSaving(true);
     setMarkError(null);
-    const { ok, data, error } = await api.manuscripts.markStage(detail.module_code, stage, { done, by: by.trim(), note: done ? note.trim() : "" });
+    const { ok, data, error } = await api.manuscripts.markStage(detail.module_code, stage, { done, note: done ? note.trim() : "" });
     setSaving(false);
     if (!ok) { setMarkError(error); return; }
     setMarking(null);
