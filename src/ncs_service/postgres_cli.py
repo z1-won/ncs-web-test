@@ -53,8 +53,10 @@ def import_directory(dsn: str, directory: Path) -> bool | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="PostgreSQL 검수 이력 관리")
-    parser.add_argument("command", choices=("migrate", "import"))
+    parser.add_argument("command", choices=("migrate", "import", "clear"),
+                        help="migrate: 표 준비, import: 결과 폴더 이관, clear: 검수·분량·진행 현황 기록 비우기(계정·이미지 저작권 DB는 그대로)")
     parser.add_argument("directory", nargs="?", type=Path)
+    parser.add_argument("--yes", action="store_true", help="clear에서 실제로 지운다(없으면 몇 건인지만 보여 준다). 되돌릴 수 없다")
     args = parser.parse_args()
     dsn = os.getenv("DATABASE_URL")
     if not dsn:
@@ -62,6 +64,18 @@ def main() -> None:
     applied = migrate(dsn)
     if args.command == "migrate":
         print("PostgreSQL 스키마 준비 완료" + (f" (적용: {', '.join(applied)})" if applied else " (변경 없음)"))
+        return
+    if args.command == "clear":
+        from .postgres import clear_history
+
+        rows = clear_history(dsn, apply=args.yes)
+        for _, label, count in rows:
+            print(f"{count:>6}건  {label}")
+        total = sum(count for _, _, count in rows)
+        if args.yes:
+            print(f"모두 {total}건을 지웠습니다. 계정과 이미지 저작권 DB는 그대로입니다.")
+        else:
+            print(f"아직 지우지 않았습니다(모두 {total}건). 지우려면 --yes를 붙여 다시 실행하세요. 되돌릴 수 없습니다.")
         return
     if args.directory is None or not args.directory.is_dir():
         parser.error("import에는 기존 결과 폴더 경로가 필요합니다")

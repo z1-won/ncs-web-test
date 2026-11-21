@@ -474,3 +474,28 @@ def tag_review_stage(dsn: str, run_id: str, stage: int) -> None:
     """원고 검수 실행에 고른 단계를 적는다(review_runs.work_stage)."""
     with psycopg.connect(dsn) as connection:
         connection.execute("UPDATE review_runs SET work_stage = %s WHERE id = %s", (stage, run_id))
+
+
+# 기록 비우기 — 처음부터 다시 해 볼 때 쓴다(관리자 명령 postgres_cli clear). 계정과 이미지 저작권 DB는 건드리지 않는다.
+HISTORY_TABLES = (   # (표, 화면에서 부르는 이름). 순서대로 지운다
+    ("review_runs", "원고 검수·개발계획서 점검 이력(확인서, 입력 기록 포함)"),
+    ("review_files", "검수할 때 보관한 원고 파일"),
+    ("volume_runs", "원고 분량 산정 이력"),
+    ("work_records", "의견 반영 검토·권리 증빙 점검의 개수 기록"),
+    ("manuscript_stages", "진행 현황의 단계 완료 표시"),
+    ("manuscript_stage_history", "단계 완료 표시 이력"),
+)
+
+
+def clear_history(dsn: str, *, apply: bool) -> list[tuple[str, str, int]]:
+    """검수·분량·진행 현황 기록을 모두 지운다. apply=False면 지우지 않고 지금 몇 건인지만 센다. 반환: [(표, 이름, 건수)].
+    review_results·review_inputs는 review_runs를 지우면 함께 지워진다(ON DELETE CASCADE)."""
+    out = []
+    with psycopg.connect(dsn) as connection:
+        for table, label in HISTORY_TABLES:
+            count = connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            out.append((table, label, count))
+        if apply:
+            for table, _ in HISTORY_TABLES:
+                connection.execute(f"DELETE FROM {table}")
+    return out
