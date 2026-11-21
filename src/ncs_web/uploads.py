@@ -28,6 +28,7 @@ class Upload:
     expires_at: float
     roles: dict[str, str | None] = field(default_factory=dict)  # {'manuscript': 파일명, 'plan': 파일명|None, 'print': 출력본 PDF 파일명|None}
     assigned: dict[str, str] = field(default_factory=dict)      # {저장 경로: 역할} — 화면의 업로드 칸이 정한 역할. 비어 있으면 넣은 순서가 역할
+    case_file_id: str = ""    # 세분류 건의 문서(개발계획서)로 만든 업로드면 그 문서 id — 이 토큰으로 돌린 개발계획서 점검이 그 문서에 붙는다
     version_id: str = ""      # 세분류 건의 판본으로 만든 업로드면 그 판본 id — 이 토큰으로 돌린 검수가 그 판본에 붙는다(routes.cases)
 
 

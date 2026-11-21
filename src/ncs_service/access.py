@@ -68,7 +68,7 @@ def allowed(dsn: str, limit: Scope | None, kind: str, record_id: str) -> bool:
     return all(limit.sees(code, owner) for code, owner in rows)
 
 
-def link(dsn: str, tool: str, record_id: str, volume_id: str, stage: str, account: dict | None) -> bool:
+def link(dsn: str, tool: str, record_id: str, volume_id: str, stage: str, account: dict | None, version_id: str = "") -> bool:
     """기록을 세분류 건의 권과 단계에 붙인다(분량 산정 → volume_runs, 의견 반영 검토와 권리 증빙 점검 → work_records).
     그 단계의 도구가 아니거나, 집필진이 담당이 아닌 권이면 붙이지 않고 False."""
     definition = flow.BY_KEY.get(stage)
@@ -80,5 +80,10 @@ def link(dsn: str, tool: str, record_id: str, volume_id: str, stage: str, accoun
             return False
         if account is not None and account.get("role") not in flow.MANAGER_ROLES and str(volume[0] or "") != str(account.get("id") or "-"):
             return False
-        connection.execute(f"UPDATE {TABLES[LINKABLE[tool]]} SET case_volume_id = %s, case_stage = %s WHERE id = %s", (volume_id, stage, record_id))
+        used = None
+        if version_id:      # 보관한 판본을 그대로 쓴 기록이면 그 판본도 적는다(그 권의 판본일 때만)
+            found = connection.execute("SELECT id FROM volume_versions WHERE id = %s AND volume_id = %s", (version_id, volume_id)).fetchone()
+            used = found[0] if found else None
+        connection.execute(f"UPDATE {TABLES[LINKABLE[tool]]} SET case_volume_id = %s, case_stage = %s, version_id = %s WHERE id = %s",
+                           (volume_id, stage, used, record_id))
     return True

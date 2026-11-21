@@ -129,8 +129,11 @@ class CaseIntegrationTests(unittest.TestCase):
         proxy = act(editor, "volume", "done", note="직능연이 전화로 확인").json()
         self.assertTrue(proxy["events"][0]["proxy"])                                                # 직능연의 확인을 에디터가 대신 적음
         self.assertEqual(act(editor, "plan", "done", note="x").status_code, 409)                    # 건 단위 단계에 권을 붙이면 안 된다
-        self.assertEqual(act(other, "plan", "submit", volume=None).status_code, 200)                # 건 단위 단계: 담당 권이 있는 집필진
-        plan = act(editor, "plan", "done", volume=None).json()
+        self.assertEqual(act(other, "plan", "submit", volume=None).status_code, 409)                # 개발계획서는 파일을 올려서 제출
+        sent = other.post(f"{url}/files", data={"stage": "plan"}, files={"file": ("계획서.hwpx", b"PK plan")})
+        self.assertEqual(sent.status_code, 200, sent.text)                                          # 건 단위 단계: 담당 권이 있는 집필진
+        self.assertEqual(act(editor, "plan", "done", volume=None).status_code, 409)                 # 점검 기록 없이 완료하려면 사유
+        plan = act(editor, "plan", "done", volume=None, note="계획서를 종이로 확인").json()
         self.assertEqual(plan["case_stages"]["plan"]["state"], flow.DONE)
         self.assertEqual(act(editor, "nope", "done").status_code, 409)
 
@@ -147,9 +150,20 @@ class CaseIntegrationTests(unittest.TestCase):
 
         self.assertEqual(todo(author), [("건 전체", "plan", flow.WAITING, False)])                   # 처음은 건 단위의 개발계획서
         self.assertEqual(todo(editor), [])                                                          # 집필진 차례는 에디터 할 일에 없다
-        author.post(f"{url}/events", json={"stage": "plan", "action": "submit"})
+        planned = author.post(f"{url}/files", data={"stage": "plan"}, files={"file": ("계획서.hwpx", b"PK plan v1")})
+        document = planned.json()["case_files"]["plan"][0]
+        self.assertEqual((document["number"], document["filename"], document["review"]), (1, "계획서.hwpx", None))
         self.assertEqual(todo(editor), [("건 전체", "plan", flow.SUBMITTED, True)])                  # 직능연 차례: 에디터가 대신 적을 수 있음
-        editor.post(f"{url}/events", json={"stage": "plan", "action": "done"})
+        self.assertEqual(author.get(f"{url}/files/{document['id']}/file").content, b"PK plan v1")
+        self.assertEqual(self.client(REVIEWER).get(f"{url}/files/{document['id']}/file").status_code, 404)
+        self.assertEqual(author.post(f"{url}/files/{document['id']}/upload").status_code, 403)
+        token = editor.post(f"{url}/files/{document['id']}/upload").json()
+        self.assertEqual(token["checks"], ["plan"])
+        editor.delete(f"/api/uploads/{token['upload']}")
+        plan_run = self.run_row("")                                                                 # 계획서 점검 실행을 그 문서에 붙인다
+        cases.tag_review_case_file(DSN, plan_run, document["id"])
+        self.assertEqual(editor.get(url).json()["case_files"]["plan"][0]["review"]["run"], plan_run)
+        self.assertEqual(editor.post(f"{url}/events", json={"stage": "plan", "action": "done"}).status_code, 200)   # 점검 기록이 근거
         self.assertEqual(todo(author), [("첫째 권", "draft_edit", flow.WAITING, False)])
 
         self.assertEqual(submit(author, b"x", name="초고본.pdf").status_code, 400)
@@ -171,7 +185,9 @@ class CaseIntegrationTests(unittest.TestCase):
         self.assertEqual(author.post(f"{url}/versions/{version['id']}/upload").status_code, 403)    # 검수는 에디터가 돌린다
         ready = editor.post(f"{url}/versions/{version['id']}/upload").json()
         self.assertIn("toc", ready["checks"])
-        self.assertNotIn("position", ready["checks"])                                               # 개발계획서가 필요한 검수는 빠진다
+        self.assertIn("position", ready["checks"])                                                  # 건에 개발계획서가 있으니 위치 검수도 돈다
+        self.assertNotIn("plan", ready["checks"])
+        self.assertTrue(ready["plan"])
         self.assertEqual(ready["module_code"], A)
         editor.delete(f"/api/uploads/{ready['upload']}")
 
@@ -193,6 +209,25 @@ class CaseIntegrationTests(unittest.TestCase):
         self.assertEqual(done["volumes"][0]["current"]["key"], "review1")                           # 다음 단계로 넘어간다
         self.assertEqual(done["volumes"][1]["current"]["key"], "draft_edit")
         self.assertEqual(done["volumes"][0]["reopen"], ["draft_edit"])
+        self.assertFalse(done["volumes"][0]["stages"]["draft_edit"]["changed"])
+        late = self.fake_review(done["volumes"][0]["versions"][0]["id"], ready["group"])            # 완료한 뒤에 그 판본을 다시 검수함
+        self.addCleanup(self.drop_run, late)
+        self.assertTrue(editor.get(url).json()["volumes"][0]["stages"]["draft_edit"]["changed"])    # 완료 후 변경됨
+        # 검토진: 1차 검토에 제출된 권과 그 초고본 판본만 본다
+        reviewer = self.client(REVIEWER)
+        self.assertEqual(reviewer.get(url).status_code, 404)                                        # 아직 검토에 제출되지 않았다
+        author.post(f"{url}/events", json={"stage": "review1", "action": "submit", "volume_id": first})
+        seen = reviewer.get(url).json()
+        self.assertEqual([v["module_code"] for v in seen["volumes"]], [A])
+        self.assertEqual([(v["stage"], v["number"]) for v in seen["volumes"][0]["versions"]], [("draft_edit", 2)])
+        self.assertEqual({e["stage"] for e in seen["events"]}, {"review1"})
+        self.assertEqual([t["stage"] for t in reviewer.get("/api/cases/todo").json() if url.endswith(t["case_id"])], ["review1"])
+        old = [v for v in editor.get(url).json()["volumes"][0]["versions"] if v["number"] == 1][0]
+        self.assertEqual(reviewer.get(f"{url}/versions/{old['id']}/file").status_code, 404)         # 지난 판본은 받지 못한다
+        self.assertEqual(reviewer.get(f"{url}/versions/{seen['volumes'][0]['versions'][0]['id']}/file").status_code, 200)
+        judged = reviewer.post(f"{url}/events", json={"stage": "review1", "action": "verdict", "volume_id": first, "note": "의견서 보냄"})
+        self.assertEqual(judged.status_code, 200, judged.text)
+        self.assertEqual(reviewer.get("/api/cases").json()["cases"][0]["id"], url.rsplit("/", 1)[1])
         with psycopg.connect(DSN) as connection:
             evidence = connection.execute("SELECT evidence FROM case_events WHERE action = 'request' AND volume_id = %s", (first,)).fetchone()[0]
             connection.execute("DELETE FROM review_runs WHERE id = %s", (run_id,))
@@ -287,6 +322,15 @@ class CaseIntegrationTests(unittest.TestCase):
         with psycopg.connect(DSN) as connection:
             evidence = connection.execute("SELECT evidence FROM case_events WHERE action = 'done' AND volume_id = %s", (first,)).fetchone()[0]
         self.assertEqual(evidence["records"], [record["id"]])
+
+    def test_image_db_changes_need_an_editor(self):
+        from uuid import uuid4
+
+        author, missing = self.client(AUTHOR), str(uuid4())
+        self.assertEqual(author.post(f"/api/images/{missing}/confirm", json={}).status_code, 403)
+        self.assertEqual(author.post("/api/images/load", files=[("files", ("r.json", b"{}"))]).status_code, 403)
+        self.assertEqual(author.get("/api/images").status_code, 200)                                 # 보는 것은 된다
+        self.assertEqual(self.client(EDITOR).post(f"/api/images/{missing}/confirm", json={}).status_code, 404)
 
     def drop(self, table: str, record_id: str) -> None:
         with psycopg.connect(DSN) as connection:

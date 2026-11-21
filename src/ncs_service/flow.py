@@ -30,6 +30,8 @@ NOTES = {CREATED: "건을 만듦", VOLUME_ADDED: "권을 넣음", AUTHOR_SET: "�
 IMPROVEMENTS = ("기존개선", "최소개선", "양식편집")       # 과업 안내의 개선 유형. migrations 013의 CHECK와 같아야 한다(test_flow가 검사한다)
 PROXY_ROLE = "editor"
 MANAGER_ROLES = ("editor", "krivet")                     # 건을 만들고 권에 집필자를 붙이는 역할
+# 외부 판정을 하는 역할이 볼 수 있는 것: 그 판정 단계가 제출됨·판정 도착인 권(건)과, 판정할 원고가 제출된 단계의 가장 최근 판본만
+JUDGES = {"reviewer": {"review1": "draft_edit", "review2": "revision"}, "committee": {"deliberation": "final"}}
 
 
 class FlowError(ValueError):
@@ -53,15 +55,17 @@ class Stage:
     legacy: int | None = None     # 원고 진행 현황(모듈 코드별 7단계, ncs_service.progress)의 단계 번호
     manuscript: bool = False      # 제출할 때 원고 파일(판본)을 올리는 단계
     review: bool = False          # 그 판본으로 원고 검수를 돌리는 단계. 검수 기록 없이 보완 요청·완료를 하려면 사유를 적는다
+    document: bool = False        # 건 단위 단계에서 제출할 때 문서 파일을 올리는 단계(개발계획서). 그 문서로 점검을 돌리고, 점검 기록 없이 완료하려면 사유를 적는다
     tools: tuple[str, ...] = ()   # 이 단계의 근거를 만드는 도구(opinion 의견 반영 검토, volume 원고 분량, rights 권리 증빙 점검). 돌린 기록이 이 단계에 붙는다
 
     def public(self) -> dict:
         return {"key": self.key, "name": self.name, "unit": self.unit, "kind": self.kind, "who": self.who, "evidence": self.evidence,
-                "submit": list(self.submit), "confirm": list(self.confirm), "manuscript": self.manuscript, "review": self.review, "tools": list(self.tools)}
+                "submit": list(self.submit), "confirm": list(self.confirm), "manuscript": self.manuscript, "review": self.review, "tools": list(self.tools), "document": self.document}
 
 
 STAGES: tuple[Stage, ...] = (
-    Stage("plan", "개발계획서", CASE, ROUNDTRIP, ("krivet", "author"), ("krivet",), "직능연 전달, 집필진 정정, 직능연 확인", "개발계획서 점검", 1),
+    Stage("plan", "개발계획서", CASE, ROUNDTRIP, ("krivet", "author"), ("krivet",), "직능연 전달, 집필진 정정, 직능연 확인", "개발계획서 점검", 1,
+          document=True),
     # 초고본 편집 검수는 설계 초안에서 넘기기였으나, 집필진이 초고본을 올리고 에디터가 보완을 요청하는 왕복으로 바꿨다(2026-11-21)
     Stage("draft_edit", "초고본 편집 검수", VOLUME, ROUNDTRIP, ("author",), ("editor",), "집필진 제출, 에디터 확인(F02)", "원고 검수", 2,
           manuscript=True, review=True),

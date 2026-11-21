@@ -398,4 +398,26 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "ALTER TABLE work_records ADD COLUMN IF NOT EXISTS case_stage text;\n"
      "CREATE INDEX IF NOT EXISTS volume_runs_case_volume_idx ON volume_runs (case_volume_id);\n"
      "CREATE INDEX IF NOT EXISTS work_records_case_volume_idx ON work_records (case_volume_id)"),
+    # 016: 건 단위 단계에 올리는 문서(case_files — 개발계획서). 권의 판본과 같은 짜임이고 지우는 기한 없이 보관한다.
+    # 개발계획서 점검 실행은 review_runs.case_file_id로 그 문서에, 분량 산정과 개수 기록은 version_id로 쓴 판본에 붙는다.
+    ("016_case_files",
+     "CREATE TABLE IF NOT EXISTS case_files (\n"
+     "    id uuid PRIMARY KEY,\n"
+     "    case_id uuid NOT NULL REFERENCES cases(id) ON DELETE CASCADE,\n"
+     "    stage text NOT NULL,\n"
+     "    number integer NOT NULL CHECK (number >= 1),\n"
+     "    sha256 text NOT NULL,\n"
+     "    filename text NOT NULL,\n"
+     "    byte_size bigint NOT NULL,\n"
+     "    content bytea NOT NULL,\n"
+     "    submitted_by uuid REFERENCES accounts(id) ON DELETE SET NULL,\n"
+     "    submitted_name text NOT NULL,\n"
+     "    submitted_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    UNIQUE (case_id, stage, number)\n"
+     ");\n"
+     "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS case_file_id uuid REFERENCES case_files(id) ON DELETE SET NULL;\n"
+     "ALTER TABLE case_events ADD COLUMN IF NOT EXISTS case_file_id uuid REFERENCES case_files(id) ON DELETE SET NULL;\n"
+     "ALTER TABLE volume_runs ADD COLUMN IF NOT EXISTS version_id uuid REFERENCES volume_versions(id) ON DELETE SET NULL;\n"
+     "ALTER TABLE work_records ADD COLUMN IF NOT EXISTS version_id uuid REFERENCES volume_versions(id) ON DELETE SET NULL;\n"
+     "CREATE INDEX IF NOT EXISTS review_runs_case_file_idx ON review_runs (case_file_id)"),
 )

@@ -160,6 +160,48 @@ def register(app: FastAPI, services: Services) -> None:
             raise HTTPException(400, str(error)) from None
         return found(case_id, account)
 
+    @app.post("/api/cases/{case_id}/files")
+    def case_submit_file(case_id: UUID, request: Request, file: Annotated[UploadFile, File()],
+                         stage: Annotated[str, Form()], note: Annotated[str, Form()] = "") -> dict:
+        """건 단위 단계의 문서(개발계획서)를 올려 제출한다. 파일은 보관하고 제출 기록에 붙인다."""
+        account = who(request)
+        found(case_id, account)
+        try:
+            cases.submit_case_file(dsn, str(case_id), stage=stage, filename=file.filename or "",
+                                   content=file.file.read(cases.MAX_VERSION_BYTES + 1), account=account, note=note[:500])
+        except flow.Denied as error:
+            raise HTTPException(403, str(error)) from None
+        except flow.FlowError as error:
+            raise HTTPException(409, str(error)) from None
+        except LookupError as error:
+            raise HTTPException(404, str(error)) from None
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from None
+        return found(case_id, account)
+
+    @app.get("/api/cases/{case_id}/files/{file_id}/file")
+    def case_file_download(case_id: UUID, file_id: UUID, request: Request) -> Response:
+        document = cases.get_case_file(dsn, str(case_id), str(file_id), who(request))
+        if document is None:
+            raise HTTPException(404, "문서를 찾지 못했습니다. 화면을 새로 고쳐 주세요")
+        return Response(document["content"], media_type="application/octet-stream", headers={
+            "Content-Disposition": f"attachment; filename=document; filename*=UTF-8''{quote(document['filename'])}"})
+
+    @app.post("/api/cases/{case_id}/files/{file_id}/upload")
+    def case_file_upload(case_id: UUID, file_id: UUID, request: Request) -> dict:
+        """보관한 개발계획서로 개발계획서 점검을 돌릴 준비: 토큰을 준다. 이 토큰으로 /api/review(check=plan)를 돌리면 결과가 그 문서에 붙는다."""
+        account = manager(request)
+        document = cases.get_case_file(dsn, str(case_id), str(file_id), account)
+        if document is None:
+            raise HTTPException(404, "문서를 찾지 못했습니다. 화면을 새로 고쳐 주세요")
+        try:
+            upload = services.uploads.put([(document["filename"], document["content"])])
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from None
+        upload.assigned = {str(path): "plan" for _, path in upload.files}
+        upload.case_file_id = document["id"]
+        return {"upload": upload.token, "checks": ["plan"]}
+
     @app.get("/api/cases/{case_id}/versions/{version_id}/file")
     def case_version_file(case_id: UUID, version_id: UUID, request: Request) -> Response:
         """보관한 판본 파일을 내려받는다. 볼 수 있는 권의 것만."""
@@ -172,21 +214,24 @@ def register(app: FastAPI, services: Services) -> None:
     @app.post("/api/cases/{case_id}/versions/{version_id}/upload")
     def case_version_upload(case_id: UUID, version_id: UUID, request: Request) -> dict:
         """보관한 판본으로 원고 검수를 돌릴 준비: 파일을 임시 업로드로 꺼내 토큰을 준다. 이 토큰으로 /api/review를 돌리면 결과가 그 판본에 붙는다.
-        돌릴 검수는 원고만 있으면 되는 것(checks). 검수는 에디터와 직능연 계정만 돌린다."""
+        돌릴 검수(checks)는 원고만 있으면 되는 것이고, 건에 개발계획서가 올라와 있으면 위치 검수도 넣는다. 검수는 에디터와 직능연 계정만 돌린다."""
         from ncs_service.registry import ENGINES
 
         account = manager(request)
         version = cases.get_version(dsn, str(case_id), str(version_id), account)
         if version is None:
             raise HTTPException(404, "판본을 찾지 못했습니다. 화면을 새로 고쳐 주세요")
+        plan = cases.plan_file(dsn, str(case_id))      # 건에 올린 개발계획서가 있으면 함께 꺼내 위치 검수도 돌린다
         try:
-            upload = services.uploads.put([(version["filename"], version["content"])])
+            upload = services.uploads.put([(version["filename"], version["content"])] + ([plan] if plan else []))
         except ValueError as error:
             raise HTTPException(400, str(error)) from None
-        upload.assigned = {str(path): "manuscript" for _, path in upload.files}
+        roles = ["manuscript", "plan"]
+        upload.assigned = {str(path): roles[index] for index, (_, path) in enumerate(upload.files)}
         upload.version_id = version["id"]
-        return {"upload": upload.token, "group": upload.group_id, "module_code": version["module_code"],
-                "checks": [name for name, engine in ENGINES.items() if set(engine.required) <= {"manuscript"}]}
+        have = set(upload.assigned.values())
+        return {"upload": upload.token, "group": upload.group_id, "module_code": version["module_code"], "plan": bool(plan),
+                "checks": [name for name, engine in ENGINES.items() if "manuscript" in engine.required and set(engine.required) <= have]}
 
     @app.post("/api/cases/{case_id}/events")
     def case_act(case_id: UUID, body: EventIn, request: Request) -> dict:

@@ -48,6 +48,7 @@ def register(app: FastAPI, services: Services) -> None:
         save: Annotated[bool, Form()] = False, by: Annotated[str, Form()] = "", module_code: Annotated[str, Form()] = "",
         case_volume: Annotated[str, Form()] = "",     # 세분류 건의 권에서 열어 돌린 것이면 그 권 id와 단계 — 개수 기록이 그 단계에 붙는다
         case_stage: Annotated[str, Form()] = "",
+        case_version: Annotated[str, Form()] = "",    # 보관한 판본을 그대로 쓴 것이면 그 판본 id
     ) -> dict[str, Any]:
         from ncs_core.module_code import resolve_module_code
         from ncs_rights.check import Options
@@ -60,6 +61,12 @@ def register(app: FastAPI, services: Services) -> None:
         named = [item for item in forms or [] if item.filename]
         if len(named) > MAX_FORMS:
             raise HTTPException(400, f"서류는 한 번에 {MAX_FORMS}개까지 올릴 수 있습니다")
+        if save:
+            from ncs_service.flow import MANAGER_ROLES
+
+            account = getattr(request.state, "account", None)
+            if account is not None and account.get("role") not in MANAGER_ROLES:
+                raise HTTPException(403, "이미지 저작권 DB에 반영하는 일은 에디터와 직능연 계정만 할 수 있습니다")
         if save and not store.supports_history:
             raise HTTPException(400, "이미지 저작권 DB에 반영하려면 데이터베이스(DATABASE_URL)가 필요합니다")
         by = actor(request, by)      # 로그인했으면 계정 이름 — 보낸 이름은 쓰지 않는다
@@ -110,7 +117,7 @@ def register(app: FastAPI, services: Services) -> None:
                 report["진행 현황 기록"] = store.save_work_record(RIGHTS, manuscript_path.name, summarize_rights(report), files,
                                                               module_code=module_code)
                 record = report["진행 현황 기록"]
-                linked = own_and_link(request, store, "rights", record["id"] if record else None, case_volume, case_stage)
+                linked = own_and_link(request, store, "rights", record["id"] if record else None, case_volume, case_stage, case_version)
                 if case_volume:
                     report["건에 붙임"] = linked
             except Exception as error:      # 기록은 부가 기능이라 점검 결과를 막지 않는다

@@ -43,6 +43,7 @@ def register(app: FastAPI, services: Services) -> None:
         contract_pages: Annotated[int | None, Form(gt=0)] = None,
         case_volume: Annotated[str, Form()] = "",     # 세분류 건의 권에서 열어 돌린 것이면 그 권 id와 단계 — 산정 기록이 그 단계에 붙는다
         case_stage: Annotated[str, Form()] = "",
+        case_version: Annotated[str, Form()] = "",    # 보관한 판본을 그대로 쓴 것이면 그 판본 id
     ) -> Any:
         """산정표 JSON(ncs_volume.measure). previous: 비교할 기존 원고, manual_pages: 수작업 산정 쪽수(오차율),
         include_appendix: 부록을 산정에 넣을지(기본: 계약서 제13조 4항대로 넣는다),
@@ -73,7 +74,7 @@ def register(app: FastAPI, services: Services) -> None:
                       "include_appendix": include_appendix}
             try:
                 run_id = store.save_volume(result, files, params)
-                linked = own_and_link(request, store, "volume", run_id, case_volume, case_stage)
+                linked = own_and_link(request, store, "volume", run_id, case_volume, case_stage, case_version)
                 return {**result, "id": run_id, **({"건에 붙임": linked} if case_volume else {})}
             except Exception as error:
                 logger.exception("원고 분량 산정 이력 저장 실패: %s", error)

@@ -21,6 +21,7 @@ from . import flow
 LEGACY_NOTE = "원고 진행 현황에서 표시"
 EVENT_LIMIT = 300
 MANUSCRIPT_TYPES = (".hwp", ".hwpx")
+PLAN_STAGE = "plan"
 MAX_VERSION_BYTES = 50 << 20
 ROLE_NAMES = {"krivet": "직능연", "author": "집필진", "editor": "에디터", "reviewer": "검토진", "committee": "소위원회 위원"}     # accounts.ROLES와 같다
 
@@ -140,8 +141,19 @@ def _latest_version(connection, volume_id: str, stage: str | None = None) -> dic
     return {**version, "id": str(version["id"]), "group": str(run["group_id"] or run["id"]) if run else None}
 
 
+def _latest_case_file(connection, case_id: str, stage: str) -> dict | None:
+    """건 단위 단계에 올린 가장 최근 문서. 그 문서로 돌린 점검이 있으면 가장 최근 실행의 id도."""
+    row = connection.execute(
+        "SELECT id, number, sha256, filename, content FROM case_files WHERE case_id = %s AND stage = %s ORDER BY number DESC LIMIT 1",
+        (case_id, stage)).fetchone()
+    if row is None:
+        return None
+    run = connection.execute("SELECT id FROM review_runs WHERE case_file_id = %s ORDER BY created_at DESC LIMIT 1", (row["id"],)).fetchone()
+    return {**row, "id": str(row["id"]), "run": str(run["id"]) if run else None}
+
+
 def _act(connection, case_id: str, definition: flow.Stage, action: str, account: dict, *, volume_id: str | None, note: str,
-         evidence: dict | None = None, version_id: str | None = None) -> str:
+         evidence: dict | None = None, version_id: str | None = None, case_file_id: str | None = None) -> str:
     """잠근 건 안에서 전이를 검사하고 사건을 남긴다. 바뀐 뒤의 상태를 돌려준다."""
     ok, proxy = flow.allowed(definition, action, account.get("role", ""))
     if not ok:
@@ -174,11 +186,18 @@ def _act(connection, case_id: str, definition: flow.Stage, action: str, account:
                 found = True
         if not found and not note.strip():
             raise flow.FlowError(f"이 단계에 붙은 검수나 점검 기록이 없습니다. 먼저 실행하거나, 기록 없이 ‘{flow.ACTIONS[action]}’을 하는 사유를 적어 주세요")
+    if not volume_id and definition.document and action in (flow.REQUEST, flow.COMPLETE):
+        document = _latest_case_file(connection, case_id, definition.key)
+        if document and document["run"]:
+            evidence.update({"case_file": document["id"], "review_run": document["run"]})
+            case_file_id = case_file_id or document["id"]
+        elif not note.strip():
+            raise flow.FlowError(f"올린 문서로 돌린 점검 기록이 없습니다. 점검을 먼저 실행하거나, 점검 없이 ‘{flow.ACTIONS[action]}’을 하는 사유를 적어 주세요")
     connection.execute(
-        "INSERT INTO case_events (id, case_id, volume_id, stage, action, actor_id, actor, proxy, note, evidence, version_id) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)",
+        "INSERT INTO case_events (id, case_id, volume_id, stage, action, actor_id, actor, proxy, note, evidence, version_id, case_file_id) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)",
         (str(uuid4()), case_id, volume_id, definition.key, action, account.get("id"), actor_name(account), proxy, note.strip(),
-         json.dumps(evidence, ensure_ascii=False), version_id))
+         json.dumps(evidence, ensure_ascii=False), version_id, case_file_id))
     return target
 
 
@@ -196,8 +215,8 @@ def act(dsn: str, case_id: str, *, stage: str, action: str, account: dict, volum
     """단계에 행동 하나(제출, 보완 요청, 판정 도착, 완료, 되돌림)를 적는다. 전이와 권한은 flow가 판단하고, 안 되면 FlowError(권한이면 Denied).
     원고를 올리는 단계의 제출은 submit_version으로 한다. 돌려주는 값은 바뀐 뒤의 상태."""
     definition = _stage(stage, volume_id)
-    if action == flow.SUBMIT and definition.manuscript:
-        raise flow.FlowError(f"‘{definition.name}’은 원고 파일을 올려서 제출합니다")
+    if action == flow.SUBMIT and (definition.manuscript or definition.document):
+        raise flow.FlowError(f"‘{definition.name}’은 파일을 올려서 제출합니다")
     with _connect(dsn) as connection:
         if connection.execute("SELECT 1 FROM cases WHERE id = %s FOR UPDATE", (case_id,)).fetchone() is None:
             raise LookupError("건이 없습니다")
@@ -207,20 +226,10 @@ def act(dsn: str, case_id: str, *, stage: str, action: str, account: dict, volum
 def submit_version(dsn: str, case_id: str, volume_id: str, *, stage: str, filename: str, content: bytes, account: dict, note: str = "") -> str:
     """원고 판본을 올려 제출한다 — 파일을 보관하고(volume_versions) 제출 사건에 그 판본을 붙인다. 판본 id를 돌려준다.
     같은 단계에 바로 앞서 낸 것과 같은 파일이면 받지 않는다(고친 파일을 올려야 다시 제출이 된다)."""
-    import hashlib
-    from pathlib import PurePath
-
     definition = _stage(stage, volume_id)
     if not definition.manuscript:
         raise flow.FlowError(f"‘{definition.name}’은 원고 파일을 올리는 단계가 아닙니다")
-    name = PurePath(filename or "").name
-    if not name or PurePath(name).suffix.lower() not in MANUSCRIPT_TYPES:
-        raise ValueError("원고는 hwp, hwpx 파일로 올려 주세요")
-    if not content:
-        raise ValueError("빈 파일입니다. 파일을 다시 골라 주세요")
-    if len(content) > MAX_VERSION_BYTES:
-        raise ValueError(f"파일이 {MAX_VERSION_BYTES >> 20}MB를 넘습니다")
-    sha256 = hashlib.sha256(content).hexdigest()
+    name, sha256 = _checked_file(filename, content)
     version_id = str(uuid4())
     with _connect(dsn) as connection:
         if connection.execute("SELECT 1 FROM cases WHERE id = %s FOR UPDATE", (case_id,)).fetchone() is None:
@@ -241,9 +250,78 @@ def submit_version(dsn: str, case_id: str, volume_id: str, *, stage: str, filena
     return version_id
 
 
+def _checked_file(filename: str, content: bytes) -> tuple[str, str]:
+    """올린 파일의 이름과 sha256. 형식·크기가 맞지 않으면 ValueError."""
+    import hashlib
+    from pathlib import PurePath
+
+    name = PurePath(filename or "").name
+    if not name or PurePath(name).suffix.lower() not in MANUSCRIPT_TYPES:
+        raise ValueError("hwp, hwpx 파일로 올려 주세요")
+    if not content:
+        raise ValueError("빈 파일입니다. 파일을 다시 골라 주세요")
+    if len(content) > MAX_VERSION_BYTES:
+        raise ValueError(f"파일이 {MAX_VERSION_BYTES >> 20}MB를 넘습니다")
+    return name, hashlib.sha256(content).hexdigest()
+
+
+def submit_case_file(dsn: str, case_id: str, *, stage: str, filename: str, content: bytes, account: dict, note: str = "") -> str:
+    """건 단위 단계의 문서(개발계획서)를 올려 제출한다 — 파일을 보관하고(case_files) 제출 사건에 붙인다. 문서 id를 돌려준다."""
+    definition = _stage(stage, None)
+    if not definition.document:
+        raise flow.FlowError(f"‘{definition.name}’은 문서 파일을 올리는 단계가 아닙니다")
+    name, sha256 = _checked_file(filename, content)
+    file_id = str(uuid4())
+    with _connect(dsn) as connection:
+        if connection.execute("SELECT 1 FROM cases WHERE id = %s FOR UPDATE", (case_id,)).fetchone() is None:
+            raise LookupError("건이 없습니다")
+        last = _latest_case_file(connection, case_id, stage)
+        if last and last["sha256"] == sha256:
+            raise ValueError("바로 앞서 제출한 파일과 같은 파일입니다. 고친 파일을 올려 주세요")
+        ok, _ = flow.allowed(definition, flow.SUBMIT, account.get("role", ""))
+        if not ok:
+            raise flow.Denied(f"‘{definition.name}’의 제출은 이 계정의 역할로 할 수 없습니다")
+        connection.execute(
+            "INSERT INTO case_files (id, case_id, stage, number, sha256, filename, byte_size, content, submitted_by, submitted_name) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (file_id, case_id, stage, (last["number"] + 1) if last else 1, sha256, name, len(content), content, account.get("id"), actor_name(account)))
+        _act(connection, case_id, definition, flow.SUBMIT, account, volume_id=None, note=note, case_file_id=file_id)
+    return file_id
+
+
+def get_case_file(dsn: str, case_id: str, file_id: str, account: dict) -> dict | None:
+    """건 단위 단계의 문서 파일: {'id', 'filename', 'content'}. 에디터, 직능연과 그 건에 담당 권이 있는 집필진만."""
+    if account.get("role") in flow.JUDGES:      # 검토진과 위원은 판정할 원고만 본다
+        return None
+    where, values = _visible(account)
+    with _connect(dsn) as connection:
+        if connection.execute(f"SELECT 1 FROM case_volumes v WHERE v.case_id = %s AND {where} LIMIT 1", (case_id, *values)).fetchone() is None:
+            return None
+        row = connection.execute("SELECT id, filename, content FROM case_files WHERE id = %s AND case_id = %s", (file_id, case_id)).fetchone()
+    return {**row, "id": str(row["id"]), "content": bytes(row["content"])} if row else None
+
+
+def plan_file(dsn: str, case_id: str) -> tuple[str, bytes] | None:
+    """그 건의 가장 최근 개발계획서(파일 이름, 내용). 권의 원고 검수에서 위치 검수를 함께 돌리는 데 쓴다."""
+    with _connect(dsn) as connection:
+        found = _latest_case_file(connection, case_id, PLAN_STAGE)
+    return (found["filename"], bytes(found["content"])) if found else None
+
+
+def tag_review_case_file(dsn: str, run_id: str, file_id: str) -> None:
+    """개발계획서 점검 실행이 어느 문서의 것인지 적는다(review_runs.case_file_id)."""
+    with _connect(dsn) as connection:
+        connection.execute("UPDATE review_runs SET case_file_id = %s WHERE id = %s", (file_id, run_id))
+
+
 def get_version(dsn: str, case_id: str, version_id: str, account: dict) -> dict | None:
     """판본 파일: {'id', 'volume_id', 'module_code', 'filename', 'content'}. 볼 수 없는 권의 것이면 None."""
     where, values = _visible(account)
+    if account.get("role") in flow.JUDGES:      # 판정 역할은 판정할 판본만 — 건을 읽어 보이는 판본인지 가린다
+        case = get_case(dsn, case_id, account)
+        if case is None or version_id not in {version["id"] for volume in case["volumes"] for version in volume["versions"]}:
+            return None
+        where, values = "true", ()
     with _connect(dsn) as connection:
         row = connection.execute(
             "SELECT x.id, x.filename, x.content, v.id AS volume_id, v.module_code FROM volume_versions x JOIN case_volumes v ON v.id = x.volume_id "
@@ -296,6 +374,8 @@ def _visible(account: dict) -> tuple[str, tuple]:
         return "true", ()
     if account.get("role") == "author" and account.get("id"):
         return "v.author_id = %s", (account["id"],)
+    if account.get("role") in flow.JUDGES:      # 검토진, 위원: SQL로는 전부 읽고 get_case가 판정할 것만 남긴다(_judge_view)
+        return "true", ()
     return "false", ()
 
 
@@ -322,6 +402,8 @@ def list_cases(dsn: str, account: dict) -> list[dict]:
             current = flow.states(_stage_events(connection, str(case["id"])))
             ids = [str(v) for v in case.pop("volume_ids")]
             out.append({**case, "id": str(case["id"]), "progress": _progress([_volume_states(current, v) for v in ids])})
+    if account.get("role") in flow.JUDGES:      # 판정할 것이 있는 건만
+        out = [case for case in out if get_case(dsn, case["id"], account) is not None]
     return out
 
 
@@ -354,6 +436,35 @@ def _versions(connection, volume_ids: list[str]) -> dict[str, list[dict]]:
     return out
 
 
+def _case_files(connection, case_id: str) -> dict[str, list[dict]]:
+    """건 단위 단계에 올린 문서 — {단계 key: [문서(최근 것부터)]}. 문서마다 가장 최근 점검 실행의 판정을 붙인다."""
+    rows = connection.execute(
+        "SELECT f.id, f.stage, f.number, f.filename, f.byte_size, f.submitted_name, f.submitted_at, r.id AS run_id, r.verdict, r.created_at AS run_at "
+        "FROM case_files f LEFT JOIN LATERAL (SELECT id, verdict, created_at FROM review_runs WHERE case_file_id = f.id ORDER BY created_at DESC LIMIT 1) r ON true "
+        "WHERE f.case_id = %s ORDER BY f.number DESC", (case_id,)).fetchall()
+    out: dict[str, list[dict]] = {}
+    for row in rows:
+        out.setdefault(row["stage"], []).append({
+            "id": str(row["id"]), "number": row["number"], "filename": row["filename"], "byte_size": row["byte_size"], "by": row["submitted_name"],
+            "at": row["submitted_at"], "review": {"run": str(row["run_id"]), "verdict": row["verdict"], "at": row["run_at"]} if row["run_id"] else None})
+    return out
+
+
+def _judge_view(role: str, volumes: list[dict], events: list[dict]) -> tuple[list[dict], list[dict]]:
+    """검토진·위원에게 보일 것만 남긴다: 자기 판정 단계가 제출됨·판정 도착인 권, 판정할 원고(그 앞 단계의 가장 최근 판본), 그 판정 단계의 기록.
+    붙은 기록과 다른 단계의 판본은 싣지 않는다 — 위원은 심의본만 본다."""
+    stages = flow.JUDGES[role]
+    kept = []
+    for volume in volumes:
+        standing = volume["current"]
+        if standing is None or standing["key"] not in stages or standing["state"] not in (flow.SUBMITTED, flow.VERDICT):
+            continue
+        source = stages[standing["key"]]
+        kept.append({**volume, "versions": [v for v in volume["versions"] if v["stage"] == source][:1], "records": {}, "reopen": []})
+    ids = {volume["id"] for volume in kept}
+    return kept, [e for e in events if e["stage"] in stages and (e["volume_id"] is None or e["volume_id"] in ids)]
+
+
 def _standing(stage: flow.Stage | None, state: dict, role: str) -> dict | None:
     """지금 서 있는 단계와 이 계정이 거기서 할 수 있는 일."""
     if stage is None:
@@ -361,7 +472,7 @@ def _standing(stage: flow.Stage | None, state: dict, role: str) -> dict | None:
     return {"key": stage.key, "name": stage.name, "unit": stage.unit, "kind": stage.kind, "state": state["state"], "at": state["at"], "by": state["by"],
             "note": state["note"], "turn": [ROLE_NAMES.get(r, r) for r in flow.turn(stage, state["state"])],
             "turn_roles": list(flow.turn(stage, state["state"])),
-            "manuscript": stage.manuscript, "review": stage.review, "tools": list(stage.tools), "actions": flow.available(stage, state["state"], role)}
+            "manuscript": stage.manuscript, "review": stage.review, "tools": list(stage.tools), "document": stage.document, "actions": flow.available(stage, state["state"], role)}
 
 
 def get_case(dsn: str, case_id: str, account: dict) -> dict | None:
@@ -383,6 +494,7 @@ def get_case(dsn: str, case_id: str, account: dict) -> dict | None:
         seen = [str(v["id"]) for v in volumes]
         versions = _versions(connection, seen)
         linked = _linked(connection, seen)
+        documents = _case_files(connection, case_id)
         rows = connection.execute(
             "SELECT e.id, e.at, e.actor, e.proxy, e.volume_id, e.stage, e.action, e.note, e.version_id, v.module_code FROM case_events e "
             "LEFT JOIN case_volumes v ON v.id = e.volume_id WHERE e.case_id = %s AND (e.volume_id IS NULL OR e.volume_id = ANY(%s::uuid[])) "
@@ -393,6 +505,12 @@ def get_case(dsn: str, case_id: str, account: dict) -> dict | None:
         stage_states = _volume_states(current, str(volume["id"]))
         every = {**case_states, **stage_states}
         standing = flow.current(every)
+        mine = versions.get(str(volume["id"]), [])
+        for key, state in stage_states.items():     # 완료한 뒤에 그 단계의 판본·검수·붙은 기록이 새로 생겼는가 — 일관성 규칙 4
+            if state["state"] == flow.DONE and state["at"]:
+                later = [v["at"] for v in mine if v["stage"] == key] + [v["review"]["at"] for v in mine if v["stage"] == key and v["review"]]
+                later += [item["at"] for item in linked.get((str(volume["id"]), key), [])]
+                stage_states[key] = {**state, "changed": any(at > state["at"] for at in later)}
         volume_rows.append({
             "id": str(volume["id"]), "module_code": volume["module_code"], "title": volume["title"],
             "author": {"id": str(volume["author_id"]), "name": volume["author_name"], "login": volume["author_login"], "org": volume["author_org"]}
@@ -408,7 +526,12 @@ def get_case(dsn: str, case_id: str, account: dict) -> dict | None:
                "action": row["action"], "action_name": flow.ACTIONS.get(row["action"]) or flow.NOTES.get(row["action"], row["action"]),
                "note": row["note"], "version_id": str(row["version_id"]) if row["version_id"] else None} for row in rows]
     case_standing = flow.current(case_states)
-    return {**case, "id": str(case["id"]), "volumes": volume_rows,
+    if role in flow.JUDGES:
+        volume_rows, events = _judge_view(role, volume_rows, events)
+        documents = {}
+        if not volume_rows:
+            return None
+    return {**case, "id": str(case["id"]), "volumes": volume_rows, "case_files": documents,
             "case_stages": case_states,
             "case_actions": {stage.key: _standing(stage, case_states[stage.key], role) for stage in flow.CASE_STAGES},
             "case_reopen": [stage.key for stage in flow.CASE_STAGES if flow.reopenable(stage, case_states[stage.key]["state"], role)],

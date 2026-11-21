@@ -105,7 +105,7 @@ def register(app: FastAPI, services: Services) -> None:
                 if roles:
                     raise ValueError("roles는 업로드할 때 지정합니다. upload 토큰과 함께 보낼 수 없습니다")
                 payload = _run(kept.files, check, module_code, group or None, stage=stage, roles=kept.assigned or None, image_dpi=image_dpi,
-                               work_stage=marked, version_id=kept.version_id)
+                               work_stage=marked, version_id=kept.version_id, case_file_id=kept.case_file_id)
                 own_and_link(request, store, "review", payload.id)
             else:
                 if group:
@@ -152,7 +152,8 @@ def register(app: FastAPI, services: Services) -> None:
         return int(value)
 
     def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None, *, stage: str = "",
-             roles: dict[str, str] | None = None, image_dpi: str = "", work_stage: int | None = None, version_id: str = "") -> ReviewResponse:
+             roles: dict[str, str] | None = None, image_dpi: str = "", work_stage: int | None = None, version_id: str = "",
+             case_file_id: str = "") -> ReviewResponse:
         paths = tuple(path for _, path in saved)
         config = None
         if check == "plan" and stage:
@@ -176,7 +177,12 @@ def register(app: FastAPI, services: Services) -> None:
         if version_id and stored.run_id is not None:     # 세분류 건의 판본으로 돌린 검수 — 그 판본에 붙인다. 붙이지 못하면 근거가 끊기므로 실패로 알린다
             from ncs_service import cases
 
-            cases.tag_review_version(store.dsn, stored.run_id, version_id)
+            if check != "plan":
+                cases.tag_review_version(store.dsn, stored.run_id, version_id)
+        if case_file_id and check == "plan" and stored.run_id is not None:     # 건의 개발계획서로 돌린 점검 — 그 문서에 붙인다
+            from ncs_service import cases
+
+            cases.tag_review_case_file(store.dsn, stored.run_id, case_file_id)
         saved_paths = (
             SavedPaths(folder=str(stored.directory), zip=str(stored.zip_path))
             if stored.directory is not None else None

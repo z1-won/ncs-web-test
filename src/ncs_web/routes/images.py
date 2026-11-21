@@ -90,6 +90,8 @@ def register(app: FastAPI, services: Services) -> None:
         named = [item for item in files if item.filename]
         if len(named) > LOAD_MAX_FILES:
             raise HTTPException(400, f"한 번에 {LOAD_MAX_FILES}개까지 올릴 수 있습니다")
+        if not check_only:
+            editor_only(request)
         by = actor(request, by)      # 로그인했으면 계정 이름 — 보낸 이름은 쓰지 않는다
         if not check_only and not by:
             raise HTTPException(400, "by(적재한 사람)가 필요합니다 — 변경 이력에 남습니다")
@@ -159,7 +161,16 @@ def register(app: FastAPI, services: Services) -> None:
     def image_file(image_id: str, upscaled: bool = False) -> Response:
         return file_response(run(image_store.image_file, image_id, upscaled=upscaled))
 
+    def editor_only(request: Request) -> None:
+        """이미지 저작권 DB를 바꾸는 일(적재, 권리 정보 수정, 확정, 증빙)은 에디터와 직능연 계정만 한다. 보는 것은 로그인한 누구나."""
+        from ncs_service.flow import MANAGER_ROLES
+
+        account = getattr(request.state, "account", None)
+        if account is not None and account.get("role") not in MANAGER_ROLES:
+            raise HTTPException(403, "이미지 저작권 DB를 바꾸는 일은 에디터와 직능연 계정만 할 수 있습니다")
+
     def who(request: Request, given: str) -> str:
+        editor_only(request)
         name = actor(request, given)
         if not name:
             raise HTTPException(400, "변경한 사람을 알 수 없습니다. 로그인해 주세요")

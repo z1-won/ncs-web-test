@@ -70,7 +70,7 @@ def scope_of(request, store):
     return access.scope(store.dsn, viewer(request))
 
 
-def own_and_link(request, store, tool: str, record_id: str | None, case_volume: str = "", case_stage: str = "") -> bool:
+def own_and_link(request, store, tool: str, record_id: str | None, case_volume: str = "", case_stage: str = "", case_version: str = "") -> bool:
     """방금 남긴 기록에 돌린 계정을 적고, 세분류 건의 권·단계에서 열어 돌린 것이면 거기에 붙인다. 붙였으면 True.
     tool = review / volume / opinion / rights. 기록이 없으면(저장 실패, DB 없음) 아무것도 하지 않는다."""
     from ncs_service import access
@@ -82,7 +82,7 @@ def own_and_link(request, store, tool: str, record_id: str | None, case_volume: 
     try:
         access.set_owner(store.dsn, kind, record_id, account.get("id") if account else None)
         if case_volume and case_stage and tool in access.LINKABLE:
-            return access.link(store.dsn, tool, record_id, case_volume, case_stage, account)
+            return access.link(store.dsn, tool, record_id, case_volume, case_stage, account, case_version)
     except Exception as error:      # 부가 정보라 결과를 막지 않는다
         logger.exception("기록의 계정·단계 표시 실패: %s", error)
     return False
