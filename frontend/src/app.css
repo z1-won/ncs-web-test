@@ -77,6 +77,11 @@ html { scrollbar-gutter: stable; }
 .review-form .file-slot .file-info { gap: var(--krds-gap-3); }
 .review-form .file-slot .file-name { min-width: 0; font-size: var(--krds-pc-font-size-body-small); word-break: break-all; }   /* 파일명은 띄어쓰기가 없어 낱말 단위로는 한 줄 말줄임이 첫 토막에서 끊긴다 */
 .review-form .file-slot .file-hint-invalid { font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+/* 끌어다 놓기: 파일이 칸 위에 있는 동안 칸을 점선 테두리와 옅은 바탕으로 강조한다(KRDS 파일 업로드 영역의 점선과 같은 뜻). 테두리는 outline이라 칸 크기가 변하지 않는다 */
+.review-form .form-group.file-drop { border-radius: var(--krds-radius-medium2); }
+.review-form .form-group.file-drop.is-dragover { outline: 0.2rem dashed var(--krds-light-color-border-primary); outline-offset: var(--krds-gap-2); background: var(--krds-light-color-surface-secondary-subtler); }
+.review-form .form-group.file-drop.is-dragover * { pointer-events: none; }   /* 놓는 동안 안쪽 요소가 끌기 이벤트를 가로채 강조가 깜빡이지 않게 */
+.review-form .file-slot .file-drop-cue { margin: var(--krds-gap-2) 0 0; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
 .selected-files { margin-top: var(--krds-gap-7); }
 /* 결과 머리글(ResultHead): 1줄 판정·설명, 2줄 액션 바. 어떤 검수든 버튼 자리가 같다 */
 .result-head { display: flex; flex-direction: column; gap: var(--krds-gap-4); margin-top: var(--krds-gap-9); }

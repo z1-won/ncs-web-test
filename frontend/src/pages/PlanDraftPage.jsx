@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
 import { ComponentResult } from "../components/AllResults.jsx";
+import { FileSlot } from "../components/FileSlot.jsx";
 import { Badge, Spinner } from "../components/Badge.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
@@ -43,7 +44,6 @@ export default function PlanDraftPage() {
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState(null);
   const [review, setReview] = useState(null);        // { data: /api/review 응답(check=plan), stage: 그때 고른 단계 }
-  const reviewInput = useRef(null);                  // 숨긴 <input type=file> — 진짜 <button>이 대신 연다
   const aborter = useRef(null);                      // 진행 중 점검의 AbortController — 취소 버튼
 
   useEffect(() => {
@@ -244,15 +244,9 @@ export default function PlanDraftPage() {
         <h2 className="section-title">개발계획서 점검</h2>
         <p className="meta section-desc">작성한 개발계획서(hwp, hwpx)를 올리면 점검 ①~⑩을 실행합니다. 원고는 필요하지 않습니다.</p>
         <form className="fieldset review-form" onSubmit={runReview}>
-          <div className="form-group">
-            <div className="form-tit"><label htmlFor="plan-file">개발계획서 파일 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></label></div>
-            <div className="form-conts">
-              <input ref={reviewInput} id="plan-file" type="file" accept=".hwp,.hwpx" className="sr-only" tabIndex={-1} aria-describedby="plan-file-hint"
-                     onChange={(e) => { setReviewFile(e.target.files?.[0] || null); setReviewError(null); }} />
-              <button type="button" className="krds-btn large tertiary" disabled={reviewing} onClick={() => reviewInput.current?.click()}>파일 선택</button>
-            </div>
-            <p className="form-hint" id="plan-file-hint">{reviewFile ? reviewFile.name : "선택된 파일 없음"}</p>
-          </div>
+          {/* 다른 페이지의 업로드 칸과 같은 부품 — 파일 선택, 끌어다 놓기, 고른 파일 표시와 삭제 */}
+          <FileSlot id="plan-file" label="개발계획서 파일" required accept=".hwp,.hwpx" file={reviewFile} disabled={reviewing}
+                    onChange={(picked) => { setReviewFile(picked); setReviewError(null); }} />
 
           <div className="form-group">
             <div className="form-tit"><span id="plan-stage-label">점검 단계</span></div>
