@@ -145,7 +145,7 @@ export default function RightsPage() {
             <div className="form-conts krds-check-area chk-column rights-checks" role="group" aria-labelledby="rights-signed-label">
               {check("transferAuthor", "집필자 지식재산권 양도 동의서", "원고 집필 계약서 붙임 4")}
               {check("transferMaker", "제작자 지식재산권 양도 동의서", "사진·삽화 제작 계약서 붙임 3")}
-              {check("pledge", "생성형 AI 결과물 집필자 서약서")}
+              {check("pledge", "생성형 AI 결과물 집필자 서약서", "생성형 AI를 활용한 그림이 있을 때 제출")}
             </div>
             <p className="form-hint">서명 문서는 파일에서 읽지 못하므로 제출 여부를 직접 표시합니다.</p>
           </div>
