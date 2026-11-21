@@ -168,6 +168,8 @@ details.raw pre {
 .check-select .drop-menu { left: 0; right: 0; width: 100%; min-width: 0; transform: none; }
 .check-select .drop-menu[hidden] { display: none; }
 .check-select.is-open .drop-menu { display: block; }
+/* 펼친 목록은 푸터(KRDS #krds-footer: position relative, z-index 50) 위에 그린다 — 내용이 짧은 페이지에서 목록이 푸터 밑으로 들어가 가려지지 않게. 고정 헤더·TOP 버튼(100)보다는 아래 */
+.check-select.is-open .drop-menu { z-index: 60; }
 .check-select .drop-menu::before { left: 2.4rem; margin-left: 0; }
 .check-select .drop-list { display: flex; flex-direction: column; gap: var(--krds-gap-1); max-height: 32rem; overflow: auto; }
 .check-select .drop-list .item-link { height: var(--krds-dropdown--list-item-height); border: 0; background: none; text-align: left; cursor: pointer; }
