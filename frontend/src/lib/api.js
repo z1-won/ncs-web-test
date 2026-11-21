@@ -204,6 +204,11 @@ export const api = {
     form.append("include_appendix", includeAppendix ? "true" : "false");
     return request("/api/volume", { method: "POST", body: form, signal });
   },
+  // 원고 진행 현황(REQ-02-007, DB 모드에서만 — /api/health의 history): 원고(모듈 코드) 목록과 한 원고의 단계·진행도
+  manuscripts: {
+    list: () => request("/api/manuscripts"),
+    get: (code) => request(`/api/manuscripts/${encodeURIComponent(code)}`),
+  },
   // 원고 분량 산정 이력(DB 모드에서만 — /api/health의 history). get은 방금 산정한 결과와 같은 모양(+ id, created_at, 입력)
   volumes: {
     list: () => request("/api/volumes"),

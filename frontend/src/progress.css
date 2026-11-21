@@ -1,0 +1,31 @@
+/* 원고 진행 현황(/progress) — 단계 7개를 세로 줄로 보인다. 색은 KRDS 변수만 쓴다. */
+.progress-steps { list-style: none; margin: 0 0 var(--krds-gap-6); padding: 0; }
+.progress-steps > li {
+  position: relative; display: grid; grid-template-columns: 4rem 1fr; gap: var(--krds-gap-4);
+  padding-bottom: var(--krds-gap-5);
+}
+.progress-steps > li::before {   /* 단계 사이를 잇는 선 */
+  content: ""; position: absolute; left: 1.95rem; top: 4rem; bottom: 0; width: 2px;
+  background: var(--krds-light-color-border-gray-light);
+}
+.progress-steps > li:last-child { padding-bottom: 0; }
+.progress-steps > li:last-child::before { display: none; }
+.progress-step-no {
+  display: flex; align-items: center; justify-content: center; width: 4rem; height: 4rem; border-radius: 50%;
+  border: 2px solid var(--krds-light-color-border-gray); background: var(--krds-light-color-surface-white);
+  color: var(--krds-light-color-text-subtle); font-weight: var(--krds-font-weight-bold);
+}
+.progress-steps > li.is-recorded .progress-step-no {
+  border-color: var(--krds-light-color-border-primary); background: var(--krds-light-color-surface-primary-subtler);
+  color: var(--krds-light-color-text-primary);
+}
+.progress-step-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); min-height: 4rem; }
+.progress-step-head h3 { margin: 0; font-size: var(--krds-pc-font-size-heading-small); }
+.progress-step-body p { margin: var(--krds-gap-1) 0 0; }
+.progress-list-actions { white-space: nowrap; }
+@media (max-width: 600px) {
+  .progress-steps > li { grid-template-columns: 3.2rem 1fr; gap: var(--krds-gap-3); }
+  .progress-step-no { width: 3.2rem; height: 3.2rem; }
+  .progress-steps > li::before { left: 1.55rem; top: 3.2rem; }
+  .progress-step-head { min-height: 3.2rem; }
+}

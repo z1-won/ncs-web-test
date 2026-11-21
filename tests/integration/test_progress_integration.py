@@ -82,7 +82,7 @@ class ProgressIntegrationTests(unittest.TestCase):
             detail = client.get(f"/api/manuscripts/{CODE}")
             self.assertEqual(detail.status_code, 200, detail.text)
             self.assertEqual(len(detail.json()["단계"]), 7)
-            self.assertEqual(client.get("/api/manuscripts/LM0000000000_26v1").status_code, 404)
+            self.assertEqual(client.get("/api/manuscripts/LM9999999902_26v1").status_code, 404)
             self.assertEqual(client.get("/api/manuscripts/엉뚱한값").status_code, 400)
 
 if __name__ == "__main__":
