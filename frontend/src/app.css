@@ -372,11 +372,11 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
   .form-section-grid > .form-group { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: subgrid; grid-row: span 3; row-gap: var(--krds-form-group--gap); align-content: start; }
 }
 .form-section-grid > .form-group > * { min-width: 0; }
-/* 입력 폭은 두 단계만 쓴다: 짧은 칸(32rem — 날짜·셀렉트)과 열 전체(놓는 자리·체크박스 줄). 모든 입력이 열 폭을 꽉 채우면 내용에 비해 칸이 길어 화면이 무겁고,
-   입력마다 폭이 다르면 오른쪽 끝이 들쭉날쭉하다. 32rem은 셀렉트의 가장 긴 선택지가 잘리지 않는 폭이다.
+/* 입력 폭은 두 단계만 쓴다: 짧은 칸(36rem — 날짜·셀렉트·한 줄 글 입력)과 열 전체(놓는 자리·체크박스 줄). 모든 입력이 열 폭을 꽉 채우면 내용에 비해 칸이 길어 화면이 무겁고,
+   입력마다 폭이 다르면 오른쪽 끝이 들쭉날쭉하다. 36rem은 셀렉트의 가장 긴 선택지(원고 검수의 ‘전체(구성요소 10개를 차례로 검수)’)가 한 줄에 들어가는 폭이다.
    칸(.form-group)은 격자 열을 그대로 차지하므로 줄 맞춤과 도움말 폭은 그대로다. 한 열로 쌓이는 좁은 화면에서는 누르기 쉽게 폭 전체를 쓴다 */
 @media (min-width: 600px) {
-  .form-section-grid .calendar-input, .form-section-grid .check-select { max-width: 32rem; }
+  .form-section-grid .calendar-input, .form-section-grid .check-select, .form-section-grid .form-conts > input.krds-input { max-width: 36rem; }
 }
 /* 실행 줄: 알림은 폭 전체, 버튼은 오른쪽 끝(글자 폭, 최소 16rem) */
 .review-form.is-sectioned > .form-actions { align-items: stretch; }

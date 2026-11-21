@@ -248,7 +248,11 @@ export default function ReviewPage() {
         원고(hwp, hwpx)를 올리면 검수 확인서 양식에 맞춰 항목별 검수 결과를 보여 줍니다. 개발계획서와 출력본 PDF는 선택 사항이며 각자의 칸에 따로 올립니다. 개발계획서를 올리면 ‘위치’와 대조 항목을, 원고를 한글에서 PDF로 저장한 출력본을 올리면 차례 ⑦(쪽수)을 함께 검수합니다.
       </p>
 
-      <form id="review-run" className="fieldset review-form nav-anchor" onSubmit={submit}>
+      {/* 입력 묶음은 구획 셋: 파일 올리기 → 검수 조건 → 실행(권리 증빙 점검과 같은 구조). 구획 안에서만 3열 격자(.form-section-grid)를 쓴다 */}
+      <form id="review-run" className="fieldset review-form is-sectioned nav-anchor" onSubmit={submit}>
+        <div className="form-section" role="group" aria-labelledby="review-files-title">
+        <h2 className="form-section-title" id="review-files-title">파일 올리기</h2>
+        <div className="form-section-grid">
         {/* 업로드 칸 셋(#13): 원고(필수) / 개발계획서 / 출력본 PDF. 칸마다 따로 고르고 지울 수 있어, 개발계획서는 두고 원고만 바꿔 올릴 수 있다.
             역할은 칸이 정한다 — 서버는 내용으로 판별하지 않고 칸 이름을 그대로 쓴다. 고른 즉시 올려 읽을 수 있는 파일인지 확인한다 */}
         {SLOTS.map((slot) => (
@@ -263,14 +267,18 @@ export default function ReviewPage() {
                     }
                     hint={
                       slot.role === "plan" && !slots.plan && !needsPlan
-                        ? (check === ALL_CHECK ? "개발계획서가 없어도 검수할 수 있습니다. 이때 ‘위치’는 검수하지 않고, 개발계획서와 대조하는 항목은 ‘판단불가’로 표시합니다." : "개발계획서가 없어도 검수할 수 있습니다. 이때 개발계획서와 대조하는 항목은 ‘판단불가’로 표시합니다.")
+                        ? "hwp, hwpx. 없으면 대조 항목은 ‘판단불가’로 남습니다."
                       : slot.role === "print" && !slots.print
-                        ? (usesPrint ? "없어도 모든 검수가 실행됩니다. 다만 출력본 PDF가 없으면 차례 ⑦(쪽수)은 검수할 수 없어 판단불가로 남습니다. 원고를 한글에서 PDF로 저장해 올리세요."
-                                     : "없어도 됩니다. 이 구성요소는 출력본 PDF를 쓰지 않습니다(차례 ⑦ 쪽수 확인에만 씁니다).")
+                        ? (usesPrint ? "pdf. 없으면 차례 ⑦(쪽수)은 ‘판단불가’로 남습니다." : "pdf. 이 구성요소는 출력본 PDF를 쓰지 않습니다.")
                       : null
                     } />
         ))}
+        </div>
+        </div>
 
+        <div className="form-section" role="group" aria-labelledby="review-options-title">
+        <h2 className="form-section-title" id="review-options-title">검수 조건</h2>
+        <div className="form-section-grid">
         <div className="form-group">
           <div className="form-tit"><label htmlFor="check">검수 구성요소</label></div>
           <div className="form-conts">
@@ -288,7 +296,7 @@ export default function ReviewPage() {
           <div className="form-conts">
             <input id="module-code" type="text" className="krds-input" placeholder="예: LM1203020201_24v3" value={moduleCode} onChange={(e) => setModuleCode(e.target.value)} />
           </div>
-          <p className="form-hint">비우면 원고 파일명에서 추출</p>
+          <p className="form-hint">비워 두면 원고 파일 이름에서 찾습니다.</p>
         </div>
 
         {/* 이미지 해상도 기준 — 지침에 숫자 기준이 없어 고르게 한다. 기타 ⑤·⑧만 쓰므로 전체·기타를 고를 때만 보인다 */}
@@ -298,13 +306,14 @@ export default function ReviewPage() {
             <div className="form-conts">
               <KrdsSelect id="image-dpi" value={imageDpi} options={IMAGE_DPI_OPTIONS} onChange={setImageDpi} title="이미지 해상도 기준 선택" describedBy="image-dpi-hint" />
             </div>
-            <p className="form-hint" id="image-dpi-hint">기타 ⑤, ⑧ 항목에 적용합니다. 이 값보다 해상도가 낮은 그림은 ‘판단불가’로 표시합니다.</p>
+            <p className="form-hint" id="image-dpi-hint">기타 ⑤, ⑧에 적용합니다. 이보다 낮은 그림은 ‘판단불가’입니다.</p>
           </div>
         )}
 
-        <div className="form-group form-actions">
-          {/* 다른 칸의 레이블(form-tit) 높이만큼 빈 자리 — 같은 줄의 입력칸과 버튼 윗선·높이가 맞게 */}
-          <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
+        </div>
+        </div>
+
+        <div className="form-actions">
           <div className="run-buttons">
             <button className="krds-btn primary large" type="submit" disabled={busy || upload.status === "uploading"}>
               {busy ? "검수하는 중" : check === ALL_CHECK ? "전체 검수 실행" : "검수 실행"}
