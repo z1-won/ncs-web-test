@@ -2,7 +2,7 @@
 
 산정 규칙(계약서 제13조 4항, 요구사항 표준 지침)
 - 1행에 1자 이상 → 1행. 행 띄움·문단 나누기(빈 문단)도 1행. 출처를 밝힌 인용·캡션 글도 넣는다. 시각 자료는 뺀다.
-- 쪽: 줄 배치를 읽은 원고는 물리 쪽마다 산정 대상이 차지한 높이가 본문 높이의 ½ 이상이면 1쪽, 아니면 그 쪽의 행을 '행'으로 남긴다.
+- 쪽: 전체 행 ÷ 쪽당 행 수. ½쪽 규칙은 끝수에만 본다(2026-11-21 결정) — 끝수가 ½ 이상이면 1쪽. 물리 쪽마다 ½을 본 값은 비교 표에만 둔다.
   기입 분량(매) = 쪽 + (남은 행 ÷ 쪽당 행 수, ½ 이상 올림). 배치 정보가 없으면 전체 행 ÷ 쪽당 행 수(½ 이상 올림)로 '추정'한다.
 - 변경 분량: 변경된 행만 같은 방식으로 센다.
 - 출력본 PDF를 함께 주면 전체 쪽 수·구성별 쪽 범위·쪽별 채움 높이를 PDF에서 재고(printed.py) 그 기입 분량을 산정에 쓴다.
@@ -48,25 +48,28 @@ def tally(lines: list[Line], layout: Layout, config: VolumeConfig) -> dict:
             page, top = page + 1, 0.0
     full = {p for p, h in fill.items() if h >= config.half_page * body}
     rest = sum(n for p, n in count.items() if p not in full)
-    return {"쪽": len(full), "행": rest, "기입 분량": len(full) + round_half_up(rest / lpp),
-            "쪽 환산": round(sum(fill.values()) / body, 2), "행 합계": total}
+    pages, left = divmod(total, lpp)
+    # ½쪽 규칙은 끝수에만 본다(2026-11-21 결정): 전체 행 ÷ 쪽당 행 수의 끝수가 ½ 이상이면 1쪽. 쪽마다 본 값은 비교용으로만 남긴다.
+    return {"쪽": pages, "행": left, "기입 분량": round_half_up(total / lpp),
+            "쪽 환산": round(sum(fill.values()) / body, 2), "행 합계": total, "쪽마다 기준": {"쪽": len(full), "행": rest}}
 
 
 def readings(total: dict, layout: Layout) -> dict | None:
-    """계약서 '½쪽 이상은 1쪽'을 읽는 법에 따라 기입 분량이 얼마나 달라지는지(줄 배치를 읽은 원고만). 산정은 첫 줄(쪽별 기준)을 쓴다.
+    """계약서 '½쪽 이상은 1쪽'을 읽는 법에 따라 기입 분량이 얼마나 달라지는지(줄 배치를 읽은 원고만). 산정은 첫 줄(끝수 기준)을 쓴다.
 
-    계약서 문구만으로는 ½쪽을 쪽마다 볼지 끝수에만 볼지 정해지지 않아(2026-11-21 현재 확인 못 함), 정산 전에 담당자가 고를 수 있게 나란히 둔다.
+    끝수에만 보기로 정했다(2026-11-21 결정). 다른 읽는 법의 값은 정산 때 견줘 볼 수 있게 나란히 둔다.
     """
     if not layout.measured:
         return None
     lpp = layout.lines_per_page
+    each = total["쪽마다 기준"]
     rows = [
-        {"해석": "쪽마다 ½ 이상이면 1쪽, 나머지 쪽의 행은 쪽으로 환산(지금 산정)", "기입 분량": total["기입 분량"],
-         "셈": f"{total['쪽']}쪽 + {total['행']}행 ÷ {lpp}행"},
-        {"해석": "쪽마다 ½ 이상이면 1쪽, ½ 미만인 쪽은 세지 않음", "기입 분량": total["쪽"], "셈": f"{total['쪽']}쪽"},
-        {"해석": "전체 행을 쪽으로 환산하고 끝수만 ½ 이상 올림", "기입 분량": round_half_up(total["행 합계"] / lpp),
+        {"해석": "전체 행을 쪽으로 환산하고 끝수만 ½ 이상 올림(지금 산정)", "기입 분량": total["기입 분량"],
          "셈": f"{total['행 합계']}행 ÷ {lpp}행"},
         {"해석": "차지한 높이를 쪽으로 환산하고 끝수만 ½ 이상 올림", "기입 분량": round_half_up(total["쪽 환산"]), "셈": f"{total['쪽 환산']}쪽"},
+        {"해석": "쪽마다 ½ 이상이면 1쪽, 나머지 쪽의 행은 쪽으로 환산", "기입 분량": each["쪽"] + round_half_up(each["행"] / lpp),
+         "셈": f"{each['쪽']}쪽 + {each['행']}행 ÷ {lpp}행"},
+        {"해석": "쪽마다 ½ 이상이면 1쪽, ½ 미만인 쪽은 세지 않음", "기입 분량": each["쪽"], "셈": f"{each['쪽']}쪽"},
     ]
     values = [row["기입 분량"] for row in rows]
     return {"행": rows, "최소": min(values), "최대": max(values), "차이": max(values) - min(values)}
@@ -142,7 +145,7 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
             "쪽당 행 수": layout.lines_per_page,
             "줄 간격": f"{layout.pitch} HWPUNIT ({round(layout.pitch * MM_PER_UNIT, 2)}㎜)"
                       + (" — 이 원고에서 가장 많은 본문 줄 간격" if layout.measured else " — 설정값"),
-            "½쪽 기준": f"쪽마다 산정 대상 높이 ≥ {config.half_page:g} × 본문 높이면 1쪽",
+            "½쪽 기준": "전체 행 ÷ 쪽당 행 수의 끝수가 ½ 이상이면 1쪽(끝수에만 적용, 2026-11-21 결정)",
             "부록": "포함(계약서 제13조 4항 ①)" if config.include_appendix else "제외",
         },
         "물리 쪽 수": layout.pages if layout.measured else None,
@@ -154,7 +157,7 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
     spread = result["½쪽 해석 비교"]
     if spread and spread["차이"]:
         notes.append(f"'½쪽 이상은 1쪽'을 읽는 법에 따라 기입 분량이 {spread['최소']}~{spread['최대']}매로 달라집니다(아래 '½쪽 규칙 해석 비교'). "
-                     "지금 산정은 쪽마다 ½ 기준을 적용한 값입니다. 정산 전에 기준을 확인하세요.")
+                     "지금 산정은 끝수에만 ½ 기준을 적용한 값입니다(2026-11-21 결정).")
     if print_pdf is not None:
         result["출력본"] = _printed(print_pdf, layout, rows, total, config)
         if not result["출력본"]["사용"]:

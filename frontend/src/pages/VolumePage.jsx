@@ -95,7 +95,7 @@ export default function VolumePage() {
       <h1 className="page-title">원고 분량 산정</h1>
       <p className="page-desc">
         최종 원고(hwp, hwpx)를 올리면 집필료 산정 기준(계약서 제13조 4항)대로 구성별 행과 쪽을 세어 계약서에 기입할 분량(매)을 냅니다.
-        1행에 1자 이상이면 1행, ½쪽 이상이면 1쪽으로 셉니다. 행 띄움, 표, 출처를 밝힌 인용은 넣고 사진과 삽화 등 시각 자료, 표지, ‘NCS학습모듈의 이해’, 개발진은 뺍니다.
+        1행에 1자 이상이면 1행으로 세고, 전체 분량의 끝수가 ½쪽 이상이면 1쪽으로 올립니다. 행 띄움, 표, 출처를 밝힌 인용은 넣고 사진과 삽화 등 시각 자료, 표지, ‘NCS학습모듈의 이해’, 개발진은 뺍니다.
         기존 학습모듈 원고를 함께 올리면 올해 바뀐 분량을 따로 셉니다. 올린 파일은 계산 뒤 바로 지웁니다.
         {history && " 산정 결과와 입력한 값은 산정 이력에 저장합니다. 원고 파일은 저장하지 않고 파일 이름만 기록합니다."}
       </p>
@@ -402,8 +402,8 @@ function PrintedResult({ printed }) {
         <summary>쪽별 채움 ({printed.쪽별.length}쪽)</summary>
         <div className="krds-table-wrap">
           <table className="tbl col data">
-            <caption>출력본 쪽마다 산정 대상이 차지한 높이(본문 높이 대비)와 ½쪽 규칙 결과</caption>
-            <thead><tr><th scope="col">쪽</th><th scope="col">인쇄 쪽</th><th scope="col">구성</th><th scope="col">채움</th><th scope="col">인정</th></tr></thead>
+            <caption>출력본 쪽마다 산정 대상이 차지한 높이(본문 높이 대비)와 산정 반영 여부</caption>
+            <thead><tr><th scope="col">쪽</th><th scope="col">인쇄 쪽</th><th scope="col">구성</th><th scope="col">채움</th><th scope="col">산정</th></tr></thead>
             <tbody>
               {printed.쪽별.map((row) => (
                 <tr key={row.쪽} className={row.인정 === "제외" ? "muted" : ""}>

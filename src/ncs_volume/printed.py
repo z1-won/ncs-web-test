@@ -4,10 +4,11 @@
 - 전체 쪽 수: PDF 쪽 수 그대로(측정).
 - 구성별 쪽 범위: PDF 본문 줄(본문 띠 안)과 그림 위치를 한글 원고와 같은 구성 나누기(segments.assign)에 넣어 찾는다(측정).
   꼬리 구성의 제목이 글 없는 배너 그림인 것도 같다 — 평가 뒤 쪽 맨 위 그림을 차례 순서대로 다음 꼬리 구성의 시작으로 본다.
-- 쪽별 채움 높이(½쪽 규칙): PDF 글자의 y좌표와 표 테두리(사각형)·그림 상자의 y좌표로 잰다(측정).
+- 쪽별 채움 높이: PDF 글자의 y좌표와 표 테두리(사각형)·그림 상자의 y좌표로 잰다(측정).
   쪽 안 산정 대상의 맨 위 ~ 맨 아래 높이에서, 글이 겹치지 않는 그림 자리만 뺀다. 한 줄은 줄 간격(한글 원고의 본문 줄 간격) 높이를 차지한다고 본다.
 - 시각 자료 제외: PDF의 그림(이미지 XObject) 상자로 잰다(측정). 선으로 그린 도형·차트, 표 안 그림 중 글이 겹치는 것은 가리지 못한다.
-- 남은 행(½쪽 미만인 쪽): PDF에는 빈 줄·표 행 구조가 없으므로 그 쪽 채움 높이 ÷ 줄 간격으로 계산한다(계산).
+- 기입 분량(½쪽 규칙): 쪽별 채움 높이를 모두 더한 쪽 수의 끝수가 ½ 이상이면 1쪽(끝수에만 적용, 2026-11-21 결정). PDF에는 빈 줄·표 행 구조가
+  없으므로 남은 행은 끝수 × 쪽당 행 수로 계산한다(계산).
 - 행 합계·변경 행: 한글 줄 배치(PDF로는 바뀐 행을 가릴 수 없다).
 PDF 글·쪽 번호·모듈 코드 읽기는 ncs_core.pdf.load_pdf, 좌표 읽기만 여기서 pypdf로 한다(선택 설치, 없으면 PdfUnavailable).
 """
@@ -294,23 +295,18 @@ def measure_printed(path: Path | str, layout: Layout, hwp_rows: list[dict], hwp_
 
     pitch = layout.pitch * PT_PER_UNIT
     lpp = layout.lines_per_page
-    full_pages, rest, total_fill, visual_total = [], 0.0, 0.0, 0.0
+    total_fill, visual_total = 0.0, 0.0
     by_segment: dict[str, dict] = {}
     for page in printed.pages:
         counted = [i for i in page.items if config.counted(i.segment)]
         height, visual = fill(counted, pitch)
         height = min(height, page.body)
         ratio_page = height / page.body if page.body else 0.0
-        is_full = bool(counted) and height >= config.half_page * page.body
-        if is_full:
-            full_pages.append(page.index)
-        else:
-            rest += height
         total_fill += height / page.body if page.body else 0.0
         visual_total += visual / page.body if page.body else 0.0
         names = list(dict.fromkeys(i.segment for i in page.items if i.segment))
         out["쪽별"].append({"쪽": page.index + 1, "인쇄 쪽": page.folio, "구성": " · ".join(names),
-                           "채움": round(ratio_page, 2), "인정": "1쪽" if is_full else ("행" if counted else "제외")})
+                           "채움": round(ratio_page, 2), "인정": "반영" if counted else "제외"})
         for name in names:
             own = [i for i in page.items if i.segment == name]
             seg_height, seg_visual = fill(own, pitch)
@@ -319,7 +315,6 @@ def measure_printed(path: Path | str, layout: Layout, hwp_rows: list[dict], hwp_
             entry["인쇄 쪽"].append(page.folio)
             entry["높이"] += seg_height / page.body
             entry["그림"] += seg_visual / page.body
-    rest_lines = round(rest / pitch) if pitch else 0
     hwp_by = {row["구성"]: row for row in hwp_rows}
     for name, counted in SEGMENTS:
         entry, hwp = by_segment.get(name), hwp_by.get(name)
@@ -342,18 +337,21 @@ def measure_printed(path: Path | str, layout: Layout, hwp_rows: list[dict], hwp_
         out["알림"].append("한글 원고에는 있으나 출력본에서 찾지 못한 구성: " + ", ".join(missing))
     if extra:
         out["알림"].append("출력본에서만 찾은 구성(한글 원고에서는 제목을 읽지 못함): " + ", ".join(extra))
-    entry = len(full_pages) + round_half_up(rest_lines / lpp)
-    out["합계"] = {"쪽": len(full_pages), "행": rest_lines, "기입 분량": entry, "쪽 환산": round(total_fill, 2),
+    # ½쪽 규칙은 끝수에만 본다(2026-11-21 결정): 쪽별 채움 높이의 합(쪽)에서 끝수가 ½ 이상이면 1쪽
+    whole = int(total_fill)
+    rest_lines = round((total_fill - whole) * lpp)
+    entry = round_half_up(total_fill)
+    out["합계"] = {"쪽": whole, "행": rest_lines, "기입 분량": entry, "쪽 환산": round(total_fill, 2),
                   "시각 자료 제외(쪽)": round(visual_total, 2),
                   "한글 계산 기입 분량": hwp_total["기입 분량"], "차이": entry - hwp_total["기입 분량"]}
     out["측정 구분"] = [
         {"항목": "전체 쪽 수", "방법": "측정", "설명": "출력본 PDF의 쪽 수"},
         {"항목": "구성별 쪽 범위", "방법": "측정", "설명": "출력본 본문 줄·그림 위치로 구성 제목(배너 그림 포함)이 시작하는 쪽"},
-        {"항목": "쪽별 채움 높이(½쪽 규칙)", "방법": "측정",
+        {"항목": "쪽별 채움 높이", "방법": "측정",
          "설명": f"PDF 글자·표 테두리·그림의 y좌표 — 본문 띠 {config.print_top_mm:g}㎜~{config.print_bottom_mm:g}㎜ 안, 한 줄 = {pitch:g}pt"},
         {"항목": "시각 자료 제외", "방법": "측정", "설명": "PDF 그림(이미지) 상자 중 글과 겹치지 않는 높이. 선으로 그린 도형·차트는 가리지 못함"},
-        {"항목": "남은 행(½쪽 미만인 쪽)", "방법": "계산",
-         "설명": f"그 쪽들의 채움 높이 합 ÷ 줄 간격 {pitch:g}pt(한글 원고 본문 줄 간격) — PDF에는 빈 줄·표 행 구조가 없음"},
+        {"항목": "기입 분량(½쪽 규칙)", "방법": "계산",
+         "설명": "쪽별 채움 높이를 모두 더한 쪽 수의 끝수가 ½ 이상이면 1쪽(끝수에만 적용, 2026-11-21 결정). 남은 행은 끝수 × 쪽당 행 수"},
         {"항목": "쪽당 행 수", "방법": "계산", "설명": f"본문 높이 ÷ 한글 원고 본문 줄 간격 = {lpp}행"},
         {"항목": "행 합계·변경 분량", "방법": "한글 줄 배치" if layout.measured else "추정",
          "설명": "PDF로는 행 구조와 바뀐 행을 가릴 수 없어 한글 원고 값을 씀"},

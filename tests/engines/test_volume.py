@@ -94,12 +94,16 @@ class Tally(unittest.TestCase):
     def layout(self, measured=True):
         return Layout(Path("x"), "hwpx", measured, [], 0, 34, PITCH)
 
-    def test_half_page_or_more_counts_one_page_and_less_stays_as_lines(self):
-        half = [Line(1, PITCH, 0, k * PITCH, 0, 0) for k in range(18)]          # 18 × 1980 = 35,640 ≥ ½쪽 → 1쪽
-        less = [Line(1, PITCH, 1, k * PITCH, 0, 0) for k in range(10)]          # 10행 → 행으로 남는다
+    def test_half_page_rule_applies_to_the_remainder_only(self):
+        """끝수에만 본다(2026-11-21 결정): 전체 행 ÷ 쪽당 행 수. 쪽마다 본 값은 '쪽마다 기준'에 비교용으로 남는다."""
+        half = [Line(1, PITCH, 0, k * PITCH, 0, 0) for k in range(18)]          # 18 × 1980 = 35,640 ≥ ½쪽
+        less = [Line(1, PITCH, 1, k * PITCH, 0, 0) for k in range(10)]
         out = tally(half + less, self.layout(), DEFAULT_CONFIG)
-        self.assertEqual((out["쪽"], out["행"], out["행 합계"]), (1, 10, 28))
-        self.assertEqual(out["기입 분량"], 1 + round_half_up(10 / 34))
+        self.assertEqual((out["쪽"], out["행"], out["행 합계"]), (0, 28, 28))
+        self.assertEqual(out["기입 분량"], 1)                                    # 28/34 = 0.82 → 1
+        self.assertEqual(out["쪽마다 기준"], {"쪽": 1, "행": 10})
+        few = tally(less, self.layout(), DEFAULT_CONFIG)                         # 10/34 = 0.29 → 0
+        self.assertEqual((few["쪽"], few["행"], few["기입 분량"]), (0, 10, 0))
 
     def test_readings_show_how_the_half_page_rule_changes_the_count(self):
         from ncs_volume.pipeline import readings
@@ -107,8 +111,9 @@ class Tally(unittest.TestCase):
         less = [Line(1, PITCH, p, k * PITCH, 0, 0) for p in (1, 2, 3) for k in range(16)]     # ½ 미만인 쪽 셋(16행씩)
         out = tally(half + less, self.layout(), DEFAULT_CONFIG)
         spread = readings(out, self.layout())
-        # 쪽마다 기준 1쪽 + 48행 환산(1.41 → 1) = 2, 버림 1, 전체 행 66 ÷ 34 = 1.94 → 2
-        self.assertEqual([row["기입 분량"] for row in spread["행"]][:3], [2, 1, 2])
+        # 전체 행 66 ÷ 34 = 1.94 → 2(산정), 높이 환산, 쪽마다 기준 1쪽 + 48행 환산(1.41 → 1) = 2, ½ 미만 쪽 버림 1
+        self.assertEqual([row["기입 분량"] for row in spread["행"]], [2, 2, 2, 1])
+        self.assertIn("지금 산정", spread["행"][0]["해석"])
         self.assertEqual(spread["행"][0]["기입 분량"], out["기입 분량"])
         self.assertEqual((spread["최소"], spread["최대"], spread["차이"]), (1, 2, 1))
         self.assertIsNone(readings(out, self.layout(measured=False)))
@@ -116,7 +121,8 @@ class Tally(unittest.TestCase):
     def test_tall_table_spills_onto_next_pages(self):
         table = Line(40, BODY * 2, 3, 0, 0, 0)                                   # 두 쪽짜리 표
         out = tally([table], self.layout(), DEFAULT_CONFIG)
-        self.assertEqual(out["쪽"], 2)
+        self.assertEqual(out["쪽마다 기준"]["쪽"], 2)
+        self.assertEqual(out["쪽 환산"], 2.0)
 
     def test_estimate_divides_lines_by_lines_per_page(self):
         lines = [Line(1, PITCH, -1, 0, 0, 0)] * 85

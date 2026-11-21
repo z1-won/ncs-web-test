@@ -146,15 +146,17 @@ class PrintedMeasure(unittest.TestCase):
         self.assertEqual(rows["참고 자료"]["출력본 쪽"], "9~9")          # 배너 그림으로 시작하는 꼬리 구성
         self.assertFalse(rows["표지"]["반영"])
         self.assertIsNotNone(rows["학습 — 필요 지식"]["차이"])
-        # ½쪽 규칙: 필요 지식(그림 자리 뺌)·수행 내용 두 쪽만 1쪽
-        self.assertEqual(printed["합계"]["쪽"], 2)
-        self.assertEqual([p["인정"] for p in printed["쪽별"]][4:6], ["1쪽", "1쪽"])
+        # ½쪽 규칙은 끝수에만: 쪽별 채움 높이를 더한 값의 정수 부분이 쪽, 끝수가 ½ 이상이면 1쪽
+        total = printed["합계"]
+        self.assertEqual(total["쪽"], int(total["쪽 환산"]))
+        self.assertEqual(total["기입 분량"], int(total["쪽 환산"] + 0.5))
+        self.assertEqual([p["인정"] for p in printed["쪽별"]][4:6], ["반영", "반영"])
         self.assertEqual(printed["쪽별"][0]["인정"], "제외")
         self.assertGreater(rows["학습 — 필요 지식"]["시각 자료 제외(쪽)"], 0)
         methods = {m["항목"]: m["방법"] for m in printed["측정 구분"]}
         self.assertEqual(methods["전체 쪽 수"], "측정")
-        self.assertEqual(methods["쪽별 채움 높이(½쪽 규칙)"], "측정")
-        self.assertEqual(methods["남은 행(½쪽 미만인 쪽)"], "계산")
+        self.assertEqual(methods["쪽별 채움 높이"], "측정")
+        self.assertEqual(methods["기입 분량(½쪽 규칙)"], "계산")
         # 산정에는 출력본 값을 쓰고, 한글 값은 합계에 그대로 남긴다
         self.assertEqual(result["채택 분량"]["기입 분량"], printed["합계"]["기입 분량"])
         self.assertIn("출력본", result["채택 분량"]["근거"])
