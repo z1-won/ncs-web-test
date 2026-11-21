@@ -72,8 +72,11 @@ html { scrollbar-gutter: stable; }
 .review-form .krds-btn { width: 100%; }
 /* 업로드 칸(FileSlot, #13): KRDS 파일 업로드(.krds-file-upload)의 파일 목록을 폼 한 칸 폭에 맞춘다 — 간격·안쪽 여백만 한 단계 작은 KRDS 토큰으로 */
 .review-form .file-slot { --krds-file-upload--gap: var(--krds-gap-3); --krds-file-upload--list-padding: var(--krds-padding-4) var(--krds-padding-5); }
-/* 놓는 자리(.file-upload): KRDS의 회색 면을 그대로 쓰되 세 칸을 한 줄에 둘 수 있게 안쪽 여백과 글자를 한 단계 줄인다. 버튼은 제출 버튼보다 낮은 강조(tertiary), 글자 폭만큼 */
-.review-form .file-slot .file-upload { gap: var(--krds-gap-3); padding: var(--krds-padding-6) var(--krds-padding-5); border-radius: var(--krds-radius-medium2); }
+/* 놓는 자리(.file-upload): 세 칸을 한 줄에 둘 수 있게 KRDS보다 안쪽 여백과 글자를 한 단계 줄인다. 버튼은 제출 버튼보다 낮은 강조(tertiary), 글자 폭만큼.
+   면은 KRDS 기본(차가운 회색 gray-10)이 아니라 이 화면이 면에 쓰는 갈회색(secondary-5 — 하위 메뉴·펼친 표 행과 같은 색), 옅은 면이라 테두리(입력 묶음 테두리와 같은 색)로 자리를 드러낸다.
+   나란한 칸의 높이가 같도록 안의 글은 모든 칸이 같고, 좁은 폭에서 글이 접혀도 함께 접힌다 */
+.review-form .file-slot .file-upload { gap: var(--krds-gap-3); padding: var(--krds-padding-6) var(--krds-padding-5); border-radius: var(--krds-radius-medium2);
+  border-color: var(--krds-light-color-border-gray-light); background-color: var(--krds-light-color-surface-secondary-subtler); }
 .review-form .file-slot .file-upload .txt { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
 .review-form .file-slot .file-upload .file-upload-btn-wrap, .review-form .file-slot .file-upload .krds-btn { width: auto; }
 .review-form .file-slot .upload-list .krds-btn { width: auto; white-space: nowrap; }

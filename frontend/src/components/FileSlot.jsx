@@ -140,9 +140,8 @@ function FileName({ file, nameId }) {
 function DropArea({ id, label, accept, multiple, required, disabled, invalid, describedBy, intake, input }) {
   return (
     <div className={`file-upload${intake.dragging ? " active" : ""}${intake.over ? " is-over" : ""}`}>
-      <p className="txt">
-        파일을 여기에 끌어다 놓거나 선택해 주세요.{multiple ? " 여러 개를 한 번에 올릴 수 있습니다." : ""}
-      </p>
+      {/* 글은 한 칸짜리와 여러 개짜리가 같다 — 글 길이가 다르면 나란한 칸의 놓는 자리 높이가 달라진다. '여러 개'는 칸 아래 도움말이 알린다 */}
+      <p className="txt">파일을 여기에 끌어다 놓거나 선택해 주세요.</p>
       <div className="file-upload-btn-wrap">
         <input ref={input} id={id} type="file" multiple={multiple} accept={accept} className="sr-only" tabIndex={-1} aria-describedby={describedBy}
                aria-invalid={invalid ? "true" : undefined} aria-required={required ? "true" : undefined}
