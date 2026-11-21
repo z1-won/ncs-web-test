@@ -395,6 +395,10 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 /* ── 정책 페이지(개인정보처리방침) ── */
 .policy .section-title { margin-top: var(--krds-gap-8); }
 .policy .krds-info-list li { line-height: 1.6; }
+.policy .krds-table-wrap + .krds-info-list { margin-top: var(--krds-gap-5); }
+/* 방침의 표: 칸마다 글 길이가 달라 위쪽으로 맞춘다(KRDS 표의 가운데 맞춤보다 우선하도록 선택자를 한 단계 더 적는다) */
+.policy .krds-table-wrap .tbl.data tbody th[scope="row"] { width: 22%; min-width: 14rem; vertical-align: top; }
+.policy .krds-table-wrap .tbl.data tbody td { vertical-align: top; line-height: 1.6; }
 .policy code { padding: 0 0.4rem; border-radius: var(--krds-radius-small2); background: var(--krds-light-color-surface-gray-subtler); font-size: 0.95em; }
 
 /* 이력 페이지네이션: 표 아래 가운데. KRDS 마크업은 a 기준이라 button으로 쓸 때 기본 버튼 모양만 지운다 */
