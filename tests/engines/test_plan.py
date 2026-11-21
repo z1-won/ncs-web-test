@@ -333,6 +333,32 @@ class LawTests(unittest.TestCase):
             [none] = check_laws(m, None)
             self.assertEqual(none["체크"][LABEL], "△")
 
+    def test_spacing_differs_from_official_name(self):
+        """현행 법령인데 띄어쓰기만 법제처 정식 명칭과 다르면 띄어쓰기 오류(F11 법령 표기 기준). NCS 쪽은 △, 약칭은 참고만."""
+        from ncs_core.law_catalog import LawCatalog
+        from ncs_plan.rules.laws import LABEL, check_laws, spacing_only
+
+        self.assertTrue(spacing_only("개인 정보 보호법", "개인정보 보호법"))
+        self.assertTrue(spacing_only("「개인정보보호법」", "개인정보 보호법"))
+        self.assertFalse(spacing_only("개인정보 보호법", "개인정보 보호법"))
+        self.assertFalse(spacing_only("정보통신망법", "정보통신망 이용촉진 및 정보보호 등에 관한 법률"))
+        self.assertFalse(spacing_only("개인정보 보호법", ""))
+        with tempfile.TemporaryDirectory() as folder:
+            table = Path(folder) / "law_names.tsv"
+            table.write_text("개인 정보 보호법\t개인정보 보호법\t011357\t20250313\t일부개정\t현행\t개인정보 보호법\t2026-11-10\n"
+                             "정보통신망법\t정보통신망 이용촉진 및 정보보호 등에 관한 법률\t000030\t20261002\t일부개정\t현행\t\t2026-11-10\n", encoding="utf-8")
+            elements = ((f"{CODE}.1", "a하기", ["1.1 개인 정보 보호법에 따라 등록할 수 있다."]),)
+            m = read_module(module_table([([0], "1. a하기", [("1-1. 등록", ["1.1 「개인정보보호법」과 정보통신망법에 따라 등록할 수 있다."])])], elements=elements))
+            rows = {r["원고"]: r for r in check_laws(m, LawCatalog(table))}
+            plan_side = rows["개인정보보호법"]
+            self.assertEqual(plan_side["체크"][LABEL], "X")
+            self.assertIn("띄어쓰기만 다름", plan_side["비고"][LABEL])
+            self.assertEqual(plan_side["수정 제안"], "「개인정보보호법」 → 「개인정보 보호법」로 띄어쓰기 수정")
+            self.assertEqual(rows["개인 정보 보호법"]["체크"][LABEL], "△")              # NCS 쪽 → 직능연 협의
+            self.assertIn("직능연", rows["개인 정보 보호법"]["비고"][LABEL])
+            self.assertEqual(rows["정보통신망법"]["체크"][LABEL], "O")             # 약칭은 참고만
+            self.assertIn("약칭", rows["정보통신망법"]["비고"][LABEL])
+
 
 class ElementsTableTests(unittest.TestCase):
     def test_read_elements_and_criteria_format(self):

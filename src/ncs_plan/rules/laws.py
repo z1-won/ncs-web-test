@@ -2,7 +2,13 @@
 
 법령명 추출은 ncs_core.law_catalog.extract_law_names, 판정 근거는 law_names.tsv(법제처 Open API 조회 결과).
 NCS(수정 금지) 쪽에 있는 법령명은 집필자가 고칠 수 없으므로 X 대신 △로 두고 '직능연 협의' 안내만 한다.
+
+현행 법령이어도 띄어쓰기가 법제처 정식 명칭과 다르면 띄어쓰기 오류로 표시한다(REQ-02-001 '법령 용어 현행화 대상 표시(매뉴얼 수록 기준)',
+'용어 띄어쓰기 오류 표시'). 기준은 F11 매뉴얼(2026) 참고 자료 작성 방법의 법령 항목(인쇄 82~83쪽): '공식 명칭'으로 적고
+'법제처의 권고에 따라 … 띄어쓰기를 한다'. 글자가 다른 약칭·축약 표기는 지금처럼 참고로만 알린다.
 """
+
+import re
 
 from ncs_core import NA, O, TRI, X
 from ncs_core.law_catalog import LawCatalog, extract_law_names
@@ -11,6 +17,14 @@ from ncs_core.law_catalog import normalize as normalize_name
 from .common import row
 
 LABEL = "⑩ 법령 명칭 현행"
+SPACING_BASIS = "F11 매뉴얼 참고 자료 작성 방법(법령): 공식 명칭, 법제처 권고 띄어쓰기"
+
+
+def spacing_only(written: str, official: str) -> bool:
+    """글자는 같고 띄어쓰기만 다른가(따옴표·가운뎃점 꼴은 보지 않는다)."""
+    def words(text: str) -> list[str]:
+        return re.sub(r"[「」『』]", "", text or "").split()
+    return bool(official) and "".join(words(written)) == "".join(words(official)) and words(written) != words(official)
 
 
 def law_texts(module: dict) -> list[tuple[str, str, bool]]:
@@ -55,6 +69,15 @@ def check_laws(module: dict, catalog: LawCatalog | None) -> list[dict]:
                 checks[LABEL] = X
                 notes[LABEL] = f"{where} 「{name}」 — 현행 법령 목록에 없음(폐지·명칭 변경·오기 중 하나). 법제처에서 현행 명칭 확인"
                 suggestion = f"「{name}」의 현행 법령명 확인 후 현행화"
+        elif entry.status == "현행" and spacing_only(name, entry.name):
+            if ncs_side:
+                checks[LABEL] = TRI
+                notes[LABEL] = (f"{where} 「{name}」 / 법제처 정식 명칭 「{entry.name}」 — 띄어쓰기만 다름({SPACING_BASIS}). "
+                                "NCS 원문(수정 금지)이므로 직능연과 협의")
+            else:
+                checks[LABEL] = X
+                notes[LABEL] = f"{where} 「{name}」 / 법제처 정식 명칭 「{entry.name}」 — 띄어쓰기만 다름({SPACING_BASIS})"
+                suggestion = f"「{name}」 → 「{entry.name}」로 띄어쓰기 수정"
         elif entry.status == "현행":
             checks[LABEL] = O
             if entry.name and normalize_name(entry.name) != normalize_name(name):
