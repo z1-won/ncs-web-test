@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, Response, UploadFile
+from fastapi import FastAPI, File, Form, Request, Response, UploadFile
 from starlette.exceptions import HTTPException
 
-from ..common import Services, logger
+from ..common import Services, actor, logger
 
 MAX_BYTES = 200 << 20      # 원고 + 서류 합계 상한(업로드 보관함과 같은 200MB)
 MAX_FORMS = 30
@@ -38,6 +38,7 @@ def register(app: FastAPI, services: Services) -> None:
 
     @app.post("/api/rights/check")
     def rights_check(
+        request: Request,
         manuscript: Annotated[UploadFile, File()],
         forms: Annotated[list[UploadFile] | None, File()] = None,
         print_copy: Annotated[UploadFile | None, File()] = None,
@@ -59,7 +60,8 @@ def register(app: FastAPI, services: Services) -> None:
             raise HTTPException(400, f"서류는 한 번에 {MAX_FORMS}개까지 올릴 수 있습니다")
         if save and not store.supports_history:
             raise HTTPException(400, "이미지 저작권 DB에 반영하려면 데이터베이스(DATABASE_URL)가 필요합니다")
-        if save and not by.strip():
+        by = actor(request, by)      # 로그인했으면 계정 이름 — 보낸 이름은 쓰지 않는다
+        if save and not by:
             raise HTTPException(400, "by(변경한 사람)가 필요합니다 — 변경 이력에 남습니다")
         with tempfile.TemporaryDirectory(prefix="ncs_rights_") as folder:
             total = 0

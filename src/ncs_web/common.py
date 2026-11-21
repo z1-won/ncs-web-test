@@ -50,3 +50,9 @@ def error_response(status: int, message: str, **extra: Any) -> JSONResponse:
     # charset을 명시해 브라우저가 JSON을 직접 표시할 때 한국어 메시지가 깨지지 않게 한다.
     return JSONResponse({"error": message, **extra}, status_code=status,
                         media_type="application/json; charset=utf-8")
+
+
+def actor(request, given: str = "") -> str:
+    """변경 이력에 남길 '누가'. 로그인했으면 계정의 이름(아이디) — 화면이 보낸 이름은 쓰지 않는다. 로그인을 끈 서버(테스트)에서만 given을 쓴다."""
+    account = getattr(request.state, "account", None)
+    return f"{account['name']}({account['login']})" if account else (given or "").strip()

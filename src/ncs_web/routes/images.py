@@ -24,10 +24,10 @@ import tempfile
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, File, Form, Query, Response, UploadFile
+from fastapi import FastAPI, File, Form, Query, Request, Response, UploadFile
 from starlette.exceptions import HTTPException
 
-from ..common import Services
+from ..common import Services, actor
 from ..schemas import ImageActionRequest, ImageEvidenceRequest, ImageRightsRequest
 
 LOAD_MAX_BYTES = 50 << 20     # 한 번에 올리는 레코드 JSON + 그림 파일 합계 상한(50MB)
@@ -78,7 +78,7 @@ def register(app: FastAPI, services: Services) -> None:
         return image_store.terms()
 
     @app.post("/api/images/load")
-    def image_load(files: Annotated[list[UploadFile], File()], by: Annotated[str, Form()] = "",
+    def image_load(request: Request, files: Annotated[list[UploadFile], File()], by: Annotated[str, Form()] = "",
                    check_only: Annotated[bool, Form()] = False) -> dict:
         """레코드 JSON 1개와 그 레코드가 가리키는 그림 파일들을 함께 올린다. 그림은 파일 이름으로 짝짓는다(폴더 경로는 무시).
 
@@ -90,7 +90,8 @@ def register(app: FastAPI, services: Services) -> None:
         named = [item for item in files if item.filename]
         if len(named) > LOAD_MAX_FILES:
             raise HTTPException(400, f"한 번에 {LOAD_MAX_FILES}개까지 올릴 수 있습니다")
-        if not check_only and not by.strip():
+        by = actor(request, by)      # 로그인했으면 계정 이름 — 보낸 이름은 쓰지 않는다
+        if not check_only and not by:
             raise HTTPException(400, "by(적재한 사람)가 필요합니다 — 변경 이력에 남습니다")
         with tempfile.TemporaryDirectory(prefix="ncs_image_load_") as folder:
             base, total, record_files = Path(folder), 0, []
@@ -158,23 +159,29 @@ def register(app: FastAPI, services: Services) -> None:
     def image_file(image_id: str, upscaled: bool = False) -> Response:
         return file_response(run(image_store.image_file, image_id, upscaled=upscaled))
 
+    def who(request: Request, given: str) -> str:
+        name = actor(request, given)
+        if not name:
+            raise HTTPException(400, "변경한 사람을 알 수 없습니다. 로그인해 주세요")
+        return name
+
     @app.post("/api/images/{image_id}/rights")
-    def image_rights(image_id: str, body: ImageRightsRequest) -> dict:
-        return run(image_store.update_rights, image_id, body.rights, by=body.by, version=body.version)
+    def image_rights(image_id: str, body: ImageRightsRequest, request: Request) -> dict:
+        return run(image_store.update_rights, image_id, body.rights, by=who(request, body.by), version=body.version)
 
     @app.post("/api/images/{image_id}/confirm")
-    def image_confirm(image_id: str, body: ImageActionRequest) -> dict:
-        return run(image_store.confirm, image_id, by=body.by, version=body.version)
+    def image_confirm(image_id: str, body: ImageActionRequest, request: Request) -> dict:
+        return run(image_store.confirm, image_id, by=who(request, body.by), version=body.version)
 
     @app.post("/api/images/{image_id}/unconfirm")
-    def image_unconfirm(image_id: str, body: ImageActionRequest) -> dict:
-        return run(image_store.unconfirm, image_id, by=body.by, version=body.version)
+    def image_unconfirm(image_id: str, body: ImageActionRequest, request: Request) -> dict:
+        return run(image_store.unconfirm, image_id, by=who(request, body.by), version=body.version)
 
     @app.post("/api/images/{image_id}/evidence")
-    def image_evidence_add(image_id: str, body: ImageEvidenceRequest) -> dict:
-        return run(image_store.register_evidence, image_id, body.kind, by=body.by, file_ref=body.file_ref,
+    def image_evidence_add(image_id: str, body: ImageEvidenceRequest, request: Request) -> dict:
+        return run(image_store.register_evidence, image_id, body.kind, by=who(request, body.by), file_ref=body.file_ref,
                    submitted_on=body.submitted_on, note=body.note)
 
     @app.post("/api/images/{image_id}/evidence/{evidence_id}/delete")
-    def image_evidence_remove(image_id: str, evidence_id: str, body: ImageActionRequest) -> dict:
-        return run(image_store.remove_evidence, image_id, evidence_id, by=body.by)
+    def image_evidence_remove(image_id: str, evidence_id: str, body: ImageActionRequest, request: Request) -> dict:
+        return run(image_store.remove_evidence, image_id, evidence_id, by=who(request, body.by))

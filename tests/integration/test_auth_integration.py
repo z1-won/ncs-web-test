@@ -114,3 +114,25 @@ class StageMarkByAccountTests(unittest.TestCase):
             done = client.post(f"/api/manuscripts/{self.CODE}/stages/1", json={"done": True, "by": "남의 이름", "note": "확인"})
             self.assertEqual(done.status_code, 200, done.text)
             self.assertEqual(done.json()["단계"][0]["완료한 사람"], f"김에디터({LOGIN})")
+
+    def test_image_history_name_comes_from_the_session(self):
+        """이미지 저작권 DB의 변경 이력도 같다(REQ-02-010) — 보낸 이름은 쓰지 않고, 이름을 안 보내도 된다."""
+        import hashlib
+        from uuid import uuid4
+
+        from ncs_service.image_db import load_records
+        content = (b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (64).to_bytes(4, "big") + (48).to_bytes(4, "big")
+                   + b"\x08\x02\x00\x00\x00" + uuid4().bytes)
+        sha256 = hashlib.sha256(content).hexdigest()
+        self.addCleanup(lambda: psycopg.connect(DSN, autocommit=True).execute("DELETE FROM image_assets WHERE sha256 = %s", (sha256,)))
+        self.assertEqual(load_records(DSN, [{"content": content, "keywords": ["auth-test"]}], changed_by="적재").rejected, [])
+        with psycopg.connect(DSN) as connection:
+            image_id = str(connection.execute("SELECT id FROM image_assets WHERE sha256 = %s", (sha256,)).fetchone()[0])
+        with TestClient(create_app(database_url=DSN)) as client:
+            client.post("/api/login", json={"login": LOGIN, "password": PASSWORD})
+            first = client.post(f"/api/images/{image_id}/rights", json={"by": "남의 이름", "rights": {"author": "가"}})
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(first.json()["history"][0]["changed_by"], f"김에디터({LOGIN})")
+            second = client.post(f"/api/images/{image_id}/rights", json={"version": first.json()["rights"]["version"], "rights": {"author": "나"}})
+            self.assertEqual(second.status_code, 200, second.text)
+            self.assertEqual(second.json()["history"][0]["changed_by"], f"김에디터({LOGIN})")

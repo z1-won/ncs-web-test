@@ -8,7 +8,7 @@ from fastapi import FastAPI, Query, Request
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException
 
-from ..common import Services
+from ..common import Services, actor
 
 
 class StageMark(BaseModel):
@@ -60,8 +60,7 @@ def register(app: FastAPI, services: Services) -> None:
             raise HTTPException(400, str(error)) from None
         if stage not in STAGE_NUMBERS:
             raise HTTPException(400, f"단계는 {STAGE_NUMBERS[0]}~{STAGE_NUMBERS[-1]} 중 하나여야 합니다")
-        account = getattr(request.state, "account", None)
-        by = f"{account['name']}({account['login']})" if account else mark.by.strip()     # 로그인했으면 보낸 이름은 쓰지 않는다
+        by = actor(request, mark.by)     # 로그인했으면 보낸 이름은 쓰지 않는다
         if not by:
             raise HTTPException(400, "표시한 사람을 알 수 없습니다. 로그인해 주세요")
         store.set_stage(code, stage, done=mark.done, by=by, note=mark.note.strip())
