@@ -223,6 +223,20 @@ export const api = {
     lookup: (subclass) => request(`/api/cases/lookup?subclass=${encodeURIComponent(subclass)}`),   // { subclass, name, volumes }
     create: (body) => postJson("/api/cases", body),
     get: (id) => request(`/api/cases/${encodeURIComponent(id)}`),
+    todo: () => request("/api/cases/todo"),                              // 내 할 일
+    // 단계에 행동 하나: submit 제출(원고 없는 단계), request 보완 요청, verdict 판정 도착, done 완료, reopen 되돌림. 바뀐 뒤의 건이 온다
+    act: (id, { stage, action, volumeId, note = "" }) => postJson(`/api/cases/${encodeURIComponent(id)}/events`, { stage, action, volume_id: volumeId, note }),
+    // 원고 판본을 올려 제출(원고를 올리는 단계). 파일은 보관되고 제출 기록에 붙는다
+    submitVersion: (id, volumeId, { stage, note = "", file }) => {
+      const form = new FormData();
+      form.append("stage", stage);
+      form.append("note", note);
+      form.append("file", file, file.name);
+      return request(`/api/cases/${encodeURIComponent(id)}/volumes/${encodeURIComponent(volumeId)}/versions`, { method: "POST", body: form });
+    },
+    // 보관한 판본으로 검수를 돌릴 준비: { upload, group, module_code, checks } — 이 토큰으로 api.review를 돌리면 결과가 그 판본에 붙는다
+    versionUpload: (id, versionId) => request(`/api/cases/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/upload`, { method: "POST" }),
+    versionFileUrl: (id, versionId) => `/api/cases/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}/file`,
     assignAuthor: (id, volumeId, authorId) => postJson(`/api/cases/${encodeURIComponent(id)}/volumes/${encodeURIComponent(volumeId)}/author`, { author_id: authorId }),
   },
   manuscripts: {

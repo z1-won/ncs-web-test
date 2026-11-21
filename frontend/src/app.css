@@ -767,6 +767,32 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 @media (max-width: 599px) { .progress-step-head .krds-btn { margin-left: 0; } }
 
 /* ── 세분류 건(CasesPage) ── 표와 상세는 원고 진행 현황의 .progress-table, .progress-detail을 그대로 쓴다 */
+.cases-todo-list { list-style: none; margin: var(--krds-gap-4) 0 0; padding: 0; display: grid; gap: var(--krds-gap-3); }
+.cases-todo-list > li {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--krds-gap-5);
+  padding: var(--krds-padding-5) var(--krds-padding-6); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2);
+  border-left: 0.4rem solid var(--krds-light-color-border-primary);
+}
+.cases-todo-list p { margin: var(--krds-gap-1) 0 0; }
+.cases-todo-list .meta, .cases-action .meta, .cases-volume p.meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.cases-todo-list .krds-btn { flex: none; }
+.cases-new { margin-top: var(--krds-gap-7); }
+.cases-new > summary { cursor: pointer; font-weight: var(--krds-font-weight-bold); }
+.cases-new > .review-form { margin-top: var(--krds-gap-4); }
+.cases-volume { margin-top: var(--krds-gap-7); padding: var(--krds-padding-7); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); }
+.cases-volume > .section-head .table-title { margin-top: 0; }
+.progress-steps > li.is-current .progress-step-no { border-color: var(--krds-light-color-border-primary); color: var(--krds-light-color-text-primary); font-weight: var(--krds-font-weight-bold); }
+.cases-action, .cases-case-stage > .cases-action {
+  margin-top: var(--krds-gap-3); padding: var(--krds-padding-6);
+  border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-secondary-subtler);
+}
+.cases-action p { margin: 0 0 var(--krds-gap-3); }
+.cases-action-note { font-weight: var(--krds-font-weight-bold); }
+.cases-review { margin-bottom: var(--krds-gap-5); padding-bottom: var(--krds-gap-5); border-bottom: 1px solid var(--krds-light-color-border-gray-light); }
+.cases-action-form { display: grid; gap: var(--krds-gap-5); }
+.cases-action-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--krds-gap-3); }
+.review-form .cases-action-buttons .krds-btn { flex: none; width: auto; min-width: 12rem; }
+@media (max-width: 599px) { .cases-todo-list > li { flex-direction: column; align-items: stretch; } }
 .cases-create { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
 .cases-create .krds-form-select { width: 100%; }
 .cases-pick { margin-top: var(--krds-gap-5); padding-top: var(--krds-gap-5); border-top: 1px solid var(--krds-light-color-border-gray-light); }

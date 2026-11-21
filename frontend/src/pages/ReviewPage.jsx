@@ -223,6 +223,15 @@ export default function ReviewPage() {
     setAllRun({ group: id, roles: { manuscript: true, plan: hasPlan }, items, running: false, created_at: data.created_at, module_code: data.module_code });
   }
 
+  // 세분류 건의 판본 검수 결과에서 넘어오면(?group=) 그 묶음을 바로 연다. 검수 목록(reviewChecks)이 준비된 뒤 한 번만
+  const linkedGroup = useRef(new URLSearchParams(window.location.search).get("group"));
+  useEffect(() => {
+    if (!linkedGroup.current || !history || !reviewChecks.length) return;
+    const id = linkedGroup.current;
+    linkedGroup.current = null;
+    openGroup(id);
+  }, [history, reviewChecks]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   async function openHistory(id) {
     setError(null);
     const { ok, data, error: message } = await api.reviews.get(id);
