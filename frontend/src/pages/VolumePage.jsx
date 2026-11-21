@@ -281,6 +281,22 @@ function VolumeResult({ result }) {
         </p>
       )}
 
+      {result["½쪽 해석 비교"] && (
+        <>
+          <h3 className="table-title" id="volume-half-title">½쪽 규칙 해석 비교 <span className="meta">계약서 제13조 4항 '½쪽 이상은 1쪽'을 읽는 법에 따른 분량</span></h3>
+          <div className="krds-table-wrap">
+            <table className="tbl col data" aria-labelledby="volume-half-title">
+              <thead><tr><th scope="col">읽는 법</th><th scope="col">기입 분량(매)</th><th scope="col">셈</th></tr></thead>
+              <tbody>
+                {result["½쪽 해석 비교"].행.map((row, i) => (
+                  <tr key={row.해석}><th scope="row">{row.해석}</th><td>{row["기입 분량"]}{i === 0 && <span className="krds-badge bg-light-gray">산정에 씀</span>}</td><td>{row.셈}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       <h2 className="section-title">산정 가정</h2>
       <ul className="krds-info-list dash">
         {Object.entries(result.가정).map(([key, value]) => <li key={key}>{key}: {String(value)}</li>)}

@@ -52,6 +52,26 @@ def tally(lines: list[Line], layout: Layout, config: VolumeConfig) -> dict:
             "쪽 환산": round(sum(fill.values()) / body, 2), "행 합계": total}
 
 
+def readings(total: dict, layout: Layout) -> dict | None:
+    """계약서 '½쪽 이상은 1쪽'을 읽는 법에 따라 기입 분량이 얼마나 달라지는지(줄 배치를 읽은 원고만). 산정은 첫 줄(쪽별 기준)을 쓴다.
+
+    계약서 문구만으로는 ½쪽을 쪽마다 볼지 끝수에만 볼지 정해지지 않아(2026-11-21 현재 확인 못 함), 정산 전에 담당자가 고를 수 있게 나란히 둔다.
+    """
+    if not layout.measured:
+        return None
+    lpp = layout.lines_per_page
+    rows = [
+        {"해석": "쪽마다 ½ 이상이면 1쪽, 나머지 쪽의 행은 쪽으로 환산(지금 산정)", "기입 분량": total["기입 분량"],
+         "셈": f"{total['쪽']}쪽 + {total['행']}행 ÷ {lpp}행"},
+        {"해석": "쪽마다 ½ 이상이면 1쪽, ½ 미만인 쪽은 세지 않음", "기입 분량": total["쪽"], "셈": f"{total['쪽']}쪽"},
+        {"해석": "전체 행을 쪽으로 환산하고 끝수만 ½ 이상 올림", "기입 분량": round_half_up(total["행 합계"] / lpp),
+         "셈": f"{total['행 합계']}행 ÷ {lpp}행"},
+        {"해석": "차지한 높이를 쪽으로 환산하고 끝수만 ½ 이상 올림", "기입 분량": round_half_up(total["쪽 환산"]), "셈": f"{total['쪽 환산']}쪽"},
+    ]
+    values = [row["기입 분량"] for row in rows]
+    return {"행": rows, "최소": min(values), "최대": max(values), "차이": max(values) - min(values)}
+
+
 def _counted_units(layout: Layout, names: list[str], config: VolumeConfig) -> list[tuple[str, Unit]]:
     return [(name, unit) for block, name in zip(layout.blocks, names) if config.counted(name) for unit in block.units]
 
@@ -129,8 +149,12 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
         "구성": rows,
         "합계": total,
         "권고 분량": None, "변경": None, "수작업 대조": None, "알림": notes, "경고": warnings,
-        "출력본": None, "채택 분량": None, "집필료": None,
+        "출력본": None, "채택 분량": None, "집필료": None, "½쪽 해석 비교": readings(total, layout),
     }
+    spread = result["½쪽 해석 비교"]
+    if spread and spread["차이"]:
+        notes.append(f"'½쪽 이상은 1쪽'을 읽는 법에 따라 기입 분량이 {spread['최소']}~{spread['최대']}매로 달라집니다(아래 '½쪽 규칙 해석 비교'). "
+                     "지금 산정은 쪽마다 ½ 기준을 적용한 값입니다. 정산 전에 기준을 확인하세요.")
     if print_pdf is not None:
         result["출력본"] = _printed(print_pdf, layout, rows, total, config)
         if not result["출력본"]["사용"]:

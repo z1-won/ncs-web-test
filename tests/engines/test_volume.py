@@ -101,6 +101,18 @@ class Tally(unittest.TestCase):
         self.assertEqual((out["쪽"], out["행"], out["행 합계"]), (1, 10, 28))
         self.assertEqual(out["기입 분량"], 1 + round_half_up(10 / 34))
 
+    def test_readings_show_how_the_half_page_rule_changes_the_count(self):
+        from ncs_volume.pipeline import readings
+        half = [Line(1, PITCH, 0, k * PITCH, 0, 0) for k in range(18)]
+        less = [Line(1, PITCH, p, k * PITCH, 0, 0) for p in (1, 2, 3) for k in range(16)]     # ½ 미만인 쪽 셋(16행씩)
+        out = tally(half + less, self.layout(), DEFAULT_CONFIG)
+        spread = readings(out, self.layout())
+        # 쪽마다 기준 1쪽 + 48행 환산(1.41 → 1) = 2, 버림 1, 전체 행 66 ÷ 34 = 1.94 → 2
+        self.assertEqual([row["기입 분량"] for row in spread["행"]][:3], [2, 1, 2])
+        self.assertEqual(spread["행"][0]["기입 분량"], out["기입 분량"])
+        self.assertEqual((spread["최소"], spread["최대"], spread["차이"]), (1, 2, 1))
+        self.assertIsNone(readings(out, self.layout(measured=False)))
+
     def test_tall_table_spills_onto_next_pages(self):
         table = Line(40, BODY * 2, 3, 0, 0, 0)                                   # 두 쪽짜리 표
         out = tally([table], self.layout(), DEFAULT_CONFIG)
