@@ -77,8 +77,8 @@ export default function OpinionPage() {
                   hint="개발계획서 및 초고본 검토의견서(PDF, hwp, hwpx)." />
         <FileSlot id="opinion-second" label="2차 검토의견서" accept=".pdf,.hwp,.hwpx" file={second} onChange={setSecond} disabled={busy}
                   hint="완성본 검토의견서(PDF, hwp, hwpx)." />
-        <FileSlot id="opinion-third" label="심의의견서" accept=".pdf,.hwp,.hwpx" file={third} onChange={setThird} disabled={busy}
-                  hint="PDF, hwp, hwpx. 구분, 쪽수, 심의의견 표를 읽습니다." />
+        <FileSlot id="opinion-third" label="심의의견서" accept=".hwp,.hwpx" file={third} onChange={setThird} disabled={busy}
+                  hint="hwp, hwpx. 소위원회 심의의견서 양식(심의 항목, 세분류, 심의 의견)을 읽습니다." />
         </div>
         </div>
         <div className="form-actions">

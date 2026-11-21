@@ -118,8 +118,47 @@ class SheetTests(unittest.TestCase):
         self.assertFalse(flipped(PDF_LINES))
         self.assertTrue(flipped(list(reversed(PDF_LINES))))
 
+    def test_deliberation_form_f25(self):
+        """F25 소위원회 심의의견서: 표 '심의 항목 | 세분류 | 심의 의견', 항목 ①~⑤. 실물 양식을 ncs_core로 읽은 칸 모양 그대로."""
+        def table(rows):
+            return {"cells": {(r, c): text for r, row in enumerate(rows) for c, text in enumerate(row)}}
+
+        tables = [
+            table([["심의 위원", "성명", "소속기관"], ["홍길동", "한국대학교"], ["심의 분야", "소위원회", "소분류", "검토 자료"],
+                   ["세분류", "학습모듈 원고명"], ["정보기술", "정보기술개발", "SW제품기획", "SW제품 판매 계획 수립"]]),
+            table([["심의 항목", "세분류", "심의 의견"],
+                   ["① 학습모듈과 NCS 능력단위와의 정합성", "SW제품기획", "- 학습 2의 수행 내용이 수행준거 2.3을 다루지 않음 - 능력단위 정의와 목표가 맞음"],
+                   ["② 학습모듈의 적정성", "", "<표 1-3>에 CSAP 인증을 추가할 것"],
+                   ["③ 교육현장 활용의 용이성", "", ""],
+                   ["④ 기타 소위원회 상정 안건", "없음"],
+                   ["⑤ 총 평", "수정 후 채택"]]),
+        ]
+        sheet = parse_tables(tables, "심의의견서.hwp")
+        self.assertEqual((sheet.round, sheet.module_name), ("심의", "SW제품 판매 계획 수립"))
+        rows = [(o.round, o.group, o.lesson, o.text) for o in sheet.opinions]
+        self.assertEqual(rows, [
+            ("심의", "심의 항목: 학습모듈과 NCS 능력단위와의 정합성", 2, "학습 2의 수행 내용이 수행준거 2.3을 다루지 않음"),
+            ("심의", "심의 항목: 학습모듈과 NCS 능력단위와의 정합성", None, "능력단위 정의와 목표가 맞음"),
+            ("심의", "심의 항목: 학습모듈의 적정성", None, "<표 1-3>에 CSAP 인증을 추가할 것"),
+            ("심의", "종합 의견", None, "수정 후 채택"),
+        ])
+        self.assertEqual(sheet.opinions[0].notes, ["세분류: SW제품기획", "학습 번호: 의견 글의 '학습 2'로 정함"])
+        # 의견 칸이 모두 빈 양식도 오류가 아니다(의견 0개)
+        blank = [table([["심의 항목", "세분류", "심의 의견"], ["① 학습모듈과 NCS 능력단위와의 정합성", "", ""], ["⑤ 총 평", ""]])]
+        self.assertEqual(parse_tables(blank, "빈양식.hwp").opinions, [])
+        # 범위: 학습 번호가 있으면 그 학습, 표 참조가 있으면 캡션, 총 평은 가리키는 자리 없음
+        manuscript = map_manuscript("최종.hwpx", MANUSCRIPT)
+        self.assertEqual(locate(sheet.opinions[0], manuscript)[1], "심의 항목: 학습모듈과 NCS 능력단위와의 정합성 구간")
+        self.assertIn("<표 1-3>", locate(sheet.opinions[2], manuscript)[1])
+        self.assertEqual(locate(sheet.opinions[3], manuscript)[1], NO_PLACE)
+        self.assertEqual(locate(sheet.opinions[1], manuscript)[1], WHOLE)
+
+    def test_deliberation_form_pdf_is_refused_with_reason(self):
+        with self.assertRaisesRegex(ValueError, "hwp, hwpx"):
+            parse_lines(["2025년도 NCS학습모듈 소위원회 심의의견서", "심의 위원 성명 소속기관", "심의 항목 세분류 심의 의견", "① 학습모듈과"], "심의.pdf")
+
     def test_deliberation_sheet_pdf_lines(self):
-        """심의의견서(샘플이 없어 검토의견서와 같은 표로 가정): 제목·표 머리의 '심의'를 읽고 차수를 '심의'로 둔다."""
+        """검토의견서와 같은 표에 칸 이름만 '심의의견'인 경우: 제목·표 머리의 '심의'를 읽고 차수를 '심의'로 둔다."""
         lines = ["NCS학습모듈 심의의견서", "세분류명 SW제품기획", "심의위원 홍길동 (인)", "학습모듈명 SW제품 판매 계획 수립", "구분 쪽수 심의의견",
                  "필요지식 4 -<표 1-3>에 CSAP 인증을 추가할 것", "학습1", "수행 내용 - -", "종합 의견", "-수정 후 채택"]
         sheet = parse_lines(lines, "심의의견서.pdf")
