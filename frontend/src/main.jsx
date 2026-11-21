@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import HomePage from "./pages/HomePage.jsx";
 import ImageDbPage from "./pages/ImageDbPage.jsx";
 import OpinionPage from "./pages/OpinionPage.jsx";
 import PlanDraftPage from "./pages/PlanDraftPage.jsx";
@@ -17,13 +18,15 @@ import VolumePage from "./pages/VolumePage.jsx";
 import "pretendard-gov/dist/web/static/pretendard-gov.css";
 import "krds-uiux/resources/cdn/krds.min.css";
 import "./app.css";
+import "./progress.css";   // 머리글의 진행 현황 자리, 처음 화면, 진행 현황 화면
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {/* 페이지: / 원고 검수, /plan 개발계획서 작성, /upscale 업스케일링, /images 이미지 저작권 DB, /recommend 이미지 추천, /rights 권리 증빙 점검, /volume 원고 분량 산정, /opinion 의견 반영 검토, /suggest 문장 추천, /progress 원고 진행 현황. 서버(ncs_web)는 /api 밖 404를 index.html로 돌려 새로 고침에도 열린다 */}
+    {/* 페이지: / 처음 화면(최근 원고 미리 보기와 기능 바로 가기), /review 원고 검수, /plan 개발계획서 작성, /upscale 업스케일링, /images 이미지 저작권 DB, /recommend 이미지 추천, /rights 권리 증빙 점검, /volume 원고 분량 산정, /opinion 의견 반영 검토, /suggest 문장 추천, /progress 원고 진행 현황. 서버(ncs_web)는 /api 밖 404를 index.html로 돌려 새로 고침에도 열린다 */}
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<ReviewPage />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/review" element={<ReviewPage />} />
         <Route path="/plan" element={<PlanDraftPage />} />
         <Route path="/upscale" element={<UpscalePage />} />
         <Route path="/images" element={<ImageDbPage />} />
@@ -34,7 +37,7 @@ createRoot(document.getElementById("root")).render(
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/opinion" element={<OpinionPage />} />
         <Route path="/progress" element={<ProgressPage />} />
-        <Route path="*" element={<ReviewPage />} />
+        <Route path="*" element={<HomePage />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

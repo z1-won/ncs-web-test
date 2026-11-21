@@ -99,7 +99,7 @@ export default function PrivacyPage() {
       <h2 className="section-title">5. 문의와 삭제 요청</h2>
       <p>자료 삭제 요청이나 문의는 <a href="mailto:dgu2026protocol@gmail.com">dgu2026protocol@gmail.com</a>으로 보내 주세요.</p>
       <p className="meta">시행일 2026년 11월 21일(처음 시행 2026년 11월 10일)</p>
-      <p className="meta"><Link to="/">원고 검수로 돌아가기</Link></p>
+      <p className="meta"><Link to="/">처음 화면으로 돌아가기</Link></p>
       <TopButton />
     </main>
     <Footer />

@@ -29,3 +29,28 @@
   .progress-steps > li::before { left: 1.55rem; top: 3.2rem; }
   .progress-step-head { min-height: 3.2rem; }
 }
+
+/* 처음 화면(/) — 최근 원고 미리 보기와 기능 바로 가기 */
+.home-section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--krds-gap-3); margin-bottom: var(--krds-gap-4); }
+.home-section-head .section-title { margin-bottom: 0; }
+.home-section-head .section-title .meta { margin-left: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-subtle); }
+.home-recent, .home-shortcuts { list-style: none; margin: 0 0 var(--krds-gap-8); padding: 0; display: grid; gap: var(--krds-gap-4); }
+.home-recent { grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr)); }
+.home-shortcuts { grid-template-columns: repeat(auto-fill, minmax(28rem, 1fr)); }
+.home-recent a, .home-shortcuts a {
+  display: flex; flex-direction: column; gap: var(--krds-gap-2); height: 100%; padding: var(--krds-gap-5);
+  border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2, 0.8rem);
+  background: var(--krds-light-color-surface-white); color: inherit; text-decoration: none;
+}
+.home-recent a:hover, .home-shortcuts a:hover { border-color: var(--krds-light-color-border-primary); }
+.home-recent a:focus-visible, .home-shortcuts a:focus-visible { outline: 2px solid var(--krds-light-color-border-primary); outline-offset: 2px; }
+.home-shortcuts strong { font-size: var(--krds-pc-font-size-heading-small); }
+.home-shortcuts span { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.home-recent-steps { display: flex; align-items: center; gap: 0.4rem; }
+.home-recent-steps i { width: 1.6rem; height: 0.6rem; border-radius: 0.3rem; background: var(--krds-light-color-border-gray-light); }
+.home-recent-steps i.is-on { background: var(--krds-light-color-border-primary); }
+.home-recent-steps b { margin-left: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); }
+
+/* 머리글 오른쪽의 '진행 현황' — 작업 메뉴와 떨어진 자리 */
+#krds-header .header-container .inner { position: relative; }
+#krds-header .header-actions { position: absolute; right: var(--krds-contents-padding-x, 2.4rem); top: 50%; transform: translateY(-50%); }

@@ -35,9 +35,8 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
 /* 페이지 메뉴 — 라우트 단위, 작업 순서. 1Depth는 링크형이 기본이고, children이 있는 항목(이미지)은 눌러서 펼치는 2Depth 묶음이다
    (이미지 저작권 DB·이미지 추천 — 같은 DB의 등록·확정과 조회라 한 묶음). 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
 export const PAGES = [
-  { path: "/progress", label: "원고 진행 현황" },
   { path: "/plan", label: "개발계획서 작성" },
-  { path: "/", label: "원고 검수" },
+  { path: "/review", label: "원고 검수" },
   { path: "/opinion", label: "의견 반영 검토" },
   { path: "/upscale", label: "업스케일링" },
   { id: "image", label: "이미지", children: [
@@ -135,6 +134,11 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
                 <h2 className="logo">
                   <Link to="/"><span className="sr-only">NCS 학습모듈 검수, 한국직업능력연구원</span></Link>
                 </h2>
+              </div>
+              {/* 진행 현황은 작업 도구가 아니라 가끔 확인하는 화면이라 작업 메뉴 밖(머리글 오른쪽)에 둔다. 로그인이 생기면 이 자리가 '내 원고'가 된다 */}
+              <div className="header-actions">
+                <Link to="/progress" className={`krds-btn small ${location.pathname === "/progress" ? "secondary" : "tertiary"}`}
+                      aria-current={location.pathname === "/progress" ? "page" : undefined}>진행 현황</Link>
               </div>
             </div>
           </div>
