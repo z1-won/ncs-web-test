@@ -1,4 +1,4 @@
-"""검토의견서 반영 여부 검토(REQ-02-003) — 의견서(여러 개)와 최종 원고(+ 출력본·반영 전 원고)를 받아 의견별 판정 후보표를 돌려준다.
+"""검토의견서·심의의견서 반영 여부 검토(REQ-02-003) — 의견서(여러 개)와 최종 원고(+ 출력본·반영 전 원고)를 받아 의견별 판정 후보표를 돌려준다.
 
 판정은 ncs_opinion이 맡는다. 검수 결과처럼 저장하지 않는다: 올린 파일은 임시 폴더에서 읽고 바로 지운다.
 """
@@ -34,7 +34,7 @@ def register(app: FastAPI, services: Services) -> None:
         print_pdf: Annotated[UploadFile | None, File()] = None,
         previous: Annotated[UploadFile | None, File()] = None,
     ) -> Any:
-        """판정 후보표 JSON(ncs_opinion.review). opinions: 검토의견서(PDF·hwp·hwpx), rounds: 의견서 순서대로 '1차'·'2차'(선택),
+        """판정 후보표 JSON(ncs_opinion.review). opinions: 검토의견서·심의의견서(PDF·hwp·hwpx), rounds: 의견서 순서대로 '1차'·'2차'·'심의'(선택),
         print_pdf: 최종 원고 출력본(근거 쪽 표시), previous: 반영 전 원고. 판정은 LLM이 한다 — 서버에 LLM 설정·반출 승인이 있으면
         자동으로 부르고, 없으면 모든 의견이 '확인 필요'와 이유(결과의 'LLM' 값)다."""
         from ncs_opinion import review

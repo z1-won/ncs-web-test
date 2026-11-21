@@ -1,4 +1,4 @@
-// 검토의견서 반영 여부 검토(REQ-02-003) — 1·2차 검토의견서와 최종 원고를 올리면 의견마다 반영 후보·미반영 후보·확인 필요를 근거 문단과 함께 보여 준다.
+// 검토의견서·심의의견서 반영 여부 검토(REQ-02-003) — 1·2차 검토의견서, 심의의견서와 최종 원고를 올리면 의견마다 반영 후보·미반영 후보·확인 필요를 근거 문단과 함께 보여 준다.
 // 판정은 서버(ncs_opinion)가 LLM으로 내고 모두 후보다. LLM 설정이 없으면 서버가 모든 의견을 '확인 필요'와 이유로 돌려준다(체크박스 없음).
 // 화면에서 사람이 의견마다 반영/미반영을 정하면 자동 후보와의 오차율(기준 6% 이내)을 바로 센다.
 import React, { useMemo, useRef, useState } from "react";
@@ -17,9 +17,10 @@ const VERDICT_BADGE = { "반영 후보": "bg-light-success", "미반영 후보":
 const FILTERS = ["전체", "반영 후보", "미반영 후보", "확인 필요", "조치 불필요"];
 
 export default function OpinionPage() {
-  usePageTitle("검토의견서 반영 검토");
+  usePageTitle("의견서 반영 검토");
   const [first, setFirst] = useState(null);
   const [second, setSecond] = useState(null);
+  const [third, setThird] = useState(null);
   const [file, setFile] = useState(null);
   const [printCopy, setPrintCopy] = useState(null);
   const [previous, setPrevious] = useState(null);
@@ -27,7 +28,7 @@ export default function OpinionPage() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const aborter = useRef(null);
-  const ready = file && (first || second);
+  const ready = file && (first || second || third);
 
   async function submit(e) {
     e.preventDefault();
@@ -35,7 +36,7 @@ export default function OpinionPage() {
     aborter.current = new AbortController();
     setBusy(true);
     setError(null);
-    const opinions = [first && { file: first, round: "1차" }, second && { file: second, round: "2차" }].filter(Boolean);
+    const opinions = [first && { file: first, round: "1차" }, second && { file: second, round: "2차" }, third && { file: third, round: "심의" }].filter(Boolean);
     const { ok, data, error: message, aborted } = await api.opinion({ file, opinions, printCopy, previous, signal: aborter.current.signal });
     setBusy(false);
     if (aborted) return;
@@ -47,9 +48,9 @@ export default function OpinionPage() {
     <>
     <Header anchors={[]} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page opinion-page">
-      <h1 className="page-title">검토의견서 반영 검토</h1>
+      <h1 className="page-title">의견서 반영 검토</h1>
       <p className="page-desc">
-        1차, 2차 검토의견서(PDF, hwp, hwpx)와 의견을 반영한 최종 원고(hwp, hwpx)를 올리면, 의견이 가리키는 표, 그림, 학습 구성에서 고른 원고 문단을
+        1차, 2차 검토의견서나 심의의견서(PDF, hwp, hwpx)와 의견을 반영한 최종 원고(hwp, hwpx)를 올리면, 의견이 가리키는 표, 그림, 학습 구성에서 고른 원고 문단을
         생성형 AI가 읽고 의견마다 <strong>반영 후보, 미반영 후보, 확인 필요</strong>를 근거 문단과 함께 보여 줍니다. 근거 문단이 없거나 원고 글로 확인할 수 없는
         의견(형식, 그림)은 확인 필요로, 용어 변경 의견은 바로 반영으로 보지 않고 집필자에게 확인할 항목으로 따로 표시합니다. 생성형 AI를 쓸 수 없을 때는
         모든 의견을 확인 필요로 표시하고 이유를 함께 보여 줍니다. 이 화면의 판정은 참고용이며 최종 판단은 담당자가 합니다. 올린 파일은 검토 뒤 바로 지웁니다.
@@ -57,9 +58,11 @@ export default function OpinionPage() {
 
       <form className="fieldset review-form" onSubmit={submit}>
         <FileSlot id="opinion-first" label="1차 검토의견서" accept=".pdf,.hwp,.hwpx" file={first} onChange={setFirst} disabled={busy}
-                  hint="개발계획서 및 초고본 검토의견서(PDF, hwp, hwpx). 1차와 2차 중 하나 이상 필요합니다." />
+                  hint="개발계획서 및 초고본 검토의견서(PDF, hwp, hwpx). 의견서는 세 칸 중 하나 이상 필요합니다." />
         <FileSlot id="opinion-second" label="2차 검토의견서" accept=".pdf,.hwp,.hwpx" file={second} onChange={setSecond} disabled={busy}
                   hint="완성본 검토의견서(PDF, hwp, hwpx)." />
+        <FileSlot id="opinion-third" label="심의의견서" accept=".pdf,.hwp,.hwpx" file={third} onChange={setThird} disabled={busy}
+                  hint="심의의견서(PDF, hwp, hwpx). 검토의견서와 같은 표(구분, 쪽수, 심의의견)로 된 것을 읽습니다." />
         <FileSlot id="opinion-final" label="최종 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
                   hint="의견을 반영한 원고(hwp, hwpx)." />
         <FileSlot id="opinion-print" label="출력본 PDF" accept=".pdf" file={printCopy} onChange={setPrintCopy} disabled={busy}
@@ -113,7 +116,7 @@ function OpinionResult({ result }) {
         badges={<span id="opinion-llm-state" className="krds-badge bg-light-gray">생성형 AI: {result.LLM}</span>}
       />
       <dl className="upscale-summary">
-        <div><dt>조치 요구 의견</dt><dd><strong>{summary["조치 요구"]}</strong>개</dd><dd className="meta">조치 불필요(적합 확인) {summary["조치 불필요"]}개 제외</dd></div>
+        <div><dt>조치 요구 의견</dt><dd><strong>{summary["조치 요구"]}</strong>개</dd><dd className="meta">조치 불필요(적합 확인) {summary["조치 불필요"]}개 제외{summary["심의 의견"] > 0 && `, 심의 의견 ${summary["심의 의견"]}개 포함`}</dd></div>
         <div><dt>반영 후보</dt><dd><strong>{summary["반영 후보"]}</strong>개</dd></div>
         <div><dt>미반영 후보</dt><dd><strong>{summary["미반영 후보"]}</strong>개</dd></div>
         <div><dt>확인 필요</dt><dd><strong>{summary["확인 필요"]}</strong>개</dd><dd className="meta">그중 용어 변경(집필자 확인) {summary["용어 변경(집필자 확인)"]}개</dd></div>

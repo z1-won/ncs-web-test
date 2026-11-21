@@ -55,7 +55,7 @@ npm run dev
 DB 모드(`DATABASE_URL`)에서는 산정할 때마다 `volume_runs` 표에 산정 이력을 남기고 응답에 `id`를 싣습니다(마이그레이션 `009_volume_runs`, 서버 시작 때 자동 적용). 남기는 것은 산정표 전체(`result`), 넣은 값(`params`: 단가·계약 분량·수작업 쪽수·부록 포함), 입력 파일의 역할·이름·sha256·크기(`inputs`), 목록용 열(모듈 코드·기입 분량·단가·집필료·추정 여부)이며 **원고 파일은 보관하지 않습니다**. 이력에 쓰지 못해도 산정 결과는 200으로 돌려주고 `id: null`과 `저장 오류`로 알립니다. `GET /api/volumes`(최신순 50건, 최대 100건; `module_code`·`limit`·`offset`), `GET /api/volumes/{id}`(산정표 + `created_at`·`입력`), `DELETE /api/volumes/{id}`가 붙고, 화면 아래 **산정 이력** 표에서 다시 열거나 지웁니다. 파일 저장 모드에서는 이력을 남기지 않으며 이 경로들도 없습니다(`/api/health`의 `history`로 구분).
 ## 의견 반영 검토 페이지
 
-메인 메뉴의 **의견 반영 검토**(`/opinion`)는 검토의견서 반영 여부 검토 페이지입니다(REQ-02-003). 1차·2차 검토의견서(하나 이상), 최종 원고(필수), 출력본 PDF·반영 전 원고(선택)를 올립니다. 서버는 `POST /api/opinion`(multipart: `opinions` 여러 개, 같은 순서의 `rounds`, `manuscript`, `print_pdf`, `previous`)으로 `src/ncs_opinion`의 판정 후보표 JSON을 돌려주며 파일은 저장하지 않습니다. 판정은 LLM이 하며 서버에 LLM 설정·반출 승인(`LLM_ALLOW_UPLOAD=1`)이 있으면 자동으로 부릅니다(선택 칸 없음). 없으면 모든 의견이 '확인 필요'와 이유로 오고, 화면은 결과 머리의 배지(`#opinion-llm-state`)에 'LLM: 사용(모델) · 호출 N번' 또는 'LLM 미설정 — 이유'를 보여 줍니다. 화면은 `frontend/src/pages/OpinionPage.jsx`입니다.
+메인 메뉴의 **의견 반영 검토**(`/opinion`)는 검토의견서 반영 여부 검토 페이지입니다(REQ-02-003). 1차·2차 검토의견서와 심의의견서(셋 중 하나 이상), 최종 원고(필수), 출력본 PDF·반영 전 원고(선택)를 올립니다. 서버는 `POST /api/opinion`(multipart: `opinions` 여러 개, 같은 순서의 `rounds`(`1차`, `2차`, `심의`), `manuscript`, `print_pdf`, `previous`)으로 `src/ncs_opinion`의 판정 후보표 JSON을 돌려주며 파일은 저장하지 않습니다. 판정은 LLM이 하며 서버에 LLM 설정·반출 승인(`LLM_ALLOW_UPLOAD=1`)이 있으면 자동으로 부릅니다(선택 칸 없음). 없으면 모든 의견이 '확인 필요'와 이유로 오고, 화면은 결과 머리의 배지(`#opinion-llm-state`)에 'LLM: 사용(모델) · 호출 N번' 또는 'LLM 미설정 — 이유'를 보여 줍니다. 화면은 `frontend/src/pages/OpinionPage.jsx`입니다.
 
 ## 저장·화면 경로 분리
 

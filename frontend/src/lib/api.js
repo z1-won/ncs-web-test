@@ -223,7 +223,7 @@ export const api = {
     get: (id) => request(`/api/groups/${id}`),
     remove: (id) => request(`/api/groups/${id}`, { method: "DELETE" }),
   },
-  // 검토의견서 반영 여부 검토(REQ-02-003): opinions = [{ file, round: "1차"|"2차" }], 최종 원고 file(+ 출력본·반영 전 원고)
+  // 검토의견서 반영 여부 검토(REQ-02-003): opinions = [{ file, round: "1차"|"2차"|"심의" }], 최종 원고 file(+ 출력본·반영 전 원고)
   opinion: ({ file, opinions, printCopy, previous, signal }) => {
     const form = new FormData();
     form.append("manuscript", file, file.name);

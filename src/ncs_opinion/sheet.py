@@ -1,4 +1,7 @@
-"""검토의견서 읽기 — 1·2차 검토의견서(PDF 줄 또는 hwp/hwpx 표)를 의견 항목 목록으로 바꾼다. I/O 없음(읽기는 pipeline이 한다).
+"""의견서 읽기 — 1·2차 검토의견서와 심의의견서(PDF 줄 또는 hwp/hwpx 표)를 의견 항목 목록으로 바꾼다. I/O 없음(읽기는 pipeline이 한다).
+
+심의의견서는 실물 샘플이 없어 검토의견서와 같은 표(구분 | 쪽수 | 심의의견)로 가정한다: 제목·표 머리·칸 이름의 '검토' 자리에
+'심의'가 와도 읽고, 차수는 '심의'(제목이 'N차 심의'면 'N차 심의')로 둔다. 표 모양이 다르면 표를 찾지 못했다는 오류로 끝난다.
 
 의견 항목 = (차수, 구분, 학습 번호, 구성, 쪽, 의견 문장). 판정·유형은 여기서 정하지 않는다.
 
@@ -21,7 +24,7 @@ from .config import OTHER, OVERVIEW, PARTS, PLAN, SUMMARY
 
 @dataclass
 class Opinion:
-    round: str                    # '1차' | '2차' | ''
+    round: str                    # '1차' | '2차' | '심의' | ''
     source: str                   # 의견서 파일 이름
     group: str                    # 학습모듈 개요 | 학습 N | 기타 | 종합 의견 | 개발계획서
     lesson: int | None            # 학습 번호
@@ -54,16 +57,19 @@ OTHER_LABEL = re.compile(r"^기타(?=\s|\d|-|$)")
 LESSON_LABEL = re.compile(r"^학습\s*(\d{1,2})(?:\s*-\s*\d+)?(?=$|\s*-(?!>)|\s*(?:필요|수행|교수|평\s*가))")
 LESSON_CELL = re.compile(r"^학습\s*(\d{1,2})(?:\s*-\s*\d+)?$")
 METHOD_TAIL = re.compile(r"^방법$")
-TABLE_HEAD = re.compile(r"^구분\s*쪽\s*수\s*검토\s*의견$")
-TITLE = re.compile(r"검토\s*의견서$")
+TABLE_HEAD = re.compile(r"^구분\s*쪽\s*수\s*(?:검토|심의)\s*의견$")
+TITLE = re.compile(r"(?:검토|심의)\s*의견서$")
 ROUND = re.compile(r"([1-3])\s*차\s*검토")
+DELIBERATION_TITLE = re.compile(r"(?:([1-3])\s*차\s*)?심의\s*의견서")   # 제목 줄·칸: '심의의견서', '2차 심의의견서'
+DELIBERATION_CELL = re.compile(r"^(?:([1-3])\s*차\s*)?심의$")              # hwp 표의 차수 칸: '심의', '1차 심의'
+DELIBERATION = "심의"
 MODULE_NAME = re.compile(r"^학습\s*모듈\s*명\s*(.*)$")
-HEADER_LINE = re.compile(r"^(세분류\s*명|검토진|학습\s*모듈\s*명)|\(인\)$|검토\s*의견서$|^검토진$")
+HEADER_LINE = re.compile(r"^(세분류\s*명|검토진|심의\s*위원|심의진|학습\s*모듈\s*명)|\(인\)$|(?:검토|심의)\s*의견서$|^검토진$")
 NOTE_LINE = re.compile(r"^※")
 TABLE_END = re.compile(r"^※\s*학습이\s*추가될")
 SUMMARY_HEAD = re.compile(r"^종합\s*의견$")
 PLAN_HEAD = re.compile(r"^개발\s*계획서$")
-PLAN_TEXT_HEAD = re.compile(r"^검토\s*의견$")
+PLAN_TEXT_HEAD = re.compile(r"^(?:검토|심의)\s*의견$")
 PAGE_ONLY = re.compile(r"^(\d{1,3}(?:\s*[-~]\s*\d{1,3})?)$")
 PAGE_HEAD = re.compile(r"^(\d{1,3}(?:\s*[-~]\s*\d{1,3})?)(?!\d)\s*")
 EMPTY_PAGE = re.compile(r"^-(?:\s+(?=-)|\s*$)")
@@ -112,8 +118,14 @@ def split_bullets(text: str) -> list[str]:
 
 
 def _round(text: str) -> str:
+    """제목 줄·차수 칸 → '1차'·'2차'(검토), '심의'·'N차 심의'(심의의견서). 아니면 ''."""
     match = ROUND.search(text)
-    return f"{match.group(1)}차" if match else ""
+    if match:
+        return f"{match.group(1)}차"
+    match = DELIBERATION_TITLE.search(text) or DELIBERATION_CELL.match(text.strip())
+    if match:
+        return f"{match.group(1)}차 {DELIBERATION}" if match.group(1) else DELIBERATION
+    return ""
 
 
 # --- PDF 줄 -------------------------------------------------------------------
@@ -385,7 +397,7 @@ def parse_lines(lines: list[str], source: str = "", round_: str = "") -> Opinion
     module = next((MODULE_NAME.match(l).group(1).strip() for l in lines if MODULE_NAME.match(l)), "")
     head = next((i for i, l in enumerate(lines) if TABLE_HEAD.match(l)), None)
     if head is None:
-        raise ValueError(f"검토의견서 표(구분·쪽수·검토의견)를 찾지 못했습니다: {source}")
+        raise ValueError(f"의견서 표(구분, 쪽수, 검토의견 또는 심의의견)를 찾지 못했습니다: {source}")
     end = next((i for i in range(head, len(lines)) if TABLE_END.match(lines[i]) or SUMMARY_HEAD.match(lines[i])), len(lines))
     opinions = []
     plan_start = next((i for i in range(head) if PLAN_TEXT_HEAD.match(lines[i])), None)
@@ -428,12 +440,13 @@ def parse_tables(tables: list[dict], source: str = "", round_: str = "") -> Opin
         if not cells:
             continue
         first = cells[0]
-        if ROUND.match(first):            # 2차 의견서 파일 안에 1차 의견서 표가 앞에 함께 든 경우가 있다 → 표마다 차수를 다시 읽는다
+        if ROUND.match(first) or DELIBERATION_CELL.match(first) or DELIBERATION_TITLE.search(first):
+            # 2차 의견서 파일 안에 1차 의견서 표가 앞에 함께 든 경우가 있다 → 표마다 차수를 다시 읽는다(심의의견서도 같다)
             round_, state = fixed_round or _round(first), "head"
             continue
         if HEADER_LINE.search(first):
             continue
-        if TABLE_HEAD.match(" ".join(cells)) or (first == "구분" and any("검토의견" in c.replace(" ", "") for c in cells)):
+        if TABLE_HEAD.match(" ".join(cells)) or (first == "구분" and any(k in c.replace(" ", "") for c in cells for k in ("검토의견", "심의의견"))):
             state = "table"
             continue
         if PLAN_HEAD.match(first):
@@ -479,7 +492,7 @@ def parse_tables(tables: list[dict], source: str = "", round_: str = "") -> Opin
                 opinions.append(Opinion(round_, source, group, lesson if group.startswith("학습") else None,
                                         part, page, t))
     if state == "head" and not opinions:
-        raise ValueError(f"검토의견서 표(구분·쪽수·검토의견)를 찾지 못했습니다: {source}")
+        raise ValueError(f"의견서 표(구분, 쪽수, 검토의견 또는 심의의견)를 찾지 못했습니다: {source}")
     return OpinionSheet(source, round_, module, opinions)
 
 

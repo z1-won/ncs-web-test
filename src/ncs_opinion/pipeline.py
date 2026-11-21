@@ -55,6 +55,7 @@ def summarize(rows: list[dict]) -> dict:
         "확인 필요": counts[CHECK],
         "조치 불필요": counts[NO_ACTION],
         "용어 변경(집필자 확인)": sum(1 for r in rows if r["유형"] == KIND_TERM),
+        "심의 의견": sum(1 for r in rows if "심의" in r.get("차수", "")),
     }
 
 
@@ -63,12 +64,12 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
            config: OpinionConfig = DEFAULT_CONFIG) -> dict:
     """의견서들 × 최종 원고 → 판정 후보표(JSON으로 그대로 내보낼 수 있는 dict).
 
-    rounds: 의견서와 같은 순서의 차수('1차'·'2차') — 주면 파일 안의 표기 대신 쓴다. print_pdf: 최종 원고 출력본(근거 쪽 표시).
+    rounds: 의견서와 같은 순서의 차수('1차'·'2차'·'심의') — 주면 파일 안의 표기 대신 쓴다. print_pdf: 최종 원고 출력본(근거 쪽 표시).
     previous: 반영 전 원고(초고본·완성본, 선택). 판정은 LLM이 한다 — 설정·반출 승인·허용 목록이 있으면 자동으로 부르고,
     없으면 모든 의견을 '확인 필요'와 이유로 둔다. asker: 테스트용 가짜 LLM(llm_check.ask_all).
     """
     if not opinions:
-        raise ValueError("검토의견서를 하나 이상 올려 주세요")
+        raise ValueError("검토의견서나 심의의견서를 하나 이상 올려 주세요")
     notes: list[str] = []
     sheets = [read_sheet(path, (rounds or [])[i] if i < len(rounds or []) else "") for i, path in enumerate(opinions)]
     final = read_manuscript(manuscript)

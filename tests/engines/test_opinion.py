@@ -118,6 +118,33 @@ class SheetTests(unittest.TestCase):
         self.assertFalse(flipped(PDF_LINES))
         self.assertTrue(flipped(list(reversed(PDF_LINES))))
 
+    def test_deliberation_sheet_pdf_lines(self):
+        """심의의견서(샘플이 없어 검토의견서와 같은 표로 가정): 제목·표 머리의 '심의'를 읽고 차수를 '심의'로 둔다."""
+        lines = ["NCS학습모듈 심의의견서", "세분류명 SW제품기획", "심의위원 홍길동 (인)", "학습모듈명 SW제품 판매 계획 수립", "구분 쪽수 심의의견",
+                 "필요지식 4 -<표 1-3>에 CSAP 인증을 추가할 것", "학습1", "수행 내용 - -", "종합 의견", "-수정 후 채택"]
+        sheet = parse_lines(lines, "심의의견서.pdf")
+        self.assertEqual((sheet.round, sheet.module_name), ("심의", "SW제품 판매 계획 수립"))
+        rows = [(o.round, o.group, o.part, o.page, o.text) for o in sheet.opinions]
+        self.assertEqual(rows, [("심의", "학습 1", "필요 지식", "4", "<표 1-3>에 CSAP 인증을 추가할 것"), ("심의", "종합 의견", None, None, "수정 후 채택")])
+        self.assertEqual(parse_lines(["2차 심의의견서", "구분 쪽수 심의의견", "기타 - -출처 보완"], "a.pdf").round, "2차 심의")
+        # 검토의견서 본문에 '심의'라는 낱말이 있어도 차수는 그대로다
+        self.assertEqual(parse_lines(["2차 검토 완성본 검토의견서", "구분 쪽수 검토의견", "기타 - -심의 전에 출처 보완"], "b.pdf").round, "2차")
+
+    def test_deliberation_sheet_hwp_tables(self):
+        def table(rows):
+            return {"cells": {(r, c): text for r, row in enumerate(rows) for c, text in enumerate(row)}}
+
+        tables = [table([["2차 검토", "완성본 검토의견서"], ["구분", "쪽수", "검토의견"], ["학습 1-1", "필요지식", "5", "- 출처 보완 필요"],
+                         ["심의", "NCS학습모듈 심의의견서"], ["학습모듈명", "SW제품 시장성 분석"], ["구분", "쪽수", "심의의견"],
+                         ["학습 2-1", "수행 내용", "31", "- 안전 유의 사항을 구체적으로 쓸 것"], ["종합 의견"], ["- 조건부 채택"]])]
+        rows = [(o.round, o.group, o.part, o.page, o.text) for o in parse_tables(tables, "의견서.hwp").opinions]
+        self.assertEqual(rows, [("2차", "학습 1", "필요 지식", "5", "출처 보완 필요"), ("심의", "학습 2", "수행 내용", "31", "안전 유의 사항을 구체적으로 쓸 것"),
+                                ("심의", "종합 의견", None, None, "조건부 채택")])
+        # 제목 칸 하나뿐인 표, 차수를 밖에서 정한 경우
+        only = [table([["심의의견서"], ["구분", "쪽수", "심의의견"], ["기타", "", "", "- 참고 자료 최신화"]])]
+        self.assertEqual([o.round for o in parse_tables(only, "a.hwp").opinions], ["심의"])
+        self.assertEqual([o.round for o in parse_tables(only, "a.hwp", "1차 심의").opinions], ["1차 심의"])
+
     def test_no_table_is_error(self):
         with self.assertRaises(ValueError):
             parse_lines(["아무 글"], "메모.pdf")
@@ -374,7 +401,7 @@ class PipelineTests(unittest.TestCase):
             final, sheet = self.write(folder)
             result = review([sheet, sheet], final, asker=fake(reply))
         self.assertEqual(result["요약"], {"총 의견": 4, "조치 요구": 3, "반영 후보": 1, "미반영 후보": 1, "확인 필요": 1,
-                                         "조치 불필요": 1, "용어 변경(집필자 확인)": 1})        # 같은 파일 두 번 → 한 번만
+                                         "조치 불필요": 1, "용어 변경(집필자 확인)": 1, "심의 의견": 0})        # 같은 파일 두 번 → 한 번만
         self.assertTrue(result["LLM"].startswith("사용(가짜) · 호출 3번, 의견 4개"), result["LLM"])
         self.assertEqual([r["판정"] for r in result["의견"]], [REFLECTED, NOT_REFLECTED, CHECK, NO_ACTION])
         self.assertEqual(result["의견"][0]["참조"], ["<표 1-3>"])

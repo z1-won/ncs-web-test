@@ -54,6 +54,18 @@ class OpinionWebTests(unittest.TestCase):
         self.assertEqual((row["판정"], row["유형"], row["LLM"]["상태"]), ("확인 필요", "미분류", body["LLM"]))
         self.assertIn("사람이 대조", row["비고"][-1])
 
+    def test_deliberation_sheet(self):
+        """심의의견서: 표 머리가 '심의의견'이어도 읽고, 차수 '심의'와 요약의 심의 의견 수가 온다."""
+        third = Path(self.out.name) / "심의의견서.hwpx"
+        rows = [["심의의견서", "", ""], ["구분", "쪽수", "심의의견"], ["학습 1-1", "필요지식", "- <표 1-3>에 GS인증 근거 법령을 밝힐 것"]]
+        mf.write_hwpx(third, [[mf.table(rows)]])
+        response = self.post({"rounds": ["2차", "심의"]}, opinions=(self.second, third), manuscript=self.final)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual([s["차수"] for s in body["의견서"]], ["2차", "심의"])
+        self.assertEqual(body["요약"]["심의 의견"], 1)
+        self.assertEqual([r["차수"] for r in body["의견"]][-1], "심의")
+
     def test_rounds_override(self):
         response = self.post({"rounds": ["2차"]}, opinions=(self.first,), manuscript=self.final)
         self.assertEqual(response.status_code, 200, response.text)
