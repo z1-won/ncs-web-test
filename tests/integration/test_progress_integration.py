@@ -7,7 +7,7 @@ from uuid import uuid4
 import psycopg
 from fastapi.testclient import TestClient
 
-from ncs_service.postgres import list_manuscripts, migrate, progress_sources, save_work_record
+from ncs_service.postgres import list_manuscripts, migrate, progress_sources, save_work_record, set_stage, tag_review_stage
 from ncs_service.progress import OPINION, RECORDED, RIGHTS, build
 from ncs_web.server import create_app
 
@@ -35,6 +35,8 @@ class ProgressIntegrationTests(unittest.TestCase):
             connection.execute("DELETE FROM work_records WHERE module_code = %s OR manuscript LIKE %s", (CODE, "진행현황테스트%"))
             connection.execute("DELETE FROM volume_runs WHERE module_code = %s", (CODE,))
             connection.execute("DELETE FROM review_runs WHERE module_code = %s", (CODE,))
+            connection.execute("DELETE FROM manuscript_stages WHERE module_code LIKE 'LM99999999%%'")
+            connection.execute("DELETE FROM manuscript_stage_history WHERE module_code LIKE 'LM99999999%%'")
 
     def seed(self):
         name = f"진행현황테스트_{CODE}.hwpx"
@@ -72,6 +74,22 @@ class ProgressIntegrationTests(unittest.TestCase):
         self.assertEqual(result["진행도"]["분량"]["pages"], 80)
         self.assertEqual(result["기록 수"]["분량 산정"], 1)
 
+    def test_stage_marks_and_tagged_reviews(self):
+        self.seed()
+        self.assertTrue(set_stage(DSN, CODE, 6, done=True, by="김에디터", note="적합"))
+        self.assertTrue(set_stage(DSN, CODE, 6, done=True, by="박검수"))          # 다시 표시하면 사람·시각을 새로 쓴다
+        self.assertFalse(set_stage(DSN, CODE, 5, done=False, by="박검수"))       # 완료가 아닌 단계를 되돌리면 바뀐 것이 없다
+        with psycopg.connect(DSN) as connection:
+            run = connection.execute("SELECT id FROM review_runs WHERE module_code = %s AND check_name = 'toc'", (CODE,)).fetchone()[0]
+        tag_review_stage(DSN, str(run), 6)
+        sources = progress_sources(DSN, CODE)
+        self.assertEqual(sources["done"][6]["by"], "박검수")
+        self.assertEqual([h["action"] for h in sources["history"]], ["done", "done"])
+        self.assertEqual((sources["staged_reviews"][6]["count"], sources["staged_reviews"][6]["verdict"]), (1, "부적합"))
+        result = build(CODE, sources)
+        self.assertEqual(result["단계"][5]["내용"], "최종본으로 표시한 원고 검수 1건, 최근 판정 부적합")
+        self.assertEqual(result["완료 단계 수"], 1)
+
     def test_web_routes(self):
         self.seed()
         with TestClient(create_app(database_url=DSN)) as client:
@@ -82,7 +100,23 @@ class ProgressIntegrationTests(unittest.TestCase):
             detail = client.get(f"/api/manuscripts/{CODE}")
             self.assertEqual(detail.status_code, 200, detail.text)
             self.assertEqual(len(detail.json()["단계"]), 7)
-            self.assertEqual(client.get("/api/manuscripts/LM9999999902_26v1").status_code, 404)
+            empty = client.get("/api/manuscripts/LM9999999902_26v1")       # 기록이 없어도 빈 현황(일을 시작하기 전에 열 수 있다)
+            self.assertEqual((empty.status_code, empty.json()["완료 단계 수"]), (200, 0))
+            # 단계 완료 표시 → 되돌림. 이름이 없거나 단계가 틀리면 400
+            marked = client.post(f"/api/manuscripts/{CODE}/stages/2", json={"done": True, "by": " 김에디터 ", "note": "초고본 검토 끝"})
+            self.assertEqual(marked.status_code, 200, marked.text)
+            stage = marked.json()["단계"][1]
+            self.assertEqual((stage["완료"], stage["완료한 사람"], stage["메모"]), (True, "김에디터", "초고본 검토 끝"))
+            row = next(r for r in client.get("/api/manuscripts", params={"limit": 100}).json() if r["module_code"] == CODE)
+            self.assertEqual(row["stages_done"], 1)
+            undone = client.post(f"/api/manuscripts/{CODE}/stages/2", json={"done": False, "by": "김에디터"})
+            self.assertFalse(undone.json()["단계"][1]["완료"])
+            self.assertEqual([h["action"] for h in undone.json()["이력"]], ["undone", "done"])
+            self.assertEqual(client.post(f"/api/manuscripts/{CODE}/stages/2", json={"done": True, "by": "  "}).status_code, 400)
+            self.assertEqual(client.post(f"/api/manuscripts/{CODE}/stages/9", json={"done": True, "by": "가"}).status_code, 400)
+            # 기록이 없는 원고도 표시하면 목록에 나온다
+            client.post("/api/manuscripts/LM9999999902_26v1/stages/1", json={"done": True, "by": "가"})
+            self.assertTrue(any(r["module_code"] == "LM9999999902_26v1" for r in client.get("/api/manuscripts", params={"limit": 100}).json()))
             self.assertEqual(client.get("/api/manuscripts/엉뚱한값").status_code, 400)
 
 if __name__ == "__main__":

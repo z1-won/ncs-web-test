@@ -86,12 +86,14 @@ def register(app: FastAPI, services: Services) -> None:
         group: Annotated[str, Form()] = "",
         stage: Annotated[str, Form()] = "",     # 개발계획서 점검(plan) 단계: final / draft. 다른 검수는 무시
         roles: Annotated[str, Form()] = "",     # files로 직접 올릴 때만: files와 같은 순서의 역할 JSON 배열. 없으면 넣은 순서(검수 종류의 필수 역할 먼저)
+        work_stage: Annotated[str, Form()] = "",  # 원고 진행 현황의 단계(2 초고본·3 수정본·6 최종본). 비우면 단계 없이 남긴다. 개발계획서 점검은 무시
         image_dpi: Annotated[str, Form()] = "",  # 이미지 해상도 기준(150/300). 기타(misc) 검수의 ⑤·⑧에만 쓰이고 다른 검수는 무시. 비우면 기본값
     ) -> ReviewResponse | JSONResponse:
         """files로 직접 올리거나, /api/uploads 토큰(upload)으로 올려 둔 파일을 쓴다. group은 이력 묶음 id(토큰 응답의 group).
         토큰으로 실행하면 업로드 때 정한 역할을 그대로 쓴다."""
         # 동기 엔진은 일반 def 경로 함수의 스레드풀에서 실행한다.
         try:
+            marked = _work_stage(work_stage) if check != "plan" else None
             if upload:
                 kept = uploads_store.get(upload)
                 if kept is None:
@@ -101,7 +103,8 @@ def register(app: FastAPI, services: Services) -> None:
                 # group을 보내지 않으면 단독 실행(묶음 없음) — 화면이 파일을 미리 올려 두고 토큰만으로 1건 돌리는 경우
                 if roles:
                     raise ValueError("roles는 업로드할 때 지정합니다. upload 토큰과 함께 보낼 수 없습니다")
-                payload = _run(kept.files, check, module_code, group or None, stage=stage, roles=kept.assigned or None, image_dpi=image_dpi)
+                payload = _run(kept.files, check, module_code, group or None, stage=stage, roles=kept.assigned or None, image_dpi=image_dpi,
+                               work_stage=marked)
             else:
                 if group:
                     raise ValueError("group은 upload 토큰과 함께만 쓸 수 있습니다")
@@ -126,7 +129,7 @@ def register(app: FastAPI, services: Services) -> None:
                                 assigned[str(path)] = given[index]
                     if not saved:
                         raise ValueError("업로드된 파일이 없습니다")
-                    payload = _run(saved, check, module_code, None, stage=stage, roles=assigned or None, image_dpi=image_dpi)
+                    payload = _run(saved, check, module_code, None, stage=stage, roles=assigned or None, image_dpi=image_dpi, work_stage=marked)
         except ValueError as error:
             return error_response(400, str(error))
         except Exception as error:
@@ -136,8 +139,17 @@ def register(app: FastAPI, services: Services) -> None:
             return error_response(500, f"{type(error).__name__}: {error}", **debug)
         return payload
 
+    def _work_stage(value: str) -> int | None:
+        from ncs_service.progress import REVIEW_STAGES
+
+        if not value.strip():
+            return None
+        if value.strip() not in {str(no) for no in REVIEW_STAGES}:
+            raise ValueError("work_stage는 " + " / ".join(f"{no}({name})" for no, name in REVIEW_STAGES.items()) + " 중 하나여야 합니다")
+        return int(value)
+
     def _run(saved: list[tuple[str, Path]], check: str, module_code: str, group_id: str | None, *, stage: str = "",
-             roles: dict[str, str] | None = None, image_dpi: str = "") -> ReviewResponse:
+             roles: dict[str, str] | None = None, image_dpi: str = "", work_stage: int | None = None) -> ReviewResponse:
         paths = tuple(path for _, path in saved)
         config = None
         if check == "plan" and stage:
@@ -153,6 +165,11 @@ def register(app: FastAPI, services: Services) -> None:
         execution = execute_review(ReviewRequest(paths, check, module_code.strip(), roles=roles, config=config))
         result = execution.result
         stored = store.save(execution, saved, group_id=group_id)
+        if work_stage is not None and stored.run_id is not None:
+            try:
+                store.tag_review_stage(stored.run_id, work_stage)
+            except Exception as error:      # 단계 표시는 부가 정보라 검수 결과를 막지 않는다
+                logger.exception("검수 단계 표시 실패: %s", error)
         saved_paths = (
             SavedPaths(folder=str(stored.directory), zip=str(stored.zip_path))
             if stored.directory is not None else None

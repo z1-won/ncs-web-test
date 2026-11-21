@@ -281,4 +281,28 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "    source text NOT NULL DEFAULT 'web'\n"
      ");\n"
      "CREATE INDEX IF NOT EXISTS work_records_module_idx ON work_records (module_code, created_at DESC)"),
+    # 011: 원고 진행 현황의 단계 완료 표시 — 기록으로 미룬 값 대신 담당자(에디터)가 실제로 끝낸 단계를 직접 표시한다.
+    #   manuscript_stages         원고(모듈 코드) × 단계(1~7)의 지금 상태. 완료로 표시한 사람·시각·메모. 되돌리면 행을 지운다
+    #   manuscript_stage_history  표시·되돌림 이력(누가·언제·무엇을). 지우지 않는다
+    #   review_runs.work_stage    원고 검수를 돌릴 때 고른 단계(2 초고본·3 수정본·6 최종본). 고르지 않으면 NULL
+    ("011_manuscript_stages",
+     "CREATE TABLE IF NOT EXISTS manuscript_stages (\n"
+     "    module_code text NOT NULL,\n"
+     "    stage smallint NOT NULL CHECK (stage BETWEEN 1 AND 7),\n"
+     "    done_by text NOT NULL,\n"
+     "    done_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    note text NOT NULL DEFAULT '',\n"
+     "    PRIMARY KEY (module_code, stage)\n"
+     ");\n"
+     "CREATE TABLE IF NOT EXISTS manuscript_stage_history (\n"
+     "    id uuid PRIMARY KEY,\n"
+     "    module_code text NOT NULL,\n"
+     "    stage smallint NOT NULL CHECK (stage BETWEEN 1 AND 7),\n"
+     "    action text NOT NULL CHECK (action IN ('done', 'undone')),\n"
+     "    changed_by text NOT NULL,\n"
+     "    changed_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    note text NOT NULL DEFAULT ''\n"
+     ");\n"
+     "CREATE INDEX IF NOT EXISTS manuscript_stage_history_idx ON manuscript_stage_history (module_code, changed_at DESC);\n"
+     "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS work_stage smallint"),
 )

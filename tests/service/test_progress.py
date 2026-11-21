@@ -77,6 +77,33 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(result["학습모듈명"], "AIoT 운영 플랫폼 요구사항 분석")
         self.assertEqual(result["기록 수"], {"원고 검수": 12, "개발계획서 점검": 1, "의견 반영 검토": 2, "권리 증빙 점검": 1, "분량 산정": 2})
 
+    def test_done_is_marked_by_a_person_not_inferred_from_records(self):
+        """기록이 있어도 완료가 아니다. 완료는 담당자가 표시한 단계만이고, 기록이 없는 단계도 완료로 표시할 수 있다."""
+        sources = self.sources()
+        result = build(CODE, sources)
+        self.assertEqual((result["완료 단계 수"], [s["완료"] for s in result["단계"]]), (0, [False] * 7))
+        sources["done"] = {1: {"by": "김에디터", "at": "2026-10-21T00:00:00+00:00", "note": "직능연 승인"}, 4: {"by": "김에디터", "at": "2026-11-20T00:00:00+00:00", "note": ""}}
+        sources["history"] = [{"stage": 4, "action": "done", "by": "김에디터", "at": "2026-11-20T00:00:00+00:00", "note": ""}]
+        result = build(CODE, sources)
+        by = {s["번호"]: s for s in result["단계"]}
+        self.assertEqual(result["완료 단계 수"], 2)
+        self.assertEqual((by[1]["완료"], by[1]["완료한 사람"], by[1]["메모"]), (True, "김에디터", "직능연 승인"))
+        self.assertEqual((by[2]["완료"], by[2]["상태"]), (False, RECORDED))
+        self.assertEqual(len(result["이력"]), 1)
+        empty = build(CODE, {"done": {3: {"by": "가", "at": "2026-11-20T00:00:00+00:00", "note": ""}}})      # 기록이 하나도 없는 원고
+        self.assertEqual([(s["완료"], s["상태"]) for s in empty["단계"]][2], (True, EMPTY))
+
+    def test_reviews_tagged_with_a_stage_show_at_that_stage(self):
+        sources = self.sources()
+        self.assertIn("단계를 고르지 않은 기록", {s["번호"]: s for s in build(CODE, sources)["단계"]}[2]["내용"])
+        sources["staged_reviews"] = {2: {"count": 3, "last": "2026-11-02T00:00:00+00:00", "verdict": "부적합"},
+                                     3: {"count": 1, "last": "2026-11-11T00:00:00+00:00", "verdict": "판단불가"},
+                                     6: {"count": 2, "last": "2026-11-20T00:00:00+00:00", "verdict": "적합"}}
+        by = {s["번호"]: s for s in build(CODE, sources)["단계"]}
+        self.assertEqual((by[2]["내용"], by[2]["일시"]), ("초고본으로 표시한 원고 검수 3건, 최근 판정 부적합", "2026-11-02T00:00:00+00:00"))
+        self.assertTrue(by[3]["내용"].startswith("수정본으로 표시한 원고 검수 1건, 최근 판정 판단불가. 의견 3개 중"))
+        self.assertEqual(by[6]["내용"], "최종본으로 표시한 원고 검수 2건, 최근 판정 적합")
+
     def test_progress_numbers(self):
         progress = build(CODE, self.sources())["진행도"]
         editing = progress["편집 검수"]
@@ -105,6 +132,9 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(stages_recorded({"review"}), 1)
         self.assertEqual(stages_recorded({"opinion", "opinion:1차 심의", "rights"}), 2)      # '1차 심의'는 심의 단계
         self.assertEqual(stages_recorded(set()), 0)
+        from ncs_service.progress import stages_done
+        self.assertEqual(stages_done({"review", "done:1", "done:6"}), 2)
+        self.assertEqual(stages_recorded({"done:1", "done:6"}), 0)      # 완료 표시는 기록이 아니다
 
 
 class WebWithoutDatabaseTests(unittest.TestCase):

@@ -55,6 +55,9 @@ class FileStore:
         """진행 현황용 개수 기록은 DB 모드에서만 남긴다. 남기지 않았다는 뜻으로 None."""
         return None
 
+    def tag_review_stage(self, run_id: str, stage: int) -> None:
+        """검수 단계 표시는 DB 모드에서만 남긴다."""
+
     def save_volume(self, result: dict, files: list[VolumeInput], params: dict, *, source: str = "web") -> str | None:
         """원고 분량 산정은 파일로 남기지 않는다(이력은 DB 모드에서만). 저장하지 않았다는 뜻으로 None."""
         return None
@@ -147,17 +150,27 @@ class PostgresStore:
 
     def list_manuscripts(self, **filters) -> list[dict]:
         from . import postgres
-        from .progress import stages_recorded
+        from .progress import stages_done, stages_recorded
 
         rows = postgres.list_manuscripts(self.dsn, **filters)
-        return [{**row, "stages_recorded": stages_recorded(set(row["kinds"]))} for row in rows]
+        return [{**row, "stages_recorded": stages_recorded(set(row["kinds"])), "stages_done": stages_done(set(row["kinds"]))} for row in rows]
 
-    def get_progress(self, module_code: str, *, name: str = "") -> dict | None:
+    def get_progress(self, module_code: str, *, name: str = "") -> dict:
+        """기록이 하나도 없는 원고도 빈 현황을 돌려준다 — 일을 시작하기 전에 원고를 열어 단계를 표시할 수 있어야 한다."""
         from . import postgres
         from .progress import build
 
-        sources = postgres.progress_sources(self.dsn, module_code)
-        return build(module_code, sources, name=name) if sources is not None else None
+        return build(module_code, postgres.progress_sources(self.dsn, module_code) or {}, name=name)
+
+    def set_stage(self, module_code: str, stage: int, *, done: bool, by: str, note: str = "") -> bool:
+        from . import postgres
+
+        return postgres.set_stage(self.dsn, module_code, stage, done=done, by=by, note=note)
+
+    def tag_review_stage(self, run_id: str, stage: int) -> None:
+        from . import postgres
+
+        postgres.tag_review_stage(self.dsn, run_id, stage)
 
     def export_zip(self, run_id: str) -> tuple[bytes, str] | None:
         """저장된 이력을 해당 엔진의 save_results로 다시 만들어 (ZIP 바이트, 파일 이름)을 돌려준다."""

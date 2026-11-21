@@ -4,8 +4,10 @@ DB를 읽지 않는다: 기록을 모으는 일은 postgres.progress_sources가 
 
 단계는 F11 매뉴얼(2026) 제2장 개발 절차(인쇄 16~17쪽) 11단계에서 연결할 기능이 있는 것만 추린 7개다
 (사전 협의·킥오프·검토 회의·사업 마무리는 뺐다, 2026-11-21 결정).
-단계의 상태는 담당자가 정한 값이 아니라 **남아 있는 기록으로 미룬 것**이다: 어느 기능을 돌린 기록이 있으면 '기록 있음'.
-원고 검수 기록에는 초고본·수정본·최종본 구분이 없으므로, 처음 검수한 날을 초고본 검토에, 가장 최근 검수의 판정을 최종본 검수에 보인다.
+단계의 **완료**는 담당자(에디터)가 직접 표시한다(manuscript_stages — 누가·언제·메모, 되돌릴 수 있고 이력이 남는다).
+기록은 완료를 판단할 근거로 단계 옆에 보일 뿐이고, 기록이 있다고 완료가 되지 않는다('기록 있음'/'기록 없음').
+원고 검수는 돌릴 때 단계(초고본·수정본·최종본)를 고를 수 있다(REVIEW_STAGES). 고른 기록은 그 단계에 보이고, 고르지 않은 기록은
+처음 검수한 날을 초고본 검토에, 가장 최근 전체 검수의 판정을 최종본 검수에 '단계를 고르지 않은 기록'으로 보인다.
 
 의견 반영 검토와 권리 증빙 점검은 개수만 남긴다(summarize_opinion·summarize_rights) — 의견 문장·원고 문단·지적 내용은 저장하지 않는다.
 """
@@ -29,6 +31,8 @@ STAGES = (
     (6, "최종본 검수", "에디터, 직능연(적합 또는 부적합 판정)", "원고 검수(전체)", "/review"),
     (7, "분량과 권리 증빙", "개발기관 제출, 담당자 확인", "원고 분량, 권리 증빙 점검", "/volume"),
 )
+REVIEW_STAGES = {2: "초고본", 3: "수정본", 6: "최종본"}     # 원고 검수를 돌릴 때 고를 수 있는 단계
+STAGE_NUMBERS = tuple(stage[0] for stage in STAGES)
 BASIS = "F11 매뉴얼(2026) 제2장 개발 절차(인쇄 16~17쪽)에서 연결할 기능이 있는 단계만 추림"
 
 
@@ -116,25 +120,42 @@ def build(module_code: str, sources: dict, *, name: str = "") -> dict:
         row = rows[0]
         return f"의견 {row['총 의견']}개 중 반영 후보 {row['반영 후보']}, 미반영 후보 {row['미반영 후보']}, 확인 필요 {row['확인 필요']}"
 
+    staged = {int(k): v for k, v in (sources.get("staged_reviews") or {}).items()}
+    done = {int(k): v for k, v in (sources.get("done") or {}).items()}
+
+    def tagged(no: int) -> str:
+        row = staged.get(no)
+        return f"{REVIEW_STAGES[no]}으로 표시한 원고 검수 {row['count']}건, 최근 판정 {row['verdict']}" if row else ""
+
+    def joined(*parts: str) -> str:
+        return ". ".join(part for part in parts if part)
+
+    loose = "단계를 고르지 않은 기록: "
     facts = {
         1: (bool(plan.get("count")), plan.get("last"), f"점검 {plan.get('count')}회, 최근 판정 {plan.get('verdict')}" if plan.get("count") else ""),
-        2: (bool(reviews.get("count")), reviews.get("first"), f"처음 검수한 날. 검수 기록 {reviews.get('count')}건" if reviews.get("count") else ""),
-        3: (bool(first), first[0]["일시"] if first else None, opinion_note(first) if first else ""),
+        2: (bool(staged.get(2) or reviews.get("count")), staged[2]["last"] if staged.get(2) else reviews.get("first"),
+            tagged(2) or (f"{loose}처음 검수한 날, 검수 기록 {reviews.get('count')}건" if reviews.get("count") else "")),
+        3: (bool(first or staged.get(3)), first[0]["일시"] if first else (staged[3]["last"] if staged.get(3) else None),
+            joined(tagged(3), opinion_note(first) if first else "")),
         4: (bool(second), second[0]["일시"] if second else None, opinion_note(second) if second else ""),
         5: (bool(review), review[0]["일시"] if review else None, opinion_note(review) if review else ""),
-        6: (bool(group), group["created_at"] if group else None,
-            f"가장 최근 전체 검수 판정 {group['verdict']}(구성요소 {len(group['checks'])}개)" if group else ""),
+        6: (bool(staged.get(6) or group), staged[6]["last"] if staged.get(6) else (group["created_at"] if group else None),
+            tagged(6) or (f"{loose}가장 최근 전체 검수 판정 {group['verdict']}(구성요소 {len(group['checks'])}개)" if group else "")),
         7: (bool(volume or rights), max(filter(None, [volume and volume["created_at"], rights and rights["created_at"]]), default=None),
             ", ".join(filter(None, [f"분량 {volume['pages']}매" if volume else "",
                                     f"권리 증빙 {rights['counts'].get('판정')}" if rights else ""]))),
     }
     stages = [{"번호": no, "이름": title, "담당": who, "기능": feature, "경로": path,
+               "완료": no in done, "완료한 사람": done[no]["by"] if no in done else None, "완료 시각": done[no]["at"] if no in done else None,
+               "메모": done[no]["note"] if no in done else "",
                "상태": RECORDED if facts[no][0] else EMPTY, "일시": facts[no][1], "내용": facts[no][2]}
               for no, title, who, feature, path in STAGES]
     return {
         "module_code": module_code, "학습모듈명": name,
         "단계": stages, "단계 근거": BASIS,
-        "단계 안내": "단계의 상태는 남아 있는 기록으로 미룬 것이며 담당자가 확정한 값이 아닙니다. 원고 검수 기록에는 초고본, 수정본, 최종본 구분이 없습니다.",
+        "완료 단계 수": len(done),
+        "단계 안내": "단계의 완료는 담당자가 직접 표시합니다. 기록은 완료를 판단할 근거로 보여 주는 것이며, 기록이 있다고 완료로 바뀌지 않습니다.",
+        "이력": sources.get("history", []),
         "진행도": {
             "편집 검수": editing_progress(sources.get("latest_checks", [])),
             "내용 검수": content_progress(records),
@@ -149,7 +170,7 @@ def build(module_code: str, sources: dict, *, name: str = "") -> dict:
 
 
 def stages_recorded(kinds: set[str]) -> int:
-    """목록용: 기록 종류 집합 → 기록이 있는 단계 수. kinds = {'plan', 'review', 'group', 'volume', 'rights', 'opinion:1차', …}."""
+    """목록용: 기록 종류 집합 → 기록이 있는 단계 수(완료 표시 'done:N'은 stages_done이 센다). kinds = {'plan', 'review', 'group', 'volume', 'rights', 'opinion:1차', …}."""
     rounds = {k.split(":", 1)[1] for k in kinds if k.startswith("opinion:")}
     return sum([
         "plan" in kinds, "review" in kinds,
@@ -158,3 +179,8 @@ def stages_recorded(kinds: set[str]) -> int:
         any(_is_review(r) for r in rounds),
         "group" in kinds, bool({"volume", "rights"} & kinds),
     ])
+
+
+def stages_done(kinds: set[str]) -> int:
+    """목록용: 담당자가 완료로 표시한 단계 수(kinds의 'done:N')."""
+    return sum(1 for kind in kinds if kind.startswith("done:"))

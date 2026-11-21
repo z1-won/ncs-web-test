@@ -374,6 +374,7 @@ def list_manuscripts(dsn: str, *, limit: int = 50, offset: int = 0) -> list[dict
             "count(*) FILTER (WHERE counted) AS records, array_agg(DISTINCT kind) AS kinds FROM ("
             " SELECT module_code, created_at, CASE WHEN check_name = 'plan' THEN 'plan' ELSE 'review' END AS kind, true AS counted FROM review_runs"
             " UNION ALL SELECT module_code, created_at, 'group', false FROM review_runs WHERE group_id IS NOT NULL AND check_name <> 'plan'"
+            " UNION ALL SELECT module_code, done_at, 'done:' || stage, false FROM manuscript_stages"
             " UNION ALL SELECT module_code, created_at, 'volume', true FROM volume_runs"
             " UNION ALL SELECT module_code, created_at, 'rights', true FROM work_records WHERE kind = 'rights'"
             " UNION ALL SELECT module_code, created_at, 'opinion', true FROM work_records WHERE kind = 'opinion'"
@@ -396,6 +397,15 @@ def progress_sources(dsn: str, module_code: str) -> dict | None:
         totals = connection.execute(
             "SELECT check_name = 'plan' AS is_plan, count(*) AS n, min(created_at) AS first_at, max(created_at) AS last_at "
             "FROM review_runs WHERE module_code = %s GROUP BY 1", (module_code,)).fetchall()
+        staged = connection.execute(
+            "SELECT work_stage, count(*) AS n, max(created_at) AS last_at, "
+            "(array_agg(verdict ORDER BY created_at DESC, id DESC))[1] AS verdict FROM review_runs "
+            "WHERE module_code = %s AND work_stage IS NOT NULL AND check_name <> 'plan' GROUP BY work_stage", (module_code,)).fetchall()
+        done = connection.execute(
+            "SELECT stage, done_by, done_at, note FROM manuscript_stages WHERE module_code = %s", (module_code,)).fetchall()
+        history = connection.execute(
+            "SELECT stage, action, changed_by, changed_at, note FROM manuscript_stage_history WHERE module_code = %s "
+            "ORDER BY changed_at DESC, id DESC LIMIT 50", (module_code,)).fetchall()
         latest = connection.execute(
             "SELECT DISTINCT ON (r.check_name) r.id, r.check_name, r.created_at, r.verdict, d.sheet "
             "FROM review_runs r LEFT JOIN review_results d ON d.run_id = r.id WHERE r.module_code = %s "
@@ -414,7 +424,7 @@ def progress_sources(dsn: str, module_code: str) -> dict | None:
         images = connection.execute(
             "SELECT count(DISTINCT p.image_id) AS total, count(DISTINCT p.image_id) FILTER (WHERE r.status = 'confirmed') AS confirmed "
             "FROM image_placements p LEFT JOIN image_rights r ON r.image_id = p.image_id WHERE p.module_code = %s", (module_code,)).fetchone()
-    if not (totals or volume or records or images["total"]):
+    if not (totals or volume or records or images["total"] or done or history):
         return None
     by_plan = {row["is_plan"]: row for row in totals}
     reviews, plans = by_plan.get(False), by_plan.get(True)
@@ -433,4 +443,34 @@ def progress_sources(dsn: str, module_code: str) -> dict | None:
         "records": [{"id": str(row["id"]), "created_at": iso(row["created_at"]), "kind": row["kind"],
                      "manuscript": row["manuscript"], "counts": row["counts"]} for row in records],
         "images": {"total": images["total"], "confirmed": images["confirmed"]},
+        "staged_reviews": {row["work_stage"]: {"count": row["n"], "last": iso(row["last_at"]), "verdict": row["verdict"]} for row in staged},
+        "done": {row["stage"]: {"by": row["done_by"], "at": iso(row["done_at"]), "note": row["note"]} for row in done},
+        "history": [{"stage": row["stage"], "action": row["action"], "by": row["changed_by"], "at": iso(row["changed_at"]),
+                     "note": row["note"]} for row in history],
     }
+
+
+def set_stage(dsn: str, module_code: str, stage: int, *, done: bool, by: str, note: str = "") -> bool:
+    """단계 완료 표시(done=True) 또는 되돌림(False). 이력을 함께 남긴다. 상태가 실제로 바뀌었으면 True
+    (이미 완료인 단계를 다시 완료로 표시하면 사람·시각·메모를 새로 쓰고 True, 완료가 아닌 단계를 되돌리면 False)."""
+    with psycopg.connect(dsn) as connection:
+        if done:
+            connection.execute(
+                "INSERT INTO manuscript_stages (module_code, stage, done_by, note) VALUES (%s, %s, %s, %s) "
+                "ON CONFLICT (module_code, stage) DO UPDATE SET done_by = EXCLUDED.done_by, done_at = now(), note = EXCLUDED.note",
+                (module_code, stage, by, note))
+            changed = True
+        else:
+            changed = connection.execute("DELETE FROM manuscript_stages WHERE module_code = %s AND stage = %s",
+                                         (module_code, stage)).rowcount > 0
+        if changed:
+            connection.execute(
+                "INSERT INTO manuscript_stage_history (id, module_code, stage, action, changed_by, note) VALUES (%s, %s, %s, %s, %s, %s)",
+                (str(uuid4()), module_code, stage, "done" if done else "undone", by, note))
+    return changed
+
+
+def tag_review_stage(dsn: str, run_id: str, stage: int) -> None:
+    """원고 검수 실행에 고른 단계를 적는다(review_runs.work_stage)."""
+    with psycopg.connect(dsn) as connection:
+        connection.execute("UPDATE review_runs SET work_stage = %s WHERE id = %s", (stage, run_id))

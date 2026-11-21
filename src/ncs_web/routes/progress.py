@@ -1,13 +1,21 @@
 """원고 진행 현황(REQ-02-007 '원고별 편집·내용·저작권 검수 진행도 확인') — 원고(모듈 코드)마다 남아 있는 기록을 단계와 진행도로 보여 준다.
 
-읽기 전용이다: 새로 받는 입력이 없고, 이미 남은 기록(원고 검수·개발계획서 점검 이력, 분량 산정 이력, 의견 반영 검토와 권리 증빙 점검의
-개수 기록, 이미지 저작권 DB)만 모은다. 단계와 진행도를 만드는 일은 ncs_service.progress가 한다. 저장소가 이력을 지원할 때(PostgreSQL)만 붙는다.
+기록(원고 검수·개발계획서 점검 이력, 분량 산정 이력, 의견 반영 검토와 권리 증빙 점검의 개수 기록, 이미지 저작권 DB)은 모아서 보여 주기만 하고,
+단계의 완료는 담당자가 직접 표시한다(POST …/stages/{단계} — 누가·언제·메모가 남고 되돌릴 수 있다. 로그인이 없어 이름은 화면에서 받는다). 단계와 진행도를 만드는 일은 ncs_service.progress가 한다. 저장소가 이력을 지원할 때(PostgreSQL)만 붙는다.
 """
 
 from fastapi import FastAPI, Query
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException
 
 from ..common import Services
+
+
+class StageMark(BaseModel):
+    """단계 완료 표시·되돌림. by는 이력에 남는 이름(로그인이 없어 화면에서 입력받는다)."""
+    done: bool
+    by: str = Field(min_length=1, max_length=50)
+    note: str = Field(default="", max_length=300)
 
 
 def module_name(module_code: str) -> str:
@@ -31,14 +39,28 @@ def register(app: FastAPI, services: Services) -> None:
 
     @app.get("/api/manuscripts/{module_code}")
     def manuscript_progress(module_code: str) -> dict:
-        """한 원고의 진행 현황: 단계 7개(기록으로 미룬 상태)와 편집·내용·저작권 검수 진행도, 분량."""
+        """한 원고의 진행 현황: 단계 7개(담당자의 완료 표시와 근거 기록)와 편집·내용·저작권 검수 진행도, 분량."""
         from ncs_core import validate_module_code
 
         try:
             code = validate_module_code(module_code)
         except ValueError as error:
             raise HTTPException(400, str(error)) from None
-        found = store.get_progress(code, name=module_name(code))
-        if found is None:
-            raise HTTPException(404, "이 모듈 코드로 남은 기록이 없습니다")
-        return found
+        return store.get_progress(code, name=module_name(code))     # 기록이 없어도 빈 현황 — 일을 시작하기 전에 열어 단계를 표시할 수 있다
+
+    @app.post("/api/manuscripts/{module_code}/stages/{stage}")
+    def mark_stage(module_code: str, stage: int, mark: StageMark) -> dict:
+        """단계를 완료로 표시하거나(done=true) 되돌린다(false). 바뀐 뒤의 진행 현황을 돌려준다."""
+        from ncs_core import validate_module_code
+        from ncs_service.progress import STAGE_NUMBERS
+
+        try:
+            code = validate_module_code(module_code)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from None
+        if stage not in STAGE_NUMBERS:
+            raise HTTPException(400, f"단계는 {STAGE_NUMBERS[0]}~{STAGE_NUMBERS[-1]} 중 하나여야 합니다")
+        if not mark.by.strip():
+            raise HTTPException(400, "표시한 사람의 이름을 적어 주세요")
+        store.set_stage(code, stage, done=mark.done, by=mark.by.strip(), note=mark.note.strip())
+        return store.get_progress(code, name=module_name(code))
