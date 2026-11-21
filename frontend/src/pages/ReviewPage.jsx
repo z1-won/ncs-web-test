@@ -27,6 +27,11 @@ const SLOTS = [
   { role: "print", label: "출력본 PDF", accept: ".pdf" },
 ];
 
+// 원고 단계 선택지 — 서버 ncs_service.progress.REVIEW_STAGES와 같아야 한다
+const WORK_STAGE_OPTIONS = [
+  { value: "", label: "고르지 않음" }, { value: "2", label: "초고본" }, { value: "3", label: "수정본" }, { value: "6", label: "최종본" },
+];
+
 export default function ReviewPage() {
   usePageTitle("원고 검수");
   const [check, setCheck] = useState(ALL_CHECK); // 기본은 전체 검수
@@ -38,6 +43,7 @@ export default function ReviewPage() {
   const fileRoles = useMemo(() => filled.map((slot) => slot.role), [filled]);   // files와 같은 순서의 역할
   const [tried, setTried] = useState(false);   // 실행을 한 번 눌렀는가 — 그 뒤부터 빈 필수 칸에 오류 문구를 보인다
   const [moduleCode, setModuleCode] = useState("");
+  const [workStage, setWorkStage] = useState("");   // 원고 진행 현황의 단계(초고본 2·수정본 3·최종본 6). 비우면 단계 없이 남는다
   const [imageDpi, setImageDpi] = useState(String(IMAGE_DPI_DEFAULT));   // 이미지 해상도 기준 — 기타 ⑤·⑧에 쓰인다
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -145,12 +151,12 @@ export default function ReviewPage() {
     const controller = new AbortController();
     aborter.current = controller;
     let kept = await ensureUpload(controller.signal);
-    let answer = kept ? await api.review({ check, moduleCode, upload: kept.token, imageDpi, signal: controller.signal }) : null;
+    let answer = kept ? await api.review({ check, moduleCode, upload: kept.token, imageDpi, workStage, signal: controller.signal }) : null;
     if (answer && !answer.ok && answer.status === 400 && /만료/.test(answer.error)) {
       setUpload({ status: "idle" });
       uploadRef.current = { status: "idle" };
       kept = await ensureUpload(controller.signal);
-      answer = kept ? await api.review({ check, moduleCode, upload: kept.token, imageDpi, signal: controller.signal }) : null;
+      answer = kept ? await api.review({ check, moduleCode, upload: kept.token, imageDpi, workStage, signal: controller.signal }) : null;
     }
     if (answer && !answer.aborted) {
       if (!answer.ok) setError(answer.error);
@@ -193,7 +199,7 @@ export default function ReviewPage() {
       if (items[value].status === "skipped") continue;
       if (cancelled) { update(value, { status: "cancelled" }); continue; }
       update(value, { status: "running" });
-      const { ok, data, error: message, aborted } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group, imageDpi, signal: controller.signal });
+      const { ok, data, error: message, aborted } = await api.review({ check: value, moduleCode, upload: upload.upload, group: upload.group, imageDpi, workStage, signal: controller.signal });
       if (aborted) { cancelled = true; update(value, { status: "cancelled" }); continue; }
       update(value, ok ? { status: "done", data } : { status: "error", error: message });
     }
@@ -297,6 +303,15 @@ export default function ReviewPage() {
             <input id="module-code" type="text" className="krds-input" placeholder="예: LM1203020201_24v3" value={moduleCode} onChange={(e) => setModuleCode(e.target.value)} />
           </div>
           <p className="form-hint">비워 두면 원고 파일 이름에서 찾습니다.</p>
+        </div>
+
+        {/* 원고 단계 — 진행 현황(/progress)에서 이 검수가 초고본·수정본·최종본 중 어느 것의 기록인지 가르는 데 쓴다. 고르지 않아도 검수는 같다 */}
+        <div className="form-group">
+          <div className="form-tit"><label htmlFor="work-stage">원고 단계</label></div>
+          <div className="form-conts">
+            <KrdsSelect id="work-stage" value={workStage} options={WORK_STAGE_OPTIONS} onChange={setWorkStage} title="원고 단계 선택" describedBy="work-stage-hint" />
+          </div>
+          <p className="form-hint" id="work-stage-hint">고르면 진행 현황에서 그 단계의 기록으로 보입니다.</p>
         </div>
 
         {/* 이미지 해상도 기준 — 지침에 숫자 기준이 없어 고르게 한다. 기타 ⑤·⑧만 쓰므로 전체·기타를 고를 때만 보인다 */}

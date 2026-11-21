@@ -93,9 +93,10 @@ export const api = {
   // signal: AbortController.signal — 취소 버튼
   // stage: 개발계획서 점검(plan)만 — "final" 최종본(기본) / "draft" 직능연 1차본(기관 기재 칸은 해당 없음)
   // imageDpi: 이미지 해상도 기준(150/300) — 기타(misc) 검수의 ⑤·⑧에만 쓰인다
-  review: ({ check, moduleCode, files = [], roles, upload, group, stage, imageDpi, signal }) =>
+  review: ({ check, moduleCode, files = [], roles, upload, group, stage, imageDpi, workStage, signal }) =>
     request("/api/review", { method: "POST", body: multipart({ check, module_code: moduleCode, upload, group, stage: check === "plan" ? stage : undefined,
                                                               roles: roles ? JSON.stringify(roles) : undefined,
+                                                              work_stage: check !== "plan" && workStage ? String(workStage) : undefined,
                                                               image_dpi: check === "misc" && imageDpi ? String(imageDpi) : undefined }, files), signal }),
   uploads: {
     create: (files, signal, roles) => request("/api/uploads", { method: "POST", body: multipart({ roles: roles ? JSON.stringify(roles) : undefined }, files), signal }),
@@ -208,6 +209,9 @@ export const api = {
   manuscripts: {
     list: () => request("/api/manuscripts"),
     get: (code) => request(`/api/manuscripts/${encodeURIComponent(code)}`),
+    // 단계 완료 표시(done=true)·되돌림(false). by는 이력에 남는 이름. 바뀐 뒤의 진행 현황이 온다
+    markStage: (code, stage, { done, by, note = "" }) => request(`/api/manuscripts/${encodeURIComponent(code)}/stages/${stage}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ done, by, note }) }),
   },
   // 원고 분량 산정 이력(DB 모드에서만 — /api/health의 history). get은 방금 산정한 결과와 같은 모양(+ id, created_at, 입력)
   volumes: {

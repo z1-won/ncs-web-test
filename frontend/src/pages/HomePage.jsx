@@ -65,7 +65,7 @@ export default function HomePage() {
       {list && (
         <section aria-labelledby="home-recent-title">
           <div className="home-section-head">
-            <h2 className="section-title" id="home-recent-title">최근 원고 <span className="meta">기록이 있는 단계, {STAGE_COUNT}단계 중</span></h2>
+            <h2 className="section-title" id="home-recent-title">최근 원고 <span className="meta">담당자가 완료로 표시한 단계, {STAGE_COUNT}단계 중</span></h2>
             <Link className="krds-btn small tertiary" to="/progress">진행 현황 전체 보기</Link>
           </div>
           {list.length === 0 ? (
@@ -77,9 +77,9 @@ export default function HomePage() {
                   <Link to={`/progress?code=${encodeURIComponent(row.module_code)}`}>
                     <strong className="home-card-title">{row.name || row.module_code}</strong>
                     <span className="home-card-files">{row.module_code}</span>
-                    <span className="home-recent-steps" aria-label={`기록이 있는 단계 ${row.stages_recorded}, 전체 ${STAGE_COUNT}`}>
-                      {Array.from({ length: STAGE_COUNT }, (_, i) => <i key={i} className={i < row.stages_recorded ? "is-on" : ""} aria-hidden="true" />)}
-                      <b>{row.stages_recorded} / {STAGE_COUNT}</b>
+                    <span className="home-recent-steps" aria-label={`완료한 단계 ${row.stages_done}, 전체 ${STAGE_COUNT}`}>
+                      {Array.from({ length: STAGE_COUNT }, (_, i) => <i key={i} className={i < row.stages_done ? "is-on" : ""} aria-hidden="true" />)}
+                      <b>완료 {row.stages_done} / {STAGE_COUNT}</b>
                     </span>
                     <span className="home-card-files">최근 기록 {new Date(row.last_at).toLocaleDateString("ko-KR")}</span>
                   </Link>

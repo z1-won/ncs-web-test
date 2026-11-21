@@ -188,7 +188,7 @@ ncs-web --dist frontend/dist          # API + 빌드된 화면, http://127.0.0.1
 | `POST /api/review` (`files[]`, `check`, `module_code`) | 검수 1건. 응답은 요약·검수확인서·진단·지적사항·전체 |
 | `POST /api/uploads` → `{upload, group, roles, expires_in}` / `DELETE /api/uploads/{token}` | 전체 실행: 파일을 한 번 올려 토큰을 받고(`roles`에 `files`와 같은 순서의 역할 JSON 배열을 주면 내용 판별 대신 그 역할로 받는다 — 화면의 업로드 칸), `POST /api/review`에 `upload=토큰&group=묶음id`로 엔진마다 부른다. 토큰은 10분 뒤 자동 삭제 |
 | `GET /api/reviews[?standalone=true]`, `GET/DELETE /api/reviews/{id}`, `GET /api/reviews/{id}/zip` | 단독 실행 이력(`DATABASE_URL` 설정 시) |
-| `GET /api/manuscripts`, `GET /api/manuscripts/{모듈 코드}` | **원고 진행 현황**(REQ-02-007, `DATABASE_URL` 설정 시): 기록이 있는 원고 목록, 한 원고의 단계 7개(기록으로 미룬 상태)와 편집·내용·저작권 검수 진행도. 화면은 `/progress`(머리글 오른쪽의 '진행 현황'), 처음 화면 `/`에 최근 원고 미리 보기 |
+| `GET /api/manuscripts`, `GET /api/manuscripts/{모듈 코드}` | **원고 진행 현황**(REQ-02-007, `DATABASE_URL` 설정 시): 기록이 있는 원고 목록, 한 원고의 단계 7개(담당자의 완료 표시와 근거 기록)와 편집·내용·저작권 검수 진행도. `POST /api/manuscripts/{모듈 코드}/stages/{단계}`로 단계를 완료로 표시하거나 되돌림. 화면은 `/progress`(머리글 오른쪽의 '진행 현황'), 처음 화면 `/`에 최근 원고 미리 보기 |
 | `GET /api/groups`, `GET/DELETE /api/groups/{group_id}` | 전체 실행 묶음 이력 — 한 묶음의 모든 검수를 한 번에 열고 지운다 |
 | `POST /api/export/sheet?format=xlsx\|hwpx` (`{module_code, rows, created_at}`) | **F02 검수 확인서 파일**. hwpx는 원본 양식(`src/ncs_core/data/F02_검수확인서_양식.hwpx`)에 ✓·비고를 채운 제출본, xlsx는 열람·편집용. 실행하지 않은 구성요소는 '미검사'로 54개 항목을 모두 채운다 |
 | `POST /api/export/annotated` (`upload` 토큰, `rows` JSON) | **수정 메모 원고**: 원고 hwpx의 해당 문단에 지적사항을 한글 메모로 단 파일(본문 불변). 문단을 못 찾은 지적은 첫 문단의 총괄 메모에 목록으로. hwp 원고는 불가 |
