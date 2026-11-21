@@ -56,21 +56,32 @@ export default function OpinionPage() {
         모든 의견을 확인 필요로 표시하고 이유를 함께 보여 줍니다. 이 화면의 판정은 참고용이며 최종 판단은 담당자가 합니다. 올린 파일은 검토 뒤 바로 지웁니다.
       </p>
 
-      <form className="fieldset review-form" onSubmit={submit}>
+      {/* 입력 묶음은 구획 셋: 원고 → 의견서 → 실행(권리 증빙 점검과 같은 구조). 필수인 최종 원고를 맨 앞에 둔다 */}
+      <form className="fieldset review-form is-sectioned" onSubmit={submit}>
+        <div className="form-section" role="group" aria-labelledby="opinion-manuscript-title">
+        <h2 className="form-section-title" id="opinion-manuscript-title">원고</h2>
+        <div className="form-section-grid">
+        <FileSlot id="opinion-final" label="최종 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
+                  hint="의견을 반영한 원고(hwp, hwpx)." />
+        <FileSlot id="opinion-previous" label="반영 전 원고" accept=".hwp,.hwpx" file={previous} onChange={setPrevious} disabled={busy}
+                  hint="hwp, hwpx. 올리면 원래 있던 표현을 반영으로 보지 않습니다." />
+        <FileSlot id="opinion-print" label="출력본 PDF" accept=".pdf" file={printCopy} onChange={setPrintCopy} disabled={busy}
+                  hint="pdf. 올리면 근거 문장이 실린 쪽을 함께 보여 줍니다." />
+        </div>
+        </div>
+        <div className="form-section" role="group" aria-labelledby="opinion-opinions-title" aria-describedby="opinion-opinions-desc">
+        <h2 className="form-section-title" id="opinion-opinions-title">의견서</h2>
+        <p className="form-section-desc" id="opinion-opinions-desc">세 칸 중 하나 이상 올려 주세요.</p>
+        <div className="form-section-grid">
         <FileSlot id="opinion-first" label="1차 검토의견서" accept=".pdf,.hwp,.hwpx" file={first} onChange={setFirst} disabled={busy}
-                  hint="개발계획서 및 초고본 검토의견서(PDF, hwp, hwpx). 의견서는 세 칸 중 하나 이상 필요합니다." />
+                  hint="개발계획서 및 초고본 검토의견서(PDF, hwp, hwpx)." />
         <FileSlot id="opinion-second" label="2차 검토의견서" accept=".pdf,.hwp,.hwpx" file={second} onChange={setSecond} disabled={busy}
                   hint="완성본 검토의견서(PDF, hwp, hwpx)." />
         <FileSlot id="opinion-third" label="심의의견서" accept=".pdf,.hwp,.hwpx" file={third} onChange={setThird} disabled={busy}
-                  hint="심의의견서(PDF, hwp, hwpx). 검토의견서와 같은 표(구분, 쪽수, 심의의견)로 된 것을 읽습니다." />
-        <FileSlot id="opinion-final" label="최종 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
-                  hint="의견을 반영한 원고(hwp, hwpx)." />
-        <FileSlot id="opinion-print" label="출력본 PDF" accept=".pdf" file={printCopy} onChange={setPrintCopy} disabled={busy}
-                  hint="최종 원고의 PDF입니다. 올리면 근거 문장이 실린 쪽을 함께 보여 줍니다." />
-        <FileSlot id="opinion-previous" label="반영 전 원고" accept=".hwp,.hwpx" file={previous} onChange={setPrevious} disabled={busy}
-                  hint="초고본이나 완성본을 올리면 원래 있던 표현을 반영으로 잘못 보지 않게 걸러 냅니다." />
-        <div className="form-group form-actions">
-          <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
+                  hint="PDF, hwp, hwpx. 구분, 쪽수, 심의의견 표를 읽습니다." />
+        </div>
+        </div>
+        <div className="form-actions">
           <div className="run-buttons">
             <button className="krds-btn primary large" type="submit" disabled={busy || !ready}>{busy ? "검토하는 중" : "반영 여부 검토"}</button>
             {busy && <button className="krds-btn tertiary large" type="button" onClick={() => aborter.current?.abort()}>취소</button>}
