@@ -363,7 +363,7 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
    칸(.form-group)은 subgrid로 레이블 / 입력 / 도움말 줄을 옆 칸과 맞춘다 — 도움말 길이나 올린 파일 수가 달라도 같은 줄의 입력과 도움말이 같은 높이에서 시작한다 */
 .review-form.fieldset.is-sectioned { display: flex; flex-direction: column; align-items: stretch; gap: var(--krds-gap-8); }
 .form-section { min-width: 0; }
-.form-section + .form-section, .form-section + .form-actions { padding-top: var(--krds-padding-8); border-top: 1px solid var(--krds-light-color-divider-gray-light); }
+.form-section + .form-section, .form-section + .form-actions, .form-section-grid + .form-actions { padding-top: var(--krds-padding-8); border-top: 1px solid var(--krds-light-color-divider-gray-light); }
 .form-section-title { margin: 0 0 var(--krds-gap-5); font-size: var(--krds-pc-font-size-heading-xsmall); font-weight: var(--krds-font-weight-bold); }
 .form-section-title:has(+ .form-section-desc) { margin-bottom: var(--krds-gap-2); }
 .form-section-desc { margin: 0 0 var(--krds-gap-5); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }   /* 구획 전체에 걸리는 조건(예: 셋 중 하나 이상) */

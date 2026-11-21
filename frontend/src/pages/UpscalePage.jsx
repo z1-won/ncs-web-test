@@ -49,7 +49,9 @@ export default function UpscalePage() {
         올린 원고 파일은 바뀌지 않습니다.
       </p>
 
-      <div className="fieldset review-form">
+      {/* 칸이 둘뿐이라 구획 제목 없이 3열 격자만 쓴다(다른 화면의 입력 묶음과 같은 열·폭) */}
+      <div className="fieldset review-form is-sectioned">
+        <div className="form-section-grid">
         <FileSlot id="file-upscale" label="원고" required accept=".hwpx" file={file} onChange={setFile}
                   uploading={upload.status === "uploading"} invalid={upload.status === "error" ? upload.error : null}
                   hint="hwpx 원고만 됩니다. hwp는 한글에서 hwpx로 저장해 올리세요." />
@@ -58,7 +60,8 @@ export default function UpscalePage() {
           <div className="form-conts">
             <KrdsSelect id="upscale-dpi" value={targetDpi} options={IMAGE_DPI_OPTIONS} onChange={setTargetDpi} title="이미지 해상도 기준 선택" describedBy="upscale-dpi-hint" />
           </div>
-          <p className="form-hint" id="upscale-dpi-hint">이 값보다 낮은 그림을 찾아 보여 줍니다. 원고 검수의 기준과 같은 선택지입니다.</p>
+          <p className="form-hint" id="upscale-dpi-hint">이 값보다 해상도가 낮은 그림을 찾습니다.</p>
+        </div>
         </div>
       </div>
 

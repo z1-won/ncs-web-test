@@ -133,11 +133,13 @@ export default function SuggestPage() {
         생성형 AI를 쓸 수 없을 때는 고칠 문장을 찾지 않고 그 이유만 보여 줍니다. 올린 파일은 계산 뒤 바로 지웁니다.
       </p>
 
-      <form className="fieldset review-form" onSubmit={submit}>
+      {/* 칸이 하나라 구획 제목 없이 3열 격자와 실행 줄만 쓴다(다른 화면의 입력 묶음과 같은 열·폭) */}
+      <form className="fieldset review-form is-sectioned" onSubmit={submit}>
+        <div className="form-section-grid">
         <FileSlot id="suggest-file" label="원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
-                  hint="집필 중인 원고(hwp, hwpx). hwpx면 수행 순서 번호를 더 정확히 찾습니다." />
-        <div className="form-group form-actions">
-          <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
+                  hint="hwp, hwpx. hwpx면 수행 순서 번호를 더 정확히 찾습니다." />
+        </div>
+        <div className="form-actions">
           <div className="run-buttons">
             <button className="krds-btn primary large" type="submit" disabled={busy || !file}>{busy ? "찾는 중" : "문장 추천"}</button>
             {busy && <button className="krds-btn tertiary large" type="button" onClick={() => aborter.current?.abort()}>취소</button>}
