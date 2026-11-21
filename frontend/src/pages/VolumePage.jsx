@@ -100,20 +100,36 @@ export default function VolumePage() {
         {history && " 산정 결과와 입력한 값은 산정 이력에 저장합니다. 원고 파일은 저장하지 않고 파일 이름만 기록합니다."}
       </p>
 
-      <form className="fieldset review-form" onSubmit={submit}>
+      {/* 입력 묶음은 구획 셋: 파일 올리기 → 산정 조건 → 실행(다른 화면과 같은 구조). 칸 아래 도움말은 한 줄로 두고, 긴 설명은 구획 설명(.form-section-desc)에 모은다 */}
+      <form className="fieldset review-form is-sectioned" onSubmit={submit}>
+        <div className="form-section" role="group" aria-labelledby="volume-files-title" aria-describedby="volume-files-desc">
+        <h2 className="form-section-title" id="volume-files-title">파일 올리기</h2>
+        <p className="form-section-desc" id="volume-files-desc">
+          최종 원고는 한글에서 저장한 파일이어야 줄과 쪽을 정확히 셉니다. 출력본 PDF를 올리면 전체 쪽 수, 구성별 쪽, 쪽마다 채운 높이를 PDF에서 직접 재어 산정에 씁니다.
+        </p>
+        <div className="form-section-grid">
         <FileSlot id="volume-final" label="최종 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
-                  hint="3차 검토까지 반영한 최종 완성본(hwp, hwpx). 한글에서 저장한 파일이어야 줄과 쪽을 정확히 셉니다." />
+                  hint="hwp, hwpx. 3차 검토까지 반영한 최종 완성본입니다." />
         <FileSlot id="volume-previous" label="기존 원고" accept=".hwp,.hwpx" file={previous} onChange={setPrevious} disabled={busy}
-                  hint="기존 학습모듈 원고를 올리면 한 글자라도 바뀐 행을 변경 분량으로 셉니다." />
+                  hint="hwp, hwpx. 한 글자라도 바뀐 행을 변경 분량으로 셉니다." />
         <FileSlot id="volume-print" label="출력본 PDF" accept=".pdf" file={printCopy} onChange={setPrintCopy} disabled={busy}
-                  hint="최종 원고를 한글에서 PDF로 저장한 파일입니다. 올리면 전체 쪽 수, 구성별 쪽, 쪽마다 채운 높이를 PDF에서 직접 재어 산정에 씁니다." />
+                  hint="pdf. 최종 원고를 한글에서 PDF로 저장한 파일입니다." />
+        </div>
+        </div>
+        <div className="form-section" role="group" aria-labelledby="volume-options-title" aria-describedby="volume-options-desc">
+        <h2 className="form-section-title" id="volume-options-title">산정 조건</h2>
+        <p className="form-section-desc" id="volume-options-desc">
+          계약서에는 단가가 없어(제2조 계약금액 빈칸), 단가를 비우면 예산집행 및 정산지침의 상한인 50,000원/쪽으로 계산합니다.
+          계약 분량을 넣으면 넘는 분량은 인정하지 않고(추가금 없음), 모자라면 제출 분량만큼 계산합니다.
+        </p>
+        <div className="form-section-grid">
         <div className="form-group">
           <div className="form-tit"><label htmlFor="volume-manual">수작업 산정 쪽수 (선택)</label></div>
           <div className="form-conts">
             <input id="volume-manual" type="number" min="1" step="0.5" className="krds-input" value={manual} disabled={busy}
                    onChange={(e) => setManual(e.target.value)} aria-describedby="volume-manual-hint" placeholder="예: 80" />
           </div>
-          <p className="form-hint" id="volume-manual-hint">넣으면 자동 산정과의 오차율(기준 0.5% 이내)을 함께 보여 줍니다.</p>
+          <p className="form-hint" id="volume-manual-hint">넣으면 자동 산정과의 오차율을 보여 줍니다(기준 0.5% 이내).</p>
         </div>
         <div className="form-group">
           <div className="form-tit"><label htmlFor="volume-unit-price">원고료 단가 (원/쪽, 선택)</label></div>
@@ -121,7 +137,7 @@ export default function VolumePage() {
             <input id="volume-unit-price" type="number" min="1" step="1" className="krds-input" value={unitPrice} disabled={busy}
                    onChange={(e) => setUnitPrice(e.target.value)} aria-describedby="volume-unit-price-hint" placeholder="50000" />
           </div>
-          <p className="form-hint" id="volume-unit-price-hint">계약서에는 단가가 없고(제2조 계약금액 빈칸), 예산집행 및 정산지침의 원고료 50,000원/쪽은 상한입니다. 비우면 상한으로 계산합니다.</p>
+          <p className="form-hint" id="volume-unit-price-hint">비우면 상한인 50,000원으로 계산합니다.</p>
         </div>
         <div className="form-group">
           <div className="form-tit"><label htmlFor="volume-contract-pages">계약 분량 (매, 선택)</label></div>
@@ -129,7 +145,7 @@ export default function VolumePage() {
             <input id="volume-contract-pages" type="number" min="1" step="1" className="krds-input" value={contractPages} disabled={busy}
                    onChange={(e) => setContractPages(e.target.value)} aria-describedby="volume-contract-pages-hint" placeholder="예: 80" />
           </div>
-          <p className="form-hint" id="volume-contract-pages-hint">과업지시서에 적은 원고 분량입니다. 넣으면 넘는 분량은 인정하지 않고(추가금 없음), 모자라면 제출 분량만큼 계산합니다.</p>
+          <p className="form-hint" id="volume-contract-pages-hint">과업지시서에 적은 원고 분량입니다.</p>
         </div>
         <div className="form-group">
           <div className="form-tit"><span>부록</span></div>
@@ -140,8 +156,9 @@ export default function VolumePage() {
             </div>
           </div>
         </div>
-        <div className="form-group form-actions">
-          <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
+        </div>
+        </div>
+        <div className="form-actions">
           <div className="run-buttons">
             <button className="krds-btn primary large" type="submit" disabled={busy || !file}>{busy ? "세는 중" : "분량 산정"}</button>
             {busy && <button className="krds-btn tertiary large" type="button" onClick={() => aborter.current?.abort()}>취소</button>}
