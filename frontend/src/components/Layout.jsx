@@ -146,6 +146,8 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
               )) : (
               <div className="header-actions">
                 {account && <span className="header-account"><strong>{account.name}</strong> {account.role_name}</span>}
+                <Link to="/cases" className={`krds-btn small ${location.pathname === "/cases" ? "secondary" : "tertiary"}`}
+                      aria-current={location.pathname === "/cases" ? "page" : undefined}>세분류 건</Link>
                 <Link to="/progress" className={`krds-btn small ${location.pathname === "/progress" ? "secondary" : "tertiary"}`}
                       aria-current={location.pathname === "/progress" ? "page" : undefined}>진행 현황</Link>
                 {account && <button type="button" className="krds-btn small tertiary" onClick={logOut}>로그아웃</button>}

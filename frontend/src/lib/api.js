@@ -216,6 +216,15 @@ export const api = {
     return request("/api/volume", { method: "POST", body: form, signal });
   },
   // 원고 진행 현황(REQ-02-007, DB 모드에서만 — /api/health의 history): 원고(모듈 코드) 목록과 한 원고의 단계·진행도
+  // 세분류 건(REQ-02-007): 건 → 권(담당 집필자) → 사건. 볼 수 있는 범위와 권한은 서버가 로그인한 계정으로 거른다
+  cases: {
+    list: () => request("/api/cases"),                                   // { cases, can_manage }
+    options: () => request("/api/cases/options"),                        // { improvements, year, authors }
+    lookup: (subclass) => request(`/api/cases/lookup?subclass=${encodeURIComponent(subclass)}`),   // { subclass, name, volumes }
+    create: (body) => postJson("/api/cases", body),
+    get: (id) => request(`/api/cases/${encodeURIComponent(id)}`),
+    assignAuthor: (id, volumeId, authorId) => postJson(`/api/cases/${encodeURIComponent(id)}/volumes/${encodeURIComponent(volumeId)}/author`, { author_id: authorId }),
+  },
   manuscripts: {
     list: () => request("/api/manuscripts"),
     get: (code) => request(`/api/manuscripts/${encodeURIComponent(code)}`),

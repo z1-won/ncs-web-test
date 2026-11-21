@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import CasesPage from "./pages/CasesPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import ImageDbPage from "./pages/ImageDbPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
@@ -35,7 +36,7 @@ function AuthGate({ children }) {
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {/* 페이지: / 처음 화면(최근 원고 미리 보기와 기능 바로 가기), /review 원고 검수, /plan 개발계획서 작성, /upscale 업스케일링, /images 이미지 저작권 DB, /recommend 이미지 추천, /rights 권리 증빙 점검, /volume 원고 분량 산정, /opinion 의견 반영 검토, /suggest 문장 추천, /progress 원고 진행 현황. 서버(ncs_web)는 /api 밖 404를 index.html로 돌려 새로 고침에도 열린다 */}
+    {/* 페이지: / 처음 화면(최근 원고 미리 보기와 기능 바로 가기), /review 원고 검수, /plan 개발계획서 작성, /upscale 업스케일링, /images 이미지 저작권 DB, /recommend 이미지 추천, /rights 권리 증빙 점검, /volume 원고 분량 산정, /opinion 의견 반영 검토, /suggest 문장 추천, /progress 원고 진행 현황, /cases 세분류 건. 서버(ncs_web)는 /api 밖 404를 index.html로 돌려 새로 고침에도 열린다 */}
     <BrowserRouter>
       <AuthProvider>
       <AuthGate>
@@ -52,6 +53,7 @@ createRoot(document.getElementById("root")).render(
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/opinion" element={<OpinionPage />} />
         <Route path="/progress" element={<ProgressPage />} />
+        <Route path="/cases" element={<CasesPage />} />
         <Route path="*" element={<HomePage />} />
       </Routes>
       </AuthGate>
