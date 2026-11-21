@@ -107,7 +107,7 @@ class VolumeHistoryWebTests(unittest.TestCase):
         from fastapi.testclient import TestClient
         from ncs_web.server import create_app
 
-        return TestClient(create_app(database_url="postgresql://example"))
+        return TestClient(create_app(database_url="postgresql://example", require_login=False))
 
     def post(self, client, data=None, **files):
         return client.post("/api/volume", data=data or {}, files={k: (v.name, v.read_bytes()) for k, v in files.items()})

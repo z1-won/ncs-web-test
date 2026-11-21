@@ -64,7 +64,7 @@ class PostgresIntegrationTests(unittest.TestCase):
         run_id = None
         kept = self._kept_files()
         try:
-            with TestClient(create_app(database_url=DSN)) as client:
+            with TestClient(create_app(database_url=DSN, require_login=False)) as client:
                 response = client.post("/api/volume", data={"unit_price": "46200", "contract_pages": "1"},
                                        files={"manuscript": (MANUSCRIPT.name, MANUSCRIPT.read_bytes())})
                 self.assertEqual(response.status_code, 200, response.text)
@@ -109,7 +109,7 @@ class PostgresIntegrationTests(unittest.TestCase):
             self.assertTrue(any(row["id"] == run_id for row in list_reviews(
                 DSN, module_code=review.result.module_code, check="position")))
 
-            with TestClient(create_app(database_url=DSN)) as client:
+            with TestClient(create_app(database_url=DSN, require_login=False)) as client:
                 self.assertEqual(client.get(f"/api/reviews/{run_id}").status_code, 200)
                 self.assertEqual(client.get(f"/api/reviews/{run_id}/zip").status_code, 200)
                 response = client.post("/api/review", files=[
@@ -131,7 +131,7 @@ class PostgresIntegrationTests(unittest.TestCase):
                 self.assertFalse(import_directory(DSN, saved.directory))
                 self.assertEqual(get_review(DSN, imported_id)["source"], "import")
 
-            with TestClient(create_app(database_url=DSN)) as client:
+            with TestClient(create_app(database_url=DSN, require_login=False)) as client:
                 self.assertEqual(client.delete(f"/api/reviews/{web_id}").status_code, 204)
                 self.assertEqual(client.delete(f"/api/reviews/{web_id}").status_code, 404)
             self.assertIsNone(get_review(DSN, web_id))
@@ -142,7 +142,7 @@ class PostgresIntegrationTests(unittest.TestCase):
             self.assertFalse(delete_review(DSN, "not-a-uuid"))
 
             # 전체 실행 묶음: 토큰으로 두 검수 → /api/groups 한 줄 → 상세 → 삭제 시 묶음 전체가 지워진다
-            with TestClient(create_app(database_url=DSN)) as client:
+            with TestClient(create_app(database_url=DSN, require_login=False)) as client:
                 token = client.post("/api/uploads", files=[
                     ("files", (path.name, path.read_bytes())) for path in (MANUSCRIPT, PLAN)
                 ]).json()

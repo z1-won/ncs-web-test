@@ -63,7 +63,7 @@ class PostgresModeTests(unittest.TestCase):
             }
             with patch("ncs_service.postgres.migrate"), patch("ncs_service.postgres.get_review", return_value=detail), \
                  patch("ncs_service.postgres.list_reviews", return_value=[{"id": response.json()["id"]}]):
-                with TestClient(create_app(database_url="postgresql://example")) as client:
+                with TestClient(create_app(database_url="postgresql://example", require_login=False)) as client:
                     self.assertIs(client.get("/api/health").json()["history"], True)
                     self.assertEqual(len(client.get("/api/reviews").json()), 1)
                     self.assertEqual(client.get(f"/api/reviews/{response.json()['id']}").json(), detail)
@@ -75,7 +75,7 @@ class PostgresModeTests(unittest.TestCase):
     def test_database_web_delete_history(self):
         with patch("ncs_service.postgres.migrate"), \
              patch("ncs_service.postgres.delete_review", side_effect=[True, False]) as delete:
-            with TestClient(create_app(database_url="postgresql://example")) as client:
+            with TestClient(create_app(database_url="postgresql://example", require_login=False)) as client:
                 self.assertEqual(client.delete("/api/reviews/run-1").status_code, 204)
                 missing = client.delete("/api/reviews/run-2")
         self.assertEqual(missing.status_code, 404)

@@ -21,7 +21,7 @@ class RightsLinkIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         migrate(DSN)
-        cls.client = TestClient(create_app(database_url=DSN))
+        cls.client = TestClient(create_app(database_url=DSN, require_login=False))
 
     def setUp(self):
         folder = tempfile.TemporaryDirectory()

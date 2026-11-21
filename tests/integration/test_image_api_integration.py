@@ -28,7 +28,7 @@ class ImageApiIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         migrate(DSN)
-        cls.client = TestClient(create_app(database_url=DSN))
+        cls.client = TestClient(create_app(database_url=DSN, require_login=False))
 
     def setUp(self):
         self.tag = f"테스트-{uuid4()}"          # 이 테스트가 넣은 그림만 고르는 키워드

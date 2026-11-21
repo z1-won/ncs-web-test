@@ -92,7 +92,7 @@ class ProgressIntegrationTests(unittest.TestCase):
 
     def test_web_routes(self):
         self.seed()
-        with TestClient(create_app(database_url=DSN)) as client:
+        with TestClient(create_app(database_url=DSN, require_login=False)) as client:
             listed = client.get("/api/manuscripts", params={"limit": 100})
             self.assertEqual(listed.status_code, 200, listed.text)
             row = next(r for r in listed.json() if r["module_code"] == CODE)

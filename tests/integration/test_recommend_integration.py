@@ -30,7 +30,7 @@ class RecommendIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         migrate(DSN)
-        cls.client = TestClient(create_app(database_url=DSN))
+        cls.client = TestClient(create_app(database_url=DSN, require_login=False))
 
     def setUp(self):
         self.tag = "낱말" + uuid4().hex[:10]        # 이 테스트가 넣은 그림에만 있는 핵심어

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
+from . import auth
 from .common import Services, allowed_origins, error_response
 from .routes import export, history, images, opinion, plan, progress, recommend, review, rights, suggest, upscale, volume
 from .uploads import UploadStore
@@ -23,12 +24,15 @@ def create_app(
     dist_dir: str | Path | None = None,
     database_url: str | None = None,
     data_dir: str | Path | None = None,
+    require_login: bool | None = None,
 ) -> FastAPI:
     """경로는 앱 생성 시 실행 위치를 기준으로 확정한다. dist_dir 생략 시 API만 제공한다.
 
     저장소는 open_store()가 고른다: database_url이 있으면 PostgreSQL 이력, 없으면 out_dir의 파일 폴더.
     data_dir는 기준정보 폴더(ncs_core.refdata) — 운영 중에 NCS·법제처에서 받아 온 기준정보를 두는 곳. 주지 않으면(None)
     환경 변수 NCS_DATA_DIR를 따르고, 그것도 없으면 운영 중 조회를 하지 않는다(패키지에 든 표만 쓴다).
+    require_login: 로그인한 사람만 /api를 쓰게 할지(ncs_web.auth). 주지 않으면(None) 데이터베이스가 있을 때 켠다 — 계정을 둘 곳이
+    있어야 하기 때문이다. DB 없이 띄운 서버는 로그인이 없고 이 컴퓨터(127.0.0.1)에서만 열린다. False는 테스트에서만 쓴다.
     """
     from ncs_core import refdata
     from ncs_service import open_store
@@ -46,6 +50,9 @@ def create_app(
     store.prepare()
     uploads_store = UploadStore()
     app.state.uploads = uploads_store
+    if require_login and not store.supports_history:
+        raise ValueError("로그인을 쓰려면 데이터베이스(DATABASE_URL)가 필요합니다")
+    auth.install(app, store, require_login=store.supports_history if require_login is None else require_login)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError) -> JSONResponse:

@@ -305,4 +305,24 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      ");\n"
      "CREATE INDEX IF NOT EXISTS manuscript_stage_history_idx ON manuscript_stage_history (module_code, changed_at DESC);\n"
      "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS work_stage smallint"),
+    # 012: 계정과 로그인 세션(ncs_service.accounts) — 회원가입 없이 관리자가 계정을 만든다. 비밀번호는 scrypt 값만, 세션은 토큰의 sha256만 둔다.
+    # 역할 허용값은 ncs_service.accounts.ROLES와 같아야 한다(test_accounts가 검사한다).
+    ("012_accounts",
+     "CREATE TABLE IF NOT EXISTS accounts (\n"
+     "    id uuid PRIMARY KEY,\n"
+     "    login text NOT NULL UNIQUE,\n"
+     "    name text NOT NULL,\n"
+     "    role text NOT NULL CHECK (role IN ('krivet', 'author', 'editor', 'reviewer', 'committee')),\n"
+     "    org text NOT NULL DEFAULT '',\n"
+     "    password_hash text NOT NULL,\n"
+     "    active boolean NOT NULL DEFAULT true,\n"
+     "    created_at timestamptz NOT NULL DEFAULT now()\n"
+     ");\n"
+     "CREATE TABLE IF NOT EXISTS account_sessions (\n"
+     "    token_hash text PRIMARY KEY,\n"
+     "    account_id uuid NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,\n"
+     "    created_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    expires_at timestamptz NOT NULL\n"
+     ");\n"
+     "CREATE INDEX IF NOT EXISTS account_sessions_account_idx ON account_sessions (account_id)"),
 )
