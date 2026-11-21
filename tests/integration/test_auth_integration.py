@@ -124,7 +124,10 @@ class StageMarkByAccountTests(unittest.TestCase):
         content = (b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (64).to_bytes(4, "big") + (48).to_bytes(4, "big")
                    + b"\x08\x02\x00\x00\x00" + uuid4().bytes)
         sha256 = hashlib.sha256(content).hexdigest()
-        self.addCleanup(lambda: psycopg.connect(DSN, autocommit=True).execute("DELETE FROM image_assets WHERE sha256 = %s", (sha256,)))
+        def remove():
+            with psycopg.connect(DSN) as connection:
+                connection.execute("DELETE FROM image_assets WHERE sha256 = %s", (sha256,))
+        self.addCleanup(remove)
         self.assertEqual(load_records(DSN, [{"content": content, "keywords": ["auth-test"]}], changed_by="적재").rejected, [])
         with psycopg.connect(DSN) as connection:
             image_id = str(connection.execute("SELECT id FROM image_assets WHERE sha256 = %s", (sha256,)).fetchone()[0])

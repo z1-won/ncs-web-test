@@ -467,6 +467,9 @@ def set_stage(dsn: str, module_code: str, stage: int, *, done: bool, by: str, no
             connection.execute(
                 "INSERT INTO manuscript_stage_history (id, module_code, stage, action, changed_by, note) VALUES (%s, %s, %s, %s, %s, %s)",
                 (str(uuid4()), module_code, stage, "done" if done else "undone", by, note))
+            from .cases import mirror_stage_mark
+
+            mirror_stage_mark(connection, module_code, stage, done=done, by=by, note=note)     # 세분류 건에 든 원고면 사건으로도 남긴다
     return changed
 
 
