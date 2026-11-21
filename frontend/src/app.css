@@ -72,16 +72,20 @@ html { scrollbar-gutter: stable; }
 .review-form .krds-btn { width: 100%; }
 /* 업로드 칸(FileSlot, #13): KRDS 파일 업로드(.krds-file-upload)의 파일 목록을 폼 한 칸 폭에 맞춘다 — 간격·안쪽 여백만 한 단계 작은 KRDS 토큰으로 */
 .review-form .file-slot { --krds-file-upload--gap: var(--krds-gap-3); --krds-file-upload--list-padding: var(--krds-padding-4) var(--krds-padding-5); }
-.review-form .file-slot .file-upload-btn-wrap { width: 100%; }
+/* 놓는 자리(.file-upload): KRDS의 회색 면을 그대로 쓰되 세 칸을 한 줄에 둘 수 있게 안쪽 여백과 글자를 한 단계 줄인다. 버튼은 제출 버튼보다 낮은 강조(tertiary), 글자 폭만큼 */
+.review-form .file-slot .file-upload { gap: var(--krds-gap-3); padding: var(--krds-padding-6) var(--krds-padding-5); border-radius: var(--krds-radius-medium2); }
+.review-form .file-slot .file-upload .txt { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.review-form .file-slot .file-upload .file-upload-btn-wrap, .review-form .file-slot .file-upload .krds-btn { width: auto; }
 .review-form .file-slot .upload-list .krds-btn { width: auto; white-space: nowrap; }
 .review-form .file-slot .file-info { gap: var(--krds-gap-3); }
-.review-form .file-slot .file-name { min-width: 0; font-size: var(--krds-pc-font-size-body-small); word-break: break-all; }   /* 파일명은 띄어쓰기가 없어 낱말 단위로는 한 줄 말줄임이 첫 토막에서 끊긴다 */
+/* 파일 이름은 한 줄, 길면 말줄임(KRDS 파일 업로드 사용성). [확장자, 크기]는 잘리지 않게 따로 둔다. KRDS 규칙(선택자 5단)보다 앞서도록 선택자를 길게 쓴다 */
+.review-form .krds-file-upload.file-slot .file-list .upload-list .file-info .file-name { display: flex; gap: var(--krds-gap-2); min-width: 0; font-size: var(--krds-pc-font-size-body-small); }
+.review-form .file-slot .file-name .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-form .file-slot .file-name .info { flex: none; white-space: nowrap; color: var(--krds-light-color-text-subtle); }
 .review-form .file-slot .file-hint-invalid { font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
-/* 끌어다 놓기: 파일이 칸 위에 있는 동안 칸을 점선 테두리와 옅은 바탕으로 강조한다(KRDS 파일 업로드 영역의 점선과 같은 뜻). 테두리는 outline이라 칸 크기가 변하지 않는다 */
-.review-form .form-group.file-drop { border-radius: var(--krds-radius-medium2); }
-.review-form .form-group.file-drop.is-dragover { outline: 0.2rem dashed var(--krds-light-color-border-primary); outline-offset: var(--krds-gap-2); background: var(--krds-light-color-surface-secondary-subtler); }
+/* 끌어다 놓기: 파일을 화면으로 끌어오면 모든 칸의 놓는 자리에 점선이 들고(KRDS .active), 그 칸 위에 오면 강조색 점선과 옅은 바탕으로 바뀐다. 테두리 자리는 평소에도 있어(투명) 칸 크기가 변하지 않는다 */
+.review-form .file-slot .file-upload.is-over { border-color: var(--krds-light-color-border-primary) !important; background-color: var(--krds-light-color-surface-primary-subtler); }
 .review-form .form-group.file-drop.is-dragover * { pointer-events: none; }   /* 놓는 동안 안쪽 요소가 끌기 이벤트를 가로채 강조가 깜빡이지 않게 */
-.review-form .file-slot .file-drop-cue { margin: var(--krds-gap-2) 0 0; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
 .selected-files { margin-top: var(--krds-gap-7); }
 /* 결과 머리글(ResultHead): 1줄 판정·설명, 2줄 액션 바. 어떤 검수든 버튼 자리가 같다 */
 .result-head { display: flex; flex-direction: column; gap: var(--krds-gap-4); margin-top: var(--krds-gap-9); }
