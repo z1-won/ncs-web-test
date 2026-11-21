@@ -52,12 +52,3 @@ export function conditionsOf(choice, terms) {
   if (choice.startsWith("cc-")) return terms?.cc_license?.[choice.slice(3)] || null;
   return null;
 }
-
-// 변경한 사람 이름 — 같은 브라우저에서 다시 적지 않게 기억한다. 저장소를 못 쓰는 환경이면 그냥 넘어간다
-const NAME_KEY = "ncs-image-db-by";
-export function loadName() {
-  try { return window.localStorage.getItem(NAME_KEY) || ""; } catch { return ""; }
-}
-export function saveName(name) {
-  try { window.localStorage.setItem(NAME_KEY, name); } catch { /* 기억하지 못해도 동작에는 문제없다 */ }
-}

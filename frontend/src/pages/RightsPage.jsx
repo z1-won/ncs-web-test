@@ -12,7 +12,6 @@ import { KrdsSelect } from "../components/KrdsSelect.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { usePageTitle } from "../lib/hooks.js";
-import { loadName, saveName } from "../lib/imageTerms.js";
 
 const ANCHORS = [{ id: "rights-run", label: "점검 실행" }, { id: "rights-result", label: "점검 결과" }];
 const PORTRAIT_OPTIONS = [
@@ -39,7 +38,6 @@ export default function RightsPage() {
   const [error, setError] = useState(null);
   const [report, setReport] = useState(null);
   const [imageDb, setImageDb] = useState(false);
-  const [by, setBy] = useState(loadName);
   const [moduleCode, setModuleCode] = useState("");
   const [saved, setSaved] = useState(null);     // { kind, text } — DB 반영 결과
   const result = useRef(null);
@@ -68,7 +66,7 @@ export default function RightsPage() {
   async function saveToDb() {
     setBusy("save");
     setSaved(null);
-    const { ok, data, error: message } = await api.rights.check(manuscript, forms, { ...options, printCopy, save: true, by, moduleCode });
+    const { ok, data, error: message } = await api.rights.check(manuscript, forms, { ...options, printCopy, save: true, moduleCode });
     setBusy(null);
     if (!ok) { setSaved({ kind: "danger", text: message }); return; }
     setReport(data);
@@ -244,12 +242,6 @@ export default function RightsPage() {
           {!imageDb ? <p className="empty">데이터베이스가 연결되어 있지 않아 등록할 수 없습니다. 점검 결과는 위 표와 엑셀 현황표로 확인해 주세요.</p> : (
             <div className="fieldset review-form">
               <div className="form-group">
-                <div className="form-tit"><label htmlFor="rights-by">변경한 사람</label></div>
-                <div className="form-conts"><input id="rights-by" type="text" className="krds-input" maxLength={50} value={by} placeholder="예: 에디팅기관 홍길동"
-                                                   onChange={(e) => { setBy(e.target.value); saveName(e.target.value); }} /></div>
-                <p className="form-hint">변경 이력에 남습니다.</p>
-              </div>
-              <div className="form-group">
                 <div className="form-tit"><label htmlFor="rights-module">모듈 코드</label></div>
                 <div className="form-conts"><input id="rights-module" type="text" className="krds-input" value={moduleCode} placeholder="LM1203020201_24v3" onChange={(e) => setModuleCode(e.target.value)} /></div>
                 <p className="form-hint">원고 파일 이름에 모듈 코드가 있으면 비워 둬도 됩니다.</p>
@@ -259,7 +251,7 @@ export default function RightsPage() {
                   이미 있는 그림은 합쳐지고, 기관이 확정한 권리 정보는 바뀌지 않습니다.</p>
                 {saved && <PageAlert kind={saved.kind}>{saved.text}</PageAlert>}
                 <div className="run-buttons image-actions">
-                  <button type="button" className="krds-btn large secondary" disabled={!!busy || !by.trim()} onClick={saveToDb}>{busy === "save" ? "등록하는 중" : "이미지 저작권 DB에 등록"}</button>
+                  <button type="button" className="krds-btn large secondary" disabled={!!busy} onClick={saveToDb}>{busy === "save" ? "등록하는 중" : "이미지 저작권 DB에 등록"}</button>
                 </div>
               </div>
             </div>

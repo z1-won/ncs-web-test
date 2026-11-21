@@ -518,7 +518,6 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 
 /* ── 이미지 저작권 DB(ImageDbPage · ImageDetail) ── 요약 칸은 업스케일링의 .upscale-summary, 입력칸은 .review-form.fieldset을 그대로 쓴다 */
 .image-db-page .image-summary { margin-top: var(--krds-gap-7); }
-.image-db-page .image-by { margin-top: var(--krds-gap-5); }
 .image-section { margin-top: var(--krds-gap-9); }
 .image-section > .krds-spinner, .image-detail > .krds-spinner, .image-db-page > .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); margin-top: var(--krds-gap-5); z-index: auto; }
 .image-section .section-desc { margin: var(--krds-gap-3) 0 var(--krds-gap-5); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }

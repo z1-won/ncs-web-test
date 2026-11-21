@@ -79,7 +79,7 @@ function changeText(entry, terms) {
   return parts.join(", ");
 }
 
-export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
+export function ImageDetail({ imageId, terms, onChanged, onClose }) {
   const [state, setState] = useState({ status: "loading" });   // { status: loading|ready|error, data, error }
   const [form, setForm] = useState(() => toForm(null));
   const [busy, setBusy] = useState(null);     // "save" | "confirm" | "unconfirm" | "evidence"
@@ -124,7 +124,6 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
   const set = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }));
   const setText = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   const setCheck = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.checked }));
-  const needName = !by.trim();
 
   // 요청 하나를 보내고 결과를 반영한다. 성공하면 받은 상세를 돌려준다(이어서 확정할 때 그 버전을 쓴다)
   async function send(kind, call, done) {
@@ -147,7 +146,7 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
     return next;
   }
 
-  const save = () => send("save", () => api.images.updateRights(imageId, { by, version: rights?.version, rights: toRequest(form) }), "저장했습니다.");
+  const save = () => send("save", () => api.images.updateRights(imageId, { version: rights?.version, rights: toRequest(form) }), "저장했습니다.");
 
   async function confirm() {
     let version = rights?.version;
@@ -156,17 +155,17 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
       if (!saved) return;
       version = saved.rights?.version;
     }
-    await send("confirm", () => api.images.confirm(imageId, { by, version }), "기관 확정했습니다.");
+    await send("confirm", () => api.images.confirm(imageId, { version }), "기관 확정했습니다.");
   }
 
-  const unconfirm = () => send("unconfirm", () => api.images.unconfirm(imageId, { by, version: rights?.version }), "확정을 취소했습니다. 이제 수정할 수 있습니다.");
+  const unconfirm = () => send("unconfirm", () => api.images.unconfirm(imageId, { version: rights?.version }), "확정을 취소했습니다. 이제 수정할 수 있습니다.");
 
   const evidenceOptions = termOptions(terms?.evidence_kind, "종류 선택");
   async function addEvidence() {
-    const added = await send("evidence", () => api.images.addEvidence(imageId, { by, ...evidence }), "증빙을 등록했습니다.");
+    const added = await send("evidence", () => api.images.addEvidence(imageId, evidence), "증빙을 등록했습니다.");
     if (added) setEvidence(NEW_EVIDENCE);
   }
-  const removeEvidence = (item) => send("evidence", () => api.images.removeEvidence(imageId, item.id, { by }), "증빙을 삭제했습니다.");
+  const removeEvidence = (item) => send("evidence", () => api.images.removeEvidence(imageId, item.id), "증빙을 삭제했습니다.");
 
   const name = data.placements[0]?.caption || data.title || data.filename || "이름 없는 그림";
   const field = (id, label, control, hint) => (
@@ -296,17 +295,16 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
         </div>}
         </div>
         <div className="form-actions">
-          {needName && <PageAlert kind="info">저장하거나 확정하려면 화면 위쪽의 ‘변경한 사람’에 이름을 적어 주세요. 변경 이력에 남습니다.</PageAlert>}
           {message && message.at !== "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
           {!confirmed && form.reuse_scope === "unknown" && (
             <PageAlert kind="danger">재사용 범위가 ‘미확인’입니다. 이대로 확정하면 추천 목록에 나오지 않습니다. 위의 ‘재사용 범위’를 먼저 선택해 주세요.</PageAlert>
           )}
           <div className="run-buttons image-actions">
             {confirmed
-              ? <button type="button" className="krds-btn large secondary" onClick={unconfirm} disabled={!!busy || needName}>{busy === "unconfirm" ? "취소하는 중" : "확정 취소"}</button>
+              ? <button type="button" className="krds-btn large secondary" onClick={unconfirm} disabled={!!busy}>{busy === "unconfirm" ? "취소하는 중" : "확정 취소"}</button>
               : <>
-                  <button type="button" className="krds-btn large secondary" onClick={save} disabled={!!busy || needName || !dirty}>{busy === "save" ? "저장하는 중" : "저장"}</button>
-                  <button type="button" className="krds-btn large primary" onClick={confirm} disabled={!!busy || needName}>{busy === "confirm" ? "확정하는 중" : dirty ? "저장하고 기관 확정" : "기관 확정"}</button>
+                  <button type="button" className="krds-btn large secondary" onClick={save} disabled={!!busy || !dirty}>{busy === "save" ? "저장하는 중" : "저장"}</button>
+                  <button type="button" className="krds-btn large primary" onClick={confirm} disabled={!!busy}>{busy === "confirm" ? "확정하는 중" : dirty ? "저장하고 기관 확정" : "기관 확정"}</button>
                 </>}
           </div>
         </div>
@@ -324,7 +322,7 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
                 <td>{item.file_ref || "-"}</td>
                 <td>{item.submitted_on || "-"}</td>
                 <td>{item.note || "-"}</td>
-                <td className="center"><button type="button" className="krds-btn small text" disabled={!!busy || needName} onClick={() => removeEvidence(item)}>삭제<span className="sr-only">: {terms?.evidence_kind?.[item.kind] || item.kind}</span></button></td>
+                <td className="center"><button type="button" className="krds-btn small text" disabled={!!busy} onClick={() => removeEvidence(item)}>삭제<span className="sr-only">: {terms?.evidence_kind?.[item.kind] || item.kind}</span></button></td>
               </tr>
             ))}</tbody>
           </table>
@@ -349,7 +347,7 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
         <div className="form-actions">
           {message && message.at === "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
           <div className="run-buttons image-actions">
-            <button type="button" className="krds-btn large secondary" onClick={addEvidence} disabled={!!busy || needName || !evidence.kind}>{busy === "evidence" ? "처리하는 중" : "증빙 등록"}</button>
+            <button type="button" className="krds-btn large secondary" onClick={addEvidence} disabled={!!busy || !evidence.kind}>{busy === "evidence" ? "처리하는 중" : "증빙 등록"}</button>
           </div>
         </div>
       </div>

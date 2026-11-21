@@ -11,7 +11,7 @@ import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { Pagination } from "../components/Pagination.jsx";
 import { usePageTitle } from "../lib/hooks.js";
-import { conditionsLabel, licenseLabel, loadName, saveName, statusBadge, termOptions } from "../lib/imageTerms.js";
+import { conditionsLabel, licenseLabel, statusBadge, termOptions } from "../lib/imageTerms.js";
 
 const ANCHORS = [
   { id: "image-load", label: "자료 등록" },
@@ -34,7 +34,7 @@ function rowName(row) {
 }
 
 /* 자료 적재 — 레코드 JSON 1개와 그 레코드가 가리키는 그림 파일들을 함께 고른다. 먼저 형식만 검사해 볼 수 있다 */
-function LoadSection({ by, onLoaded }) {
+function LoadSection({ onLoaded }) {
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(null);     // "check" | "load"
   const [report, setReport] = useState(null);
@@ -45,7 +45,7 @@ function LoadSection({ by, onLoaded }) {
     setBusy(checkOnly ? "check" : "load");
     setError(null);
     setReport(null);
-    const { ok, data, error: message } = await api.images.load(files, { by, checkOnly });
+    const { ok, data, error: message } = await api.images.load(files, { checkOnly });
     setBusy(null);
     if (!ok) { setError(message); return; }
     setReport(data);
@@ -75,9 +75,8 @@ function LoadSection({ by, onLoaded }) {
           {error && <PageAlert kind="danger">{error}</PageAlert>}
           <div className="run-buttons image-actions">
             <button type="button" className="krds-btn large secondary" disabled={!!busy || jsonCount !== 1} onClick={() => run(true)}>{busy === "check" ? "확인하는 중" : "형식만 확인"}</button>
-            <button type="button" className="krds-btn large primary" disabled={!!busy || jsonCount !== 1 || !by.trim()} onClick={() => run(false)}>{busy === "load" ? "등록하는 중" : "등록"}</button>
+            <button type="button" className="krds-btn large primary" disabled={!!busy || jsonCount !== 1} onClick={() => run(false)}>{busy === "load" ? "등록하는 중" : "등록"}</button>
           </div>
-          {jsonCount === 1 && !by.trim() && <p className="form-hint">자료를 등록하려면 화면 위쪽의 ‘변경한 사람’에 이름을 적어 주세요.</p>}
         </div>
       </div>
       {report && (
@@ -178,7 +177,6 @@ export default function ImageDbPage() {
   usePageTitle("이미지 저작권 DB");
   const [ready, setReady] = useState(null);       // null 확인 중 | true | false(DB 없음) | "error"
   const [terms, setTerms] = useState(null);
-  const [by, setBy] = useState(loadName);
   const [filters, setFilters] = useState({ status: "", category: "", q: "" });
   const [query, setQuery] = useState("");         // 검색칸에 적는 중인 글 — [검색]을 눌러야 filters.q가 된다
   const [page, setPage] = useState(1);
@@ -256,20 +254,7 @@ export default function ImageDbPage() {
           <div><dt>추천 목록에 나옴</dt><dd><strong>{counts?.recommendable ?? "…"}</strong>건</dd><dd className="meta">확정했고 재사용 범위가 정해졌고 비공개가 아닌 그림</dd></div>
         </dl>
 
-        <div className="fieldset review-form is-sectioned image-by">
-          <div className="form-section-grid">
-          <div className="form-group">
-            <div className="form-tit"><label htmlFor="image-by">변경한 사람</label></div>
-            <div className="form-conts">
-              <input id="image-by" type="text" className="krds-input" maxLength={50} value={by} placeholder="예: 에디팅기관 홍길동"
-                     onChange={(e) => { setBy(e.target.value); saveName(e.target.value); }} aria-describedby="image-by-hint" />
-            </div>
-            <p className="form-hint" id="image-by-hint">등록, 수정, 확정할 때 변경 이력에 남는 이름입니다.</p>
-          </div>
-          </div>
-        </div>
-
-        <LoadSection by={by} onLoaded={refresh} />
+        <LoadSection onLoaded={refresh} />
 
         <section id="image-list" className="nav-anchor image-section">
           <div className="section-head">
@@ -317,7 +302,7 @@ export default function ImageDbPage() {
           {list.data && <Pagination page={page} total={Math.ceil(list.data.total / PAGE_SIZE)} onChange={setPage} label="이미지 목록 페이지" />}
 
           <div ref={detail} className="nav-anchor">
-            {openId && <ImageDetail key={openId} imageId={openId} terms={terms} by={by} onChanged={refresh} onClose={() => setOpenId(null)} />}
+            {openId && <ImageDetail key={openId} imageId={openId} terms={terms} onChanged={refresh} onClose={() => setOpenId(null)} />}
           </div>
         </section>
 

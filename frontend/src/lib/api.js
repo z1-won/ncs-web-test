@@ -169,15 +169,15 @@ export const api = {
     fileUrl: (id, upscaled) => `/api/images/${id}/file${upscaled ? "?upscaled=true" : ""}`,
     recommendableFileUrl: (id) => `/api/images/recommendable/${id}/file`,
     // rights: 이미지 레코드의 rights와 같은 모양(docs/IMAGE_RECORD.md). null은 그 칸을 비운다. version: 화면이 열어 본 버전
-    updateRights: (id, { by, version, rights }) => postJson(`/api/images/${id}/rights`, { by, version: version || null, rights }),
-    confirm: (id, { by, version }) => postJson(`/api/images/${id}/confirm`, { by, version: version || null }),
-    unconfirm: (id, { by, version }) => postJson(`/api/images/${id}/unconfirm`, { by, version: version || null }),
+    updateRights: (id, { version, rights }) => postJson(`/api/images/${id}/rights`, { version: version || null, rights }),
+    confirm: (id, { version }) => postJson(`/api/images/${id}/confirm`, { version: version || null }),
+    unconfirm: (id, { version }) => postJson(`/api/images/${id}/unconfirm`, { version: version || null }),
     // 증빙 직접 등록·삭제. 서류 파일은 보내지 않는다 — 종류와 파일 이름(또는 보관 위치)·제출일·비고만 남긴다
-    addEvidence: (id, { by, kind, fileRef, submittedOn, note }) => postJson(`/api/images/${id}/evidence`, {
-      by, kind, file_ref: (fileRef || "").trim() || null, submitted_on: submittedOn || null, note: (note || "").trim() || null }),
-    removeEvidence: (id, evidenceId, { by }) => postJson(`/api/images/${id}/evidence/${evidenceId}/delete`, { by }),
+    addEvidence: (id, { kind, fileRef, submittedOn, note }) => postJson(`/api/images/${id}/evidence`, {
+      kind, file_ref: (fileRef || "").trim() || null, submitted_on: submittedOn || null, note: (note || "").trim() || null }),
+    removeEvidence: (id, evidenceId) => postJson(`/api/images/${id}/evidence/${evidenceId}/delete`, {}),
     // files: 레코드 JSON 1개 + 그 레코드가 가리키는 그림 파일들. checkOnly면 DB에 넣지 않고 형식만 검사
-    load: (files, { by, checkOnly }) => request("/api/images/load", { method: "POST", body: multipart({ by: by || "", check_only: checkOnly ? "true" : "false" }, files) }),
+    load: (files, { checkOnly }) => request("/api/images/load", { method: "POST", body: multipart({ check_only: checkOnly ? "true" : "false" }, files) }),
   },
   // 이미지 추천(REQ-02-011). 문단과 능력단위 코드 중 하나는 있어야 한다. useLlm이 꺼져 있으면 문단을 외부로 보내지 않는다
   recommend: {
@@ -185,7 +185,7 @@ export const api = {
       text: text || "", unit_code: (unitCode || "").trim(), criterion_no: (criterionNo || "").trim(), use_llm: !!useLlm, limit: limit || 10 }),
   },
   // 권리 증빙 제출 현황 점검(REQ-02-014). manuscript: 원고 파일, forms: 제출 서류(작성된 한글 양식) 파일들
-  // options: { firstReviewOn, submittedOn, transferAuthor, transferMaker, portrait, pledge } + DB 반영용 { save, by, moduleCode }
+  // options: { firstReviewOn, submittedOn, transferAuthor, transferMaker, portrait, pledge } + DB 반영용 { save, moduleCode }. 변경한 사람은 서버가 로그인한 계정에서 읽는다
   //          + printCopy(출력본 PDF, 선택 — 그림이 놓인 쪽을 읽어 결과물 현황의 쪽수와 대조)
   rights: {
     check: (manuscript, forms, options = {}) => {
@@ -197,7 +197,7 @@ export const api = {
         first_review_on: options.firstReviewOn || "", submitted_on: options.submittedOn || "",
         transfer_author: options.transferAuthor ? "true" : "false", transfer_maker: options.transferMaker ? "true" : "false",
         portrait: options.portrait || "unknown", pledge: options.pledge ? "true" : "false",
-        save: options.save ? "true" : "false", by: options.by || "", module_code: options.moduleCode || "",
+        save: options.save ? "true" : "false", module_code: options.moduleCode || "",
       }).forEach(([key, value]) => form.append(key, value));
       return request("/api/rights/check", { method: "POST", body: form });
     },
