@@ -6,6 +6,7 @@
 import hashlib
 import os
 import unittest
+from unittest import mock
 from uuid import uuid4
 
 import psycopg
@@ -106,10 +107,18 @@ class RecommendIntegrationTests(unittest.TestCase):
 
     def test_empty_pool_points_to_confirmation_not_ai_generation(self):
         from unittest import mock
+        self.add("범위 미확인", OWN, scope=None)
+        self.add("자동 태깅", OWN, confirm=False)
+        counts = image_recommend.waiting(DSN)
+        self.assertGreaterEqual(min(counts["unknown_scope"], counts["unconfirmed"]), 1)
         with mock.patch.object(image_recommend, "candidates", return_value=[]):
             result = image_recommend.recommend(DSN, text="객실 유형", use_llm=False)
-        self.assertEqual((result["items"], result["total_candidates"], result["guidance"]), ([], 0, [image_recommend.NO_CANDIDATES]))
-        self.assertIn("기관 확정", result["guidance"][0])
+        self.assertEqual((result["items"], result["total_candidates"]), ([], 0))
+        text = " ".join(result["guidance"])
+        for fragment in ("추천에 쓸 수 있는 그림이 아직 없습니다", f"‘미확인’인 그림이 {counts['unknown_scope']}건", "확정 취소",
+                         f"확정하지 않은 그림이 {counts['unconfirmed']}건"):
+            self.assertIn(fragment, text)
+        self.assertNotIn("REQ-02-006", text)
 
     def test_llm_answer_is_used_when_given(self):
         self.add("확정", OWN)
@@ -117,6 +126,86 @@ class RecommendIntegrationTests(unittest.TestCase):
             "data": {"summary": "요약 글", "keywords": [self.tag, "글에없는말"]}, "model": "모델"})
         self.assertEqual((result["context"]["method"], result["context"]["summary"], result["context"]["keywords"], result["context"]["dropped"],
                           len(result["items"])), ("llm", "요약 글", [self.tag], ["글에없는말"], 1))
+
+
+class FakeEmbedder:
+    """그림 내용의 마지막 바이트(0·1·2)를 축으로 삼는 가짜 모델 — 네트워크·모델 파일 없이 흐름만 본다."""
+    name = "fake-embedder"
+    WORDS = {"객실": 0, "연회장": 1, "주방": 2}
+
+    def images(self, contents):
+        return [None if content.endswith(b"broken") else [1.0 if axis == content[-1] else 0.0 for axis in range(3)] for content in contents]
+
+    def text(self, text):
+        return [1.0 if any(word in text and axis == index for word, index in self.WORDS.items()) else 0.0 for axis in range(3)]
+
+
+@unittest.skipUnless(DSN, "NCS_TEST_DATABASE_URL 미설정")
+class EmbeddingIntegrationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        migrate(DSN)
+
+    def setUp(self):
+        self.used: list[str] = []
+        self.addCleanup(self.cleanup)
+
+    def cleanup(self):
+        with psycopg.connect(DSN) as connection:
+            connection.execute("DELETE FROM image_assets WHERE sha256 = ANY(%s)", (self.used,))
+
+    def add(self, title: str, axis: int | bytes, **fields) -> str:
+        content = PNG + uuid4().bytes + (axis if isinstance(axis, bytes) else bytes([axis]))
+        sha256 = hashlib.sha256(content).hexdigest()
+        self.used.append(sha256)
+        report = load_records(DSN, [{"content": content, "title": title, "rights": {**OWN, "reuse_scope": "all"}, **fields}], changed_by="적재")
+        self.assertEqual(report.rejected, [])
+        with psycopg.connect(DSN) as connection:
+            image_id = str(connection.execute("SELECT id FROM image_assets WHERE sha256 = %s", (sha256,)).fetchone()[0])
+        image_store.confirm(DSN, image_id, by="에디팅기관")
+        return image_id
+
+    def mine(self, result: dict, ids: list[str]) -> list[dict]:
+        return [item for item in result["items"] if item["id"] in ids]
+
+    def test_vectors_are_stored_once_and_used_for_ranking(self):
+        from ncs_service import image_embed
+        room, hall, kitchen, broken = (self.add("제목 없음 1", 0), self.add("제목 없음 2", 1), self.add("제목 없음 3", 2), self.add("깨진 그림", b"broken"))
+        ids = [room, hall, kitchen, broken]
+        fake = FakeEmbedder()
+        first = image_embed.embed_missing(DSN, fake)
+        self.assertGreaterEqual(first["새로 계산"], 3)
+        self.assertGreaterEqual(first["읽지 못한 그림"], 1)
+        with psycopg.connect(DSN) as connection:
+            stored = dict(connection.execute("SELECT image_id::text, vector FROM image_embeddings WHERE model = %s AND image_id = ANY(%s)",
+                                             (fake.name, ids)).fetchall())
+        self.assertEqual((stored[room], stored[hall], set(stored)), ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], {room, hall, kitchen}))
+        again = image_embed.embed_missing(DSN, fake)
+        self.assertEqual(again["새로 계산"], 0, "이미 있는 벡터는 다시 계산하지 않는다")
+        self.assertGreaterEqual(image_embed.status(DSN, fake.name)["벡터가 있는 그림"], 3)
+
+        # 제목·키워드에 '연회장'이 없어도 그림이 닮은 것을 찾는다
+        result = image_recommend.recommend(DSN, text="연회장 배치를 설명한다", use_llm=False, embedder=fake, limit=30)
+        found = self.mine(result, ids)
+        self.assertEqual((found[0]["id"], found[0]["matched"], found[0]["visual"]), (hall, [], 1.0))
+        self.assertNotIn(kitchen, [item["id"] for item in found])
+        self.assertTrue(result["embedding"]["used"])
+        self.assertEqual((result["embedding"]["model"], result["embedding"]["query"]), (fake.name, "연회장 배치"))
+        self.assertTrue(all("vector" not in item for item in result["items"]))
+
+        # 임베딩이 꺼져 있으면 예전 방식 그대로(이 그림들은 핵심어가 없어 나오지 않는다)
+        with mock.patch.dict(os.environ, {"NCS_EMBED_MODEL": ""}):
+            off = image_recommend.recommend(DSN, text="연회장 배치를 설명한다", use_llm=False, limit=30)
+        self.assertEqual((self.mine(off, ids), off["embedding"]["used"]), ([], False))
+        self.assertIn("꺼져", off["embedding"]["note"])
+
+    def test_deleting_an_image_removes_its_vector(self):
+        from ncs_service import image_embed
+        image_id = self.add("지울 그림", 0)
+        image_embed.embed_missing(DSN, FakeEmbedder())
+        self.cleanup()
+        with psycopg.connect(DSN) as connection:
+            self.assertEqual(connection.execute("SELECT count(*) FROM image_embeddings WHERE image_id = %s", (image_id,)).fetchone()[0], 0)
 
 
 if __name__ == "__main__":

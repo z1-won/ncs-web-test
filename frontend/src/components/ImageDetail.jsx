@@ -245,6 +245,9 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
       )}
 
       <h3 className="sub-title">권리 정보{rights ? <span className="meta"> 버전 {rights.version}{confirmed ? ` · ${rights.confirmed_by} 확정(${formatDate(rights.confirmed_at)})` : ""}</span> : null}</h3>
+      {confirmed && rights.reuse_scope === "unknown" && (
+        <PageAlert kind="danger">확정됐지만 재사용 범위가 ‘미확인’이라 추천에 나오지 않습니다. 아래 ‘확정 취소’를 누르고 재사용 범위를 고른 뒤 다시 확정하세요.</PageAlert>
+      )}
       {confirmed && <PageAlert kind="info">기관 확정된 권리 정보라 고칠 수 없습니다. 고치려면 확정을 취소한 뒤 수정하고 다시 확정하세요.</PageAlert>}
       <div className="fieldset review-form image-rights-form">
         {select("category", "분류 체계", termOptions(terms?.category, "선택 안 함"), "확정하려면 필요합니다.")}
@@ -284,6 +287,9 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
         <div className="form-group form-group-wide form-actions">
           {needName && <PageAlert kind="info">저장·확정하려면 화면 위쪽의 ‘변경한 사람’에 이름을 적어 주세요. 변경 이력에 남습니다.</PageAlert>}
           {message && message.at !== "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
+          {!confirmed && form.reuse_scope === "unknown" && (
+            <PageAlert kind="danger">재사용 범위가 ‘미확인’입니다. 이대로 확정하면 추천에 나오지 않습니다 — 위의 ‘재사용 범위’를 먼저 골라 주세요.</PageAlert>
+          )}
           <div className="run-buttons image-actions">
             {confirmed
               ? <button type="button" className="krds-btn large secondary" onClick={unconfirm} disabled={!!busy || needName}>{busy === "unconfirm" ? "취소하는 중…" : "확정 취소"}</button>

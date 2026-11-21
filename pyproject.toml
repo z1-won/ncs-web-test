@@ -34,5 +34,6 @@ namespaces = false
 
 [tool.setuptools.dynamic.optional-dependencies]
 pdf = {file = ["requirements/pdf.txt"]}
+embed = {file = ["requirements/embed.txt"]}
 web = {file = ["requirements/web.txt"]}
 test = {file = ["requirements/web.txt", "requirements/test.txt", "requirements/pdf.txt"]}

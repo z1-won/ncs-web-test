@@ -6,6 +6,7 @@ from unittest import mock
 
 from ncs_core import llm
 from ncs_recommend import context as ctx
+from ncs_recommend import embed
 from ncs_recommend import rank
 
 TEXT = ("호텔의 객실 유형(위치, 면적, 객실 타입 등)에 따라 객실 및 부대시설 정보를 구분한다. "
@@ -143,6 +144,152 @@ class RankTests(unittest.TestCase):
         self.assertTrue(any("REQ-02-006" in line for line in rank.guidance([])))
         self.assertIn("화질이 낮습니다", rank.guidance([small])[0])
         self.assertEqual(rank.guidance([small, upscaled]), [])
+
+
+class CommonKeywordTests(unittest.TestCase):
+    """후보 대부분에 맞는 핵심어는 그림을 가려 주지 못한다."""
+
+    def hotels(self, count=8):
+        return [image(f"h{n}", title=f"호텔 내부 {n}") for n in range(count)]
+
+    def test_keyword_on_every_candidate_does_not_qualify_alone(self):
+        pool = self.hotels()
+        pool[3]["keywords"] = ["프런트"]
+        ranked = rank.rank(pool, context("호텔", "프런트"))
+        self.assertEqual([(item["id"], item["score"], item["matched"], item["common"]) for item in ranked],
+                         [("h3", 2.3, ["호텔", "프런트"], ["호텔"])], "가려 주는 핵심어가 맞은 그림만 남고, 흔한 핵심어는 1/4만 친다")
+
+    def test_falls_back_when_nothing_else_matches(self):
+        ranked = rank.rank(self.hotels(), context("호텔"))
+        self.assertEqual([(item["id"], item["score"]) for item in ranked], [(f"h{n}", 0.5) for n in range(8)],
+                         "그래서 추천이 하나도 없으면 흔한 핵심어가 맞은 그림을 그대로 보여 준다")
+
+    def test_small_pools_are_left_alone(self):
+        ranked = rank.rank(self.hotels(7), context("호텔"))
+        self.assertEqual([(item["score"], item["common"]) for item in ranked], [(2.0, [])] * 7, "후보가 8장 미만이면 따지지 않는다")
+
+
+def toward(first: float) -> list[float]:
+    """첫 축 성분이 first인 길이 1 벡터(나머지는 셋째 축)."""
+    return [first, 0.0, (1.0 - first * first) ** 0.5]
+
+
+class VisualTests(unittest.TestCase):
+    """그림 임베딩으로 견주기 — 벡터는 손으로 만든 것(모델 없이).
+
+    바탕 글 8개는 첫 축 성분이 0.10~0.24다. 그래서 그림 'same'([1,0,0])의 바탕(관련 없는 글과 닮은 정도의 중앙값)은 0.17이고,
+    'hub'([0.6,0,0.8])은 무슨 글에나 0.86~0.92로 닮게 나오는 그림, 'far'([0,1,0])는 어느 글과도 0이다.
+    """
+
+    QUERY = [1.0, 0.0, 0.0]
+    REFS = [toward(first / 100) for first in range(10, 25, 2)]
+
+    def pool(self):
+        return [image("same", vector=[1.0, 0.0, 0.0]), image("hub", vector=[0.6, 0.0, 0.8]), image("far", vector=[0.0, 1.0, 0.0]),
+                image("no-vector")]
+
+    def z(self, pool, above):
+        """'same' 그림의 바탕보다 above만큼 더 닮은 글을 넣었을 때 첫 후보의 (σ, 가산 비율)."""
+        return rank.visual_scores(pool, toward(0.17 + above), self.REFS)[0][1:]
+
+    def test_cosine(self):
+        self.assertAlmostEqual(embed.cosine([0.6, 0.8], [0.6, 0.8]), 1.0)
+        self.assertAlmostEqual(embed.cosine([1.0, 0.0], [0.0, 1.0]), 0.0)
+        for a, b in ((None, [1.0]), ([1.0], None), ([], [1.0]), ([1.0, 0.0], [1.0])):
+            self.assertIsNone(embed.cosine(a, b))
+
+    def test_similarity_is_measured_against_unrelated_texts(self):
+        scores = rank.visual_scores(self.pool(), self.QUERY, self.REFS)
+        self.assertEqual(sorted(scores), [0, 1, 2], "벡터가 없는 후보는 빠진다")
+        self.assertEqual((scores[0][0], scores[0][2]), (1.0, 1.0))
+        self.assertEqual((round(scores[1][0], 2), scores[1][2]), (0.6, 0.0), "유사도가 높아도 무슨 글에나 닮는 그림이면 가산하지 않는다")
+        self.assertLess(scores[1][1], 0)
+        self.assertEqual(scores[2][1:], (0.0, 0.0))
+
+    def test_sigma_is_the_distance_from_the_baseline_in_one_unit_for_all(self):
+        pool = self.pool()
+        unit = 0.03 / self.z(pool, 0.03)[0]
+        self.assertAlmostEqual(self.z(pool, 0.06)[0], 0.06 / unit, places=6, msg="바탕에서 벗어난 만큼에 비례한다")
+        halfway = (rank.VISUAL_Z_MIN + rank.VISUAL_Z_FULL) / 2
+        self.assertAlmostEqual(self.z(pool, halfway * unit)[1], 0.5, places=6)
+        self.assertEqual((self.z(pool, rank.VISUAL_Z_MIN * unit - 0.001)[1], self.z(pool, rank.VISUAL_Z_FULL * unit + 0.001)[1]), (0.0, 1.0))
+        # 그림마다 제 퍼짐으로 나누지 않는다: 바탕이 고른 그림(far, 퍼짐 0)이라고 σ가 부풀지 않는다
+        tight = [image("far", vector=[0.0, 1.0, 0.0]), *pool[:2]]
+        query = [0.05, 0.9987492177719089, 0.0]          # far와 0.9987, same과 0.05
+        scores = rank.visual_scores(tight, query, self.REFS)
+        self.assertAlmostEqual(scores[0][1], 0.9987492177719089 / unit, places=6, msg="단위는 후보들의 바탕 퍼짐의 중앙값 하나다")
+
+    def test_text_that_fits_every_candidate_alike_scores_nobody(self):
+        alike = [image(str(n), vector=[1.0, 0.0, 0.0]) for n in range(rank.VISUAL_POOL_MIN)]
+        self.assertEqual({position for _, _, position in rank.visual_scores(alike, toward(0.17 + 0.2), self.REFS).values()}, {0.0},
+                         "후보 모두에 고르게 닮는 글은 그림을 가려 주지 못한다")
+        one = [image("same", vector=[1.0, 0.0, 0.0]), *[image(f"far{n}", vector=[0.0, 1.0, 0.0]) for n in range(rank.VISUAL_POOL_MIN - 1)]]
+        self.assertEqual([position for _, _, position in rank.visual_scores(one, toward(0.17 + 0.2), self.REFS).values()],
+                         [1.0, *[0.0] * (rank.VISUAL_POOL_MIN - 1)], "하나만 닮으면 그 그림이 받는다")
+        few = alike[:rank.VISUAL_POOL_MIN - 1]
+        self.assertEqual({position for _, _, position in rank.visual_scores(few, toward(0.17 + 0.2), self.REFS).values()}, {1.0},
+                         "후보가 적으면 후보끼리 견주지 않는다")
+
+    def test_nobody_scores_when_nothing_matches(self):
+        unrelated = toward(0.17)                            # 바탕 글과 같은 쪽을 보는 글
+        scores = rank.visual_scores(self.pool(), unrelated, self.REFS)
+        self.assertEqual({position for _, _, position in scores.values()}, {0.0}, "가장 닮은 그림이라고 점수를 받지는 않는다")
+        self.assertEqual(rank.rank(self.pool(), context("용접"), query_vector=unrelated, reference_vectors=self.REFS), [])
+
+    def test_needs_reference_texts(self):
+        for query, references in ((None, self.REFS), (self.QUERY, None), (self.QUERY, []), (self.QUERY, self.REFS[:rank.VISUAL_MIN_REFS - 1])):
+            self.assertEqual(rank.visual_scores(self.pool(), query, references), {})
+        self.assertEqual(rank.rank(self.pool(), context("객실"), query_vector=self.QUERY), [], "바탕이 없으면 그림 유사도를 쓰지 않는다")
+        self.assertEqual(rank.rank(self.pool(), context("객실")), [], "임베딩이 없으면 예전처럼 핵심어·연결로만")
+
+    def test_similar_pictures_are_recommended_without_any_keyword(self):
+        ranked = rank.rank(self.pool(), context("객실"), query_vector=self.QUERY, reference_vectors=self.REFS)
+        self.assertEqual([(item["id"], item["score"], item["similarity"], item["visual"]) for item in ranked], [("same", 6.0, 1.0, 1.0)],
+                         "핵심어가 하나도 안 맞아도 그림이 문맥과 뚜렷이 맞으면 나온다")
+        self.assertGreater(ranked[0]["visual_z"], rank.VISUAL_Z_FULL)
+        self.assertTrue(all("vector" not in item for item in ranked), "벡터는 결과에 싣지 않는다")
+
+    def test_visual_and_keyword_scores_add_up(self):
+        pool = self.pool()
+        pool[2]["keywords"] = ["객실"]            # 그림은 멀지만 핵심어가 맞는다
+        pool[3]["keywords"] = ["객실"]            # 벡터 없음 + 핵심어
+        ranked = rank.rank(pool, context("객실"), query_vector=self.QUERY, reference_vectors=self.REFS)
+        self.assertEqual([(item["id"], item["score"]) for item in ranked], [("same", 6.0), ("far", 3.0), ("no-vector", 3.0)])
+        self.assertEqual([item["visual"] for item in ranked], [1.0, 0.0, None], "벡터가 없는 그림은 유사도를 비워 둔다")
+
+    def test_reference_vectors_are_computed_once_per_model(self):
+        class Fake:
+            name = "fake-for-references"
+            calls = 0
+
+            def text(self, text):
+                Fake.calls += 1
+                return [1.0, 0.0]
+
+        fake = Fake()
+        self.addCleanup(embed._references.pop, fake.name, None)
+        first = embed.reference_vectors(fake)
+        self.assertEqual((len(first), Fake.calls), (len(embed.REFERENCE_TEXTS), len(embed.REFERENCE_TEXTS)))
+        self.assertIs(embed.reference_vectors(fake), first)
+        self.assertEqual(Fake.calls, len(embed.REFERENCE_TEXTS))
+
+        class Broken:
+            name = "broken-for-references"
+
+            def text(self, text):
+                raise RuntimeError("모델 오류")
+
+        self.assertEqual(embed.reference_vectors(Broken()), [], "바탕을 못 만들면 그림 유사도만 꺼진다")
+
+    def test_embedding_is_off_unless_a_model_is_named(self):
+        with mock.patch.dict(os.environ, {"NCS_EMBED_MODEL": ""}):
+            self.assertIsNone(embed.get())
+            self.assertIn("NCS_EMBED_MODEL이 비어", embed.why_not())
+        with mock.patch.dict(os.environ, {"NCS_EMBED_MODEL": "없는/모델"}), mock.patch.object(embed, "Embedder", side_effect=OSError("모델 없음")), \
+                mock.patch.object(embed, "_cached", None):
+            self.assertIsNone(embed.get())
+            self.assertIn("없는/모델", embed.why_not())
+            self.assertIn("모델 없음", embed.why_not())
 
 
 if __name__ == "__main__":

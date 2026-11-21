@@ -92,6 +92,11 @@ function LoadSection({ by, onLoaded }) {
                 <dd className="meta">확정이라 유지한 권리 정보 {report["확정 유지"].length}</dd></div>
             )}
           </dl>
+          {report["그림 임베딩"] && (
+            <p className="form-hint">{report["그림 임베딩"].오류
+              ? `그림 임베딩을 계산하지 못했습니다(${report["그림 임베딩"].오류}). 적재는 끝났고, 나중에 python -m ncs_service.image_embed로 채울 수 있습니다.`
+              : `그림 임베딩 ${report["그림 임베딩"]["새로 계산"]}건 계산(${report["그림 임베딩"].모델}, 이 컴퓨터에서 계산)`}</p>
+          )}
           {rejected.length > 0 && (
             <ul className="image-rejected">
               {rejected.map((item) => (
@@ -294,7 +299,8 @@ export default function ImageDbPage() {
                           <span className="sub">{row.module_code ? `${row.module_code}${row.placement_count > 1 ? ` 외 ${row.placement_count - 1}곳(모듈 ${row.module_count}개)` : ""}` : `수록 위치 없음(수집 자료${row.source_id ? ` ${row.source_id}` : ""})`}</span></td>
                         <td>{terms?.category?.[row.category] || "—"}</td>
                         <td>{licenseLabel(row, terms)}{row.ai_used && <span className="sub">AI 활용</span>}</td>
-                        <td>{row.status ? terms?.reuse_scope?.[row.reuse_scope] || row.reuse_scope : "—"}</td>
+                        <td>{row.status ? terms?.reuse_scope?.[row.reuse_scope] || row.reuse_scope : "—"}
+                          {row.status === "confirmed" && row.reuse_scope === "unknown" && <span className="krds-badge bg-light-danger scope-badge">추천 제외</span>}</td>
                         <td><span className={`krds-badge ${tone}`}>{statusText}</span></td>
                         <td><button type="button" className="krds-btn small tertiary" onClick={() => open(row.id)} aria-label={`${rowName(row)} 열기`}>열기</button></td>
                       </tr>

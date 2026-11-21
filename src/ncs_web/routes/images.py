@@ -56,6 +56,19 @@ def register(app: FastAPI, services: Services) -> None:
         except ValueError as error:
             raise HTTPException(400, str(error)) from None
 
+    def embed_after_load() -> dict | None:
+        """그림 임베딩이 켜져 있으면 방금 넣은 그림의 벡터를 계산한다(이 컴퓨터에서, 외부 전송 없음). 꺼져 있으면 None.
+        실패해도 적재는 이미 끝났으므로 오류로 만들지 않고 까닭만 돌려준다 — 나중에 python -m ncs_service.image_embed로 채울 수 있다."""
+        from ncs_recommend import embed
+        from ncs_service import image_embed
+
+        if not embed.model_name():
+            return None
+        try:
+            return image_embed.embed_missing(dsn)
+        except Exception as error:      # noqa: BLE001
+            return {"모델": embed.model_name(), "오류": str(error)[:300]}
+
     def file_response(found: tuple[bytes, str]) -> Response:
         content, media_type = found
         return Response(content, media_type=media_type, headers=FILE_HEADERS)
@@ -100,8 +113,9 @@ def register(app: FastAPI, services: Services) -> None:
                 raise HTTPException(400, f"레코드 JSON을 읽지 못했습니다: {error}") from None
             if kogl_import.is_dataset(data):      # 공공누리 수집 JSON(0.1-PoC, REQ-02-012) — 이미지 레코드로 바꿔 넣는다
                 try:
-                    return {"check_only": check_only,
-                            **kogl_import.run(dsn, data, base_dir=base, by=by, check_only=check_only)}
+                    report = {"check_only": check_only,
+                              **kogl_import.run(dsn, data, base_dir=base, by=by, check_only=check_only)}
+                    return report if check_only else {**report, "그림 임베딩": embed_after_load()}
                 except ValueError as error:
                     raise HTTPException(400, str(error)) from None
             try:
@@ -112,7 +126,8 @@ def register(app: FastAPI, services: Services) -> None:
             if check_only:
                 return {"check_only": True, "형식": "이미지 레코드", **image_db.check_records(records, base_dir=base), "안내": []}
             return {"check_only": False, "형식": "이미지 레코드",
-                    **image_db.load_records(dsn, records, changed_by=by, base_dir=base).as_dict(), "안내": []}
+                    **image_db.load_records(dsn, records, changed_by=by, base_dir=base).as_dict(), "안내": [],
+                    "그림 임베딩": embed_after_load()}
 
     @app.get("/api/images/recommendable")
     def recommendable(module_code: str | None = None, unit_code: str | None = None, keyword: str | None = None,

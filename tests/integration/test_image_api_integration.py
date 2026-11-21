@@ -372,11 +372,12 @@ class ImageApiIntegrationTests(unittest.TestCase):
         fourth = self.client.get(f"/api/images/{rows[source_id + '-2']['id']}").json()["rights"]
         self.assertEqual((fourth["kogl_type"], fourth["kogl_ai"], fourth["non_commercial"], fourth["no_derivatives"], fourth["release_class"]),
                          (4, True, True, True, "inherit"))
-        # 자동 적재분은 추천에 나오지 않고, 기관이 재사용 범위를 정해 확정해야 나온다
+        # 재사용 범위는 '전체'로 들어오지만, 자동 적재분은 기관이 확정하기 전에는 추천에 나오지 않는다
+        self.assertEqual(rights["reuse_scope"], "all")
         self.assertEqual(self.listed("/api/images/recommendable")["items"], [])
         image_id = rows[source_id]["id"]
-        self.post(image_id, "rights", version=rights["version"], rights={"reuse_scope": "all"})
-        self.post(image_id, "confirm")
+        done = self.post(image_id, "confirm", version=rights["version"])
+        self.assertNotIn("notice", {key for key, value in done.items() if value})
         self.assertEqual([row["id"] for row in self.listed("/api/images/recommendable")["items"]], [image_id])
         # 확정 뒤 다시 적재해도 확정 내용은 그대로
         after = self.upload(files, by="수집 담당")

@@ -31,7 +31,10 @@ function Card({ item, rank, terms }) {
           {item.ai_used && <span className="krds-badge bg-light-gray">AI 활용 그림</span>}
         </p>
         <dl className="recommend-facts">
-          <div><dt>맞은 핵심어</dt><dd>{item.matched.length ? item.matched.join(", ") : "—"}<span className="meta"> · 점수 {item.score}</span></dd></div>
+          {item.similarity != null && (
+            <div><dt>그림 유사도</dt><dd>{item.similarity.toFixed(3)}<span className="meta"> · 바탕보다 {item.visual_z >= 0 ? "+" : ""}{item.visual_z.toFixed(1)}σ · 유사도 점수 {Math.round(item.visual * 100)}%</span></dd></div>
+          )}
+          <div><dt>맞은 핵심어</dt><dd>{item.matched.length ? item.matched.map((word) => (item.common?.includes(word) ? `${word}(후보 대부분에 있음)` : word)).join(", ") : "—"}<span className="meta"> · 점수 {item.score}</span></dd></div>
           <div><dt>라이선스</dt><dd>{licenseLabel(item, terms)}{item.license_scheme ? <span className="meta"> · {item.conditions.length ? item.conditions.join(" · ") : "조건 없음"}</span> : null}</dd></div>
           <div><dt>권리 귀속</dt><dd>{terms?.ownership?.[item.ownership] || item.ownership} · 재사용 범위 {terms?.reuse_scope?.[item.reuse_scope] || item.reuse_scope}</dd></div>
           <div><dt>출처</dt><dd>{item.source_org || item.author || "—"}{item.source_url && <> · <a href={item.source_url} target="_blank" rel="noreferrer">원 출처 열기</a></>}</dd></div>
@@ -95,6 +98,7 @@ export default function RecommendPage() {
       <p className="page-desc">
         집필 중인 문단과 수행준거를 넣으면 이미지 저작권 DB에서 실을 수 있는 그림을 권합니다.
         기관이 확정했고 재사용 범위가 확인된 그림만 나오며, 그림마다 출처·라이선스·이용조건과 원고에 넣을 출처 문구를 함께 보여 줍니다.
+        그림 임베딩이 켜져 있으면 그림에 달린 키워드뿐 아니라 그림 자체를 문단과 견주어 찾습니다(이 컴퓨터에서 계산, 외부 전송 없음).
       </p>
 
       {ready === null && <Spinner label="서버 상태를 확인하는 중" />}
@@ -171,6 +175,13 @@ export default function RecommendPage() {
               {context.summary && <p><strong>요약</strong> {context.summary}</p>}
               <div className="recommend-keywords"><strong>핵심어</strong>
                 {context.keywords.length ? <span className="krds-tag-wrap small">{context.keywords.map((word) => <span key={word} className="krds-btn-tag">{word}</span>)}</span> : " —"}</div>
+              <p className="recommend-method">
+                <span className={`krds-badge ${result.embedding.used ? "bg-light-information" : "bg-light-gray"}`}>
+                  {result.embedding.used ? `그림 유사도 사용 · ${result.embedding.model}` : "그림 유사도 사용 안 함"}</span>
+                <span className="meta"> {result.embedding.used
+                  ? `견준 글: “${result.embedding.query}”${result.embedding.note ? ` · ${result.embedding.note}` : ""}`
+                  : `핵심어와 수행준거 연결로만 찾았습니다. ${result.embedding.note}`}</span>
+              </p>
               {context.dropped.length > 0 && <p className="form-hint">AI가 냈지만 글에 없어 쓰지 않은 말: {context.dropped.join(", ")}</p>}
               {result.criterion.criterion_no && (result.criterion.found
                 ? <p><strong>수행준거 {result.criterion.criterion_no}</strong> {result.criterion.text}<span className="meta"> ({result.criterion.unit_name})</span></p>

@@ -183,6 +183,8 @@ def convert_item(item, base_dir: Path | None) -> tuple[dict | None, list[str], l
         notes.append(f"적힌 출처 문구 대신 URL·검색일·유형으로 만든 문구를 넣었습니다 — 「{made}」")
     record["rights"] = {
         "category": "public_license", "ownership": "kogl",
+        # 공공누리는 특정 학습모듈에 한정된 허락이 아니라 누구나 조건에 따라 쓰는 라이선스라 재사용 범위는 '전체'다(이용조건은 따로 남는다)
+        "reuse_scope": "all",
         "license": {"kogl_type": kogl_type, "kogl_ai": bool(combined)},
         **({"conditions": {key: conditions[key] for key in CONDITIONS if key in conditions}} if conditions else {}),
         **({"release_class": "inherit"} if kogl_type >= 2 else {}),

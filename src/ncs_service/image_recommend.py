@@ -10,17 +10,17 @@ from psycopg.rows import dict_row
 
 from ncs_core.ncs_catalog import catalog
 from ncs_recommend import context as recommend_context
+from ncs_recommend import embed as recommend_embed
 from ncs_recommend import rank as recommend_rank
 
 from . import kogl_import
 from .image_store import RECOMMENDABLE, _row
 
-NO_CANDIDATES = ("추천에 쓸 수 있는 그림이 아직 없습니다. 이미지 저작권 DB에서 그림을 열어 재사용 범위를 정하고 ‘기관 확정’을 하면 "
-                 "추천 대상이 됩니다(자동 태깅 상태나 재사용 범위 미확인 그림은 추천하지 않습니다).")
 MAX_CANDIDATES = 5000        # PoC 규모. 넘으면 앞에서부터만 보고 그 사실을 결과에 적는다
 
 CANDIDATES = f"""
 SELECT v.*, a.source_id, a.upscaled_width_px, a.upscaled_height_px,
+       (SELECT e.vector FROM image_embeddings e WHERE e.image_id = v.id AND e.model = %s) AS vector,
        (SELECT coalesce(array_agg(DISTINCT p.caption) FILTER (WHERE p.caption IS NOT NULL), '{{}}')
           FROM image_placements p WHERE p.image_id = v.id) AS captions,
        (SELECT coalesce(array_agg(DISTINCT p.context_text) FILTER (WHERE p.context_text IS NOT NULL), '{{}}')
@@ -36,9 +36,30 @@ LIMIT %s
 """
 
 
-def candidates(dsn: str) -> list[dict]:
+def waiting(dsn: str) -> dict:
+    """추천에 못 나오는 그림 수 — {'unknown_scope': 확정됐지만 재사용 범위 미확인, 'unconfirmed': 아직 확정 전(권리 정보 없음 포함)}."""
     with psycopg.connect(dsn, row_factory=dict_row) as connection:
-        rows = connection.execute(CANDIDATES, (MAX_CANDIDATES + 1,)).fetchall()
+        return connection.execute(
+            "SELECT count(*) FILTER (WHERE r.status = 'confirmed' AND r.reuse_scope = 'unknown') AS unknown_scope, "
+            "count(*) FILTER (WHERE r.status IS DISTINCT FROM 'confirmed') AS unconfirmed "
+            "FROM image_assets a LEFT JOIN image_rights r ON r.image_id = a.id").fetchone()
+
+
+def _no_candidates(dsn: str) -> list[str]:
+    counts = waiting(dsn)
+    lines = ["추천에 쓸 수 있는 그림이 아직 없습니다. 기관이 확정했고 재사용 범위가 정해진 그림만 추천합니다."]
+    if counts["unknown_scope"]:
+        lines.append(f"확정됐지만 재사용 범위가 ‘미확인’인 그림이 {counts['unknown_scope']}건 있습니다 — 이미지 저작권 DB에서 그림을 열어 "
+                     "‘확정 취소’ → 재사용 범위 선택 → ‘저장하고 기관 확정’을 하면 추천 대상이 됩니다.")
+    if counts["unconfirmed"]:
+        lines.append(f"아직 확정하지 않은 그림이 {counts['unconfirmed']}건 있습니다 — 이미지 저작권 DB에서 그림을 열어 ‘기관 확정’을 하세요.")
+    return lines
+
+
+def candidates(dsn: str, model: str = "") -> list[dict]:
+    """추천 후보. model을 주면 그 모델로 계산해 둔 그림 벡터를 'vector'로 함께 준다(없는 그림은 None)."""
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        rows = connection.execute(CANDIDATES, (model, MAX_CANDIDATES + 1)).fetchall()
     out = []
     for row in rows:
         item = _row(row)
@@ -65,8 +86,11 @@ def criterion_text(unit_code: str, criterion_no: str) -> tuple[str, str]:
 
 
 def recommend(dsn: str, *, text: str = "", unit_code: str = "", criterion_no: str = "", limit: int = 10,
-              use_llm: bool = True, asker=None) -> dict:
-    """문단·수행준거에 맞는 그림 추천. 반환: {'context', 'criterion', 'items', 'total_candidates', 'guidance'}."""
+              use_llm: bool = True, asker=None, embedder=None) -> dict:
+    """문단·수행준거에 맞는 그림 추천. 반환: {'context', 'criterion', 'embedding', 'items', 'total_candidates', 'guidance'}.
+
+    embedder: 테스트에서 그림 임베딩 모델 대신 넣는 것(.name, .text(str) → 벡터). 주지 않으면 설정된 모델(꺼져 있으면 쓰지 않음).
+    """
     text, unit_code, criterion_no = (text or "").strip(), (unit_code or "").strip(), (criterion_no or "").strip()
     if not text and not recommend_rank.unit_base(unit_code):
         raise ValueError("문단을 적거나 능력단위 코드를 넣어 주세요")
@@ -74,9 +98,27 @@ def recommend(dsn: str, *, text: str = "", unit_code: str = "", criterion_no: st
         raise ValueError("능력단위 코드는 숫자 10자리가 들어 있어야 합니다(예: 1203020201, LM1203020201_24v3)")
     criterion, unit_name = criterion_text(unit_code, criterion_no)
     analyzed = recommend_context.analyze(text, criterion, use_llm=use_llm, asker=asker)
-    pool = candidates(dsn)
+    embedder = embedder if embedder is not None else recommend_embed.get()
+    pool = candidates(dsn, embedder.name if embedder else "")
     truncated = len(pool) > MAX_CANDIDATES
-    items = recommend_rank.rank(pool[:MAX_CANDIDATES], analyzed, unit_code=unit_code, criterion_no=criterion_no, limit=limit)
+    pool = pool[:MAX_CANDIDATES]
+    covered = sum(1 for row in pool if row.get("vector"))
+    # 그림과 견줄 글: AI 요약이 있으면 그것, 없으면 핵심어. 모델의 글 길이 상한이 짧아 문단을 통째로 넣지 않는다
+    query = analyzed.summary or " ".join(analyzed.keywords)
+    query_vector = embedder.text(query) if embedder and covered and query else None
+    # 그림 유사도의 바탕: 관련 없는 글들의 벡터. 그림마다 이것과 견주어 문맥과 뚜렷이 맞는지 본다(rank.visual_scores)
+    reference = recommend_embed.reference_vectors(embedder) if query_vector is not None else []
+    items = recommend_rank.rank(pool, analyzed, unit_code=unit_code, criterion_no=criterion_no, limit=limit, query_vector=query_vector,
+                                reference_vectors=reference)
+    used = query_vector is not None and len(reference) >= recommend_rank.VISUAL_MIN_REFS
+    if used:
+        note = "" if covered == len(pool) else f"후보 {len(pool)}건 중 {covered}건만 그림 벡터가 있습니다(python -m ncs_service.image_embed로 채웁니다)"
+    elif embedder is None:
+        note = recommend_embed.why_not()
+    elif not covered:
+        note = "그림 벡터가 아직 없습니다 — python -m ncs_service.image_embed로 채웁니다"
+    else:
+        note = "그림과 견줄 글이 없거나 바탕 글의 벡터를 만들지 못해 그림 유사도를 쓰지 않았습니다"
     for item in items:           # 화면에 필요 없는 긴 글은 뺀다
         item.pop("contexts", None)
     return {
@@ -85,8 +127,9 @@ def recommend(dsn: str, *, text: str = "", unit_code: str = "", criterion_no: st
         "criterion": {"unit_code": unit_code, "unit_name": unit_name, "criterion_no": criterion_no, "text": criterion,
                       "found": bool(criterion) if criterion_no else bool(unit_name)},
         "items": items,
-        "total_candidates": min(len(pool), MAX_CANDIDATES),
+        "embedding": {"used": used, "model": embedder.name if embedder else "", "query": query if used else "", "covered": covered, "note": note},
+        "total_candidates": len(pool),
         "truncated": truncated,
         # 후보가 하나도 없으면 '맞는 그림이 없다'가 아니라 '확정된 그림이 없다'가 원인이다 — AI 생성으로 안내하지 않는다
-        "guidance": recommend_rank.guidance(items) if pool else [NO_CANDIDATES],
+        "guidance": recommend_rank.guidance(items) if pool else _no_candidates(dsn),
     }

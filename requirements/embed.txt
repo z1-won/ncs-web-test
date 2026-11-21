@@ -1,0 +1,6 @@
+# 그림 임베딩(이미지 추천의 그림-문맥 유사도, 선택). 모델을 이 컴퓨터에서 직접 돌린다 — docs/RECOMMEND.md
+torch>=2.2
+transformers>=4.49
+pillow>=10
+sentencepiece>=0.2
+protobuf>=4

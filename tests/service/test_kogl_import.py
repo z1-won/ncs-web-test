@@ -57,6 +57,7 @@ class ConversionTests(KoglCase):
                          ("KOGL-SAMPLE-0001", "객실 유형별 이용 현황 도표", "kogl_0001.png", ["객실", "이용정보", "부대시설"]))
         self.assertEqual((rights["category"], rights["ownership"], rights["license"], rights["source_org"], rights["retrieved_on"]),
                          ("public_license", "kogl", {"kogl_type": 1, "kogl_ai": False}, "예시기관", "2026-11-17"))
+        self.assertEqual(rights["reuse_scope"], "all", "공공누리는 학습모듈 한정 허락이 아니다")
         self.assertNotIn("release_class", rights, "제0·1유형은 산출물 분류를 정하지 않는다")
         # 능력단위는 버전까지, 요소·수행준거는 NCS의 글과 맞춰 코드로
         self.assertEqual(record["links"], [{"unit_code": "1203020201_24v3", "element_code": "1203020201_24v3.1", "criterion_no": "1.1"}])

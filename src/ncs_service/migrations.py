@@ -232,4 +232,15 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("007_image_source_id",
      "ALTER TABLE IF EXISTS image_assets ADD COLUMN IF NOT EXISTS source_id text;\n"
      "CREATE INDEX IF NOT EXISTS image_assets_source_id_idx ON image_assets (source_id)"),
+    # 008: 그림 임베딩 벡터(REQ-02-011) — 그림 자체를 문맥과 맞춰 보기 위한 것. 모델을 바꿔도 되게 (그림, 모델)마다 한 벌.
+    # 벡터는 이 컴퓨터에서 계산한 것이고(ncs_recommend.embed) PoC 규모라 확장(pgvector) 없이 real[]로 두고 파이썬에서 견준다.
+    ("008_image_embeddings",
+     "CREATE TABLE IF NOT EXISTS image_embeddings (\n"
+     "    image_id uuid NOT NULL REFERENCES image_assets(id) ON DELETE CASCADE,\n"
+     "    model text NOT NULL,\n"
+     "    dim integer NOT NULL CHECK (dim > 0),\n"
+     "    vector real[] NOT NULL,\n"
+     "    created_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    PRIMARY KEY (image_id, model)\n"
+     ")"),
 )
