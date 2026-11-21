@@ -1,8 +1,8 @@
 // 원고 진행 현황(REQ-02-007 '원고별 편집·내용·저작권 검수 진행도 확인') — 원고(모듈 코드)마다 남은 기록을 단계 7개와 진행도로 보여 준다.
 // 단계의 완료는 담당자가 여기서 직접 표시한다(누가·언제·메모, 되돌릴 수 있고 이력이 남는다). 기록은 완료를 판단할 근거로 옆에 보일 뿐이다.
-// 로그인이 없어 표시한 사람의 이름은 입력받고, 다시 적지 않게 브라우저에 기억한다(이미지 저작권 DB의 '변경한 사람'과 같은 값).
+// 화면 짜임은 이미지 저작권 DB와 같다: 위쪽 입력 묶음(표시한 사람 — 한 번 적으면 브라우저가 기억, 모듈 코드로 열기) → 목록 → 고른 원고의 상세가 목록 아래에 열리고 [닫기].
 // 서버가 DB 이력을 쓸 때만(/api/health의 history) 목록이 있다. 고른 원고는 주소(?code=)에 남아 새로 고침·공유에도 같은 화면이 열린다.
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { api } from "../lib/api.js";
@@ -18,7 +18,19 @@ import "../progress.css";
 const STAGE_COUNT = 7;
 const CHECK_LABEL = Object.fromEntries(CHECKS.map((c) => [c.value, c.label]));
 const CHECK_ORDER = CHECKS.map((c) => c.value);   // 편집 검수 표는 확인서 순서로
+const ANCHORS = [{ id: "progress-list", label: "원고 목록" }, { id: "progress-detail", label: "단계와 진행도" }];
 const day = (iso) => (iso ? formatDate(iso) : "-");
+const dateOnly = (iso) => (iso ? new Date(iso).toLocaleDateString("ko-KR") : "");
+
+// 단계 막대 — 처음 화면의 최근 원고 카드와 같은 모양(완료한 단계 수만큼 채운다)
+export function StageBar({ done }) {
+  return (
+    <span className="home-recent-steps" aria-label={`완료한 단계 ${done}, 전체 ${STAGE_COUNT}`}>
+      {Array.from({ length: STAGE_COUNT }, (_, i) => <i key={i} className={i < done ? "is-on" : ""} aria-hidden="true" />)}
+      <b>완료 {done} / {STAGE_COUNT}</b>
+    </span>
+  );
+}
 
 export default function ProgressPage() {
   usePageTitle("원고 진행 현황");
@@ -31,6 +43,9 @@ export default function ProgressPage() {
   const [detailError, setDetailError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [typed, setTyped] = useState("");            // 목록에 없는 원고를 모듈 코드로 여는 칸
+  const [by, setBy] = useState(loadName);            // 표시한 사람 — 이미지 저작권 DB의 '변경한 사람'과 같은 값을 쓴다
+  const byInput = useRef(null);
+  const detailBox = useRef(null);
 
   async function refreshList() {
     const { ok, data, error } = await api.manuscripts.list();
@@ -49,12 +64,6 @@ export default function ProgressPage() {
     return () => { alive = false; };
   }, []);
 
-  function openTyped(e) {
-    e.preventDefault();
-    const value = typed.trim();
-    if (value) setParams({ code: value });
-  }
-
   useEffect(() => {
     if (!code || history !== true) { setDetail(null); setDetailError(null); return undefined; }
     let alive = true;
@@ -64,72 +73,101 @@ export default function ProgressPage() {
       const { ok, data, error } = await api.manuscripts.get(code);
       if (!alive) return;
       setLoading(false);
-      if (ok) setDetail(data); else { setDetail(null); setDetailError(error); }
+      if (ok) {
+        setDetail(data);
+        requestAnimationFrame(() => detailBox.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
+      } else { setDetail(null); setDetailError(error); }
     })();
     return () => { alive = false; };
   }, [code, history]);
 
+  function openTyped(e) {
+    e.preventDefault();
+    const value = typed.trim();
+    if (value) { setParams({ code: value }); setTyped(""); }
+  }
+
   return (
     <>
-    <Header anchors={[]} hasHistory={false} hasResult={false} />
+    <Header anchors={history ? ANCHORS : []} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page progress-page">
       <h1 className="page-title">원고 진행 현황</h1>
       <p className="page-desc">
-        원고마다 남아 있는 기록(개발계획서 점검, 원고 검수, 의견 반영 검토, 원고 분량, 권리 증빙 점검, 이미지 저작권 DB)을 모아 단계와 검수 진행도로 보여 줍니다.
-        단계의 완료는 담당자가 직접 표시하며, 기록은 완료를 판단할 근거로 함께 보여 줍니다. 파일 이름에 모듈 코드(LM으로 시작)가 있는 원고의 기록만 모입니다.
+        원고마다 단계 7개의 완료 여부와 검수 진행도를 보여 줍니다. 단계의 완료는 담당자가 직접 표시하고, 남아 있는 기록은 완료를 판단할 근거로 함께 보입니다.
+        파일 이름에 모듈 코드(LM으로 시작)가 있는 원고의 기록만 모입니다.
       </p>
 
       {history === null && <Spinner label="기록을 확인하는 중" />}
       {history === false && <PageAlert kind="info">데이터베이스가 연결된 서버에서만 진행 현황을 볼 수 있습니다. 관리자에게 문의해 주세요.</PageAlert>}
-      <PageAlert kind="danger">{listError}</PageAlert>
 
       {history && (
-        <form className="progress-open" onSubmit={openTyped}>
-          <label htmlFor="progress-code">모듈 코드로 원고 열기</label>
-          <input id="progress-code" type="text" className="krds-input" placeholder="예: LM1203020201_24v3" value={typed} onChange={(e) => setTyped(e.target.value)} />
-          <button type="submit" className="krds-btn medium secondary" disabled={!typed.trim()}>열기</button>
-          <p className="form-hint">아직 기록이 없는 원고도 열어서 단계를 표시할 수 있습니다.</p>
+        <form className="fieldset review-form is-sectioned" onSubmit={openTyped}>
+          <div className="form-section-grid">
+            <div className="form-group">
+              <div className="form-tit"><label htmlFor="progress-by">표시한 사람</label></div>
+              <div className="form-conts">
+                <input id="progress-by" ref={byInput} type="text" className="krds-input" maxLength={50} value={by} placeholder="예: 에디팅기관 홍길동"
+                       onChange={(e) => { setBy(e.target.value); saveName(e.target.value); }} aria-describedby="progress-by-hint" />
+              </div>
+              <p className="form-hint" id="progress-by-hint">단계를 완료로 표시하거나 되돌릴 때 이력에 남는 이름입니다.</p>
+            </div>
+            <div className="form-group">
+              <div className="form-tit"><label htmlFor="progress-code">모듈 코드로 원고 열기</label></div>
+              <div className="form-conts progress-open">
+                <input id="progress-code" type="text" className="krds-input" placeholder="예: LM1203020201_24v3" value={typed}
+                       onChange={(e) => setTyped(e.target.value)} aria-describedby="progress-code-hint" />
+                <button type="submit" className="krds-btn medium secondary" disabled={!typed.trim()}>열기</button>
+              </div>
+              <p className="form-hint" id="progress-code-hint">아직 기록이 없는 원고도 열어서 단계를 표시할 수 있습니다.</p>
+            </div>
+          </div>
         </form>
       )}
 
-      {history && list && (
-        <section aria-labelledby="progress-list-title">
-          <h2 className="section-title" id="progress-list-title">원고 목록 <span className="meta">최근 기록순, {list.length}건</span></h2>
-          {list.length === 0 ? (
-            <p className="meta">아직 기록이 없습니다. 파일 이름에 모듈 코드가 있는 원고로 검수나 산정을 하면 여기에 모입니다.</p>
+      {history && (
+        <section id="progress-list" className="nav-anchor">
+          <div className="section-head">
+            <h2 className="section-title">원고 목록{list ? <span className="meta"> {list.length}건, 최근 기록순</span> : null}</h2>
+          </div>
+          <PageAlert kind="danger">{listError}</PageAlert>
+          {!list && !listError && <Spinner label="목록을 읽는 중" />}
+          {list && (list.length === 0 ? (
+            <p className="empty">아직 기록이 없습니다. 파일 이름에 모듈 코드가 있는 원고로 검수나 산정을 하면 여기에 모입니다.</p>
           ) : (
             <div className="krds-table-wrap">
-              <table className="tbl col data" aria-labelledby="progress-list-title">
+              <table className="tbl col data progress-table">
+                <caption>기록이 있는 원고와 완료한 단계</caption>
                 <thead>
-                  <tr><th scope="col">모듈 코드</th><th scope="col">학습모듈명</th><th scope="col">완료한 단계</th><th scope="col">기록이 있는 단계</th><th scope="col">기록 수</th><th scope="col">최근 기록</th><th scope="col">보기</th></tr>
+                  <tr><th scope="col">학습모듈</th><th scope="col">완료한 단계</th><th scope="col">근거 기록</th><th scope="col">최근 기록</th><th scope="col">열기</th></tr>
                 </thead>
                 <tbody>
                   {list.map((row) => (
-                    <tr key={row.module_code} className={row.module_code === code ? "is-selected" : ""}>
-                      <th scope="row">{row.module_code}</th>
-                      <td>{row.name || "-"}</td>
-                      <td><strong>{row.stages_done}</strong> / {STAGE_COUNT}</td>
-                      <td>{row.stages_recorded} / {STAGE_COUNT}</td>
-                      <td>{row.records}</td>
-                      <td>{day(row.last_at)}</td>
-                      <td className="progress-list-actions">
+                    <tr key={row.module_code} className={row.module_code === code ? "is-open" : ""}>
+                      <th scope="row">{row.name || row.module_code}{row.name && <span className="meta">{row.module_code}</span>}</th>
+                      <td><StageBar done={row.stages_done} /></td>
+                      <td>{row.records}건<span className="meta">{row.stages_recorded}개 단계</span></td>
+                      <td>{dateOnly(row.last_at)}</td>
+                      <td>
                         <button type="button" className="krds-btn small tertiary" aria-pressed={row.module_code === code}
-                                onClick={() => setParams({ code: row.module_code })}>
-                          진행 현황 보기<span className="sr-only"> {row.module_code}</span>
-                        </button>
+                                aria-label={`${row.name || row.module_code} 열기`} onClick={() => setParams({ code: row.module_code })}>열기</button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
+          ))}
         </section>
       )}
 
-      {loading && <Spinner label="진행 현황을 불러오는 중" />}
-      <PageAlert kind="danger">{detailError}</PageAlert>
-      {detail && !loading && <ProgressDetail detail={detail} onChange={(next) => { setDetail(next); refreshList(); }} />}
+      <div id="progress-detail" ref={detailBox} className="nav-anchor">
+        {loading && <Spinner label="진행 현황을 불러오는 중" />}
+        <PageAlert kind="danger">{detailError}</PageAlert>
+        {detail && !loading && (
+          <ProgressDetail detail={detail} by={by} onNeedName={() => byInput.current?.focus()}
+                          onChange={(next) => { setDetail(next); refreshList(); }} onClose={() => setParams({})} />
+        )}
+      </div>
       <TopButton />
     </main>
     <Footer />
@@ -137,21 +175,19 @@ export default function ProgressPage() {
   );
 }
 
-function ProgressDetail({ detail, onChange }) {
-  const [marking, setMarking] = useState(null);      // 완료로 표시하려고 연 단계 번호
-  const [by, setBy] = useState(loadName);
+function ProgressDetail({ detail, by, onNeedName, onChange, onClose }) {
+  const [marking, setMarking] = useState(null);      // 메모를 적으려고 연 단계 번호
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [markError, setMarkError] = useState(null);
 
   async function mark(stage, done) {
-    if (!by.trim()) { setMarkError("표시한 사람의 이름을 적어 주세요."); setMarking(stage); return; }
+    if (!by.trim()) { setMarkError("위쪽 ‘표시한 사람’에 이름을 적어 주세요."); onNeedName(); return; }
     setSaving(true);
     setMarkError(null);
     const { ok, data, error } = await api.manuscripts.markStage(detail.module_code, stage, { done, by: by.trim(), note: done ? note.trim() : "" });
     setSaving(false);
     if (!ok) { setMarkError(error); return; }
-    saveName(by.trim());
     setMarking(null);
     setNote("");
     onChange(data);
@@ -163,21 +199,87 @@ function ProgressDetail({ detail, onChange }) {
   const rights = progress["저작권 검수"]["권리 증빙"];
   const images = progress["저작권 검수"]["이미지 저작권 DB"];
   const volume = progress.분량;
-  const doneCount = detail["완료 단계 수"];
   return (
     <section className="progress-detail" aria-labelledby="progress-detail-title">
-      <h2 className="section-title" id="progress-detail-title">
-        {detail.module_code}{detail.학습모듈명 && ` ${detail.학습모듈명}`} <span className="meta">완료한 단계 {doneCount} / {STAGE_COUNT}</span>
-      </h2>
+      <div className="section-head">
+        <h2 className="section-title" id="progress-detail-title">
+          {detail.학습모듈명 || detail.module_code}{detail.학습모듈명 && <span className="meta"> {detail.module_code}</span>}
+        </h2>
+        <button type="button" className="krds-btn small tertiary" onClick={onClose}>닫기</button>
+      </div>
+      <p className="progress-overall"><StageBar done={detail["완료 단계 수"]} /></p>
 
-      <h3 className="table-title" id="progress-numbers-title">검수 진행도</h3>
+      <h3 className="table-title" id="progress-steps-title">단계 <span className="meta">{detail["단계 근거"]}</span></h3>
+      <PageAlert kind="danger">{markError}</PageAlert>
+      <ol className="progress-steps" aria-labelledby="progress-steps-title">
+        {detail.단계.map((stage) => (
+          <li key={stage.번호} className={stage.완료 ? "is-done" : ""}>
+            <span className="progress-step-no" aria-hidden="true">{stage.번호}</span>
+            <div className="progress-step-body">
+              <div className="progress-step-head">
+                <h4><span className="sr-only">{stage.번호}단계 </span>{stage.이름}</h4>
+                <span className={`krds-badge ${stage.완료 ? "bg-light-success" : "bg-light-gray"}`}>{stage.완료 ? "완료" : "완료 전"}</span>
+                <span className="progress-step-who">{stage.담당}</span>
+                {stage.완료 ? (
+                  <button type="button" className="krds-btn small tertiary" disabled={saving} onClick={() => mark(stage.번호, false)}>
+                    되돌리기<span className="sr-only"> {stage.이름}</span>
+                  </button>
+                ) : (
+                  <button type="button" className="krds-btn small secondary" disabled={saving} aria-expanded={marking === stage.번호}
+                          onClick={() => { setMarking(marking === stage.번호 ? null : stage.번호); setNote(""); setMarkError(null); }}>
+                    완료로 표시<span className="sr-only"> {stage.이름}</span>
+                  </button>
+                )}
+              </div>
+              {stage.완료 && (
+                <p className="progress-step-done">{stage["완료한 사람"]}, {dateOnly(stage["완료 시각"])}{stage.메모 && <span className="meta"> {stage.메모}</span>}</p>
+              )}
+              <p className="meta">
+                근거 기록: {stage.내용 ? <>{stage.내용}{stage.일시 && ` (${dateOnly(stage.일시)})`}</> : "없음"}
+                <Link className="progress-step-link" to={stage.경로}>{stage.기능} 열기</Link>
+              </p>
+              {marking === stage.번호 && !stage.완료 && (
+                <form className="progress-mark" onSubmit={(e) => { e.preventDefault(); mark(stage.번호, true); }}>
+                  <label htmlFor={`mark-note-${stage.번호}`}>메모(선택)</label>
+                  <input id={`mark-note-${stage.번호}`} type="text" className="krds-input" maxLength={300} value={note} autoFocus
+                         placeholder="예: 직능연 승인 확인" onChange={(e) => setNote(e.target.value)} />
+                  <button type="submit" className="krds-btn medium primary" disabled={saving}>{saving ? "저장하는 중" : "완료로 표시"}</button>
+                  <button type="button" className="krds-btn medium tertiary" disabled={saving} onClick={() => setMarking(null)}>취소</button>
+                </form>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      {detail.이력.length > 0 && (
+        <details className="progress-history">
+          <summary>완료 표시 이력 {detail.이력.length}건</summary>
+          <div className="krds-table-wrap">
+            <table className="tbl col data">
+              <caption>단계 완료 표시와 되돌림 이력</caption>
+              <thead><tr><th scope="col">때</th><th scope="col">단계</th><th scope="col">한 일</th><th scope="col">사람</th><th scope="col">메모</th></tr></thead>
+              <tbody>
+                {detail.이력.map((row, i) => (
+                  <tr key={i}>
+                    <td>{day(row.at)}</td><td>{row.stage}. {detail.단계.find((x) => x.번호 === row.stage)?.이름}</td>
+                    <td>{row.action === "done" ? "완료로 표시" : "되돌림"}</td><td>{row.by}</td><td>{row.note || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+
+      <h3 className="table-title" id="progress-numbers-title">검수 진행도 <span className="meta">남아 있는 기록에서 모은 값</span></h3>
       <dl className="upscale-summary" aria-labelledby="progress-numbers-title">
         <div>
           <dt>편집 검수</dt>
           {editing.항목 ? (
             <>
               <dd><strong>{editing["적합 비율"] ?? "-"}</strong>% 적합</dd>
-              <dd className="meta">적합 {editing.항목.적합}, 부적합 {editing.항목.부적합}, 판단불가 {editing.항목.판단불가} (구성요소 {editing.구성요소.length}개의 최근 검수)</dd>
+              <dd className="meta">적합 {editing.항목.적합}, 부적합 {editing.항목.부적합}, 판단불가 {editing.항목.판단불가}</dd>
             </>
           ) : <dd className="meta">기록 없음</dd>}
         </div>
@@ -205,80 +307,11 @@ function ProgressDetail({ detail, onChange }) {
           {volume ? (
             <>
               <dd><strong>{volume.pages}</strong>매{volume.estimated && " (추정)"}</dd>
-              <dd className="meta">집필료 {volume.fee.toLocaleString()}원, {day(volume.created_at)} 산정</dd>
+              <dd className="meta">집필료 {volume.fee.toLocaleString()}원, {dateOnly(volume.created_at)} 산정</dd>
             </>
           ) : <dd className="meta">기록 없음</dd>}
         </div>
       </dl>
-
-      <h3 className="table-title" id="progress-steps-title">단계 <span className="meta">{detail["단계 근거"]}</span></h3>
-      <p className="meta section-desc">{detail["단계 안내"]}</p>
-      <PageAlert kind="danger">{markError}</PageAlert>
-      <ol className="progress-steps" aria-labelledby="progress-steps-title">
-        {detail.단계.map((stage) => (
-          <li key={stage.번호} className={stage.완료 ? "is-done" : ""}>
-            <span className="progress-step-no" aria-hidden="true">{stage.번호}</span>
-            <div className="progress-step-body">
-              <div className="progress-step-head">
-                <h3><span className="sr-only">{stage.번호}단계 </span>{stage.이름}</h3>
-                <span className={`krds-badge ${stage.완료 ? "bg-light-success" : "bg-light-gray"}`}>{stage.완료 ? "완료" : "완료 전"}</span>
-                {stage.완료 ? (
-                  <button type="button" className="krds-btn small tertiary" disabled={saving} onClick={() => mark(stage.번호, false)}>
-                    되돌리기<span className="sr-only"> {stage.이름}</span>
-                  </button>
-                ) : (
-                  <button type="button" className="krds-btn small secondary" disabled={saving} aria-expanded={marking === stage.번호}
-                          onClick={() => { setMarking(marking === stage.번호 ? null : stage.번호); setMarkError(null); }}>
-                    완료로 표시<span className="sr-only"> {stage.이름}</span>
-                  </button>
-                )}
-                <Link className="krds-btn small text" to={stage.경로}>{stage.기능} 열기</Link>
-              </div>
-              <p className="meta">{stage.담당}</p>
-              {stage.완료 && (
-                <p>{stage["완료한 사람"]} 님이 {day(stage["완료 시각"])}에 완료로 표시{stage.메모 && `. 메모: ${stage.메모}`}</p>
-              )}
-              <p className="meta">근거 기록: {stage.내용 ? <>{stage.내용}{stage.일시 && ` (${day(stage.일시)})`}</> : "없음"}</p>
-              {marking === stage.번호 && !stage.완료 && (
-                <form className="progress-mark" onSubmit={(e) => { e.preventDefault(); mark(stage.번호, true); }}>
-                  <div>
-                    <label htmlFor={`mark-by-${stage.번호}`}>표시한 사람</label>
-                    <input id={`mark-by-${stage.번호}`} type="text" className="krds-input" maxLength={50} value={by} onChange={(e) => setBy(e.target.value)} />
-                  </div>
-                  <div>
-                    <label htmlFor={`mark-note-${stage.번호}`}>메모(선택)</label>
-                    <input id={`mark-note-${stage.번호}`} type="text" className="krds-input" maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />
-                  </div>
-                  <div className="progress-mark-actions">
-                    <button type="submit" className="krds-btn medium primary" disabled={saving}>{saving ? "저장하는 중" : "완료로 표시"}</button>
-                    <button type="button" className="krds-btn medium tertiary" disabled={saving} onClick={() => setMarking(null)}>취소</button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </li>
-        ))}
-      </ol>
-
-      {detail.이력.length > 0 && (
-        <details className="progress-history">
-          <summary>완료 표시 이력 {detail.이력.length}건</summary>
-          <div className="krds-table-wrap">
-            <table className="tbl col data">
-              <caption>단계 완료 표시와 되돌림 이력</caption>
-              <thead><tr><th scope="col">때</th><th scope="col">단계</th><th scope="col">한 일</th><th scope="col">사람</th><th scope="col">메모</th></tr></thead>
-              <tbody>
-                {detail.이력.map((row, i) => (
-                  <tr key={i}>
-                    <td>{day(row.at)}</td><td>{row.stage}. {detail.단계.find((x) => x.번호 === row.stage)?.이름}</td>
-                    <td>{row.action === "done" ? "완료로 표시" : "되돌림"}</td><td>{row.by}</td><td>{row.note || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
 
       {editing.구성요소.length > 0 && (
         <>

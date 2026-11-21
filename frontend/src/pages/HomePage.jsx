@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { usePageTitle } from "../lib/hooks.js";
+import { StageBar } from "./ProgressPage.jsx";
 import "../progress.css";
 
 const PREVIEW = 4;        // 미리 보기에 보이는 원고 수 — 아래 기능 묶음과 같은 4열 한 줄
@@ -77,10 +78,7 @@ export default function HomePage() {
                   <Link to={`/progress?code=${encodeURIComponent(row.module_code)}`}>
                     <strong className="home-card-title">{row.name || row.module_code}</strong>
                     <span className="home-card-files">{row.module_code}</span>
-                    <span className="home-recent-steps" aria-label={`완료한 단계 ${row.stages_done}, 전체 ${STAGE_COUNT}`}>
-                      {Array.from({ length: STAGE_COUNT }, (_, i) => <i key={i} className={i < row.stages_done ? "is-on" : ""} aria-hidden="true" />)}
-                      <b>완료 {row.stages_done} / {STAGE_COUNT}</b>
-                    </span>
+                    <StageBar done={row.stages_done} />
                     <span className="home-card-files">최근 기록 {new Date(row.last_at).toLocaleDateString("ko-KR")}</span>
                   </Link>
                 </li>
