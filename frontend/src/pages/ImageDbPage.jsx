@@ -15,7 +15,7 @@ import { conditionsLabel, licenseLabel, loadName, saveName, statusBadge, termOpt
 
 const ANCHORS = [
   { id: "image-load", label: "자료 등록" },
-  { id: "image-list", label: "이미지 목록·확정" },
+  { id: "image-list", label: "이미지 목록과 확정" },
   { id: "image-recommend", label: "추천용 조회" },
 ];
 const PAGE_SIZE = 10;
@@ -83,11 +83,11 @@ function LoadSection({ by, onLoaded }) {
             <div><dt>전체</dt><dd><strong>{report.전체}</strong>건</dd></div>
             {report.check_only
               ? <div><dt>형식 확인 통과</dt><dd><strong>{report.통과}</strong>건</dd><dd className="meta">DB에는 넣지 않았습니다</dd></div>
-              : <div><dt>등록</dt><dd><strong>{report.적재}</strong>건</dd><dd className="meta">새 그림 {report["새 그림"]} · 기존 그림에 합침 {report["기존 그림에 합침"]}</dd></div>}
+              : <div><dt>등록</dt><dd><strong>{report.적재}</strong>건</dd><dd className="meta">새 그림 {report["새 그림"]}, 기존 그림에 합침 {report["기존 그림에 합침"]}</dd></div>}
             <div><dt>거부</dt><dd><strong>{rejected.length}</strong>건</dd>
               {!report.check_only && report["필수 항목 충족률"] !== null && <dd className="meta">필수 항목 충족률 {(report["필수 항목 충족률"] * 100).toFixed(1)}%</dd>}</div>
             {!report.check_only && (
-              <div><dt>추가·변경</dt><dd className="meta">수록 위치 {report["추가된 수록 위치"]} · 수행준거 연결 {report["추가된 수행준거 연결"]} · 고친 권리 정보 {report["고친 권리 정보"]}</dd>
+              <div><dt>추가와 변경</dt><dd className="meta">수록 위치 {report["추가된 수록 위치"]}, 수행준거 연결 {report["추가된 수행준거 연결"]}, 고친 권리 정보 {report["고친 권리 정보"]}</dd>
                 <dd className="meta">확정이라 유지한 권리 정보 {report["확정 유지"].length}</dd></div>
             )}
           </dl>
@@ -107,7 +107,7 @@ function LoadSection({ by, onLoaded }) {
           )}
           {(report.안내 || []).length > 0 && (
             <div className="image-notes">
-              <p className="form-hint">안내 — 거부 사유는 아니지만 확인해 둘 점입니다.</p>
+              <p className="form-hint">안내: 거부 사유는 아니지만 확인해 둘 점입니다.</p>
               <ul className="image-rejected is-note">
                 {report.안내.map((item) => (
                   <li key={item.index}><strong>{item.index + 1}번째 항목{item.image_id ? ` (${item.image_id})` : ""}</strong>
@@ -152,13 +152,13 @@ function RecommendSection({ terms, refreshKey }) {
             <table className="tbl col data image-table">
               <caption>추천 목록에 나오는 그림</caption>
               <colgroup><col className="col-thumb" /><col /><col className="col-license" /><col className="col-source" /><col className="col-scope" /></colgroup>
-              <thead><tr><th scope="col">그림</th><th scope="col">제목·키워드</th><th scope="col">라이선스·이용조건</th><th scope="col">출처</th><th scope="col">재사용 범위</th></tr></thead>
+              <thead><tr><th scope="col">그림</th><th scope="col">제목과 키워드</th><th scope="col">라이선스와 이용조건</th><th scope="col">출처</th><th scope="col">재사용 범위</th></tr></thead>
               <tbody>{state.data.items.map((row) => (
                 <tr key={row.id}>
                   <td><Thumb src={api.images.recommendableFileUrl(row.id)} alt={row.title || row.filename || "그림"} /></td>
                   <td><strong>{row.title || row.filename || "이름 없는 그림"}</strong>{row.keywords.length > 0 && <span className="sub">{row.keywords.join(", ")}</span>}</td>
                   <td>{licenseLabel(row, terms)}<span className="sub">{conditionsLabel(row)}</span></td>
-                  <td>{row.source_org || row.author || "—"}<span className="sub">{terms?.ownership?.[row.ownership]}</span></td>
+                  <td>{row.source_org || row.author || "-"}<span className="sub">{terms?.ownership?.[row.ownership]}</span></td>
                   <td>{terms?.reuse_scope?.[row.reuse_scope]}{row.scope_check_needed && <span className="krds-badge bg-light-warning scope-badge">범위 확인 필요</span>}</td>
                 </tr>
               ))}</tbody>
@@ -232,7 +232,7 @@ export default function ImageDbPage() {
       <h1 className="page-title">이미지 저작권 DB</h1>
       <p className="page-desc">
         원고에서 뽑거나 수집한 이미지의 권리 정보를 모아 두고 기관이 확정하는 곳입니다. 자료를 등록하면 ‘자동 태깅’ 상태로 들어오고,
-        그림을 열어 분류·귀속·라이선스를 확인한 뒤 ‘기관 확정’을 하면 추천 목록에 쓸 수 있게 됩니다.
+        그림을 열어 분류, 귀속, 라이선스를 확인한 뒤 ‘기관 확정’을 하면 추천 목록에 쓸 수 있게 됩니다.
       </p>
 
       {ready === null && <Spinner label="서버 상태를 확인하는 중" />}
@@ -247,9 +247,9 @@ export default function ImageDbPage() {
       {ready === true && <>
         <dl className="upscale-summary image-summary">
           <div><dt>등록된 그림</dt><dd><strong>{counts?.all ?? "…"}</strong>건</dd></div>
-          <div><dt>확정 대기</dt><dd><strong>{counts ? counts.none + counts.auto : "…"}</strong>건</dd><dd className="meta">자동 태깅 {counts?.auto ?? "…"} · 권리 정보 없음 {counts?.none ?? "…"}</dd></div>
+          <div><dt>확정 대기</dt><dd><strong>{counts ? counts.none + counts.auto : "…"}</strong>건</dd><dd className="meta">자동 태깅 {counts?.auto ?? "…"}, 권리 정보 없음 {counts?.none ?? "…"}</dd></div>
           <div><dt>기관 확정</dt><dd><strong>{counts?.confirmed ?? "…"}</strong>건</dd></div>
-          <div><dt>추천 목록에 나옴</dt><dd><strong>{counts?.recommendable ?? "…"}</strong>건</dd><dd className="meta">확정 + 재사용 범위 확인 + 비공개 아님</dd></div>
+          <div><dt>추천 목록에 나옴</dt><dd><strong>{counts?.recommendable ?? "…"}</strong>건</dd><dd className="meta">확정했고 재사용 범위가 정해졌고 비공개가 아닌 그림</dd></div>
         </dl>
 
         <div className="fieldset review-form image-by">
@@ -259,7 +259,7 @@ export default function ImageDbPage() {
               <input id="image-by" type="text" className="krds-input" maxLength={50} value={by} placeholder="예: 에디팅기관 홍길동"
                      onChange={(e) => { setBy(e.target.value); saveName(e.target.value); }} aria-describedby="image-by-hint" />
             </div>
-            <p className="form-hint" id="image-by-hint">등록·수정·확정을 할 때마다 변경 이력에 이 이름이 남습니다. 로그인이 없어 직접 적습니다.</p>
+            <p className="form-hint" id="image-by-hint">등록, 수정, 확정을 할 때마다 변경 이력에 이 이름이 남습니다. 로그인이 없어 직접 적습니다.</p>
           </div>
         </div>
 
@@ -267,7 +267,7 @@ export default function ImageDbPage() {
 
         <section id="image-list" className="nav-anchor image-section">
           <div className="section-head">
-            <h2 className="section-title">이미지 목록·확정{list.data ? <span className="meta"> {list.data.total}건</span> : null}</h2>
+            <h2 className="section-title">이미지 목록과 확정{list.data ? <span className="meta"> {list.data.total}건</span> : null}</h2>
           </div>
           <form className="image-filters" onSubmit={(e) => { e.preventDefault(); changeFilter("q", query.trim()); }}>
             <div className="filter"><label htmlFor="filter-status">확정 상태</label>
@@ -275,7 +275,7 @@ export default function ImageDbPage() {
             <div className="filter"><label htmlFor="filter-category">분류 체계</label>
               <KrdsSelect id="filter-category" value={filters.category} options={categoryOptions} onChange={(v) => changeFilter("category", v)} title="분류 체계 선택" /></div>
             <div className="filter grow"><label htmlFor="filter-q">검색</label>
-              <input id="filter-q" type="search" className="krds-input" maxLength={100} value={query} placeholder="제목·그림명·키워드·수집 번호·그림 사용 문장" onChange={(e) => setQuery(e.target.value)} /></div>
+              <input id="filter-q" type="search" className="krds-input" maxLength={100} value={query} placeholder="제목, 그림명, 키워드, 수집 번호, 그림 사용 문장" onChange={(e) => setQuery(e.target.value)} /></div>
             <button type="submit" className="krds-btn medium secondary">검색</button>
           </form>
 
@@ -288,7 +288,7 @@ export default function ImageDbPage() {
                 <table className="tbl col data image-table">
                   <caption>이미지 저작권 DB에 등록된 그림</caption>
                   <colgroup><col className="col-thumb" /><col /><col className="col-category" /><col className="col-license" /><col className="col-scope" /><col className="col-status" /><col className="col-open" /></colgroup>
-                  <thead><tr><th scope="col">그림</th><th scope="col">그림명·수록 위치</th><th scope="col">분류 체계</th><th scope="col">라이선스</th><th scope="col">재사용 범위</th><th scope="col">상태</th><th scope="col">열기</th></tr></thead>
+                  <thead><tr><th scope="col">그림</th><th scope="col">그림명과 수록 위치</th><th scope="col">분류 체계</th><th scope="col">라이선스</th><th scope="col">재사용 범위</th><th scope="col">상태</th><th scope="col">열기</th></tr></thead>
                   <tbody>{items.map((row) => {
                     const [statusText, tone] = statusBadge(row.status, terms);
                     return (
@@ -296,9 +296,9 @@ export default function ImageDbPage() {
                         <td><Thumb src={row.has_file ? api.images.fileUrl(row.id) : null} alt={rowName(row)} /></td>
                         <td><strong>{rowName(row)}</strong>
                           <span className="sub">{row.module_code ? `${row.module_code}${row.placement_count > 1 ? ` 외 ${row.placement_count - 1}곳(모듈 ${row.module_count}개)` : ""}` : `수록 위치 없음(수집 자료${row.source_id ? ` ${row.source_id}` : ""})`}</span></td>
-                        <td>{terms?.category?.[row.category] || "—"}</td>
+                        <td>{terms?.category?.[row.category] || "-"}</td>
                         <td>{licenseLabel(row, terms)}{row.ai_used && <span className="sub">AI 활용</span>}</td>
-                        <td>{row.status ? terms?.reuse_scope?.[row.reuse_scope] || row.reuse_scope : "—"}
+                        <td>{row.status ? terms?.reuse_scope?.[row.reuse_scope] || row.reuse_scope : "-"}
                           {row.status === "confirmed" && row.reuse_scope === "unknown" && <span className="krds-badge bg-light-danger scope-badge">추천 제외</span>}</td>
                         <td><span className={`krds-badge ${tone}`}>{statusText}</span></td>
                         <td><button type="button" className="krds-btn small tertiary" onClick={() => open(row.id)} aria-label={`${rowName(row)} 열기`}>열기</button></td>

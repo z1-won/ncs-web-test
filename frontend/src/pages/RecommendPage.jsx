@@ -10,7 +10,7 @@ import { usePageTitle } from "../lib/hooks.js";
 import { copyText } from "../lib/clipboard.js";
 import { licenseLabel } from "../lib/imageTerms.js";
 
-const ANCHORS = [{ id: "recommend-input", label: "문단·수행준거" }, { id: "recommend-result", label: "추천 결과" }];
+const ANCHORS = [{ id: "recommend-input", label: "문단과 수행준거" }, { id: "recommend-result", label: "추천 결과" }];
 const LINK_LABEL = { criterion: "같은 수행준거", element: "같은 능력단위요소", unit: "같은 능력단위" };
 
 function Card({ item, rank, terms }) {
@@ -24,7 +24,7 @@ function Card({ item, rank, terms }) {
       <div className="recommend-body">
         <h3><span className="recommend-rank">{rank}</span>{name}</h3>
         <p className="krds-badge-wrap recommend-badges">
-          {item.priority && <span className="krds-badge bg-light-success">정부 귀속 · 전체 재사용</span>}
+          {item.priority && <span className="krds-badge bg-light-success">정부 귀속, 전체 재사용 가능</span>}
           {item.scope_check_needed && <span className="krds-badge bg-light-warning">범위 확인 필요</span>}
           {item.link_level && <span className="krds-badge bg-light-information">{LINK_LABEL[item.link_level]}</span>}
           {item.low_quality && <span className="krds-badge bg-light-danger">화질 낮음</span>}
@@ -32,14 +32,14 @@ function Card({ item, rank, terms }) {
         </p>
         <dl className="recommend-facts">
           {item.similarity != null && (
-            <div><dt>그림 유사도</dt><dd>{item.similarity.toFixed(3)}<span className="meta"> · 바탕보다 {item.visual_z >= 0 ? "+" : ""}{item.visual_z.toFixed(1)}σ · 유사도 점수 {Math.round(item.visual * 100)}%</span></dd></div>
+            <div><dt>그림 유사도</dt><dd>{item.similarity.toFixed(3)}<span className="meta">, 바탕보다 {item.visual_z >= 0 ? "+" : ""}{item.visual_z.toFixed(1)}σ, 유사도 점수 {Math.round(item.visual * 100)}%</span></dd></div>
           )}
-          <div><dt>맞은 핵심어</dt><dd>{item.matched.length ? item.matched.map((word) => (item.common?.includes(word) ? `${word}(후보 대부분에 있음)` : word)).join(", ") : "—"}<span className="meta"> · 점수 {item.score}</span></dd></div>
-          <div><dt>라이선스</dt><dd>{licenseLabel(item, terms)}{item.license_scheme ? <span className="meta"> · {item.conditions.length ? item.conditions.join(" · ") : "조건 없음"}</span> : null}</dd></div>
-          <div><dt>권리 귀속</dt><dd>{terms?.ownership?.[item.ownership] || item.ownership} · 재사용 범위 {terms?.reuse_scope?.[item.reuse_scope] || item.reuse_scope}</dd></div>
-          <div><dt>출처</dt><dd>{item.source_org || item.author || "—"}{item.source_url && <> · <a href={item.source_url} target="_blank" rel="noreferrer">원 출처 열기</a></>}</dd></div>
-          <div><dt>크기</dt><dd>{item.width_px ? `${item.width_px}×${item.height_px}px` : "—"}{item.has_upscaled ? " (업스케일본 있음)" : ""}
-            {item.max_width_mm != null && <span className="meta"> · 300dpi로 가로 {item.max_width_mm}mm까지</span>}</dd></div>
+          <div><dt>맞은 핵심어</dt><dd>{item.matched.length ? item.matched.map((word) => (item.common?.includes(word) ? `${word}(후보 대부분에 있음)` : word)).join(", ") : "-"}<span className="meta">, 점수 {item.score}</span></dd></div>
+          <div><dt>라이선스</dt><dd>{licenseLabel(item, terms)}{item.license_scheme ? <span className="meta">, {item.conditions.length ? item.conditions.join(", ") : "조건 없음"}</span> : null}</dd></div>
+          <div><dt>권리 귀속</dt><dd>{terms?.ownership?.[item.ownership] || item.ownership}, 재사용 범위 {terms?.reuse_scope?.[item.reuse_scope] || item.reuse_scope}</dd></div>
+          <div><dt>출처</dt><dd>{item.source_org || item.author || "-"}{item.source_url && <>, <a href={item.source_url} target="_blank" rel="noreferrer">원 출처 열기</a></>}</dd></div>
+          <div><dt>크기</dt><dd>{item.width_px ? `${item.width_px}×${item.height_px}px` : "-"}{item.has_upscaled ? " (업스케일본 있음)" : ""}
+            {item.max_width_mm != null && <span className="meta">, 300dpi로 가로 {item.max_width_mm}mm까지</span>}</dd></div>
         </dl>
         {item.notes.length > 0 && <ul className="krds-info-list recommend-notes">{item.notes.map((note, i) => <li key={i}>{note}</li>)}</ul>}
         {item.credit ? (
@@ -97,7 +97,7 @@ export default function RecommendPage() {
       <h1 className="page-title">이미지 추천</h1>
       <p className="page-desc">
         집필 중인 문단과 수행준거를 넣으면 이미지 저작권 DB에서 실을 수 있는 그림을 권합니다.
-        기관이 확정했고 재사용 범위가 확인된 그림만 나오며, 그림마다 출처·라이선스·이용조건과 원고에 넣을 출처 문구를 함께 보여 줍니다.
+        기관이 확정했고 재사용 범위가 확인된 그림만 나오며, 그림마다 출처, 라이선스, 이용조건과 원고에 넣을 출처 문구를 함께 보여 줍니다.
         그림 유사도 기능이 켜져 있으면 그림에 달린 키워드뿐 아니라 그림 자체를 문단과 견주어 찾습니다. 이 계산은 서버 안에서만 하며 외부로 보내지 않습니다.
       </p>
 
@@ -112,7 +112,7 @@ export default function RecommendPage() {
 
       {ready === true && <>
         <section id="recommend-input" className="nav-anchor image-section">
-          <h2 className="section-title">문단·수행준거</h2>
+          <h2 className="section-title">문단과 수행준거</h2>
           <form className="fieldset review-form" onSubmit={run}>
             <div className="form-group form-group-wide">
               <div className="form-tit"><label htmlFor="recommend-text">집필 중인 문단</label></div>
@@ -169,17 +169,17 @@ export default function RecommendPage() {
             <div className="recommend-context">
               <p className="recommend-method">
                 <span className={`krds-badge ${context.method === "llm" ? "bg-light-information" : "bg-light-gray"}`}>
-                  {context.method === "llm" ? `생성형 AI 요약${context.model ? ` · ${context.model}` : ""}` : "규칙으로 뽑은 핵심어"}</span>
+                  {context.method === "llm" ? `생성형 AI 요약${context.model ? `(${context.model})` : ""}` : "규칙으로 뽑은 핵심어"}</span>
                 {context.note && <span className="meta"> {context.note}</span>}
               </p>
               {context.summary && <p><strong>요약</strong> {context.summary}</p>}
               <div className="recommend-keywords"><strong>핵심어</strong>
-                {context.keywords.length ? <span className="krds-tag-wrap small">{context.keywords.map((word) => <span key={word} className="krds-btn-tag">{word}</span>)}</span> : " —"}</div>
+                {context.keywords.length ? <span className="krds-tag-wrap small">{context.keywords.map((word) => <span key={word} className="krds-btn-tag">{word}</span>)}</span> : " -"}</div>
               <p className="recommend-method">
                 <span className={`krds-badge ${result.embedding.used ? "bg-light-information" : "bg-light-gray"}`}>
-                  {result.embedding.used ? `그림 유사도 사용 · ${result.embedding.model}` : "그림 유사도 사용 안 함"}</span>
+                  {result.embedding.used ? `그림 유사도 사용(${result.embedding.model})` : "그림 유사도 사용 안 함"}</span>
                 <span className="meta"> {result.embedding.used
-                  ? `견준 글: “${result.embedding.query}”${result.embedding.note ? ` · ${result.embedding.note}` : ""}`
+                  ? `견준 글: “${result.embedding.query}”${result.embedding.note ? ` (${result.embedding.note})` : ""}`
                   : `핵심어와 수행준거 연결로만 찾았습니다. ${result.embedding.note}`}</span>
               </p>
               {context.dropped.length > 0 && <p className="form-hint">생성형 AI가 제시했지만 문단에 없어 쓰지 않은 낱말: {context.dropped.join(", ")}</p>}

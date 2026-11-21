@@ -189,7 +189,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
         <li>2배로 기준에 닿지 않는 그림은 4배로 키웁니다. 4배는 한 장에 약 4배 오래 걸립니다{slow ? ` (이 원고는 ${slow}장)` : ""}.</li>
         {engines.length > 1 && <li>줄을 펼치면 모델을 골라 한 장씩 키울 수 있습니다. 모델별 결과는 원본 옆에 나란히 남고, 제안본에는 그림마다 마지막에 돌린 결과가 들어갑니다. 여러 장 한 번에 돌리기는 기본 모델({engines[0].label})을 씁니다. Real-ESRGAN (x4plus)은 항상 4배로 키운 뒤 필요한 크기로 줄이며 한 장에 몇 분이 걸릴 수 있습니다.</li>}
         {engine.available && missing.map((e) => <li key={e.name}>{e.label} 모델은 실행 파일이 없어 지금은 고를 수 없습니다. {e.problem}</li>)}
-        <li>업스케일은 화질만 올립니다. 모델이 글자·선을 바꿀 수 있으니 줄을 펼쳐 결과를 원본과 나란히 놓고 확인하세요.</li>
+        <li>업스케일은 화질만 올립니다. 모델이 글자나 선을 바꿀 수 있으니 줄을 펼쳐 결과를 원본과 나란히 놓고 확인하세요.</li>
       </ul>
       {!engine.available && <PageAlert kind="danger">업스케일 엔진을 쓸 수 없습니다. 그림 목록과 원본 보기만 됩니다.{"\n"}{engine.problem}</PageAlert>}
       {pictures.length === 0 && <p className="empty">{data.target_dpi} DPI 미만 그림이 없습니다.</p>}
@@ -258,7 +258,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                               : result?.status === "실패" ? <span className="state failed">실패</span>
                               : done ? <span className="state done">완료</span> : null}
                             {done
-                              ? <span className={`krds-badge ${dpiTone(result.out_dpi, data.target_dpi, data.min_dpi)}`}>{p.dpi} → {result.out_dpi} DPI</span>
+                              ? <span className={`krds-badge ${dpiTone(result.out_dpi, data.target_dpi, data.min_dpi)}`}>{p.dpi} DPI에서 {result.out_dpi} DPI로</span>
                               : <span className={`krds-badge ${dpiTone(p.dpi, data.target_dpi, data.min_dpi)}`}>{p.dpi} DPI</span>}
                           </span>
                         </span>
@@ -268,8 +268,8 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                       {open && (
                         <div className="accordion-body">
                           <p className="meta">
-                            {p.px[0]}×{p.px[1]}px · 출력 {p.mm[0]}×{p.mm[1]}mm · {p.format} · {p.places.join(", ")}
-                            {" · "}목표까지 {p.need}배 필요, {p.scale}배로 키움{p.scale >= 4 ? " (2배보다 약 4배 오래 걸림)" : ""}{p.reaches_target ? "" : " (목표 미달)"}
+                            {p.px[0]}×{p.px[1]}px, 출력 {p.mm[0]}×{p.mm[1]}mm, {p.format}, {p.places.join(", ")}
+                            {", "}목표까지 {p.need}배 필요, {p.scale}배로 키움{p.scale >= 4 ? " (2배보다 약 4배 오래 걸림)" : ""}{p.reaches_target ? "" : " (목표 미달)"}
                           </p>
                           <div className={`upscale-pair${sides.length > 1 ? " three" : ""}`}>
                             <figure>
@@ -282,16 +282,16 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                                 <figure key={choice.name}>
                                   <img src={api.pictures.upscaledUrl(token, p.bin_id, side.v, choice.name)} alt={`${name} 업스케일 ${choice.label}`} loading="lazy" />
                                   <figcaption>
-                                    {choice.label} · {side.out_px[0]}×{side.out_px[1]}px · {side.out_dpi} DPI · {side.seconds}초
-                                    {sides.length > 1 && done && result.engine === choice.name ? " · 제안본에 들어감" : ""}
-                                    {" · "}<a href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${name}_${choice.name}`, choice.name)} download>내려받기</a>
+                                    {choice.label}, {side.out_px[0]}×{side.out_px[1]}px, {side.out_dpi} DPI, {side.seconds}초
+                                    {sides.length > 1 && done && result.engine === choice.name ? ", 제안본에 들어감" : ""}
+                                    {", "}<a href={api.pictures.downloadUrl(token, p.bin_id, `${base}_${name}_${choice.name}`, choice.name)} download>내려받기</a>
                                   </figcaption>
                                 </figure>
                               ))
                               : done && (
                                 <figure>
                                   <img src={api.pictures.upscaledUrl(token, p.bin_id, result.v)} alt={`${name} 업스케일`} loading="lazy" />
-                                  <figcaption>업스케일 {result.out_px[0]}×{result.out_px[1]}px · {result.out_dpi} DPI · {result.seconds}초</figcaption>
+                                  <figcaption>업스케일 {result.out_px[0]}×{result.out_px[1]}px, {result.out_dpi} DPI, {result.seconds}초</figcaption>
                                 </figure>
                               )}
                           </div>
@@ -333,7 +333,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
           <div className="bar-row">
           <span className="meta" role="status">
             {batch ? <>업스케일 중 <strong>{batch.done + 1}</strong> / {batch.total}장</>
-              : <>선택 <strong>{picked.size}</strong>장 · 업스케일 완료 <strong>{ready}</strong> / {pictures.length}개</>}
+              : <>선택 <strong>{picked.size}</strong>장, 업스케일 완료 <strong>{ready}</strong> / {pictures.length}개</>}
           </span>
           <div className="bar-actions">
             {batch
@@ -342,7 +342,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                   선택한 {picked.size}장 업스케일링
                 </button>}
             <button type="button" className="krds-btn medium primary" disabled={!ready || working} onClick={proposal}
-                    title="업스케일한 그림만 원고의 같은 자리에 넣은 사본(hwpx). 본문·그림 크기·위치는 그대로">
+                    title="업스케일한 그림만 원고의 같은 자리에 넣은 사본(hwpx). 본문과 그림의 크기, 위치는 그대로입니다">
               {busy === "proposal" ? "만드는 중" : `제안본 내려받기(그림 ${ready}장)`}
             </button>
           </div>

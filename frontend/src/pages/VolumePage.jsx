@@ -94,19 +94,19 @@ export default function VolumePage() {
     <main id="container" className="inner page volume-page">
       <h1 className="page-title">원고 분량 산정</h1>
       <p className="page-desc">
-        최종 원고(hwp, hwpx)를 올리면 집필료 산정 기준(계약서 제13조 4항)대로 구성별 행·쪽을 세어 계약서에 기입할 분량(매)을 냅니다.
-        1행에 1자 이상이면 1행, ½쪽 이상이면 1쪽이며 행 띄움·표·출처 밝힌 인용은 넣고 사진·삽화 등 시각 자료와 표지·NCS학습모듈의 이해·개발진은 뺍니다.
+        최종 원고(hwp, hwpx)를 올리면 집필료 산정 기준(계약서 제13조 4항)대로 구성별 행과 쪽을 세어 계약서에 기입할 분량(매)을 냅니다.
+        1행에 1자 이상이면 1행, ½쪽 이상이면 1쪽으로 셉니다. 행 띄움, 표, 출처를 밝힌 인용은 넣고 사진과 삽화 등 시각 자료, 표지, ‘NCS학습모듈의 이해’, 개발진은 뺍니다.
         기존 학습모듈 원고를 함께 올리면 올해 바뀐 분량을 따로 셉니다. 올린 파일은 계산 뒤 바로 지웁니다.
         {history && " 산정 결과와 입력한 값은 산정 이력에 저장합니다. 원고 파일은 저장하지 않고 파일 이름만 기록합니다."}
       </p>
 
       <form className="fieldset review-form" onSubmit={submit}>
         <FileSlot id="volume-final" label="최종 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
-                  hint="3차 검토까지 반영한 최종 완성본(hwp, hwpx). 한글에서 저장한 파일이어야 줄·쪽을 정확히 셉니다." />
+                  hint="3차 검토까지 반영한 최종 완성본(hwp, hwpx). 한글에서 저장한 파일이어야 줄과 쪽을 정확히 셉니다." />
         <FileSlot id="volume-previous" label="기존 원고" accept=".hwp,.hwpx" file={previous} onChange={setPrevious} disabled={busy}
-                  hint="비교할 기존 학습모듈 원고 — 올리면 1자 이상 바뀐 행을 변경 분량으로 셉니다." />
+                  hint="기존 학습모듈 원고를 올리면 한 글자라도 바뀐 행을 변경 분량으로 셉니다." />
         <FileSlot id="volume-print" label="출력본 PDF" accept=".pdf" file={printCopy} onChange={setPrintCopy} disabled={busy}
-                  hint="최종 원고를 한글에서 PDF로 저장한 것 — 올리면 전체 쪽 수·구성별 쪽·쪽마다 채운 높이를 PDF에서 직접 재어 산정에 씁니다." />
+                  hint="최종 원고를 한글에서 PDF로 저장한 파일입니다. 올리면 전체 쪽 수, 구성별 쪽, 쪽마다 채운 높이를 PDF에서 직접 재어 산정에 씁니다." />
         <div className="form-group">
           <div className="form-tit"><label htmlFor="volume-manual">수작업 산정 쪽수 (선택)</label></div>
           <div className="form-conts">
@@ -121,7 +121,7 @@ export default function VolumePage() {
             <input id="volume-unit-price" type="number" min="1" step="1" className="krds-input" value={unitPrice} disabled={busy}
                    onChange={(e) => setUnitPrice(e.target.value)} aria-describedby="volume-unit-price-hint" placeholder="50000" />
           </div>
-          <p className="form-hint" id="volume-unit-price-hint">계약서에는 단가가 없고(제2조 계약금액 빈칸), 예산·정산지침의 원고료 50,000원/쪽은 상한입니다. 비우면 상한으로 계산합니다.</p>
+          <p className="form-hint" id="volume-unit-price-hint">계약서에는 단가가 없고(제2조 계약금액 빈칸), 예산집행 및 정산지침의 원고료 50,000원/쪽은 상한입니다. 비우면 상한으로 계산합니다.</p>
         </div>
         <div className="form-group">
           <div className="form-tit"><label htmlFor="volume-contract-pages">계약 분량 (매, 선택)</label></div>
@@ -129,7 +129,7 @@ export default function VolumePage() {
             <input id="volume-contract-pages" type="number" min="1" step="1" className="krds-input" value={contractPages} disabled={busy}
                    onChange={(e) => setContractPages(e.target.value)} aria-describedby="volume-contract-pages-hint" placeholder="예: 80" />
           </div>
-          <p className="form-hint" id="volume-contract-pages-hint">과업지시서에 적은 원고 분량 — 넣으면 넘는 분량은 인정하지 않고(추가금 없음), 모자라면 제출 분량만큼 계산합니다.</p>
+          <p className="form-hint" id="volume-contract-pages-hint">과업지시서에 적은 원고 분량입니다. 넣으면 넘는 분량은 인정하지 않고(추가금 없음), 모자라면 제출 분량만큼 계산합니다.</p>
         </div>
         <div className="form-group">
           <div className="form-tit"><span>부록</span></div>
@@ -199,7 +199,7 @@ export default function VolumePage() {
         <ConfirmDialog title="산정 이력 삭제" confirmLabel="삭제" busy={deleting}
                        onConfirm={() => deleteHistory(pendingDelete)} onCancel={() => setPendingDelete(null)}>
           <p>정말 삭제하시겠습니까?</p>
-          <p className="meta">{formatDate(pendingDelete.created_at)} · {pendingDelete.manuscript} · {pendingDelete.pages}매 · {pendingDelete.fee.toLocaleString()}원</p>
+          <p className="meta">{formatDate(pendingDelete.created_at)}, {pendingDelete.manuscript}, {pendingDelete.pages}매, {pendingDelete.fee.toLocaleString()}원</p>
           <p className="meta">삭제한 이력은 되돌릴 수 없습니다.</p>
         </ConfirmDialog>
       )}
@@ -233,19 +233,19 @@ function VolumeResult({ result }) {
     <section id="volume-result" className="volume-result nav-anchor">
       <ResultHead
         status={<span className={`krds-badge large ${RANGE_BADGE[band.상태] || "bg-light-gray"}`}>{band.상태}</span>}
-        meta={`${result.원고} · ${band.비고}${result.created_at ? ` · ${formatDate(result.created_at)} 산정(이력)` : ""}`}
-        badges={result.추정 && <span className="krds-badge bg-light-warning">추정치 — 줄 배치 정보 없음</span>}
+        meta={`${result.원고}, ${band.비고}${result.created_at ? `, ${formatDate(result.created_at)} 산정(이력)` : ""}`}
+        badges={result.추정 && <span className="krds-badge bg-light-warning">추정값(줄 배치 정보 없음)</span>}
       />
       <PageAlert kind="danger">{result["저장 오류"] && <p>{result["저장 오류"]} 이 화면의 산정 결과는 정상이며, 이력에만 남지 않았습니다.</p>}</PageAlert>
       <dl className="upscale-summary">
-        <div><dt>기입 분량(계약서에 적을 분량)</dt><dd><strong>{adopted["기입 분량"]}매</strong> — {adopted.근거}</dd></div>
+        <div><dt>기입 분량(계약서에 적을 분량)</dt><dd><strong>{adopted["기입 분량"]}매</strong> ({adopted.근거})</dd></div>
         {gap != null && <div><dt>한글 줄 배치 계산</dt><dd>{total["기입 분량"]}매 (출력본 측정과 차이 {gap > 0 ? "+" : ""}{gap}매)</dd></div>}
         <div><dt>꽉 찬 쪽과 남은 행</dt><dd>{total.쪽}쪽 {total.행}행</dd></div>
         <div><dt>행 합계</dt><dd>{total["행 합계"].toLocaleString()}행</dd></div>
         <div><dt>높이로 환산한 쪽수</dt><dd>{total["쪽 환산"]}쪽</dd></div>
         {result["물리 쪽 수"] != null && <div><dt>원고 전체 쪽수</dt><dd>{result["물리 쪽 수"]}쪽</dd></div>}
         {change && <div><dt>변경 분량</dt><dd><strong>{change["변경 분량"]["기입 분량"]}매</strong> ({change["변경 행"].toLocaleString()}행, {change["변경 비율"]})</dd></div>}
-        {manual && <div><dt>수작업 대조</dt><dd>오차율 {manual.오차율} — {manual.결과}</dd></div>}
+        {manual && <div><dt>수작업 대조</dt><dd>오차율 {manual.오차율} ({manual.결과})</dd></div>}
       </dl>
       <Notes notes={result.알림} warnings={result.경고} />
 
@@ -256,7 +256,7 @@ function VolumeResult({ result }) {
       <p className="meta section-desc">측정 방식: {result["측정 방식"]}</p>
       <div className="krds-table-wrap">
         <table className="tbl col data">
-          <caption>구성별 행·쪽 산정표</caption>
+          <caption>구성별 행과 쪽 산정표</caption>
           <thead>
             <tr><th scope="col">구성</th><th scope="col">산정</th><th scope="col">행</th><th scope="col">환산 쪽수</th><th scope="col">원고 쪽</th><th scope="col">시각 자료 제외(쪽)</th>{change && <th scope="col">변경 행</th>}</tr>
           </thead>
@@ -277,7 +277,7 @@ function VolumeResult({ result }) {
       </div>
       {change && (
         <p className="meta section-desc">
-          기존 원고 {change["기존 원고"]}: {change["기존 원고 분량"]["기입 분량"]}매{change["기존 원고 추정"] ? "(추정)" : ""} · 변경 {change["변경 분량"].쪽}쪽 {change["변경 분량"].행}행 · {change.방법}
+          기존 원고 {change["기존 원고"]}: {change["기존 원고 분량"]["기입 분량"]}매{change["기존 원고 추정"] ? "(추정)" : ""}, 변경 {change["변경 분량"].쪽}쪽 {change["변경 분량"].행}행. {change.방법}
         </p>
       )}
 
@@ -302,21 +302,21 @@ function FeeCard({ fee }) {
         {defaultUnit && <button type="button" className="krds-btn small tertiary" onClick={toUnitPrice}>단가 입력하기</button>}
       </Notes>
       <dl className="upscale-summary">
-        <div><dt>집필료</dt><dd><strong>{fee.집필료.toLocaleString()}원</strong>{fee.추정 && " (추정 분량 기준 — 참고값)"}</dd></div>
+        <div><dt>집필료</dt><dd><strong>{fee.집필료.toLocaleString()}원</strong>{fee.추정 && " (추정 분량 기준 참고값)"}</dd></div>
         <div><dt>산식</dt><dd>{fee.산식}</dd></div>
         <div>
-          <dt>단가 <span className={`krds-badge ${defaultUnit ? "bg-light-warning" : "bg-light-gray"}`}>{defaultUnit ? "기본값 · 지침 상한" : "입력값"}</span></dt>
+          <dt>단가 <span className={`krds-badge ${defaultUnit ? "bg-light-warning" : "bg-light-gray"}`}>{defaultUnit ? "기본값(지침 상한)" : "입력값"}</span></dt>
           <dd>{fee.단가.toLocaleString()}원/쪽</dd>
           {defaultUnit && <dd className="meta">{fee["단가 근거"]}</dd>}
         </div>
-        <div><dt>분량</dt><dd>산정 {fee["산정 분량"]}매{fee["계약 분량"] != null && ` · 계약 ${fee["계약 분량"]}매 → 인정 ${fee["인정 분량"]}매`} ({fee["분량 근거"]})</dd></div>
-        {fee["개선 기준"] && <div><dt>개선 기준(변경 분량)</dt><dd><strong>{fee["개선 기준"].집필료.toLocaleString()}원</strong> — {fee["개선 기준"].산식}</dd></div>}
+        <div><dt>분량</dt><dd>산정 {fee["산정 분량"]}매{fee["계약 분량"] != null && `, 계약 ${fee["계약 분량"]}매, 인정 ${fee["인정 분량"]}매`} ({fee["분량 근거"]})</dd></div>
+        {fee["개선 기준"] && <div><dt>개선 기준(변경 분량)</dt><dd><strong>{fee["개선 기준"].집필료.toLocaleString()}원</strong> ({fee["개선 기준"].산식})</dd></div>}
         <div><dt>세금</dt><dd>{fee.세금}</dd></div>
       </dl>
-      <h3 className="table-title" id="volume-fee-basis-title">집필료 산정 근거 <span className="meta">계약서(F07)·예산집행 및 정산지침(F16)</span></h3>
+      <h3 className="table-title" id="volume-fee-basis-title">집필료 산정 근거 <span className="meta">계약서(F07), 예산집행 및 정산지침(F16)</span></h3>
       <div className="krds-table-wrap">
         <table className="tbl col data" aria-labelledby="volume-fee-basis-title">
-          <caption>집필료 산정 근거(계약서 F07·예산집행 및 정산지침 F16)</caption>
+          <caption>집필료 산정 근거(계약서 F07, 예산집행 및 정산지침 F16)</caption>
           <thead><tr><th scope="col">근거</th><th scope="col">내용</th></tr></thead>
           <tbody>
             {fee.근거.map((row) => <tr key={row.조항}><th scope="row">{row.조항}</th><td>{row.내용}</td></tr>)}
@@ -347,7 +347,7 @@ function PrintedResult({ printed }) {
       <dl className="upscale-summary">
         <div><dt>전체 쪽 수</dt><dd>출력본 <strong>{printed["전체 쪽 수"]}쪽</strong> / 한글 줄 배치 {show(printed["한글 물리 쪽 수"])}쪽{printed["쪽 수 차이"] != null && ` (차이 ${signed(printed["쪽 수 차이"])})`}</dd></div>
         <div><dt>기입 분량</dt><dd>출력본 <strong>{total["기입 분량"]}매</strong> ({total.쪽}쪽 {total.행}행) / 한글 {total["한글 계산 기입 분량"]}매 (차이 {signed(total.차이)})</dd></div>
-        <div><dt>같은 원고 확인</dt><dd>모듈 코드 {show(printed["모듈 코드"])} · 원고 문단 일치 {show(printed["같은 글 비율"])}</dd></div>
+        <div><dt>같은 원고 확인</dt><dd>모듈 코드 {show(printed["모듈 코드"])}, 원고 문단 일치 {show(printed["같은 글 비율"])}</dd></div>
       </dl>
       {printed.알림.length > 0 && <PageAlert kind="info">{printed.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
       <h3 className="table-title" id="volume-print-method-title">측정과 계산의 구분 <span className="meta">출력본에서 직접 잰 값과 계산한 값</span></h3>
@@ -363,7 +363,7 @@ function PrintedResult({ printed }) {
       <h3 className="table-title" id="volume-print-segments-title">구성별 쪽 <span className="meta">출력본 측정과 한글 계산 비교</span></h3>
       <div className="krds-table-wrap">
         <table className="tbl col data" aria-labelledby="volume-print-segments-title">
-          <caption>구성별 쪽 — 출력본 측정과 한글 계산</caption>
+          <caption>구성별 쪽: 출력본 측정과 한글 계산</caption>
           <thead>
             <tr><th scope="col">구성</th><th scope="col">출력본 쪽</th><th scope="col">인쇄 쪽</th><th scope="col">환산 쪽수(출력본)</th><th scope="col">환산 쪽수(한글)</th><th scope="col">차이</th><th scope="col">한글 원고 쪽</th></tr>
           </thead>

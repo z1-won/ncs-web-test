@@ -126,9 +126,9 @@ export default function SuggestPage() {
     <main id="container" className="inner page suggest-page">
       <h1 className="page-title">문장 추천</h1>
       <p className="page-desc">
-        원고(hwp, hwpx)를 올리면 생성형 AI가 학습모듈 작성 규칙(학습 목표 '~할 수 있다.', 수행 순서·교수·학습 방법 '~한다.', 학습명·수행 내용 제목 '~하기',
-        학습 내용명 행동명사, 평가 항목 명사형)과 표현(주어 군더더기·어색한 낱말·중복 표현·문장부호)에 어긋난 문장을 찾아 정정 후보를 순위와 함께 최대 5개 보여 줍니다.
-        생성형 AI가 낸 후보는 규정 꼴·원문에 없던 수치·영문·상호·원문과의 유사도로 다시 걸러 통과한 것만 보여 주고, 버린 후보는 이유와 함께 접어 둡니다.
+        원고(hwp, hwpx)를 올리면 생성형 AI가 학습모듈 작성 규칙(학습 목표 '~할 수 있다.', 수행 순서와 교수·학습 방법 '~한다.', 학습명과 수행 내용 제목 '~하기',
+        학습 내용명 행동명사, 평가 항목 명사형)과 표현(주어 군더더기, 어색한 낱말, 중복 표현, 문장부호)에 어긋난 문장을 찾아 정정 후보를 순위와 함께 최대 5개 보여 줍니다.
+        생성형 AI가 낸 후보는 규정 꼴, 원문에 없던 수치와 영문과 상호, 원문과의 유사도로 다시 걸러 통과한 것만 보여 주고, 버린 후보는 이유와 함께 접어 둡니다.
         후보 중 하나를 채택하거나 기각하세요. 직무 내용을 새로 쓰거나 교육 내용이 적절한지 판단하지 않으며, 원고는 고치지 않습니다.
         생성형 AI를 쓸 수 없을 때는 고칠 문장을 찾지 않고 그 이유만 보여 줍니다. 올린 파일은 계산 뒤 바로 지웁니다.
       </p>
@@ -152,7 +152,7 @@ export default function SuggestPage() {
           <div className="form-tit"><label htmlFor="suggest-kind">문장 종류</label></div>
           <div className="form-conts">
             <KrdsSelect id="suggest-kind" value={kind} title="문장 종류"
-                        options={kinds.map((k) => ({ value: k.이름, label: `${k.이름} — ${k["규정 꼴"]}` }))} onChange={setKind} />
+                        options={kinds.map((k) => ({ value: k.이름, label: `${k.이름} (${k["규정 꼴"]})` }))} onChange={setKind} />
           </div>
         </div>
         <div className="form-group">
@@ -182,7 +182,7 @@ export default function SuggestPage() {
           <h2 className="section-title">채택 기록</h2>
           <dl className="upscale-summary">
             <div><dt>후보가 있는 문장</dt><dd>{allCards.length}개</dd></div>
-            <div><dt>결정</dt><dd>{decided.length}개 (채택 {adopted.length} · 기각 {decided.length - adopted.length})</dd></div>
+            <div><dt>결정</dt><dd>{decided.length}개 (채택 {adopted.length}, 기각 {decided.length - adopted.length})</dd></div>
             <div><dt>채택률</dt><dd><strong>{rate == null ? "-" : `${rate}%`}</strong></dd></div>
           </dl>
           <div className="run-buttons">
@@ -204,7 +204,7 @@ function SuggestResult({ result, cards, decisions, onDecide }) {
     <section className="suggest-result">
       <ResultHead
         status={<span className={`krds-badge large ${cards.length ? "bg-light-warning" : "bg-light-success"}`}>{cards.length ? `고칠 문장 ${cards.length}개` : "고칠 문장 없음"}</span>}
-        meta={`${result.원고} · 확인한 문장 ${summary["검사한 문장"]}개 · 생성형 AI에 보낸 문장 ${summary["AI에 보낸 문장"]}개 · ${Object.entries(summary["사유별"]).map(([name, n]) => `${name} ${n}`).join(" · ") || "지적 없음"} · 추천 없음 ${summary["추천 없음"]} · 제외한 생성형 AI 후보 ${summary["버린 AI 후보"]}`}
+        meta={`${result.원고}, 확인한 문장 ${summary["검사한 문장"]}개, 생성형 AI에 보낸 문장 ${summary["AI에 보낸 문장"]}개, ${Object.entries(summary["사유별"]).map(([name, n]) => `${name} ${n}`).join(", ") || "지적 없음"}, 추천 없음 ${summary["추천 없음"]}, 제외한 생성형 AI 후보 ${summary["버린 AI 후보"]}`}
         badges={<span id="suggest-ai-state" className="krds-badge bg-light-gray">{result.AI.상태}</span>}
       />
       {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
@@ -232,7 +232,7 @@ function SuggestCard({ card, decision, onDecide }) {
       <header className="suggest-card-head">
         <span className={`krds-badge ${STATUS_BADGE[card.상태] || "bg-light-gray"}`}>{card.상태}</span>
         <strong>{card.자리}</strong>
-        <span className="meta">{card.종류} · 규정 꼴 {card["규정 꼴"]}</span>
+        <span className="meta">{card.종류}, 규정 꼴 {card["규정 꼴"]}</span>
       </header>
       <p className="suggest-original"><span className="meta">원문</span> {card.원문}</p>
       {card.사유.length > 0 && <p className="meta">사유: {card.사유.join(" / ")}</p>}
@@ -266,16 +266,16 @@ function SuggestCard({ card, decision, onDecide }) {
       )}
       {card["참고 예문"].length > 0 && (
         <div className="suggest-examples">
-          <p className="meta">참고 예문(같은 원고에서 규정을 지킨 비슷한 문장 — 후보가 아님)</p>
+          <p className="meta">참고 예문(같은 원고에서 규정을 지킨 비슷한 문장이며 후보가 아닙니다)</p>
           <ul className="krds-info-list dash">
-            {card["참고 예문"].map((ex) => <li key={ex.자리}>{ex.문장} <span className="meta">— {ex.자리}, 유사도 {ex.유사도}</span></li>)}
+            {card["참고 예문"].map((ex) => <li key={ex.자리}>{ex.문장} <span className="meta">({ex.자리}, 유사도 {ex.유사도})</span></li>)}
           </ul>
         </div>
       )}
       {card["버린 AI 후보"].length > 0 && (
         <details className="suggest-dropped">
           <summary>제외한 생성형 AI 후보 {card["버린 AI 후보"].length}개</summary>
-          <ul>{card["버린 AI 후보"].map((d, i) => <li key={i}>{d.문장} — {d.이유}</li>)}</ul>
+          <ul>{card["버린 AI 후보"].map((d, i) => <li key={i}>{d.문장} (제외 이유: {d.이유})</li>)}</ul>
         </details>
       )}
     </article>

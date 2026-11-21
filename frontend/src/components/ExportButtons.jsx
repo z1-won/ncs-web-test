@@ -37,10 +37,10 @@ export function ExportButtons({ moduleCode, rows, createdAt, disabled, onError, 
       <button type="button" className="krds-btn small secondary" disabled={disabled || busy} onClick={() => run("hwpx")}
               title="원본 F02 양식(hwpx)에 ✓와 비고를 채운 제출본">{busy === "hwpx" ? "만드는 중" : "hwpx (제출 양식)"}</button>
       <button type="button" className="krds-btn small tertiary" disabled={disabled || busy} onClick={() => run("xlsx")}
-              title="열람·편집용 엑셀">{busy === "xlsx" ? "만드는 중" : "xlsx"}</button>
+              title="열람과 편집용 엑셀">{busy === "xlsx" ? "만드는 중" : "xlsx"}</button>
       {(annotate?.upload || annotate?.runId) && (
         <>
-          <span className="meta sep">·</span>
+          <span className="meta sep" aria-hidden="true">|</span>
           <button type="button" className="krds-btn small tertiary" disabled={disabled || busy || !annotate.rows?.length} onClick={runAnnotate}
                   title="원고 hwpx의 해당 문단에 지적사항을 한글 메모로 단 파일(본문은 바꾸지 않음)">
             {busy === "memo" ? "만드는 중" : `수정 메모 원고 (${annotate.rows?.length || 0}건)`}

@@ -49,23 +49,23 @@ export default function OpinionPage() {
     <main id="container" className="inner page opinion-page">
       <h1 className="page-title">검토의견서 반영 검토</h1>
       <p className="page-desc">
-        1·2차 검토의견서(PDF, hwp, hwpx)와 의견을 반영한 최종 원고(hwp, hwpx)를 올리면, 의견이 가리키는 표·그림·학습 구성에서 고른 원고 문단을
-        생성형 AI가 읽고 의견마다 <strong>반영 후보 · 미반영 후보 · 확인 필요</strong>를 근거 문단과 함께 보여 줍니다. 근거 문단이 없거나 원고 글로 확인할 수 없는
-        의견(형식·그림)은 확인 필요로, 용어 변경 의견은 바로 반영으로 보지 않고 집필자에게 확인할 항목으로 따로 표시합니다. 생성형 AI를 쓸 수 없을 때는
+        1차, 2차 검토의견서(PDF, hwp, hwpx)와 의견을 반영한 최종 원고(hwp, hwpx)를 올리면, 의견이 가리키는 표, 그림, 학습 구성에서 고른 원고 문단을
+        생성형 AI가 읽고 의견마다 <strong>반영 후보, 미반영 후보, 확인 필요</strong>를 근거 문단과 함께 보여 줍니다. 근거 문단이 없거나 원고 글로 확인할 수 없는
+        의견(형식, 그림)은 확인 필요로, 용어 변경 의견은 바로 반영으로 보지 않고 집필자에게 확인할 항목으로 따로 표시합니다. 생성형 AI를 쓸 수 없을 때는
         모든 의견을 확인 필요로 표시하고 이유를 함께 보여 줍니다. 이 화면의 판정은 참고용이며 최종 판단은 담당자가 합니다. 올린 파일은 검토 뒤 바로 지웁니다.
       </p>
 
       <form className="fieldset review-form" onSubmit={submit}>
         <FileSlot id="opinion-first" label="1차 검토의견서" accept=".pdf,.hwp,.hwpx" file={first} onChange={setFirst} disabled={busy}
-                  hint="개발계획서 및 초고본 검토의견서(PDF, hwp, hwpx). 1차·2차 중 하나 이상 필요합니다." />
+                  hint="개발계획서 및 초고본 검토의견서(PDF, hwp, hwpx). 1차와 2차 중 하나 이상 필요합니다." />
         <FileSlot id="opinion-second" label="2차 검토의견서" accept=".pdf,.hwp,.hwpx" file={second} onChange={setSecond} disabled={busy}
                   hint="완성본 검토의견서(PDF, hwp, hwpx)." />
         <FileSlot id="opinion-final" label="최종 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
                   hint="의견을 반영한 원고(hwp, hwpx)." />
         <FileSlot id="opinion-print" label="출력본 PDF" accept=".pdf" file={printCopy} onChange={setPrintCopy} disabled={busy}
-                  hint="최종 원고의 PDF — 올리면 근거 문장이 실린 쪽을 함께 보여 줍니다." />
+                  hint="최종 원고의 PDF입니다. 올리면 근거 문장이 실린 쪽을 함께 보여 줍니다." />
         <FileSlot id="opinion-previous" label="반영 전 원고" accept=".hwp,.hwpx" file={previous} onChange={setPrevious} disabled={busy}
-                  hint="초고본·완성본 — 올리면 원래 있던 표현을 반영으로 잘못 보지 않게 걸러 냅니다." />
+                  hint="초고본이나 완성본을 올리면 원래 있던 표현을 반영으로 잘못 보지 않게 걸러 냅니다." />
         <div className="form-group form-actions">
           <div className="form-tit form-tit-spacer" aria-hidden="true"><label>&nbsp;</label></div>
           <div className="run-buttons">
@@ -109,7 +109,7 @@ function OpinionResult({ result }) {
     <section className="opinion-result">
       <ResultHead
         status={<span className="krds-badge large bg-light-gray">의견 {summary["총 의견"]}개</span>}
-        meta={`${result.원고} · ${result.의견서.map((s) => `${s.차수 || "차수 모름"} ${s.파일}`).join(", ")}${result.출력본 ? ` · 출력본 ${result.출력본}` : ""}`}
+        meta={`${result.원고} / ${result.의견서.map((s) => `${s.차수 || "차수 모름"} ${s.파일}`).join(", ")}${result.출력본 ? ` / 출력본 ${result.출력본}` : ""}`}
         badges={<span id="opinion-llm-state" className="krds-badge bg-light-gray">생성형 AI: {result.LLM}</span>}
       />
       <dl className="upscale-summary">
@@ -120,7 +120,7 @@ function OpinionResult({ result }) {
         <div>
           <dt>담당자 확정 대비 오차율 (기준 6% 이내)</dt>
           <dd><strong>{rate.rate == null ? "-" : `${rate.rate.toFixed(1)}%`}</strong></dd>
-          <dd className="meta">확정 {decided}개 · 후보와 다름 {rate.wrong} · 보류(확인 필요) {rate.held}</dd>
+          <dd className="meta">확정 {decided}개, 후보와 다름 {rate.wrong}, 보류(확인 필요) {rate.held}</dd>
         </div>
       </dl>
       {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
@@ -139,7 +139,7 @@ function OpinionResult({ result }) {
         <table className="tbl col data opinion-table">
           <caption>의견별 판정 후보와 근거</caption>
           <thead>
-            <tr><th scope="col">번호</th><th scope="col">차수·위치</th><th scope="col">의견</th><th scope="col">유형</th><th scope="col">판정 후보</th><th scope="col">근거 문단·비고</th><th scope="col">담당자 확정</th></tr>
+            <tr><th scope="col">번호</th><th scope="col">차수와 위치</th><th scope="col">의견</th><th scope="col">유형</th><th scope="col">판정 후보</th><th scope="col">근거 문단과 비고</th><th scope="col">담당자 확정</th></tr>
           </thead>
           <tbody>
             {rows.map((row) => (
@@ -151,16 +151,16 @@ function OpinionResult({ result }) {
                 <td><span className={`krds-badge ${VERDICT_BADGE[row.판정] || "bg-light-gray"}`}>{row.판정}</span></td>
                 <td className="opinion-evidence">
                   {row.근거.slice(0, 3).map((e, i) => (
-                    <p key={i}><span className="meta">{e.위치}{e["출력본 쪽"] ? ` · ${e["출력본 쪽"]}쪽` : ""}</span> {e.문단}</p>
+                    <p key={i}><span className="meta">{e.위치}{e["출력본 쪽"] ? `, ${e["출력본 쪽"]}쪽` : ""}</span> {e.문단}</p>
                   ))}
                   {row["집필자 확인"] && <p className="opinion-ask">집필자 확인: {row["집필자 확인"]}</p>}
                   {row["수정 제안"] && <p className="opinion-suggest">수정 제안: {row["수정 제안"]}</p>}
                   {row.비고.length > 0 && (
-                    <details><summary>비고 {row.비고.length}개{row["찾은 범위"] && ` · ${row["찾은 범위"]}`}</summary>
+                    <details><summary>비고 {row.비고.length}개{row["찾은 범위"] && `, ${row["찾은 범위"]}`}</summary>
                       <ul className="krds-info-list dash">{[...row.비고, ...row["의견서 읽기 추정"]].map((note, i) => <li key={i}>{note}</li>)}</ul>
                     </details>
                   )}
-                  {row.LLM && <p className="meta">생성형 AI: {row.LLM.상태 === "사용" ? `${row.LLM.모델} · ${row.LLM.판정}` : row.LLM.상태}</p>}
+                  {row.LLM && <p className="meta">생성형 AI: {row.LLM.상태 === "사용" ? `${row.LLM.모델}, ${row.LLM.판정}` : row.LLM.상태}</p>}
                 </td>
                 <td>
                   {row.판정 !== "조치 불필요" && (

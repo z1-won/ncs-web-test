@@ -110,7 +110,7 @@ export function FindingsList({ findings, note = "" }) {
             <div className="finding-head">
               <Badge value={f.verdict} />
               <strong className="finding-check">{f.check}</strong>
-              {!showReason && !showSuggestion && <span className="meta">사유·수정 제안은 비고와 같음</span>}
+              {!showReason && !showSuggestion && <span className="meta">사유와 수정 제안은 비고와 같습니다</span>}
             </div>
             <dl className="finding-body">
               {f.region_path && <><dt>위치</dt><dd className="path">{f.region_path}</dd></>}

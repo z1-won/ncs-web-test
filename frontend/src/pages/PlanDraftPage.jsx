@@ -61,7 +61,7 @@ export default function PlanDraftPage() {
     setCheck(null);
   }, [subclass]);
 
-  const options = (catalog?.subclasses || []).map((s) => ({ value: s.duty, label: `${s.name} (${s.duty}) — 능력단위 ${s.units.length}개` }));
+  const options = (catalog?.subclasses || []).map((s) => ({ value: s.duty, label: `${s.name} (${s.duty}), 능력단위 ${s.units.length}개` }));
   const chosen = subclass ? subclass.units.filter((u) => picked[u.code]) : [];
 
   async function submit(e) {
@@ -121,8 +121,8 @@ export default function PlanDraftPage() {
     <main id="container" className="inner page">
       <h1 className="page-title">NCS 학습모듈 개발계획서 작성 지원</h1>
       <p className="page-desc">
-        세분류를 고르면 NCS 능력단위·요소·수행준거를 개발계획서 양식(T01)에 자동으로 채운 초안(hwpx)을 내려받습니다.
-        학습 내용명·선수학습 등 집필자가 정할 칸은 비워 두며, 초안은 바로 개발계획서 점검 ①~⑩을 거칩니다.
+        세분류를 고르면 NCS 능력단위, 요소, 수행준거를 개발계획서 양식(T01)에 자동으로 채운 초안(hwpx)을 내려받습니다.
+        학습 내용명, 선수학습 등 집필자가 정할 칸은 비워 두며, 초안은 바로 개발계획서 점검 ①~⑩을 거칩니다.
         이어서 작성한 개발계획서는 아래 ‘개발계획서 점검’에 올려 다시 점검합니다.
       </p>
 
@@ -138,7 +138,7 @@ export default function PlanDraftPage() {
             <KrdsSelect id="duty" value={duty} options={options} onChange={setDuty} title="세분류 선택" describedBy="duty-hint" />
           </div>
           <p className="form-hint" id="duty-hint">
-            {subclass ? `${subclass.classes?.대분류 || ""} › ${subclass.classes?.중분류 || ""} › ${subclass.classes?.소분류 || ""} › ${subclass.name}` : "요소·수행준거 표에 받아 둔 세분류만 보입니다"}
+            {subclass ? `${subclass.classes?.대분류 || ""} › ${subclass.classes?.중분류 || ""} › ${subclass.classes?.소분류 || ""} › ${subclass.name}` : "NCS 기준 자료가 등록된 세분류만 보입니다"}
           </p>
         </div>
 
@@ -147,7 +147,7 @@ export default function PlanDraftPage() {
           <div className="form-conts">
             <input id="agency" type="text" className="krds-input" placeholder="예: (사)한국호텔전문경영인협회" value={agency} onChange={(e) => setAgency(e.target.value)} aria-describedby="agency-hint" aria-required="true" />
           </div>
-          <p className="form-hint" id="agency-hint">⑧ 필수 기재 항목 — 초안 점검은 1차본(직능연) 기준이라 비워도 해당 없음으로 두고, 최종본 점검에서 확인합니다</p>
+          <p className="form-hint" id="agency-hint">최종본에는 꼭 적어야 하는 항목입니다(점검 ⑧). 초안 점검은 1차본(직능연) 기준이라 비워 두어도 됩니다.</p>
         </div>
 
         <div className="form-group">
@@ -155,12 +155,12 @@ export default function PlanDraftPage() {
           <div className="form-conts">
             <input id="english" type="text" className="krds-input" placeholder="예: Rooms Operation" value={english} onChange={(e) => setEnglish(e.target.value)} aria-describedby="english-hint" aria-required="true" />
           </div>
-          <p className="form-hint" id="english-hint">⑧ 필수 기재 항목 — NCS 누리집 ‘환경 분석’의 영문명. 1차본 점검에서는 비워도 해당 없음</p>
+          <p className="form-hint" id="english-hint">최종본에는 꼭 적어야 하는 항목입니다(점검 ⑧). NCS 누리집 ‘환경 분석’의 영문명을 적습니다. 1차본 점검에서는 비워 두어도 됩니다.</p>
         </div>
 
         {subclass && (
           <div className="form-group form-group-wide">
-            <div className="form-tit"><span id="units-title">능력단위 ({chosen.length}/{subclass.units.length}) — 담당 집필진·검토진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></span></div>
+            <div className="form-tit"><span id="units-title">능력단위 ({chosen.length}/{subclass.units.length})와 담당 집필진, 검토진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></span></div>
             <div className="form-conts">
               <div className="krds-table-wrap">
                 <table className="tbl col data plan-units" aria-labelledby="units-title">
@@ -214,7 +214,7 @@ export default function PlanDraftPage() {
             </button>
           </div>
           {missing.length > 0 && !busy && (
-            <p className="form-hint" id="missing-hint">비어 있는 필수 항목: {missing.join(", ")} — 초안(1차본)에서는 비워 둘 수 있고, 최종본 점검 ⑧에서 확인됩니다</p>
+            <p className="form-hint" id="missing-hint">비어 있는 필수 항목: {missing.join(", ")}. 초안(1차본)에서는 비워 둘 수 있고, 최종본 점검 ⑧에서 확인합니다.</p>
           )}
           <PageAlert kind="danger">{error}</PageAlert>
         </div>
@@ -226,7 +226,7 @@ export default function PlanDraftPage() {
         <section>
           <ResultHead
             status={verdict ? <Badge value={verdict} large /> : <span className="krds-badge large bg-light-gray">결과 없음</span>}
-            meta={`${made.name} (${made.duty}) · 능력단위 ${made.units}개 · 요소 ${made.elements}개 · 초안 점검 ①~⑩`}
+            meta={`${made.name} (${made.duty}), 능력단위 ${made.units}개, 요소 ${made.elements}개, 초안 점검 ①~⑩`}
             downloads={
               <>
                 <span className="meta">초안 파일은 내려받기 폴더에 저장됐습니다</span>
@@ -235,7 +235,7 @@ export default function PlanDraftPage() {
             }
           />
           <h2 className="section-title">초안 점검 확인서</h2>
-          <p className="meta section-desc">1차본(직능연) 기준 점검입니다 — 학습 내용명·영문명·집필진 등 기관 기재 칸은 해당 없음으로 둡니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하고, 완성본은 아래 ‘개발계획서 점검’에서 ‘최종본’으로 다시 점검하세요.</p>
+          <p className="meta section-desc">1차본(직능연) 기준 점검입니다. 학습 내용명, 영문명, 집필진 등 기관이 적는 칸은 해당 없음으로 둡니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하고, 완성본은 아래 ‘개발계획서 점검’에서 ‘최종본’으로 다시 점검하세요.</p>
           <SheetTable sheet={check} findings={[]} />
         </section>
       )}
@@ -264,7 +264,7 @@ export default function PlanDraftPage() {
                 </div>
               ))}
             </div>
-            <p className="form-hint">1차본은 학습모듈명·영문명·기관명·집필진·학습 내용명이 비어 있어도 부적합으로 보지 않습니다(최종 단계에서 기관 기재)</p>
+            <p className="form-hint">1차본은 학습모듈명, 영문명, 기관명, 집필진, 학습 내용명이 비어 있어도 부적합으로 보지 않습니다. 이 칸들은 최종 단계에서 기관이 적습니다.</p>
           </div>
 
           <div className="form-group form-actions">
@@ -286,7 +286,7 @@ export default function PlanDraftPage() {
             <ResultHead
               status={<Badge value={review.data.요약.검수결과} large />}
               meta={[review.data.module_code, "개발계획서 점검 ①~⑩", STAGES.find(([value]) => value === review.stage)?.[1],
-                     review.data.created_at && formatDate(review.data.created_at)].filter(Boolean).join(" · ")}
+                     review.data.created_at && formatDate(review.data.created_at)].filter(Boolean).join(", ")}
               downloads={review.data.id
                 ? <a href={api.reviews.zipUrl(review.data.id)} className="krds-btn small tertiary" title="결과 파일 내려받기(ZIP)">결과 파일 내려받기(ZIP)</a>
                 : review.data.저장?.zip ? <span className="meta">저장: {review.data.저장.zip}</span> : null}

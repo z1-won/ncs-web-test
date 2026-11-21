@@ -12,7 +12,7 @@ import { formatDate } from "../lib/format.jsx";
 export function ItemStatus({ item }) {
   if (item.status === "pending") return <span className="krds-badge bg-light-gray">대기</span>;
   if (item.status === "running") return <Spinner label="검수하는 중" />;
-  if (item.status === "skipped") return <span className="krds-badge bg-light-gray">미실행 — 개발계획서 없음</span>;
+  if (item.status === "skipped") return <span className="krds-badge bg-light-gray">실행 안 함(개발계획서 없음)</span>;
   if (item.status === "cancelled") return <span className="krds-badge bg-light-gray">취소됨</span>;
   if (item.status === "error") return <span className="krds-badge bg-light-danger">오류</span>;
   const counts = countVerdicts(item.data?.검수확인서);
@@ -52,12 +52,12 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken }) {
         status={run.running
           ? <Spinner label={`검수하는 중: ${items.filter((i) => i.status === "done" || i.status === "error" || i.status === "skipped").length}/${items.length} 구성요소 완료`} />
           : verdict ? <Badge value={verdict} large /> : <span className="krds-badge large bg-light-gray">결과 없음</span>}
-        meta={`${moduleCode}${moduleCode ? " · " : ""}전체 실행${run.created_at ? ` · ${formatDate(run.created_at)}` : ""} · 적합 ${total.적합} · 부적합 ${total.부적합} · 판단불가 ${total.판단불가} 항목`}
+        meta={`${moduleCode}${moduleCode ? ", " : ""}전체 실행${run.created_at ? `, ${formatDate(run.created_at)}` : ""}: 적합 ${total.적합}개, 부적합 ${total.부적합}개, 판단불가 ${total.판단불가}개`}
         badges={
           <>
-            {run.roles && !run.roles.plan && <span className="krds-badge bg-light-warning">개발계획서 없음 — 위치 미실행</span>}
+            {run.roles && !run.roles.plan && <span className="krds-badge bg-light-warning">개발계획서 없음(위치 실행 안 함)</span>}
             {/* 방금 실행한 묶음만(roles.print가 null). 이력에서 연 묶음은 출력본 유무를 모른다(키 없음) */}
-            {run.roles && run.roles.print === null && <span className="krds-badge bg-light-warning">출력본 PDF 없음 — 차례 ⑦ 판단불가</span>}
+            {run.roles && run.roles.print === null && <span className="krds-badge bg-light-warning">출력본 PDF 없음(차례 ⑦ 판단불가)</span>}
             {run.cancelled && <span className="krds-badge bg-light-gray">중간에 취소됨</span>}
           </>
         }
@@ -144,13 +144,13 @@ function FullSheet({ items }) {
   const sheet = done.flatMap((i) => (i.data.검수확인서 || []).map((row) => ({ ...row, _check: i.check })));
   const findings = done.flatMap((i) => (i.data.지적사항 || []).map((f) => ({ ...f, _check: i.check })));
   const missing = items.filter((i) => i.status !== "done");
-  const label = { skipped: "미실행(개발계획서 없음)", error: "오류", pending: "대기", running: "검수하는 중", cancelled: "취소됨" };
+  const label = { skipped: "실행 안 함(개발계획서 없음)", error: "오류", pending: "대기", running: "검수하는 중", cancelled: "취소됨" };
   return (
     <>
       <h2 className="section-title">검수 확인서 (구성요소 {done.length}/{items.length})</h2>
       {missing.length > 0 && (
         <p className="meta full-sheet-missing">
-          표에 없는 구성요소: {missing.map((i) => `${i.option?.label || i.check} — ${label[i.status] || i.status}`).join(" / ")}
+          표에 없는 구성요소: {missing.map((i) => `${i.option?.label || i.check}(${label[i.status] || i.status})`).join(" / ")}
         </p>
       )}
       {sheet.length ? <SheetTable sheet={sheet} findings={findings} /> : <p className="empty">아직 끝난 구성요소가 없습니다.</p>}
@@ -172,7 +172,7 @@ export function ComponentResult({ result, showSave = true }) {
       <div className="component-foot">
         {showSave && (result.id ? <a href={api.reviews.zipUrl(result.id)}>결과 파일 내려받기(ZIP)</a> : result.저장?.zip ? <span className="meta">저장: {result.저장.zip}</span> : null)}
         <details>
-          <summary>지적사항 {result.지적사항?.length || 0}건 · 전체 체크리스트 {result.전체?.length || 0}행</summary>
+          <summary>지적사항 {result.지적사항?.length || 0}건, 전체 체크리스트 {result.전체?.length || 0}행</summary>
           <FindingsTable findings={result.지적사항 || []} />
           <ChecklistTable rows={result.전체 || []} />
         </details>

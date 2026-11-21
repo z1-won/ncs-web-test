@@ -24,7 +24,7 @@ const ALERT_KIND = { 적합: "success", 부적합: "danger", 판단불가: "info
 const STATE_TONE = { 제출: "bg-light-success", 누락: "bg-light-danger", "확인 필요": "bg-light-warning", "해당 없음": "bg-light-gray" };
 
 function mark(value) {
-  if (value === null || value === undefined) return <><span aria-hidden="true">—</span><span className="sr-only">해당 없음</span></>;
+  if (value === null || value === undefined) return <><span aria-hidden="true">-</span><span className="sr-only">해당 없음</span></>;
   return <><span aria-hidden="true">{value ? "○" : "×"}</span><span className="sr-only">{value ? "있음" : "없음"}</span></>;
 }
 
@@ -152,17 +152,17 @@ export default function RightsPage() {
           </div>
           <dl className="upscale-summary image-summary">
             <div><dt>원고의 그림</dt><dd><strong>{summary["원고 그림"]}</strong>개</dd>
-              <dd className="meta">{summary["목록 행"] === null ? "수록 현황 목록 없음" : `수록 현황 목록 ${summary["목록 행"]}행${summary.학습모듈명 ? ` · ${summary.학습모듈명}` : ""}`}</dd></div>
+              <dd className="meta">{summary["목록 행"] === null ? "수록 현황 목록 없음" : `수록 현황 목록 ${summary["목록 행"]}행${summary.학습모듈명 ? `, ${summary.학습모듈명}` : ""}`}</dd></div>
             <div><dt>적합</dt><dd><strong>{summary.적합}</strong>개</dd></div>
-            <div><dt>부적합</dt><dd><strong>{summary.부적합}</strong>개</dd><dd className="meta">누락·불일치 {summary.누락}건</dd></div>
+            <div><dt>부적합</dt><dd><strong>{summary.부적합}</strong>개</dd><dd className="meta">누락 또는 불일치 {summary.누락}건</dd></div>
             <div><dt>판단불가</dt><dd><strong>{summary.판단불가}</strong>개</dd><dd className="meta">담당자 확인 {summary["확인 필요"]}건</dd></div>
           </dl>
           <PageAlert kind={ALERT_KIND[deadline.판정]}>
-            <strong>제출 기한 — {deadline.판정}</strong>{"\n"}{deadline.내용}
+            <strong>제출 기한: {deadline.판정}</strong>{"\n"}{deadline.내용}
           </PageAlert>
           <p className="rights-forms-seen">
-            읽은 양식: {seen.length ? seen.map(([name, files]) => `${name}(${files.join(", ")})`).join(" · ") : "없음"}
-            {report.출력본 && ` · 출력본 ${report.출력본.파일}(${report.출력본.쪽}쪽, 캡션을 찾은 그림 ${report.출력본["캡션 찾은 그림"]}개)`}
+            읽은 양식: {seen.length ? seen.map(([name, files]) => `${name}(${files.join(", ")})`).join(" / ") : "없음"}
+            {report.출력본 && ` / 출력본 ${report.출력본.파일}(${report.출력본.쪽}쪽, 캡션을 찾은 그림 ${report.출력본["캡션 찾은 그림"]}개)`}
           </p>
           {report.안내.length > 0 && <PageAlert kind="info">{report.안내.join("\n")}</PageAlert>}
 
@@ -178,11 +178,11 @@ export default function RightsPage() {
                     <td><strong>{row["그림 번호"] || "번호 없음"}</strong><span className="sub">{row.그림명}</span>{row.쪽 && <span className="sub">출력본 {row.쪽}</span>}</td>
                     <td className="center">{mark(row.원고)}</td>
                     <td className="center">{mark(row.목록)}</td>
-                    <td>{row["제작 방식"].length ? row["제작 방식"].map((name) => <span className="line" key={name}>{name}</span>) : "—"}</td>
+                    <td>{row["제작 방식"].length ? row["제작 방식"].map((name) => <span className="line" key={name}>{name}</span>) : "-"}</td>
                     <td>{row.증빙.length ? row.증빙.map((item) => (
                       <span className="line" key={item.증빙} title={item.근거 || undefined}>{item.증빙} <span className={`krds-badge ${STATE_TONE[item.상태] || "bg-light-gray"}`}>{item.상태}</span></span>
                     )) : <span className="sub">낼 증빙 없음</span>}</td>
-                    <td>{row["AI 표기"] || "—"}{row["결과물 현황"] && <span className="sub">현황: {row["결과물 현황"]}</span>}</td>
+                    <td>{row["AI 표기"] || "-"}{row["결과물 현황"] && <span className="sub">현황: {row["결과물 현황"]}</span>}</td>
                     <td><span className={`krds-badge ${BADGE[row.판정]}`}>{row.판정}</span></td>
                     <td>{row.비고.map((text, i) => <span className="line" key={i}>{text}</span>)}</td>
                   </tr>
@@ -191,12 +191,12 @@ export default function RightsPage() {
             </div>
           )}
 
-          <h3 className="sub-title">누락·확인할 것 {report.지적사항.length}건</h3>
+          <h3 className="sub-title">누락과 확인할 것 {report.지적사항.length}건</h3>
           {report.지적사항.length === 0 ? <p className="empty">빠진 증빙이 없습니다.</p> : (
             <ul className="findings-list">
               {report.지적사항.map((finding, index) => (
                 <li className="finding" key={index}>
-                  <div className="finding-head"><Badge value={finding.수준} /><span className="finding-check">{finding.그림}</span><span className="meta">{finding.종류} · {finding["받는 곳"]}</span></div>
+                  <div className="finding-head"><Badge value={finding.수준} /><span className="finding-check">{finding.그림}</span><span className="meta">{finding.종류}, {finding["받는 곳"]}</span></div>
                   <dl className="finding-body">
                     <dt>내용</dt><dd>{finding.내용}</dd>
                     {finding.조치 && <><dt>조치</dt><dd>{finding.조치}</dd></>}
@@ -207,14 +207,14 @@ export default function RightsPage() {
           )}
 
           <h3 className="sub-title">기관별 알림</h3>
-          <p className="form-hint">서류를 내거나 원고·목록을 고쳐야 하는 것은 개발기관에, 같은 것인지 사람이 가려야 하는 것은 에디팅 기관에 보냅니다.
+          <p className="form-hint">서류를 내거나 원고나 목록을 고쳐야 하는 것은 개발기관에, 같은 것인지 사람이 가려야 하는 것은 에디팅 기관에 보냅니다.
             글을 복사해 그대로 전달할 수 있고, 현황표 xlsx에도 기관별 시트로 들어 있습니다. 이 화면이 직접 보내지는 않습니다.</p>
           <div className="rights-notices">
             {(report.알림 || []).map((notice) => (
               <div className="rights-notice" key={notice["받는 곳"]}>
                 <div className="rights-notice-head">
                   <strong>{notice["받는 곳"]}</strong>
-                  <span className="meta">{notice.건수}건 · 부적합 {notice.부적합} · 판단불가 {notice.판단불가}</span>
+                  <span className="meta">{notice.건수}건(부적합 {notice.부적합}, 판단불가 {notice.판단불가})</span>
                   <button type="button" className="krds-btn small tertiary" onClick={() => copyNotice(notice)}>
                     {copied === notice["받는 곳"] ? "복사했습니다" : "알림 글 복사"}
                   </button>

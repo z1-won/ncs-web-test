@@ -2,7 +2,7 @@
 
 // 권리 정보 한 줄(목록 행·상세의 rights) → 라이선스 표시 글
 export function licenseLabel(rights, terms) {
-  if (!rights || !rights.license_scheme) return "—";
+  if (!rights || !rights.license_scheme) return "-";
   if (rights.license_scheme === "kogl") return `공공누리 제${rights.kogl_type}유형${rights.kogl_ai ? " + AI유형" : ""}`;
   if (rights.license_scheme === "cc") return rights.cc_license === "cc0" ? "CC0" : `CC ${rights.cc_license.toUpperCase()}`;
   return terms?.license_scheme?.[rights.license_scheme] || rights.license_scheme;
@@ -11,9 +11,9 @@ export function licenseLabel(rights, terms) {
 // 이용조건 4개 → "출처표시 · 상업적 이용금지" 같은 글. 조건이 하나도 없으면 "조건 없음", 모르면 "—"
 const CONDITION_NAMES = [["attribution", "출처표시"], ["non_commercial", "상업적 이용금지"], ["no_derivatives", "변경금지"], ["share_alike", "동일조건변경허락"]];
 export function conditionsLabel(source) {
-  if (!source || CONDITION_NAMES.every(([key]) => source[key] === null || source[key] === undefined)) return "—";
+  if (!source || CONDITION_NAMES.every(([key]) => source[key] === null || source[key] === undefined)) return "-";
   const on = CONDITION_NAMES.filter(([key]) => source[key]).map(([, name]) => name);
-  return on.length ? on.join(" · ") : "조건 없음";
+  return on.length ? on.join(", ") : "조건 없음";
 }
 
 // 확정 상태 → [글, KRDS 배지 색]. 권리 정보가 아직 없는 그림은 status가 없다

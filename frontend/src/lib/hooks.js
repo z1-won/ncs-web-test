@@ -37,7 +37,7 @@ export const SERVICE_NAME = "NCS 학습모듈 검수";
 export function usePageTitle(title) {
   useEffect(() => {
     const prev = document.title;
-    document.title = title ? `${title} — ${SERVICE_NAME}` : SERVICE_NAME;
+    document.title = title ? `${title} | ${SERVICE_NAME}` : SERVICE_NAME;
     return () => { document.title = prev; };
   }, [title]);
 }

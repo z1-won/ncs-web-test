@@ -81,7 +81,7 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
             <div className="inner">
               <div className="header-branding">
                 <h2 className="logo">
-                  <Link to="/"><span className="sr-only">NCS 학습모듈 검수 — 한국직업능력연구원</span></Link>
+                  <Link to="/"><span className="sr-only">NCS 학습모듈 검수, 한국직업능력연구원</span></Link>
                 </h2>
               </div>
             </div>
@@ -130,7 +130,8 @@ export function Footer() {
         </div>
         <div className="f-cnt">
           <div className="f-info">
-            <p className="info-addr">동국대학교 종합설계1(김동우) · 프로토콜 팀 — 생성형 AI를 활용한 NCS 학습모듈 활용 및 사업운영 지원체계 구축</p>
+            <p className="info-addr">동국대학교 종합설계1(김동우) 프로토콜 팀</p>
+            <p className="info-addr">생성형 AI를 활용한 NCS 학습모듈 활용 및 사업운영 지원체계 구축</p>
             <ul className="info-cs">
               <li><span className="key-info"><strong className="strong">이메일</strong><span className="span">dgu2026protocol@gmail.com</span></span></li>
             </ul>

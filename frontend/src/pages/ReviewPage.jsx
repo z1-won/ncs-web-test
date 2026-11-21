@@ -263,10 +263,10 @@ export default function ReviewPage() {
                     }
                     hint={
                       slot.role === "plan" && !slots.plan && !needsPlan
-                        ? (check === ALL_CHECK ? "없어도 실행됩니다 — ‘위치’만 건너뛰고, 개발계획서와 대조하는 항목은 판단불가로 남습니다." : "없어도 실행됩니다 — 개발계획서와 대조하는 항목은 판단불가로 남습니다.")
+                        ? (check === ALL_CHECK ? "개발계획서가 없어도 검수할 수 있습니다. 이때 ‘위치’는 검수하지 않고, 개발계획서와 대조하는 항목은 ‘판단불가’로 표시합니다." : "개발계획서가 없어도 검수할 수 있습니다. 이때 개발계획서와 대조하는 항목은 ‘판단불가’로 표시합니다.")
                       : slot.role === "print" && !slots.print
                         ? (usesPrint ? "없어도 모든 검수가 실행됩니다. 다만 출력본 PDF가 없으면 차례 ⑦(쪽수)은 검수할 수 없어 판단불가로 남습니다. 원고를 한글에서 PDF로 저장해 올리세요."
-                                     : "없어도 됩니다 — 이 구성요소는 출력본 PDF를 쓰지 않습니다(차례 ⑦ 쪽수 확인에만 씁니다).")
+                                     : "없어도 됩니다. 이 구성요소는 출력본 PDF를 쓰지 않습니다(차례 ⑦ 쪽수 확인에만 씁니다).")
                       : null
                     } />
         ))}
@@ -279,7 +279,7 @@ export default function ReviewPage() {
           </div>
           <p className="form-hint" id="check-hint">
             필요한 파일: {selected.files}
-            {selected.items && selected.total ? ` · 확인서 항목 ${selected.total}개 중 ${selected.items.length}개 검수` : ""}
+            {selected.items && selected.total ? `, 확인서 항목 ${selected.total}개 중 ${selected.items.length}개 검수` : ""}
           </p>
         </div>
 
@@ -298,7 +298,7 @@ export default function ReviewPage() {
             <div className="form-conts">
               <KrdsSelect id="image-dpi" value={imageDpi} options={IMAGE_DPI_OPTIONS} onChange={setImageDpi} title="이미지 해상도 기준 선택" describedBy="image-dpi-hint" />
             </div>
-            <p className="form-hint" id="image-dpi-hint">기타 ⑤·⑧에 적용 — 이 값보다 낮은 그림은 판단불가로 표시</p>
+            <p className="form-hint" id="image-dpi-hint">기타 ⑤, ⑧ 항목에 적용합니다. 이 값보다 해상도가 낮은 그림은 ‘판단불가’로 표시합니다.</p>
           </div>
         )}
 
@@ -329,7 +329,7 @@ export default function ReviewPage() {
         <section aria-live="polite">
           <ResultHead
             status={<Badge value={result.요약.검수결과} large />}
-            meta={`${result.module_code} · ${checks.find((item) => item.value === result.check)?.label || result.check}${result.created_at ? ` · ${formatDate(result.created_at)}` : ""}`}
+            meta={`${result.module_code}, ${checks.find((item) => item.value === result.check)?.label || result.check}${result.created_at ? `, ${formatDate(result.created_at)}` : ""}`}
             downloads={
               <>
                 {/* 단독 결과도 확인서 파일로 — 이 구성요소만 채워지고 나머지는 '미검사' */}
@@ -376,7 +376,7 @@ export default function ReviewPage() {
                     <td className="when">{formatDateLines(row.created_at).map((line, i) => <span key={i}>{line}</span>)}</td>
                     <td className="module" title={row.module_code}>{row.module_code}</td>
                     <td>{row.kind === "group"
-                      ? `전체 실행 — 구성요소 ${row.checks.filter((c) => reviewChecks.some((item) => item.value === c)).length}/${reviewChecks.length}`
+                      ? `전체 실행(구성요소 ${row.checks.filter((c) => reviewChecks.some((item) => item.value === c)).length}/${reviewChecks.length})`
                       : checks.find((item) => item.value === row.check_name)?.label || row.check_name}</td>
                     <td><Badge value={row.verdict} /></td>
                     <td><button className="krds-btn small tertiary" type="button" onClick={() => (row.kind === "group" ? openGroup(row.id) : openHistory(row.id))}>결과 보기</button></td>
@@ -401,8 +401,8 @@ export default function ReviewPage() {
                        onConfirm={() => deleteHistory(pendingDelete)} onCancel={() => setPendingDelete(null)}>
           <p>정말 삭제하시겠습니까?</p>
           <p className="meta">
-            {formatDate(pendingDelete.created_at)} · {pendingDelete.module_code} ·{" "}
-            {pendingDelete.kind === "group" ? `전체 실행 — 구성요소 ${pendingDelete.checks.length}개` : checks.find((item) => item.value === pendingDelete.check_name)?.label || pendingDelete.check_name}
+            {formatDate(pendingDelete.created_at)}, {pendingDelete.module_code},{" "}
+            {pendingDelete.kind === "group" ? `전체 실행(구성요소 ${pendingDelete.checks.length}개)` : checks.find((item) => item.value === pendingDelete.check_name)?.label || pendingDelete.check_name}
           </p>
           <p className="meta">삭제한 이력은 되돌릴 수 없습니다.</p>
         </ConfirmDialog>

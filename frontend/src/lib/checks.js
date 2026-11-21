@@ -20,11 +20,11 @@ export const FILE_HINTS = {
 export const CHECKS = [
   { value: "position", label: "NCS-학습모듈의 위치 ①~⑤" },
   { value: "toc", label: "차례 ①~⑦" },
-  { value: "overview", label: "학습모듈의 개요 ①·②·⑤~⑧" },
+  { value: "overview", label: "학습모듈의 개요 ①, ②, ⑤~⑧" },
   { value: "knowledge", label: "필요 지식 ①~⑧" },
-  { value: "perform", label: "수행 내용 ①·④" },
+  { value: "perform", label: "수행 내용 ①, ④" },
   { value: "teaching", label: "교수·학습 방법 ①~④" },
-  { value: "evaluation", label: "평가 ①~③·⑤" },
+  { value: "evaluation", label: "평가 ①~③, ⑤" },
   { value: "references", label: "참고 자료 ①~③" },
   { value: "colophon", label: "개발 이력 및 판권 ①" },
   { value: "misc", label: "기타 ①~⑧ + 편집 체계" },
@@ -43,17 +43,17 @@ export const manuscriptChecks = (checks) => checks.filter((c) => c.value !== PLA
 
 export const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
 
-// 구현된 항목 번호 목록 → "①~③·⑤" (연속 3개 이상은 범위로)
+// 구현된 항목 번호 목록 → "①~③, ⑤" (연속 3개 이상은 범위로)
 export function formatItems(items) {
   const idx = items.map((n) => CIRCLED.indexOf(n)).filter((i) => i >= 0).sort((a, b) => a - b);
   const parts = [];
   for (let i = 0; i < idx.length;) {
     let j = i;
     while (j + 1 < idx.length && idx[j + 1] === idx[j] + 1) j += 1;
-    parts.push(j - i >= 2 ? `${CIRCLED[idx[i]]}~${CIRCLED[idx[j]]}` : idx.slice(i, j + 1).map((k) => CIRCLED[k]).join("·"));
+    parts.push(j - i >= 2 ? `${CIRCLED[idx[i]]}~${CIRCLED[idx[j]]}` : idx.slice(i, j + 1).map((k) => CIRCLED[k]).join(", "));
     i = j + 1;
   }
-  return parts.join("·");
+  return parts.join(", ");
 }
 
 // 서버가 알려 준 엔진 목록으로 선택 목록을 만든다. 구성요소 이름의 띄어쓰기는 확인서 원문(예: "개발 이력 및판권")을 읽기 좋게 고른다.
@@ -77,8 +77,8 @@ export const ALL_CHECK = "all";
 
 export const ALL_OPTION = {
   value: ALL_CHECK,
-  label: "전체 — 구성요소 10개를 차례로 검수",
-  files: "원고 + 개발계획서 (+ 출력본 PDF 선택) — 개발계획서가 없으면 '위치'만 건너뛰고 나머지를 실행",
+  label: "전체(구성요소 10개를 차례로 검수)",
+  files: "원고 + 개발계획서 (+ 출력본 PDF 선택). 개발계획서가 없으면 '위치'만 건너뛰고 나머지를 실행합니다.",
   all: true,
   optional: ["print"],
   dividerAfter: true, // 선택 목록 맨 위에 두고, 아래 개별 구성요소와 구분선으로 나눈다

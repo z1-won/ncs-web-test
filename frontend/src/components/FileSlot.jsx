@@ -37,7 +37,7 @@ export function FileSlot({ id, label, required, accept, file, onChange, disabled
                    onChange={(e) => onChange(e.target.files?.[0] || null)} />
             {/* 셀렉트·입력칸과 같은 large 높이로 칸의 규격을 맞춘다 */}
             <button type="button" className="krds-btn large tertiary" disabled={disabled} onClick={() => input.current?.click()}>
-              <i className="svg-icon ico-upload" aria-hidden="true"></i>{file ? "파일 바꾸기" : "파일 선택"}<span className="sr-only"> — {label}</span>
+              <i className="svg-icon ico-upload" aria-hidden="true"></i>{file ? "파일 바꾸기" : "파일 선택"}<span className="sr-only">: {label}</span>
             </button>
           </div>
           {file && (
@@ -51,7 +51,7 @@ export function FileSlot({ id, label, required, accept, file, onChange, disabled
                         ? <span className="krds-spinner" role="status"><span className="sr-only">확인 중</span></span>
                         : !invalid && <span className="ico-invalid complete"><em className="sr-only">확인 완료</em></span>}
                       <button type="button" className="krds-btn medium text" disabled={disabled} onClick={clear}>
-                        삭제<span className="sr-only"> — {label}</span> <i className="svg-icon ico-delete-fill" aria-hidden="true"></i>
+                        삭제<span className="sr-only">: {label}</span> <i className="svg-icon ico-delete-fill" aria-hidden="true"></i>
                       </button>
                     </div>
                   </div>
@@ -96,14 +96,14 @@ export function MultiFileSlot({ id, label, required, accept, files, onChange, di
                    aria-invalid={invalid ? "true" : undefined} aria-required={required ? "true" : undefined}
                    onChange={(e) => add([...(e.target.files || [])])} />
             <button type="button" className="krds-btn large tertiary" disabled={disabled} onClick={() => input.current?.click()}>
-              <i className="svg-icon ico-upload" aria-hidden="true"></i>{files.length ? "파일 더 고르기" : "파일 선택"}<span className="sr-only"> — {label}</span>
+              <i className="svg-icon ico-upload" aria-hidden="true"></i>{files.length ? "파일 더 고르기" : "파일 선택"}<span className="sr-only">: {label}</span>
             </button>
           </div>
           {files.length > 0 && (
             <div className="file-list">
               <div className="total">
-                <span><span className="current">{files.length}개</span>{countNote ? ` — ${countNote}` : ""}</span>
-                <button type="button" className="krds-btn small text" disabled={disabled} onClick={() => onChange([])}>모두 삭제<span className="sr-only"> — {label}</span></button>
+                <span><span className="current">{files.length}개</span>{countNote ? ` (${countNote})` : ""}</span>
+                <button type="button" className="krds-btn small text" disabled={disabled} onClick={() => onChange([])}>모두 삭제<span className="sr-only">: {label}</span></button>
               </div>
               <ul className="upload-list">
                 {files.map((file, index) => (
@@ -112,7 +112,7 @@ export function MultiFileSlot({ id, label, required, accept, files, onChange, di
                       <div className="file-name" title={file.name}>{describe(file)}</div>
                       <div className="btn-wrap">
                         <button type="button" className="krds-btn medium text" disabled={disabled} onClick={() => onChange(files.filter((_, i) => i !== index))}>
-                          삭제<span className="sr-only"> — {file.name}</span> <i className="svg-icon ico-delete-fill" aria-hidden="true"></i>
+                          삭제<span className="sr-only">: {file.name}</span> <i className="svg-icon ico-delete-fill" aria-hidden="true"></i>
                         </button>
                       </div>
                     </div>

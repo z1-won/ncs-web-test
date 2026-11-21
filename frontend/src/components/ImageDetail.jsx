@@ -74,7 +74,7 @@ function changeText(entry, terms) {
   const parts = Object.entries(entry.changes || {}).map(([key, value]) => {
     const name = HISTORY_COLUMN_NAMES[key] || key;
     const named = (item) => (typeof item === "string" && terms?.[TERM_OF[key]]?.[item]) || show(item);
-    return Array.isArray(value) ? `${name}: ${named(value[0])} → ${named(value[1])}` : `${name} ${show(value)}`;
+    return Array.isArray(value) ? `${name}: 이전 ${named(value[0])}, 이후 ${named(value[1])}` : `${name} ${show(value)}`;
   });
   return parts.join(", ");
 }
@@ -210,11 +210,11 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
           )}
         </figure>
         <dl className="image-facts">
-          <div><dt>제목</dt><dd>{data.title || "—"}</dd></div>
-          <div><dt>파일</dt><dd>{data.filename || "—"}{data.format ? ` · ${data.format}` : ""}{data.width_px ? ` · ${data.width_px}×${data.height_px}px` : ""}</dd></div>
-          {data.has_upscaled && <div><dt>업스케일본</dt><dd>{data.upscaled_width_px}×{data.upscaled_height_px}px{data.upscale_engine ? ` · ${data.upscale_engine}` : ""}</dd></div>}
-          <div><dt>유형</dt><dd>{terms?.kind?.[data.kind] || "—"}</dd></div>
-          <div><dt>주요 키워드</dt><dd>{data.keywords.length ? data.keywords.join(", ") : "—"}</dd></div>
+          <div><dt>제목</dt><dd>{data.title || "-"}</dd></div>
+          <div><dt>파일</dt><dd>{data.filename || "-"}{data.format ? `, ${data.format}` : ""}{data.width_px ? `, ${data.width_px}×${data.height_px}px` : ""}</dd></div>
+          {data.has_upscaled && <div><dt>업스케일본</dt><dd>{data.upscaled_width_px}×{data.upscaled_height_px}px{data.upscale_engine ? `, ${data.upscale_engine}` : ""}</dd></div>}
+          <div><dt>유형</dt><dd>{terms?.kind?.[data.kind] || "-"}</dd></div>
+          <div><dt>주요 키워드</dt><dd>{data.keywords.length ? data.keywords.join(", ") : "-"}</dd></div>
           {data.source_id && <div><dt>수집 번호</dt><dd className="mono">{data.source_id}</dd></div>}
           <div><dt>SHA-256</dt><dd className="mono">{data.sha256}</dd></div>
           <div><dt>증빙</dt><dd>{data.evidence.length ? data.evidence.map((e) => terms?.evidence_kind?.[e.kind] || e.kind).join(", ") : "등록된 증빙 없음"}</dd></div>
@@ -230,21 +230,21 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
             <tbody>{data.placements.map((p) => (
               <tr key={p.id}>
                 <td>{p.module_name ? <>{p.module_name}<br /></> : null}<span className="code">{p.module_code}</span></td>
-                <td>{p.label || "—"}</td>
-                <td className="num">{p.page ?? "—"}</td>
-                <td>{p.caption || "—"}</td>
-                <td>{p.source_line || "—"}</td>
-                <td>{p.context_text || "—"}</td>
+                <td>{p.label || "-"}</td>
+                <td className="num">{p.page ?? "-"}</td>
+                <td>{p.caption || "-"}</td>
+                <td>{p.source_line || "-"}</td>
+                <td>{p.context_text || "-"}</td>
               </tr>
             ))}</tbody>
           </table>
         </div>
       )}
       {data.links.length > 0 && (
-        <p className="image-links">수행준거 연결: {data.links.map((l) => [l.unit_code, l.element_code && `요소 ${l.element_code.split(".").pop()}`, l.criterion_no && `수행준거 ${l.criterion_no}`].filter(Boolean).join(" · ")).join(" / ")}</p>
+        <p className="image-links">수행준거 연결: {data.links.map((l) => [l.unit_code, l.element_code && `요소 ${l.element_code.split(".").pop()}`, l.criterion_no && `수행준거 ${l.criterion_no}`].filter(Boolean).join(", ")).join(" / ")}</p>
       )}
 
-      <h3 className="sub-title">권리 정보{rights ? <span className="meta"> 버전 {rights.version}{confirmed ? ` · ${rights.confirmed_by} 확정(${formatDate(rights.confirmed_at)})` : ""}</span> : null}</h3>
+      <h3 className="sub-title">권리 정보{rights ? <span className="meta"> 버전 {rights.version}{confirmed ? `, ${rights.confirmed_by} 확정(${formatDate(rights.confirmed_at)})` : ""}</span> : null}</h3>
       {confirmed && rights.reuse_scope === "unknown" && (
         <PageAlert kind="danger">확정됐지만 재사용 범위가 ‘미확인’이라 추천에 나오지 않습니다. 아래 ‘확정 취소’를 누르고 재사용 범위를 고른 뒤 다시 확정하세요.</PageAlert>
       )}
@@ -258,10 +258,10 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
         <div className="form-group">
           <div className="form-tit"><span>이용조건</span></div>
           <div className="form-conts">
-            <p className="derived">{form.license ? (derived ? conditionsLabel(derived) : "유형에서 정해지지 않음(메모에 적습니다)") : "—"}</p>
+            <p className="derived">{form.license ? (derived ? conditionsLabel(derived) : "유형에서 정해지지 않음(메모에 적습니다)") : "-"}</p>
             {form.license.startsWith("kogl-") && form.license !== "kogl-0" && check("kogl_ai", "AI유형 함께 표시")}
           </div>
-          <p className="form-hint">공공누리·CC는 유형을 고르면 자동으로 정해집니다. AI유형이 붙어도 조건은 그대로입니다.</p>
+          <p className="form-hint">공공누리와 CC는 유형을 고르면 자동으로 정해집니다. AI유형이 붙어도 조건은 그대로입니다.</p>
         </div>
         {input("license_note", "라이선스 메모", { placeholder: "예: 공유마당 보호기간 만료 저작물" })}
         {input("author", "저작자")}
@@ -285,10 +285,10 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
           </div>
         </>}
         <div className="form-group form-group-wide form-actions">
-          {needName && <PageAlert kind="info">저장·확정하려면 화면 위쪽의 ‘변경한 사람’에 이름을 적어 주세요. 변경 이력에 남습니다.</PageAlert>}
+          {needName && <PageAlert kind="info">저장하거나 확정하려면 화면 위쪽의 ‘변경한 사람’에 이름을 적어 주세요. 변경 이력에 남습니다.</PageAlert>}
           {message && message.at !== "evidence" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
           {!confirmed && form.reuse_scope === "unknown" && (
-            <PageAlert kind="danger">재사용 범위가 ‘미확인’입니다. 이대로 확정하면 추천에 나오지 않습니다 — 위의 ‘재사용 범위’를 먼저 골라 주세요.</PageAlert>
+            <PageAlert kind="danger">재사용 범위가 ‘미확인’입니다. 이대로 확정하면 추천 목록에 나오지 않습니다. 위의 ‘재사용 범위’를 먼저 선택해 주세요.</PageAlert>
           )}
           <div className="run-buttons image-actions">
             {confirmed
@@ -306,14 +306,14 @@ export function ImageDetail({ imageId, terms, by, onChanged, onClose }) {
         <div className="krds-table-wrap">
           <table className="tbl col data image-evidence-table">
             <caption>이 그림에 이어진 권리 증빙</caption>
-            <thead><tr><th scope="col">종류</th><th scope="col">서류(파일 이름·보관 위치)</th><th scope="col">제출일</th><th scope="col">비고</th><th scope="col">삭제</th></tr></thead>
+            <thead><tr><th scope="col">종류</th><th scope="col">서류(파일 이름 또는 보관 위치)</th><th scope="col">제출일</th><th scope="col">비고</th><th scope="col">삭제</th></tr></thead>
             <tbody>{data.evidence.map((item) => (
               <tr key={item.id}>
                 <td>{terms?.evidence_kind?.[item.kind] || item.kind}</td>
-                <td>{item.file_ref || "—"}</td>
-                <td>{item.submitted_on || "—"}</td>
-                <td>{item.note || "—"}</td>
-                <td className="center"><button type="button" className="krds-btn small text" disabled={!!busy || needName} onClick={() => removeEvidence(item)}>삭제<span className="sr-only"> — {terms?.evidence_kind?.[item.kind] || item.kind}</span></button></td>
+                <td>{item.file_ref || "-"}</td>
+                <td>{item.submitted_on || "-"}</td>
+                <td>{item.note || "-"}</td>
+                <td className="center"><button type="button" className="krds-btn small text" disabled={!!busy || needName} onClick={() => removeEvidence(item)}>삭제<span className="sr-only">: {terms?.evidence_kind?.[item.kind] || item.kind}</span></button></td>
               </tr>
             ))}</tbody>
           </table>

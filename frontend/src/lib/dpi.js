@@ -7,4 +7,4 @@ const NOTE = { 300: "인쇄 권장", 150: "인쇄 최소" };
 
 // KrdsSelect 옵션 — 값은 문자열(폼 값)
 export const IMAGE_DPI_OPTIONS = IMAGE_DPI_CHOICES.slice().sort((a, b) => b - a)
-  .map((dpi) => ({ value: String(dpi), label: `${dpi} DPI${NOTE[dpi] ? ` — ${NOTE[dpi]}` : ""}` }));
+  .map((dpi) => ({ value: String(dpi), label: `${dpi} DPI${NOTE[dpi] ? ` (${NOTE[dpi]})` : ""}` }));
