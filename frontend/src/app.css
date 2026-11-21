@@ -307,6 +307,11 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
   #krds-header .krds-main-menu .gnb-menu .gnb-main-trigger { height: var(--krds-size-height-7); white-space: nowrap; }
 }
 
+/* ── 메인 메뉴 2Depth 묶음(Layout.jsx MenuGroup — 이미지 › 이미지 저작권 DB·이미지 추천) ── 마크업·펼침 패널은 KRDS 메인 메뉴 그대로.
+   .selected(하위 페이지에 있을 때 1Depth 밑줄)는 설치된 KRDS 키트에 없어 .active와 같은 밑줄로 보탠다. 패널은 본문 위에 뜨므로 아래 경계선·그림자로 구분 */
+#krds-header .krds-main-menu .gnb-menu .gnb-main-trigger.selected { color: var(--krds-main-menu--main-trigger-color-text-active); }
+#krds-header .krds-main-menu .gnb-menu .gnb-main-trigger.selected::before { left: 0; width: 100%; }
+#krds-header .krds-main-menu .gnb-toggle-wrap { z-index: 60; border-bottom: 1px solid var(--krds-main-menu--color-border); box-shadow: 0 0.8rem 1.6rem rgba(0, 0, 0, 0.08); }
 /* ── 하위 메뉴(.page-subnav) ── 메인 메뉴 아래 한 단. 현재 페이지 안 영역(앵커) 이동. 메인 메뉴와 같은 .inner 폭, 항목 간격·높이는 메인 메뉴보다 한 단계 작게(#10) */
 #krds-header .page-subnav { border-top: 1px solid var(--krds-light-color-border-gray-light); background: var(--krds-light-color-surface-secondary-subtler); }
 #krds-header .page-subnav .subnav-menu { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: var(--krds-gap-2); margin: 0; padding: 0; list-style: none; }

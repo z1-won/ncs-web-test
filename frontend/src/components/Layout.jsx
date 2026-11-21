@@ -1,5 +1,5 @@
 // 페이지 틀 — KRDS 헤더(건너뛰기 링크·로고·메인 메뉴), 맨 위로 버튼, 푸터.
-import React, { useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import { useCssHeightVar, useScrollY } from "../lib/hooks.js";
@@ -32,18 +32,70 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
   { id: "review-history", label: "검수 이력" },
 ];
 
-/* 페이지 메뉴 — 라우트 단위. 화면이 아홉(개발계획서 작성 / 원고 검수 / 의견 반영 검토 / 업스케일링 / 이미지 저작권 DB / 이미지 추천 / 권리 증빙 점검 / 원고 분량 / 문장 추천 — 작업 순서)이라 1Depth 링크형. 메인 메뉴에는 이것만 두고, 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
+/* 페이지 메뉴 — 라우트 단위, 작업 순서. 1Depth는 링크형이 기본이고, children이 있는 항목(이미지)은 눌러서 펼치는 2Depth 묶음이다
+   (이미지 저작권 DB·이미지 추천 — 같은 DB의 등록·확정과 조회라 한 묶음). 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
 export const PAGES = [
+  { path: "/progress", label: "원고 진행 현황" },
   { path: "/plan", label: "개발계획서 작성" },
   { path: "/", label: "원고 검수" },
   { path: "/opinion", label: "의견 반영 검토" },
   { path: "/upscale", label: "업스케일링" },
-  { path: "/images", label: "이미지 저작권 DB" },
-  { path: "/recommend", label: "이미지 추천" },
+  { id: "image", label: "이미지", children: [
+    { path: "/images", label: "이미지 저작권 DB" },
+    { path: "/recommend", label: "이미지 추천" },
+  ] },
   { path: "/rights", label: "권리 증빙 점검" },
   { path: "/volume", label: "원고 분량" },
   { path: "/suggest", label: "문장 추천" },
 ];
+
+/* 2Depth 묶음 — KRDS 메인 메뉴 마크업(.gnb-main-trigger 버튼 + .gnb-toggle-wrap › .gnb-main-list › a.gnb-sub-trigger.is-link).
+   KRDS 가이드대로 클릭·Enter·Space로만 펼치고(마우스오버로 펼치지 않음), Esc는 닫고 초점을 1Depth 버튼으로, 바깥 클릭·초점 이탈·항목 선택이면 닫는다.
+   펼친 동안 버튼은 .active(밑줄 + 화살표 뒤집힘), 하위 페이지에 있을 때는 .selected(밑줄)로 현재 위치를 알린다. */
+function MenuGroup({ group, pathname }) {
+  const [open, setOpen] = useState(false);
+  const item = useRef(null);
+  const trigger = useRef(null);
+  const here = group.children.some((child) => child.path === pathname);
+  const panelId = `gnb-${group.id}`;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDown(event) { if (!item.current?.contains(event.target)) setOpen(false); }
+    function onKey(event) {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      trigger.current?.focus();
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <li ref={item} onBlur={(event) => { if (!item.current?.contains(event.relatedTarget)) setOpen(false); }}>
+      <button ref={trigger} type="button" className={`gnb-main-trigger${open ? " active" : ""}${here ? " selected" : ""}`}
+              aria-haspopup="true" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((o) => !o)}>
+        {group.label}{here && <span className="sr-only"> (현재 메뉴)</span>}
+      </button>
+      <div className={`gnb-toggle-wrap${open ? " is-open" : ""}`} id={panelId}>
+        <div className="gnb-main-list" data-has-submenu="false">
+          <ul>
+            {group.children.map((child) => (
+              <li key={child.path}>
+                <Link to={child.path} className={`gnb-sub-trigger is-link${pathname === child.path ? " active" : ""}`}
+                      aria-current={pathname === child.path ? "page" : undefined} onClick={() => setOpen(false)}>{child.label}</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </li>
+  );
+}
 
 export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
   const location = useLocation();
@@ -90,7 +142,7 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
           <nav className="krds-main-menu" aria-label="주요 영역">
             <div className="inner">
               <ul className="gnb-menu">
-                {PAGES.map((page) => (
+                {PAGES.map((page) => page.children ? <MenuGroup key={page.id} group={page} pathname={location.pathname} /> : (
                   <li key={page.path}>
                     <Link to={page.path} className={`gnb-main-trigger is-link page-link${location.pathname === page.path ? " active" : ""}`}
                           aria-current={location.pathname === page.path ? "page" : undefined}>{page.label}</Link>
