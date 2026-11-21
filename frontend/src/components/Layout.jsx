@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
+import { useAuth } from "../lib/auth.jsx";
 import { useCssHeightVar, useScrollY } from "../lib/hooks.js";
 
 /* 맨 위로(TOP) 버튼 — KRDS 아이콘 버튼 규격(app.css .krds-btn-top). 화면 높이의 절반 넘게 내려가면 나타나고, 누르면 맨 위로 올린 뒤 포커스를 본문(#container)으로 옮긴다. */
@@ -98,6 +99,8 @@ function MenuGroup({ group, pathname }) {
 
 export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
   const location = useLocation();
+  const { status, account, logOut } = useAuth();
+  const signedOut = status === "out";     // 로그인 화면: 로고만 보이고 메뉴는 숨긴다
   const items = useMemo(
     () => anchors.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" ? hasResult : true)),
     [anchors, hasHistory, hasResult],
@@ -136,14 +139,18 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
                 </h2>
               </div>
               {/* 진행 현황은 작업 도구가 아니라 가끔 확인하는 화면이라 작업 메뉴 밖(머리글 오른쪽)에 둔다. 로그인이 생기면 이 자리가 '내 원고'가 된다 */}
+              {signedOut ? null : (
               <div className="header-actions">
+                {account && <span className="header-account"><strong>{account.name}</strong> {account.role_name}</span>}
                 <Link to="/progress" className={`krds-btn small ${location.pathname === "/progress" ? "secondary" : "tertiary"}`}
                       aria-current={location.pathname === "/progress" ? "page" : undefined}>진행 현황</Link>
+                {account && <button type="button" className="krds-btn small tertiary" onClick={logOut}>로그아웃</button>}
               </div>
+              )}
             </div>
           </div>
           {/* 메인 메뉴 — KRDS .krds-main-menu, 1Depth 링크형(.is-link). 페이지 이동만 두어 어느 화면에서도 같은 항목이 보이게 한다(#10) */}
-          <nav className="krds-main-menu" aria-label="주요 영역">
+          {!signedOut && <nav className="krds-main-menu" aria-label="주요 영역">
             <div className="inner">
               <ul className="gnb-menu">
                 {PAGES.map((page) => page.children ? <MenuGroup key={page.id} group={page} pathname={location.pathname} /> : (
@@ -154,7 +161,7 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
                 ))}
               </ul>
             </div>
-          </nav>
+          </nav>}
           {/* 하위 메뉴 — 현재 페이지 안 영역 이동(앵커). 페이지마다 항목이 다르므로 메인 메뉴와 분리해 한 단 아래 둔다. 영역이 없는 페이지(개인정보처리방침)는 생략 */}
           {items.length > 0 && (
             <nav className="page-subnav" aria-label="현재 페이지 영역">

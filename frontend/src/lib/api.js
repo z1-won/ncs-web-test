@@ -4,6 +4,8 @@
 const CONNECT_FAILED = "서버에 연결하지 못했습니다";
 const CONNECT_HINT = "잠시 후 다시 시도해 주세요. 계속되면 관리자에게 문의해 주세요.";
 
+const AUTH_PATHS = ["/api/me", "/api/login", "/api/logout"];
+
 export async function request(path, options = {}) {
   let response;
   try {
@@ -23,6 +25,8 @@ export async function request(path, options = {}) {
     data = null;
   }
   if (response.ok) return { ok: true, status: response.status, data, error: null };
+  // 로그인이 풀렸으면(세션 기한 등) 앱에 알려 로그인 화면으로 돌아가게 한다. 로그인 자체의 401(비밀번호 틀림)과 /api/me는 제외
+  if (response.status === 401 && !AUTH_PATHS.includes(path)) window.dispatchEvent(new Event("ncs-auth-lost"));
   const message = data?.error || `${response.status} ${response.statusText}`.trim();
   return { ok: false, status: response.status, data, error: message + (data?.traceback ? "\n\n" + data.traceback : "") };
 }
@@ -89,6 +93,12 @@ async function planDraft(body) {
 
 export const api = {
   health: () => request("/api/health"),
+  // 로그인(ncs_web.auth). me: { auth, account } — auth가 false면 로그인을 쓰지 않는 서버. 쿠키는 브라우저가 알아서 싣는다(같은 출처)
+  auth: {
+    me: () => request("/api/me"),
+    login: (login, password) => request("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ login, password }) }),
+    logout: () => request("/api/logout", { method: "POST" }),
+  },
   // 검수 1건: files로 직접 올리거나 upload(토큰)+group으로 올려 둔 파일을 쓴다
   // signal: AbortController.signal — 취소 버튼
   // stage: 개발계획서 점검(plan)만 — "final" 최종본(기본) / "draft" 직능연 1차본(기관 기재 칸은 해당 없음)

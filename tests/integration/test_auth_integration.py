@@ -74,7 +74,7 @@ class AuthIntegrationTests(unittest.TestCase):
             self.assertEqual(client.get("/api/manuscripts").status_code, 200)
             self.assertEqual(client.post("/api/logout").status_code, 200)
             self.assertEqual(client.get("/api/manuscripts").status_code, 401)
-            client.cookies.set(COOKIE, "지어낸토큰")
+            client.cookies.set(COOKIE, "made-up-token")
             self.assertEqual(client.get("/api/manuscripts").status_code, 401)
 
     def test_login_is_locked_after_repeated_failures(self):

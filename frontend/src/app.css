@@ -825,3 +825,9 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 /* 머리글 오른쪽의 '진행 현황' — 작업 메뉴와 떨어진 자리 */
 #krds-header .header-container .inner { position: relative; }
 #krds-header .header-actions { position: absolute; right: var(--krds-contents-padding-x, 2.4rem); top: 50%; transform: translateY(-50%); }
+#krds-header .header-actions { display: flex; align-items: center; gap: var(--krds-gap-3); }
+.header-account { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.header-account strong { color: var(--krds-light-color-text-basic); font-weight: var(--krds-font-weight-bold); }
+@media (max-width: 599px) { .header-account { display: none; } }
+/* 로그인 화면 — 입력 묶음을 한 칸 폭으로 */
+.login-form.review-form.fieldset { grid-template-columns: minmax(0, 1fr); max-width: 48rem; }
