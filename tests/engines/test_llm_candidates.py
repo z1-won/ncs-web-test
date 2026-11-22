@@ -35,7 +35,7 @@ class SafetyTests(unittest.TestCase):
         with mock.patch.dict(os.environ, NO_LLM, clear=False):
             [row] = check_safety([block(["전원 케이블을 뽑은 뒤 덮개를 연다."])])
         self.assertEqual((row["체크"], row["판정"]), ({WRITTEN: "O", ABSTRACT: "△"}, "판단불가"))
-        self.assertIn("LLM 미설정", row["비고"][ABSTRACT])
+        self.assertIn("LLM 검토 전", row["비고"][ABSTRACT])
 
     def test_abstract_lines_are_candidates_and_bad_line_numbers_are_dropped(self):
         found = answer({"line": 2, "reason": "무엇을 조심하는지 없음", "suggestion": "대상과 상황을 적기"},
@@ -60,13 +60,10 @@ class SafetyTests(unittest.TestCase):
     def test_no_blocks_is_undecided(self):
         self.assertEqual([r["판정"] for r in check_safety([])], ["판단불가"])
 
-    def test_only_safety_lines_are_sent(self):
-        seen = []
-        with mock.patch.dict(os.environ, ON, clear=False), \
-                mock.patch.object(llm, "ask_json", side_effect=lambda task, system, user: seen.append((task, user)) or
-                                  llm.LlmAnswer({"findings": []}, "m", False, 1, 1)):
+    def test_never_calls_the_network(self):
+        with mock.patch.dict(os.environ, ON, clear=False), mock.patch.object(llm, "_post") as post:
             check_safety([block(["안전‧유의 사항(필수작성)", "장갑을 낀다."])])
-        self.assertEqual(seen, [("perform3_safety", "1. 장갑을 낀다.")])   # 소제목은 빼고, 다른 구역 글은 보내지 않는다
+        post.assert_not_called()
 
 
 def region(items, goals=("객실 유형에 따라 정보를 구분할 수 있다.",), found=True):
@@ -92,20 +89,16 @@ class ItemContentTests(unittest.TestCase):
         self.assertEqual(ok["판정"], "적합")
         self.assertEqual((no_goals["판정"], no_key["판정"]), ("판단불가", "판단불가"))
         self.assertIn("학습 목표를 읽지 못해", no_goals["비고"][CONTENT])
-        self.assertIn("LLM 미설정", no_key["비고"][CONTENT])
+        self.assertIn("LLM 검토 전", no_key["비고"][CONTENT])
 
     def test_unread_items_are_left_to_the_ending_check(self):
         rows = check_item_content([region([], found=False), region([])])
         self.assertEqual([r["체크"][CONTENT] for r in rows], ["-", "-"])
 
-    def test_prompt_carries_goals_and_numbered_items_only(self):
-        seen = []
-        with mock.patch.dict(os.environ, ON, clear=False), \
-                mock.patch.object(llm, "ask_json", side_effect=lambda task, system, user: seen.append((task, user)) or
-                                  llm.LlmAnswer({"findings": []}, "m", False, 1, 1)):
+    def test_never_calls_the_network(self):
+        with mock.patch.dict(os.environ, ON, clear=False), mock.patch.object(llm, "_post") as post:
             check_item_content([region(["객실 유형별 부대시설 구분 여부"])])
-        self.assertEqual(seen, [("evaluation4_items",
-                                 "[학습 목표]\n- 객실 유형에 따라 정보를 구분할 수 있다.\n\n[평가 항목]\n1. [호텔정보 구분] 객실 유형별 부대시설 구분 여부")])
+        post.assert_not_called()
 
     def test_tasks_are_on_the_allow_list(self):
         self.assertTrue(llm.task_allowed("perform3_safety") and llm.task_allowed("evaluation4_items"))

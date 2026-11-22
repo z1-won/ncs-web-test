@@ -6,7 +6,7 @@
                   O  내용이 한 줄 이상 있음
   추상성(LLM)     △  모델이 '추상적'이라고 본 줄이 있음 — 줄과 이유, 구체화 방향을 후보로 보여 준다(사람 확정)
                   O  모델이 추상적인 줄을 찾지 못함(비고에 모델 이름)
-                  △  LLM 미설정·미승인·호출 실패 — 사람이 확인
+                  △  LLM 검토 전 — 화면의 'LLM 검토'(Claude)가 이 행을 채운다
 추상적인지는 내용 판단이라 규칙으로 확정하지 않는다(안내서: 후보 제시 + 사람 확정). 보내는 것은 그 블록의 안전·유의 사항 줄뿐이다.
 """
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 
 from ncs_core import NA, O, PASS, TRI, X, verdict, visible
-from ncs_core.llm import LlmError, line_findings, settings
+from ncs_core.llm import PENDING, LlmError, line_findings
 from ncs_core.notes import lines as numbered
 
 ITEM_ID = "F02-수행-③"
@@ -47,7 +47,7 @@ def check_safety(blocks: list[dict], *, asker=None) -> list[dict]:
     """asker: 테스트에서 LLM 대신 넣는 함수((줄 목록) → {'data': {'findings': […]}, 'model': …})."""
     if not blocks:
         return [_row("section1", "", None, {WRITTEN: TRI}, {WRITTEN: "본문에서 '수행 내용' 머리를 찾지 못해 판단할 수 없음"}, None)]
-    rows, cfg = [], settings()
+    rows = []
     for block in blocks:
         region = f"section1 > {block['block_id']} > 안전·유의 사항"
         where = f"{block.get('unit') or ''} 수행 내용 {block.get('perform_no') or ''}".strip()
@@ -64,9 +64,8 @@ def check_safety(blocks: list[dict], *, asker=None) -> list[dict]:
             rows.append(_row(region, where, shown, {WRITTEN: X, ABSTRACT: NA},
                              {WRITTEN: f"「{shown[0]}」 — '해당 사항 없음'으로 둘 수 없음(필수 작성)"}, fix))
             continue
-        if asker is None and not cfg.ready:
-            rows.append(_row(region, where, shown, {WRITTEN: O, ABSTRACT: TRI},
-                             {ABSTRACT: cfg.why_not + " — 안전·유의 사항이 추상적인지 사람이 확인"}, None))
+        if asker is None:
+            rows.append(_row(region, where, shown, {WRITTEN: O, ABSTRACT: TRI}, {ABSTRACT: PENDING}, None))
             continue
         user = "\n".join(f"{no}. {text}" for no, text in enumerate(texts, 1))
         try:
