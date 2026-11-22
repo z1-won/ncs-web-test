@@ -3,47 +3,9 @@
 import re
 
 from ncs_core import NA, O, TRI, X, visible
+from ncs_core.source_line import CAPTION_START, OLD_AGENCY, SRC_HEAD, find_source_line, source_check  # noqa: F401 — source_check는 공개 이름 유지
 
 from .common import row
-
-SRC_HEAD = re.compile(r"^출\s*처\s*[:：]\s*")
-YEAR = r"(?:\d{4}|\[\d{4}\]\s*\d{4}|\d{4}[a-z])"
-DATE = r"\d{4}\.\s?\d{1,2}\.\s?\d{1,2}\."
-TEMPLATES = [  # (이름, 정규식) — F14 '출처' 예시 14종의 골격
-    ("집필진 제작", re.compile(rf"^집필진\s*제작\s*\({YEAR}\)\.?$")),
-    ("전자 자료·검색", re.compile(rf"^.+?\(.+?\)에서\s*{DATE}\s*검색\.(\s*공공누리\s*제\d유형\.)?$")),
-    ("스크린 숏", re.compile(rf"^.+?(\(.+?\)에서|\.)\s*{DATE}\s*스크린\s*숏\.$")),
-    ("법령", re.compile(rf"^[^()]+\({DATE}(\s[^)]+)?\)\.?$")),
-    ("기사(기자명(보도 연월일). “제목”. 신문사. URL.)", re.compile(rf"^[^()]{{1,40}}\({DATE}\)\.\s.+\.\s*\S+\.$")),
-    ("문헌(저자(연도). 제목. 발행처. p.00.)", re.compile(rf"^[^()]{{1,80}}\({YEAR}\)\.\s.+\.\s*(pp?\.\s*\d+(-\d+)?\.|.*\.)$")),  # 끝 마침표 필수(F02: 마침표 표기 유의)
-]
-AI_MARK = re.compile(r"(AI|GPT|gpt|LM\b|Banana|Gemini|도식화|생성)")  # AI 활용 표기는 △로 둔다(2026-11-01 결정: F14에 양식이 없고 직능연 양식이 나오면 TEMPLATES에 추가)
-OLD_AGENCY = re.compile(r"한국직업능력개발원")
-CAPTION_START = re.compile(r"^[\[〈<]\s*(그림|표)")
-
-
-def source_check(text: str) -> tuple[str, str]:
-    """출처 줄 한 개 → (체크값, 비고 또는 템플릿 이름)."""
-    if not SRC_HEAD.match(text):
-        return X, '"출처:" 로 시작하지 않음'
-    body = SRC_HEAD.sub("", text).strip()
-    if not re.match(r"^출처:\s", text):
-        return X, '"출처:" 뒤 띄어쓰기·콜론 모양이 양식과 다름(출처: ␣)'
-    if AI_MARK.search(body) and not TEMPLATES[0][1].match(body):
-        return TRI, f'AI 활용 표기 "{body}" — 지정 형식(집필진 제작(연도) 또는 직능연 AI 표기 양식)인지 확인'
-    for name, pattern in TEMPLATES:
-        if pattern.match(body):
-            return O, name
-    hints = []
-    if re.search(r"\)\s*,", body):
-        hints.append("연도 괄호 뒤가 쉼표 — 마침표로 구분")
-    if not re.search(rf"\({YEAR}\)", body) and not re.search(DATE, body):
-        hints.append("연도 괄호 (YYYY) 없음")
-    if not body.endswith(".") and not TEMPLATES[0][1].match(body):
-        hints.append("끝에 마침표 없음")
-    if re.search(r"집필진\s*제작", body):
-        hints.append("'집필진 제작(연도)' 꼴이 아님")
-    return X, "F14 출처 템플릿과 골격이 다름" + (": " + ", ".join(hints) if hints else "")
 
 
 def check_sources(body_raw: list[str], body_section: int, caps: list[dict], table_paragraphs: set[int] | None, *,
@@ -69,12 +31,7 @@ def check_sources(body_raw: list[str], body_section: int, caps: list[dict], tabl
         where = f"학습 {lesson}" if lesson else ""
         src_i = None
         if kind == "그림":
-            for i in range(p - 1, max(p - 1 - lookback, -1), -1):
-                if body_raw[i] and SRC_HEAD.match(body_raw[i]):
-                    src_i = i
-                    break
-                if is_figure_caption(i):
-                    break
+            src_i = find_source_line(body_raw, p, lookback=lookback)
         else:
             for i in range(p + 1, min(p + 1 + lookahead, len(body_raw))):
                 if body_raw[i] and CAPTION_START.match(body_raw[i]):
