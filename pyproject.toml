@@ -26,6 +26,8 @@ ncs-knowledge = "ncs_knowledge.__main__:main"
 
 [tool.setuptools.package-data]
 ncs_core = ["data/*.txt", "data/*.tsv", "data/*.hwpx"]
+ncs_figures = ["data/*.tsv", "prompts/*.md"]
+ncs_llmreview = ["prompts/*.md"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
