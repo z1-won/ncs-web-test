@@ -131,7 +131,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
 
   // 체크한 그림을 목록 순서대로 한 장씩. 서버가 한 번에 한 장만 돌리므로 요청도 차례로 보낸다
   async function runPicked() {
-    const ids = pictures.filter((p) => picked.has(p.bin_id)).map((p) => p.bin_id);
+    const ids = pictures.filter((p) => picked.has(p.bin_id) && !p.locked).map((p) => p.bin_id);
     if (!ids.length) return;
     setError(null);
     setNotice(null);
@@ -266,7 +266,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                 <div key={p.bin_id} className="upscale-row">
                   <div className="krds-check-area">
                     <div className="krds-form-check">
-                      <input type="checkbox" id={`upscale-pick-${p.bin_id}`} checked={picked.has(p.bin_id)} disabled={working}
+                      <input type="checkbox" id={`upscale-pick-${p.bin_id}`} checked={picked.has(p.bin_id) && !p.locked} disabled={working || !!p.locked}
                              onChange={() => toggle(picked, setPicked, p.bin_id)} />
                       <label htmlFor={`upscale-pick-${p.bin_id}`}><span className="sr-only">{name} 선택</span></label>
                     </div>
@@ -320,12 +320,15 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                                 </figure>
                               )}
                           </div>
+                          {/* 변경금지 원본(공공누리 제3·4유형)은 AI 화질 보정을 하지 않는다(REQ-02-006 ⑥). 비상업 원본은 조건만 알린다 */}
+                          {p.locked && <p className="upscale-note failed">업스케일 제외: {p.locked.이유}</p>}
+                          {!p.locked && p.terms && <p className="upscale-note">{p.terms} — 결과물에도 이 조건을 표시해야 합니다.</p>}
                           {result?.note && <p className={`upscale-note${result.status === "실패" ? " failed" : ""}`}>{result.status === "실패" ? "실패: " : ""}{result.note}</p>}
                           <div className="upscale-actions">
                             {/* 모델마다 버튼 하나 — 같은 그림을 모델별로 돌려 비교한다(제안본에는 마지막에 돌린 결과가 들어간다) */}
                             {engines.map((choice) => (
                               <button key={choice.name || "default"} type="button" className="krds-btn small secondary"
-                                      disabled={!choice.available || working} onClick={() => upscale(p, choice.name)}
+                                      disabled={!choice.available || working || !!p.locked} onClick={() => upscale(p, choice.name)}
                                       title={choice.available ? choice.note : choice.problem}>
                                 {running && (busyEngine || "") === choice.name ? "업스케일하는 중"
                                   : choice.label ? `${choice.label}로 업스케일링`

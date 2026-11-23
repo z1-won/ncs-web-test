@@ -182,13 +182,18 @@ export default function AiImagePage() {
                   <tr key={row.key} className={picked.has(row.key) ? "is-open" : undefined}>
                     <td>
                       <div className="krds-form-check">
-                        <input type="checkbox" id={`ai-pick-${row.key}`} checked={picked.has(row.key)} disabled={!!row["AI 표기"] || !data["표기 넣기"]}
+                        <input type="checkbox" id={`ai-pick-${row.key}`} checked={picked.has(row.key)} disabled={!!row["AI 표기"] || !data["표기 넣기"] || !!row.공공누리?.변경금지}
                                onChange={() => toggle(row.key)} />
                         <label htmlFor={`ai-pick-${row.key}`}><span className="sr-only">{row["그림 번호"]} {row.그림명} 고르기</span></label>
                       </div>
                     </td>
                     <th scope="row">[{row["그림 번호"]}]<span className="meta">{row.그림명}</span></th>
-                    <td>{row["출처 줄"] || <span className="krds-badge bg-light-warning">출처 줄 없음</span>}</td>
+                    <td>
+                      {row["출처 줄"] || <span className="krds-badge bg-light-warning">출처 줄 없음</span>}
+                      {/* 변경금지 원본은 AI 수정 보완·생성의 재료가 아니다(REQ-02-006 ⑥) — 고를 수 없게 하고 이유를 보인다 */}
+                      {row.공공누리?.변경금지 && <><br /><span className="krds-badge bg-light-danger">변경금지 원본</span> <span className="meta">AI 활용 표기 대상에서 제외</span></>}
+                      {row.공공누리 && !row.공공누리.변경금지 && row.공공누리.비상업 && <><br /><span className="krds-badge bg-light-warning">비상업 원본</span> <span className="meta">결과물에 비상업 조건 표시</span></>}
+                    </td>
                     <td>
                       {row["AI 표기"]
                         ? <><span className="krds-badge bg-light-success">표기 있음</span> <span className="ai-line">{row["AI 표기"].글}</span></>
@@ -241,6 +246,9 @@ function Preview({ shown }) {
     <section className="ai-preview" aria-labelledby="ai-preview-title">
       <h2 className="section-title" id="ai-preview-title">미리 보기</h2>
       {shown.알림.length > 0 && <PageAlert kind="info">{shown.알림.map((text) => <p key={text}>{text}</p>)}</PageAlert>}
+      {(shown["변경금지 원본 제외"] || []).length > 0 && (
+        <PageAlert kind="warning">{shown["변경금지 원본 제외"].map((item) => <p key={item.그림}>[{item.그림}] {item.이유}</p>)}</PageAlert>
+      )}
       {shown.표기.length > 0 && (
         <>
           <h3 className="ai-sub-title">그림 아래에 놓일 표기</h3>

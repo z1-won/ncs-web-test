@@ -100,3 +100,17 @@ class AiMarkerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KoglTermsTests(unittest.TestCase):
+    def test_types_and_conditions(self):
+        from ncs_core.source_line import kogl_terms
+
+        line = "출처: 고용노동부(2025). 통계. 공공누리 홈페이지(https://www.kogl.or.kr)에서 2026. 7. 1. 검색. 공공누리 제{}유형."
+        got = {n: kogl_terms(line.format(n)) for n in "01234"}
+        self.assertEqual([got[n]["변경금지"] for n in "01234"], [False, False, False, True, True])
+        self.assertEqual([got[n]["비상업"] for n in "01234"], [False, False, True, False, True])
+        self.assertEqual(got["3"]["이름"], "공공누리 제3유형")
+        self.assertIsNone(kogl_terms("출처: 집필진 제작(2026)"))
+        self.assertIsNone(kogl_terms(""))
+

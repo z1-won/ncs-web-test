@@ -13,6 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from ncs_core.documents import load_document
+from ncs_core.source_line import kogl_terms
 from ncs_core.figures import MODE_WORDS, ai_line, clean_tool, figure_pages, manuscript_figures, marking_lines
 from ncs_core.pictures import picture_records, pictures_by_caption
 
@@ -48,6 +49,7 @@ def _rows(document, pages: dict | None) -> list[dict]:
         rows.append({
             "key": f"{figure.section}:{figure.para}", "구역": figure.section, "문단": figure.para,
             "그림 번호": figure.label, "뒤 번호": figure.minor, "그림명": figure.title, "출처 줄": figure.source_line,
+            "공공누리": kogl_terms(figure.source_line),      # 출처 줄에 적힌 유형과 조건 — 변경금지(제3·4유형)는 AI 표기 대상에서 뺀다
             "AI 표기": None if figure.ai is None else {"도구": figure.ai.tool, "방식": figure.ai.mode, "일자": _day(figure.ai.on), "글": figure.ai.text},
             "쪽": [str(place["쪽"]) for place in places if place.get("쪽")],
             "그림 파일": (figure.section, figure.para) in paired,
@@ -82,6 +84,23 @@ def parse_marks(marks: list, rows: list[dict]) -> list[Mark]:
     return parsed
 
 
+LOCKED_BASIS = "REQ-02-006 ⑥: 공공누리 제3·4유형(변경금지) 원본은 AI 수정 보완·생성의 재료에서 제외"
+
+
+def split_locked(marks: list[Mark], rows: list[dict]) -> tuple[list[Mark], list[dict]]:
+    """(넣어도 되는 표기, 변경금지 원본이라 뺀 것 [{'그림', '이유'}]). 출처 줄에 공공누리 제3·4유형이 적힌 그림에는 AI 활용 표기를 넣지 않는다."""
+    by_place = {(row["구역"], row["문단"]): row for row in rows}
+    allowed, locked = [], []
+    for mark in marks:
+        row = by_place.get((mark.section, mark.para)) or {}
+        terms = row.get("공공누리")
+        if terms and terms["변경금지"]:
+            locked.append({"그림": row["그림 번호"], "이유": f"출처가 {terms['이름']}(변경금지) — AI 수정 보완·생성에 쓸 수 없는 원본입니다({LOCKED_BASIS})"})
+        else:
+            allowed.append(mark)
+    return allowed, locked
+
+
 def inspect(manuscript: str | Path, *, print_copy: str | Path | None = None) -> dict:
     """원고의 그림 목록과 유의 안내. hwp도 읽지만 표기를 넣은 사본은 hwpx 원고에서만 만든다."""
     document = load_document(manuscript)
@@ -104,7 +123,8 @@ def preview(manuscript: str | Path, marks: list, *, print_copy: str | Path | Non
     document = load_document(manuscript)
     pages, note = _read_pages(print_copy)
     rows = _rows(document, pages)
-    by_place = {(mark.section, mark.para): mark for mark in parse_marks(marks, rows)}
+    allowed, locked = split_locked(parse_marks(marks, rows), rows)
+    by_place = {(mark.section, mark.para): mark for mark in allowed}
     lines, skipped = [], []
     for row in rows:
         mark = by_place.get((row["구역"], row["문단"]))
@@ -117,7 +137,7 @@ def preview(manuscript: str | Path, marks: list, *, print_copy: str | Path | Non
         lines.append({"key": row["key"], "그림": row["그림 번호"],
                       "줄": marking_lines(source_line=row["출처 줄"], tool=mark.tool, mode=mark.mode, on=mark.on, label=row["그림 번호"], title=row["그림명"]),
                       "출처 줄 없음": not row["출처 줄"]})
-    return {"원고": Path(manuscript).name, "표기": lines, "이미 있음": skipped, "현황 머리": list(HEAD),
+    return {"원고": Path(manuscript).name, "표기": lines, "이미 있음": skipped, "변경금지 원본 제외": locked, "현황 머리": list(HEAD),
             "현황": result_rows(rows, pages), "쪽수": pages is not None, "알림": [note] if note else []}
 
 
@@ -126,7 +146,10 @@ def marked_copy(manuscript: str | Path, marks: list) -> tuple[bytes, dict]:
     document = load_document(manuscript)
     if document.format != "hwpx":
         raise ValueError("hwp 원고에는 표기를 넣지 못합니다. 한글에서 hwpx로 저장해 다시 올려 주세요")
-    parsed = parse_marks(marks, _rows(document, None))
+    rows = _rows(document, None)
+    parsed, locked = split_locked(parse_marks(marks, rows), rows)
+    if not parsed and locked:
+        raise ValueError("고른 그림이 모두 변경금지 원본이라 표기를 넣지 않았습니다. " + "; ".join(f"{item['그림']}: {item['이유']}" for item in locked))
     if not parsed:
         raise ValueError("표기를 넣을 그림을 골라 주세요")
     content, summary = insert_marks(Path(manuscript).read_bytes(), parsed, manuscript_figures(document),
@@ -134,6 +157,7 @@ def marked_copy(manuscript: str | Path, marks: list) -> tuple[bytes, dict]:
     if not summary["넣음"]:
         reasons = [f"{item['그림']}: {item['이유']}" for item in summary["넣지 못함"]] + [f"{name}: 이미 AI 활용 줄이 있습니다" for name in summary["이미 있음"]]
         raise ValueError("표기를 넣은 그림이 없습니다. " + "; ".join(reasons))
+    summary["변경금지 원본 제외"] = locked
     return content, summary
 
 

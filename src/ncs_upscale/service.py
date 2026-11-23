@@ -103,6 +103,37 @@ def engine_choices(tools: Path | None = None) -> list[dict]:
     return choices
 
 
+LOCKED_BASIS = "REQ-02-006 ⑥: 공공누리 제3·4유형(변경금지) 원본은 AI 수정 보완 대상에서 제외"
+
+
+def _kogl(manuscript: Path) -> dict[str, dict]:
+    """그림 파일(bin_id) → 그 그림의 출처 줄에 적힌 공공누리 유형과 조건(ncs_core.source_line.kogl_terms). 유형이 안 적힌 그림은 없다.
+    같은 파일을 여러 자리에 쓰면 조건이 가장 엄한 것을 쓴다(변경금지가 하나라도 있으면 변경금지)."""
+    from ncs_core.figures import manuscript_figures
+    from ncs_core.pictures import pictures_by_caption
+    from ncs_core.source_line import kogl_terms
+
+    document = load_document(manuscript)
+    figures = manuscript_figures(document)
+    by_place = {(figure.section, figure.para): figure for figure in figures}
+    paired = pictures_by_caption(picture_records(document), list(by_place))
+    found: dict[str, dict] = {}
+    for place, record in paired.items():
+        terms = kogl_terms(by_place[place].source_line)
+        if terms is None or not record["bin_id"]:
+            continue
+        kept = found.get(record["bin_id"])
+        if kept is None or (terms["변경금지"], terms["비상업"]) > (kept["변경금지"], kept["비상업"]):
+            found[record["bin_id"]] = {**terms, "그림": by_place[place].label}
+    return found
+
+
+def _locked(terms: dict | None) -> dict | None:
+    if not terms or not terms["변경금지"]:
+        return None
+    return {"유형": terms["유형"], "이유": f"출처가 {terms['이름']}(변경금지) — AI 화질 보정(수정 보완)을 할 수 없는 원본입니다({LOCKED_BASIS})"}
+
+
 def list_pictures(manuscript: Path, work: Path, *, target_dpi: int = DEFAULT_TARGET_DPI,
                   min_dpi: int | None = None) -> dict:
     """목표 DPI 미만인 그림 파일 목록(원고에 나오는 순서). 같은 그림 파일을 여러 곳에 쓰면 한 항목에 자리를 모으고, 처음 나온 자리로 줄 세운다."""
@@ -113,6 +144,7 @@ def list_pictures(manuscript: Path, work: Path, *, target_dpi: int = DEFAULT_TAR
     # 다른 해상도 기준으로 키운 결과는 이 기준의 '완료'가 아니다(150으로 키운 그림은 300에 못 미친다) — 다시 업스케일해야 한다
     done = {item["bin_id"]: item for item in _results(work, target_dpi)}
     variants = _variants(work, target_dpi)
+    kogl = _kogl(manuscript)
     pictures = []
     # 원고를 넘겨 보며 찾을 수 있게 그림이 나오는 순서(구역 → 문단)로. hwpx에는 쪽 번호가 없어 문단 위치로 줄 세운다
     for job in sorted(jobs, key=lambda j: min((u["section"], u["para"]) for u in j.uses)):
@@ -124,11 +156,14 @@ def list_pictures(manuscript: Path, work: Path, *, target_dpi: int = DEFAULT_TAR
             "dpi": job.dpi, "grade": grade(job.dpi, target_dpi, min_dpi),
             "need": round(job.need, 2), "scale": job.scale, "reaches_target": job.reaches_target,
             "upscaled": done.get(job.bin_id), "variants": variants.get(job.bin_id, {}),
+            # 변경금지 원본이면 업스케일하지 않는다. 비상업 원본(제2·4유형)은 결과물에 그 조건을 표시해야 한다
+            "locked": _locked(kogl.get(job.bin_id)),
+            "terms": (f"원본 {kogl[job.bin_id]['이름']}" + (": 비상업적 이용만 가능" if kogl[job.bin_id]["비상업"] else "")) if job.bin_id in kogl else "",
         })
     return {
         "target_dpi": target_dpi, "min_dpi": min_dpi, "pictures": pictures,
         "counts": {"그림": len(records), "그림 파일": len({r["bin_id"] for r in records if r["bin_id"]}),
-                   "대상": len(pictures), "건너뜀": len(skipped)},
+                   "대상": len(pictures), "건너뜀": len(skipped), "변경금지 제외": sum(1 for picture in pictures if picture["locked"])},
         "skipped": [{"label": label(s["record"]), "reason": s["이유"]} for s in skipped],
     }
 
@@ -149,6 +184,9 @@ def upscale_one(manuscript: Path, bin_id: str, work: Path, *, target_dpi: int = 
                 tools: Path | None = None, runner: Runner | None = None, engine: str | None = None) -> dict:
     """그림 하나를 업스케일해 work 폴더에 저장하고 결과 정보를 돌려준다. 실패해도 정보(status='실패', note)를 돌려준다.
     engine: WEB_ENGINES 가운데 하나(없으면 기본). 그림마다 결과는 하나만 남는다 — 다른 모델로 다시 돌리면 앞 결과를 덮어쓴다."""
+    locked = _locked(_kogl(manuscript).get(bin_id))
+    if locked:
+        raise PictureError(f"그림 {bin_id}: {locked['이유']}")
     chosen = _engine(engine)
     job, _ = _job_for(manuscript, bin_id, target_dpi, chosen.name)
     if job is None:

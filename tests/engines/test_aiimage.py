@@ -183,6 +183,38 @@ class MarkedManuscriptTests(unittest.TestCase):
         self.assertFalse(kinds & {"현황 누락", "활용 AI 다름", "현황에만 있음", "AI 표시 확인", "AI 표기 일자"}, kinds)
         self.assertEqual(sum(1 for row in report["현황표"] if row["AI 방식"]), 4)
 
+    def test_no_derivative_originals_are_kept_out_of_ai_marks(self):
+        """REQ-02-006 ⑥: 공공누리 제3·4유형(변경금지) 원본은 AI 수정 보완·생성 재료에서 제외한다(검증: 변경금지 원본의 수정 보완 0건).
+        제2·4유형 원본을 쓴 결과물은 비상업 조건을 표시하고 원본 유형을 현황에 적는다."""
+        kogl = "출처: 고용노동부(2025). 직업훈련 통계. 공공누리 홈페이지(https://www.kogl.or.kr)에서 2026. 7. 1. 검색. 공공누리 제{}유형."
+        figures = [("그림 1-1", "변경금지 그림", kogl.format(3), ""), ("그림 1-2", "비상업 그림", kogl.format(2), ""),
+                   ("그림 1-3", "비상업 변경금지 그림", kogl.format(4), ""), ("그림 1-4", "자유 그림", kogl.format(1), ""),
+                   ("그림 1-5", "이미 표기된 변경금지 그림", kogl.format(3), "ChatGPT를 활용하여 수정 보완함. 2026. 7. 20.")]
+        path = S.manuscript(self.folder, figures, name="LM1203020201_24v3_공공누리.hwpx")
+        rows = {row["그림 번호"]: row for row in inspect(path)["그림"]}
+        self.assertEqual([(rows[f"그림 1-{n}"]["공공누리"] or {}).get("유형") for n in (1, 2, 3, 4)], ["3", "2", "4", "1"])
+        self.assertEqual([bool((rows[f"그림 1-{n}"]["공공누리"] or {}).get("변경금지")) for n in (1, 2, 3, 4)], [True, False, True, False])
+        marks = [{"key": row["key"], "tool": "Gemini 3", "mode": "modified", "date": "2026-11-23"} for row in rows.values()]
+        content, summary = marked_copy(path, marks)
+        self.assertEqual([item["그림"] for item in summary["넣음"]], ["그림 1-2", "그림 1-4"])
+        self.assertEqual([item["그림"] for item in summary["변경금지 원본 제외"]], ["그림 1-1", "그림 1-3", "그림 1-5"])
+        self.assertIn("제3유형", summary["변경금지 원본 제외"][0]["이유"])
+        marked = self.folder / "marked_kogl.hwpx"
+        marked.write_bytes(content)
+        after = {figure.label: figure for figure in manuscript_figures(load_document(marked))}
+        self.assertIsNone(after["그림 1-1"].ai)                    # 변경금지 원본에는 표기를 넣지 않았다
+        self.assertIsNone(after["그림 1-3"].ai)
+        with self.assertRaises(ValueError) as caught:              # 변경금지 그림만 고르면 넣을 것이 없다 — 이유를 말한다
+            marked_copy(path, [mark for mark in marks if mark["key"] in (rows["그림 1-1"]["key"], rows["그림 1-3"]["key"])])
+        self.assertIn("변경금지", str(caught.exception))
+        shown = preview(path, marks)
+        self.assertEqual([item["그림"] for item in shown["변경금지 원본 제외"]], ["그림 1-1", "그림 1-3", "그림 1-5"])
+        by_name = {row["결과물 명"].split(" ")[1]: row["비고"] for row in shown["현황"]}
+        self.assertIn("비상업", by_name["1-2"])                    # 제2유형 원본을 쓴 결과물: 비상업 조건
+        self.assertIn("공공누리 제2유형", by_name["1-2"])
+        self.assertIn("변경금지 원본", by_name["1-5"])              # 이미 표기가 있는 변경금지 원본은 확인하라고 알린다
+        self.assertNotIn("1-1", by_name)
+
     def test_xlsx_has_the_form_columns_and_keeps_text_as_text(self):
         from openpyxl import load_workbook
 

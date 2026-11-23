@@ -39,8 +39,17 @@ def result_rows(figures: list[dict], pages: dict | None = None) -> list[dict]:
             continue
         page, page_note = _pages(figure["그림 번호"], figure.get("뒤 번호"), pages)
         when = ai.get("일자") or ""
+        terms = figure.get("공공누리")
+        # 원본의 공공누리 유형을 결과물에 적는다(REQ-02-006 ⑥, REQ-04-006): 제2·4유형은 비상업 조건, 제3·4유형은 변경금지 원본
+        kogl_note = ""
+        if terms and terms["변경금지"]:
+            kogl_note = f"원본 {terms['이름']}: 변경금지 원본에 AI 활용 표기가 있음 — AI 수정 보완 대상이 아닌 원본, 확인 필요"
+        elif terms and terms["비상업"]:
+            kogl_note = f"원본 {terms['이름']}: 비상업적 이용만 가능"
+        elif terms:
+            kogl_note = f"원본 {terms['이름']}"
         notes = [f"{MODE_WORDS.get(ai['방식'], ai['방식'])}" + (f". {when}" if when else ""), page_note,
-                 "이번에 넣을 표기" if ai.get("예정") else ""]
+                 "이번에 넣을 표기" if ai.get("예정") else "", kogl_note]
         rows.append({"순번": len(rows) + 1, "결과물 명": f"{figure['그림 번호']} {figure['그림명']}".strip(),
                      "학습모듈 해당 쪽수": page, "활용 AI": ai["도구"], "비고": ", ".join(note for note in notes if note),
                      "key": figure["key"]})

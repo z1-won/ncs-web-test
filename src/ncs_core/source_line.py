@@ -177,6 +177,20 @@ def find_ai_marker(paragraphs: list[str], caption_para: int, source_para: int | 
     return None
 
 
+KOGL_NAMES = {"0": "공공누리 제0유형", "1": "공공누리 제1유형", "2": "공공누리 제2유형", "3": "공공누리 제3유형", "4": "공공누리 제4유형", "AI": "공공누리 AI유형"}
+NO_DERIVATIVE = ("3", "4")      # 변경금지 — AI 수정 보완·생성의 재료로 쓸 수 없다(REQ-02-006 ⑥, REQ-04-006)
+NON_COMMERCIAL = ("2", "4")     # 상업적 이용금지 — 이 원본을 쓴 결과물에는 비상업 조건을 표시한다
+
+
+def kogl_terms(source_line: str | None) -> dict | None:
+    """출처 줄에 적힌 공공누리 유형과 이용 조건 → {'유형', '이름', '변경금지', '비상업'}. 유형이 적혀 있지 않으면 None(추측하지 않는다)."""
+    found = KOGL.search(source_line or "")
+    if not found:
+        return None
+    kind = found.group(1) or found.group(2)
+    return {"유형": kind, "이름": KOGL_NAMES.get(kind, f"공공누리 제{kind}유형"), "변경금지": kind in NO_DERIVATIVE, "비상업": kind in NON_COMMERCIAL}
+
+
 def ai_date_is_real(marker: AiMarker | None) -> bool | None:
     """AI 활용 줄의 일자가 달력에 있는 날인가. 일자가 없으면 None. (parse_ai_marker는 숫자 꼴만 읽고 날짜인지는 보지 않는다.)"""
     if marker is None or not marker.date:
