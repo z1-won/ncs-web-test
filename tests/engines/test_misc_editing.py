@@ -78,10 +78,10 @@ class EditingTests(unittest.TestCase):
         self.assertEqual((row["체크"], row["판정"]), ({PAGE: "△", FONT: "△"}, "판단불가"))
 
     def test_editing_item_stays_out_of_the_f02_sheet_file(self):
-        self.assertEqual(ITEMS[-1].no, "편집")
-        rows = full_sheet([{"구성요소": "기타", "번호": "편집", "체크 항목": "x", "검수결과": "부적합", "비고": ""}])
+        self.assertEqual([item.no for item in ITEMS[-2:]], ["편집", "법령"])      # F02에 없는 추가 항목 둘
+        rows = full_sheet([{"구성요소": "기타", "번호": no, "체크 항목": "x", "검수결과": "부적합", "비고": ""} for no in ("편집", "법령")])
         self.assertEqual(len(rows), 54)
-        self.assertNotIn("편집", [r["번호"] for r in rows])
+        self.assertFalse({"편집", "법령"} & {r["번호"] for r in rows})
 
 
 if __name__ == "__main__":

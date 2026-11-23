@@ -124,3 +124,20 @@ def law_catalog() -> LawCatalog | None:
 def reload() -> None:
     """읽어 둔 표를 버린다 — 기준정보 폴더의 표에 조회 결과를 덧붙였을 때 부른다."""
     _load.cache_clear()
+
+
+# 끝 낱말이 시행령·시행규칙·법률이거나 '○○보호법'류, 또는 띄어쓰기 없는 다섯 글자 이상의 '…법' — 법령 이름 꼴이 뚜렷한 것
+LAW_SHAPE = re.compile(r"(?:시행령|시행규칙|법률|(?:보호|기본|진흥|관리|특별|촉진|지원|안전|사업|처벌|육성|기준)법)$|^\S{4,}법$")
+
+
+def law_names_in(text: str, laws) -> list[str]:
+    """본문 글에서 법령 이름만(나온 차례, 한 번씩). extract_law_names는 계획서의 짧은 칸을 보고 만든 것이라 본문에서는 '조리법'·'대처법' 같은
+    보통 낱말도 건진다 — 따옴표(「」)로 묶인 이름, 법령명 표(laws)에서 찾은 이름, 법령 이름 꼴이 뚜렷한 것만 남긴다. laws는 LawCatalog 또는 None."""
+    out = []
+    for name, quoted in extract_law_names(text):
+        entry = laws.lookup(name) if laws is not None else None
+        known = entry is not None and entry.status not in ("미검색", "현행목록없음")
+        if (quoted or known or LAW_SHAPE.search(name)) and name not in out:
+            out.append(name)
+    return out
+

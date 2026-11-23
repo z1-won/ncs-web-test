@@ -99,7 +99,7 @@ class EngineContractTests(unittest.TestCase):
                 self.assertIn(component, SHEET_ITEMS, "확인서 구성요소 이름은 F02 원문(또는 개발계획서 항목)과 같아야 합니다")
                 # F02에 없는 추가 항목(기타 '편집' — 편집 체계)은 F02 항목 뒤에만 올 수 있고 확인서 파일에는 들어가지 않는다
                 extra = [row for row in result.sheet if row["번호"] not in SHEET_ITEMS[component]]
-                self.assertEqual([row["번호"] for row in extra], ["편집"] if check == "misc" else [])
+                self.assertEqual([row["번호"] for row in extra], ["편집", "법령"] if check == "misc" else [])
                 self.assertEqual(result.sheet[len(result.sheet) - len(extra):], extra)
                 f02_rows = [row for row in result.sheet if row not in extra]
                 self.assertEqual([row["번호"] for row in f02_rows], list(SHEET_ITEMS[component]),

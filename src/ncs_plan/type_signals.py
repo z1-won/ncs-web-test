@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 
-from ncs_core.law_catalog import extract_law_names
+from ncs_core.law_catalog import law_names_in
 
 BASIS_F05 = "F05 최소개선 유형 세부 지침 1항"
 BASIS_F21 = "F21 양식편집 운영 기준(안) 예시표"
@@ -25,21 +25,11 @@ SAFETY_HEAD = re.compile(r"안전\s*[·ㆍ･・,]?\s*유의\s*사항")
 NONE_TEXT = re.compile(r"^\W*해당\s*사항\s*없음\W*$")
 NUMBER = re.compile(r"^\s*\d+\s*[.\-]\s*\d+\s*\.?\s*")
 DOTS = re.compile(r"[･・•∙‧ㆍ]")
-# 끝 낱말이 시행령·시행규칙·법률이거나 '○○보호법'류, 또는 띄어쓰기 없는 다섯 글자 이상의 '…법'
-LAW_SHAPE = re.compile(r"(?:시행령|시행규칙|법률|(?:보호|기본|진흥|관리|특별|촉진|지원|안전|사업|처벌|육성|기준)법)$|^\S{4,}법$")
 GUIDE = ("유형은 직능연이 대상 학습모듈을 검토해 분류하고, 바꿀 때는 직능연과 협의합니다(F05 2항, F21). 아래 신호는 판단에 쓰는 자료입니다.")
 
 
 def _tight(text: str | None) -> str:
     return re.sub(r"\s", "", DOTS.sub("·", NUMBER.sub("", text or "")))
-
-
-def _is_law(name: str, quoted: bool, laws) -> bool:
-    """따옴표(「」)로 묶인 이름, 법령 표(law_names.tsv)에서 찾은 이름, 법령 이름 꼴이 뚜렷한 것만 법령으로 센다 — '조리법', '대처법' 같은 보통 낱말을 거른다."""
-    if quoted or LAW_SHAPE.search(name):
-        return True
-    entry = laws.lookup(name) if laws is not None else None
-    return entry is not None and entry.status not in ("미검색", "현행목록없음")
 
 
 def type_signals(sections: list[list[str]], detail: dict | None, laws=None) -> dict:
@@ -48,7 +38,7 @@ def type_signals(sections: list[list[str]], detail: dict | None, laws=None) -> d
     paragraphs = [text for section in sections for text in section if text and text.strip()]
     signals, unknown = [], []
 
-    laws = list(dict.fromkeys(name for text in paragraphs for name, quoted in extract_law_names(text) if _is_law(name, quoted, laws)))
+    laws = list(dict.fromkeys(name for text in paragraphs for name in law_names_in(text, laws)))
     if laws:
         signals.append({"신호": "법령 기재", "유형": "최소개선 (법령·기준 개정 반영이 필요한지 확인)", "근거": f"{BASIS_F21}: 학습모듈 교재에 법령이 기재된 경우 / {BASIS_F05}: 법령·기준 개정 반영",
                         "건수": len(laws), "예": laws[:10]})

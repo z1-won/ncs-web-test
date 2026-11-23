@@ -1,10 +1,11 @@
-"""규칙 등록. 기타 ①~⑧ — ③ 제품명 사전, ④ 캡처 화면 픽셀, ⑤⑧ 실효 DPI(ncs_core.pictures). + 편집 체계(F02에 없는 항목 — 용지·여백·글꼴)."""
+"""규칙 등록. 기타 ①~⑧ — ③ 제품명 사전, ④ 캡처 화면 픽셀, ⑤⑧ 실효 DPI(ncs_core.pictures). + 편집 체계·법령 현행화 후보(F02에 없는 항목)."""
 
 from ncs_core import Rule
 
 from .rules.brand_names import check_brand_names
 from .rules.editing import check_editing
 from .rules.form_images import check_form_images
+from .rules.laws import check_manuscript_laws
 from .rules.page_starts import check_page_starts
 from .rules.pictures import check_pictures
 from .rules.ratio import check_ratio
@@ -22,6 +23,7 @@ DEFAULT_RULES = (
     Rule("references", "F02-기타-⑦", check_references),
     Rule("form_images", "F02-기타-⑧", check_form_images),
     Rule("editing", "F02-기타-편집", check_editing),
+    Rule("laws", "F02-기타-법령", check_manuscript_laws),
 )
 
-ALL_ITEM_IDS = tuple("F02-기타-" + n for n in "①②③④⑤⑥⑦⑧") + ("F02-기타-편집",)
+ALL_ITEM_IDS = tuple("F02-기타-" + n for n in "①②③④⑤⑥⑦⑧") + ("F02-기타-편집", "F02-기타-법령")
