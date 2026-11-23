@@ -1,11 +1,13 @@
 // 전체 실행 결과 — 구성요소별 KRDS 아코디언. 실행 자체(업로드 토큰·순차 호출)는 ReviewPage.runAll이 하고 여기는 run 상태를 그린다.
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Badge, Spinner } from "./Badge.jsx";
 import { ExportButtons } from "./ExportButtons.jsx";
 import { ResultHead } from "./ResultHead.jsx";
+import { ReviewDecisions } from "./ReviewDecisions.jsx";
 import { ChecklistTable, FindingsTable, SheetTable } from "./Tables.jsx";
 import { api } from "../lib/api.js";
 import { countVerdicts, overallVerdict } from "../lib/checks.js";
+import { applyDecisions, loadDecisions, saveDecisions } from "../lib/decisions.js";
 import { formatDate } from "../lib/format.jsx";
 import { applyLlm, llmTouches } from "../lib/llm.js";
 
@@ -45,6 +47,13 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken, llm })
     return { 적합: acc.적합 + c.적합, 부적합: acc.부적합 + c.부적합, 판단불가: acc.판단불가 + c.판단불가 };
   }, { 적합: 0, 부적합: 0, 판단불가: 0 });
   const moduleCode = finished[0]?.data?.module_code || run.module_code || "";
+  // 담당자 판정 확정 — 검수 묶음(없으면 학습모듈 코드)마다 이 브라우저에 기억한다. 내려받는 확인서에 반영한다
+  const decisionId = run.group || moduleCode;
+  const [decisions, setDecisions] = useState({});
+  const [saved, setSaved] = useState(true);
+  useEffect(() => { setDecisions(loadDecisions(decisionId)); }, [decisionId]);
+  function changeDecisions(next) { setDecisions(next); setSaved(saveDecisions(decisionId, next)); }
+  const sheetRows = finished.flatMap((i) => i.data.검수확인서 || []);
   const openable = items.filter((i) => i.status !== "pending" && i.status !== "running").map((i) => i.check);
 
   function toggle(check) {
@@ -68,7 +77,7 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken, llm })
         }
         downloads={!run.running && finished.length > 0 && (
           <ExportButtons moduleCode={moduleCode} createdAt={run.created_at} onError={onError} onNotice={onNotice}
-                         rows={finished.flatMap((i) => i.data.검수확인서 || [])}
+                         rows={applyDecisions(sheetRows, decisions)}
                          annotate={{ upload: uploadToken, runId: finished.find((i) => i.data.id)?.data.id,
                                      rows: finished.flatMap((i) => (i.data.전체 || []).filter((r) => r.판정 !== "적합")) }} />
         )}
@@ -142,6 +151,10 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken, llm })
         })}
       </div>
       </section>}
+
+      {!run.running && finished.length > 0 && (
+        <ReviewDecisions rows={sheetRows} decisions={decisions} onChange={changeDecisions} saved={saved} moduleCode={moduleCode} groupId={run.group} />
+      )}
     </section>
   );
 }

@@ -1157,3 +1157,9 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 /* 의견 반영 검토 — 확정 보관, 검수 기준 */
 .opinion-keep { display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 0 0 1.2rem; }
 .opinion-criteria { font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); border-left: 3px solid var(--krds-light-color-border-gray-light); padding-left: 0.8rem; }
+
+/* 판정 확정과 앞 검수 비교(ReviewDecisions) — 원고 검수 결과 아래 */
+.review-decide { margin-top: var(--krds-gap-9); }
+.review-decide .section-title .meta { font-weight: 400; margin-left: var(--krds-gap-3); }
+.review-decide .decide-table select, .review-decide .decide-table input { width: 100%; }
+.review-decide .decide-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); margin-bottom: var(--krds-gap-5); }
