@@ -36,7 +36,7 @@ CHECKS: tuple[CheckSpec, ...] = (
     CheckSpec("status_list", ("⑥수록 현황", "⑥증빙"), frozenset({"submissions"}), BODY, submission.check_status, "제출 서류(수록 현황 목록)를 넣지 않음"),
     CheckSpec("ai_list", ("⑦AI 현황 대조",), frozenset({"submissions"}), BODY, submission.check_ai_list, "제출 서류(서약서)를 넣지 않음"),
     CheckSpec("similar", ("⑧AI 결과물 유사",), frozenset({"lookup"}), BODY, submission.check_similar, "그림 DB 미연결"),
-    CheckSpec("marks", ("②마크·워터마크",), frozenset({"marks"}), CHECKED, marks.check_marks, "OCR을 켜지 않음(Windows 내장 OCR 또는 FIG_OCR=0)"),
+    CheckSpec("marks", ("②마크·워터마크",), frozenset({"marks"}), CHECKED, marks.check_marks, "OCR을 쓸 수 없음(Windows 내장 OCR 또는 PaddleOCR이 있어야 함, FIG_OCR=0이면 끔)"),
     # ⑦생성·수정 구분은 ④·⑧(DB)·서약서 결과를 모아 보므로 맨 뒤
     CheckSpec("ai_action", ("⑦생성·수정 구분",), frozenset(), BODY, third_party.check_ai_action),
 )

@@ -1,4 +1,5 @@
-// 처음 화면(/) — 위쪽 띠(무엇을 할지 묻는 제목 + 원고 검수 시작), 최근 원고의 진행 현황 미리 보기, 묶음별 기능 카드.
+// 처음 화면(/) — 위쪽 띠(무엇을 할지 묻는 제목 + 시작 버튼), 내 할 일(세분류 건에서 지금 내 차례인 권), 최근 원고의 진행 현황 미리 보기, 묶음별 기능 카드.
+// 일의 출발점은 세분류 건의 '내 할 일'이다. DB가 있는 서버에서 로그인했으면 그것을 맨 위에 보이고 시작 버튼도 세분류 건으로 간다.
 // 미리 보기는 서버가 DB 이력을 쓸 때만(/api/health의 history) 보인다. 전체 목록과 한 원고의 단계·진행도는 /progress(머리글의 '진행 현황').
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -9,6 +10,7 @@ import { useAuth } from "../lib/auth.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 import { StageBar } from "./ProgressPage.jsx";
 
+const TODO_PREVIEW = 3;   // 처음 화면에 보이는 내 할 일 수 — 나머지는 세분류 건 화면에서
 const PREVIEW = 4;        // 미리 보기에 보이는 원고 수 — 아래 기능 묶음과 같은 4열 한 줄
 const STAGE_COUNT = 7;
 // 기능 묶음 넷(집필·검수·이미지·마무리 — 묶음 구성은 정해진 것이라 배치 때문에 바꾸지 않는다). 번호를 붙이지 않는다(이미지 작업은 검수와 나란히 가고, 묶음이 곧 순서는 아니다). 카드: 무엇을 하는지 한 줄 + 필요한 파일.
@@ -40,17 +42,20 @@ const GROUPS = [
 export default function HomePage() {
   usePageTitle("");
   const [list, setList] = useState(null);      // null: DB 없음, 로그인 전 또는 확인 전(미리 보기 자리를 그리지 않는다)
+  const [todo, setTodo] = useState(null);      // 내 할 일(세분류 건). null이면 그 자리를 그리지 않는다
   const { status } = useAuth();
   const signedOut = status === "out";            // 로그인 전에도 이 화면은 보인다 — 기능을 누르면 로그인 화면이 나온다
 
   useEffect(() => {
-    if (signedOut) { setList(null); return undefined; }
+    if (signedOut) { setList(null); setTodo(null); return undefined; }
     let alive = true;
     (async () => {
       const health = await api.health();
       if (!alive || !(health.ok && health.data?.history)) return;
-      const { ok, data } = await api.manuscripts.list();
-      if (alive && ok) setList(data);
+      const [{ ok, data }, mine] = await Promise.all([api.manuscripts.list(), api.cases.todo()]);
+      if (!alive) return;
+      if (ok) setList(data);
+      if (mine.ok) setTodo(mine.data);
     })();
     return () => { alive = false; };
   }, [signedOut]);
@@ -68,8 +73,33 @@ export default function HomePage() {
           </p>
         </div>
         {signedOut ? <Link className="krds-btn large primary" to="/login">로그인</Link>
+                   : todo ? <Link className="krds-btn large primary" to="/cases">세분류 건 열기</Link>
                    : <Link className="krds-btn large primary" to="/review">원고 검수 시작</Link>}
       </div>
+
+      {todo && (
+        <section aria-labelledby="home-todo-title">
+          <div className="home-section-head">
+            <h2 className="section-title" id="home-todo-title">내 할 일 <span className="meta">{todo.length}건, 세분류 건에서 지금 내 차례인 일</span></h2>
+            <Link className="krds-btn small tertiary" to="/cases">세분류 건 전체 보기</Link>
+          </div>
+          {todo.length === 0 ? <p className="meta">지금 내 차례인 일이 없습니다.</p> : (
+            <ul className="cases-todo-list">
+              {todo.slice(0, TODO_PREVIEW).map((item) => (
+                <li key={`${item.case_id}-${item.volume_id || item.stage}`}>
+                  <div>
+                    <strong>{item.title}</strong> <span className="meta">{item.case_name} {item.year}년{item.module_code ? `, ${item.module_code}` : ""}</span>
+                    <p>{item.stage_name}: {item.todo}{item.proxy && <span className="meta"> {item.turn.join(", ")} 차례이며 대신 기록할 수 있습니다.</span>}</p>
+                    {item.note && <p className="meta">보완 요청 메모: {item.note}</p>}
+                  </div>
+                  <Link className="krds-btn small secondary" to={`/cases?case=${item.case_id}${item.volume_id ? `&volume=${item.volume_id}` : ""}`}>열기</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {todo.length > TODO_PREVIEW && <p className="meta">나머지 {todo.length - TODO_PREVIEW}건은 세분류 건 화면에서 볼 수 있습니다.</p>}
+        </section>
+      )}
 
       {list && (
         <section aria-labelledby="home-recent-title">

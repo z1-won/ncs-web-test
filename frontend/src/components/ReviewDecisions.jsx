@@ -1,11 +1,13 @@
 // 원고 검수 결과 아래의 두 가지 — 담당자 판정 확정(REQ-02-002 사람 작업 5번)과 앞 검수와의 비교(4번).
 // 확정: 자동 판정이 부적합·판단불가인 항목을 담당자가 적합/부적합으로 정하고 사유를 적는다. 내려받는 확인서(hwpx, 엑셀, F03 표)에 반영된다.
+//       확정은 검수하는 쪽(에디터, 직능연)의 일이다 — 집필진·검토진·위원 계정에는 확정 표를 보이지 않는다(useCanManage).
 // 비교: 같은 학습모듈의 앞 전체 검수(검수 이력)를 골라 판정이 바뀐 항목과 그대로 남은 부적합을 본다. 검수 이력을 저장하는 서버에서만 된다.
 import React, { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "./Badge.jsx";
 import { PageAlert } from "./PageAlert.jsx";
 import { api } from "../lib/api.js";
+import { useCanManage } from "../lib/auth.jsx";
 import { compareSheets, decisionKey } from "../lib/decisions.js";
 import { formatDate } from "../lib/format.jsx";
 
@@ -15,6 +17,7 @@ const CHANGE_CLASS = { "해결": "bg-light-success", "새 부적합": "bg-light-
 export function ReviewDecisions({ rows, decisions, onChange, saved, moduleCode, groupId }) {
   const open = useMemo(() => (rows || []).filter((row) => row.검수결과 === "부적합" || row.검수결과 === "판단불가"), [rows]);
   const decided = open.filter((row) => decisions[decisionKey(row)]?.verdict).length;
+  const canDecide = useCanManage();
   const [groups, setGroups] = useState(null);     // 같은 학습모듈의 앞 검수 묶음. null: 아직 안 물음
   const [picked, setPicked] = useState("");
   const [diff, setDiff] = useState(null);
@@ -48,8 +51,10 @@ export function ReviewDecisions({ rows, decisions, onChange, saved, moduleCode, 
   if (!rows?.length) return null;
   return (
     <section id="review-decide" className="review-decide nav-anchor">
-      <h2 className="section-title">판정 확정 <span className="meta">자동 판정이 부적합이거나 판단불가인 {open.length}개 항목 가운데 {decided}개를 확정했습니다.</span></h2>
-      {open.length === 0 ? <p className="empty">확정할 항목이 없습니다. 모든 항목이 적합입니다.</p> : (
+      <h2 className="section-title">판정 확정 {canDecide && <span className="meta">자동 판정이 부적합이거나 판단불가인 {open.length}개 항목 가운데 {decided}개를 확정했습니다.</span>}</h2>
+      {!canDecide ? (
+        <p className="empty">판정 확정은 에디터와 직능연 계정에서 합니다. 이 계정에서는 자동 판정 결과를 보고 확인서와 수정 메모 원고를 내려받을 수 있습니다.</p>
+      ) : open.length === 0 ? <p className="empty">확정할 항목이 없습니다. 모든 항목이 적합입니다.</p> : (
         <>
           <p className="form-hint">
             담당자가 정한 판정과 사유는 내려받는 확인서(hwpx, 엑셀, F03 표)의 판정과 비고에 들어갑니다. 자동 판정도 비고에 함께 남습니다.
@@ -58,7 +63,7 @@ export function ReviewDecisions({ rows, decisions, onChange, saved, moduleCode, 
           <div className="krds-table-wrap">
             <table className="tbl col data decide-table">
               <caption className="sr-only">판정 확정: 항목, 자동 판정, 담당자 확정, 사유</caption>
-              <colgroup><col style={{ width: "13%" }} /><col /><col style={{ width: "9%" }} /><col style={{ width: "12%" }} /><col style={{ width: "30%" }} /></colgroup>
+              <colgroup><col style={{ width: "13%" }} /><col /><col style={{ width: "9%" }} /><col className="decide-col" /><col style={{ width: "26%" }} /></colgroup>
               <thead><tr><th scope="col">구성요소</th><th scope="col">체크 항목</th><th scope="col">자동 판정</th><th scope="col">담당자 확정</th><th scope="col">사유</th></tr></thead>
               <tbody>
                 {open.map((row) => {

@@ -21,8 +21,11 @@ import { usePageTitle } from "../lib/hooks.js";
 const HISTORY_PAGE = 10;   // 이력 표 한 쪽 행 수(원고 검수 이력과 같다)
 const RANGE_BADGE = { "권고 범위 안": "bg-light-success", "권고보다 적음": "bg-light-warning", "권고보다 많음": "bg-light-warning", 판단불가: "bg-light-gray" };
 
+// 화면 안 이동 줄 — 아래에 산정 이력이 있을 때만(다른 화면의 이력과 같은 방식)
+const ANCHORS = [{ id: "volume-form", label: "분량 산정" }, { id: "volume-history", label: "산정 이력" }];
+
 export default function VolumePage() {
-  usePageTitle("원고 분량 산정");
+  usePageTitle("원고 분량");
   const [file, setFile] = useState(null);
   useCaseManuscript(setFile);
   const [previous, setPrevious] = useState(null);
@@ -92,19 +95,19 @@ export default function VolumePage() {
 
   return (
     <>
-    <Header anchors={[]} hasHistory={false} hasResult={false} />
+    <Header anchors={history ? ANCHORS : []} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page volume-page">
-      <h1 className="page-title">원고 분량 산정</h1>
+      <h1 className="page-title">원고 분량</h1>
+      {/* 설명은 2~3줄. 세는 규칙(1행 기준, ½쪽, 넣고 빼는 것)은 결과의 '산정 가정'과 구획 설명에 있다 */}
       <p className="page-desc">
-        최종 원고(hwp, hwpx)를 올리면 집필료 산정 기준(계약서 제13조 4항)대로 구성별 행과 쪽을 세어 계약서에 기입할 분량(매)을 냅니다.
-        1행에 1자 이상이면 1행으로 세고, 전체 분량의 끝수가 ½쪽 이상이면 1쪽으로 올립니다. 행 띄움, 표, 출처를 밝힌 인용은 넣고 사진과 삽화 등 시각 자료, 표지, ‘NCS학습모듈의 이해’, 개발진은 뺍니다.
+        최종 원고(hwp, hwpx)를 올리면 집필료 산정 기준(계약서 제13조 4항)대로 구성별 행과 쪽을 세어 계약서에 기입할 분량(매)과 집필료를 냅니다.
         기존 학습모듈 원고를 함께 올리면 올해 바뀐 분량을 따로 셉니다. 올린 파일은 계산 뒤 바로 지웁니다.
-        {history && " 산정 결과와 입력한 값은 산정 이력에 저장합니다. 원고 파일은 저장하지 않고 파일 이름만 기록합니다."}
+        {history && " 산정 결과는 산정 이력에 저장하고, 원고는 파일 이름만 기록합니다."}
       </p>
       <CaseLinkNote />
 
       {/* 입력 묶음은 구획 셋: 파일 올리기 → 산정 조건 → 실행(다른 화면과 같은 구조). 칸 아래 도움말은 한 줄로 두고, 긴 설명은 구획 설명(.form-section-desc)에 모은다 */}
-      <form className="fieldset review-form is-sectioned" onSubmit={submit}>
+      <form id="volume-form" className="fieldset review-form is-sectioned nav-anchor" onSubmit={submit}>
         <div className="form-section" role="group" aria-labelledby="volume-files-title" aria-describedby="volume-files-desc">
         <h2 className="form-section-title" id="volume-files-title">파일 올리기</h2>
         <p className="form-section-desc" id="volume-files-desc">
@@ -174,7 +177,7 @@ export default function VolumePage() {
       {result && !busy && <VolumeResult result={result} />}
 
       {history && (
-        <section id="volume-history" className="history volume-history">
+        <section id="volume-history" className="history volume-history nav-anchor">
           <div className="section-head">
             <h2 className="section-title">산정 이력</h2>
           </div>

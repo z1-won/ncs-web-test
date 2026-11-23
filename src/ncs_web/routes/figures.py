@@ -130,7 +130,7 @@ def register(app: FastAPI, services: Services) -> None:
         work.mkdir(parents=True, exist_ok=True)
         from ncs_figures.marks import open_marks
         lookup = _lookup()
-        marks = open_marks()                     # ② 그림 속 마크·저작권 문구 — 로컬 OCR(처음엔 그림당 1초쯤, 다음엔 캐시)
+        marks = open_marks()                     # ② 그림 속 마크·저작권 문구 — 로컬 OCR(Windows 내장 또는 PaddleOCR. 처음엔 그림당 몇 초, 다음엔 캐시)
         submissions, for_tags = _submissions(work, token)  # ⑥⑦ 제출 서류(올렸을 때만) + 출력본 PDF(쪽수)
         captions = _captions(work)               # ③ 그림 판독 버튼으로 받은 캡션 판정 — 없으면 위험도 '판정 안 함'
         review = run_review(manuscript, module_code=module_code,

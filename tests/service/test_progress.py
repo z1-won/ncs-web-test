@@ -117,6 +117,14 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(progress["저작권 검수"]["이미지 저작권 DB"], {"그림": 12, "확정": 5})
         self.assertEqual(progress["분량"]["pages"], 80)
 
+    def test_remaining_work_is_counted_the_same_way_for_all_three(self):
+        """목록과 상세가 함께 쓰는 '남은 일' — 편집·내용·저작권 검수를 모두 '남은 것 / 전체'로(정의서 REQ-02-007 사람 작업 1~3)."""
+        left = build(CODE, self.sources())["남은 일"]
+        self.assertEqual(left["편집 검수"], {"남음": 1, "전체": 4, "판단불가": 1})          # 부적합 1 / 판정한 4항목('그 밖'은 뺀다)
+        self.assertEqual((left["내용 검수"]["남음"], left["내용 검수"]["전체"], left["내용 검수"]["확정"]), (1, 6, False))   # 미반영 후보 1 / 의견 6
+        empty = build(CODE, {})["남은 일"]
+        self.assertEqual(empty, {"편집 검수": None, "내용 검수": None, "저작권 검수": None})
+
     def test_figure_and_source_reviews_are_counted_in_copyright_progress(self):
         """그림 검수(REQ-02-005)와 출처 검토(REQ-02-008)의 결과도 저작권 검수 진행도에 모은다 — 정의서: 002·003·005·008을 종합, 집계 누락 0건."""
         figures = summarize_figures({"review": {"summary": {"그림": 20, "검수 대상": 17, "위험도": {"문제없음": 10, "확인 필요": 5, "고위험": 2},

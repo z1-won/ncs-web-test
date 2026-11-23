@@ -129,6 +129,32 @@ def editing_progress(latest_checks: list[dict]) -> dict:
             "적합 비율": round(items["적합"] / judged * 100, 1) if judged else None}
 
 
+def remaining(progress: dict) -> dict:
+    """진행도 → 남은 일. 편집·내용·저작권 검수를 모두 {'남음', '전체'}로 맞춘다 — 목록에서 원고끼리 견주고, 상세의 요약도 같은 값을 쓴다.
+
+    편집 검수: 남음 = 부적합 항목, 전체 = 판정한 항목(적합 + 부적합 + 판단불가). 판단불가는 따로 싣는다(사람이 볼 것이지 고칠 것으로 정해진 게 아니다).
+    내용 검수: 담당자 확정이 있으면 남음 = 확정한 미반영, 전체 = 확정한 의견 수. 없으면 남음 = 미반영 후보, 전체 = 총 의견(확인 필요는 따로).
+    저작권 검수: 남음 = 정정 필요(그림의 고위험·확인 필요 + 출처의 부적합·판단불가), 전체 = 그림 + 출처. 권리 증빙의 누락은 따로.
+    기록이 없는 것은 None."""
+    editing, content, rights = progress["편집 검수"], progress["내용 검수"], progress["저작권 검수"]
+    items = editing.get("항목")
+    out = {"편집 검수": None, "내용 검수": None, "저작권 검수": None}
+    if items:
+        out["편집 검수"] = {"남음": items["부적합"], "전체": items["적합"] + items["부적합"] + items["판단불가"], "판단불가": items["판단불가"]}
+    total, confirmed = content.get("합계"), content.get("확정")
+    if confirmed:
+        out["내용 검수"] = {"남음": confirmed.get("미반영", 0), "전체": confirmed.get("확정", 0), "확정": True,
+                        "확인 필요": 0, "총 의견": total["총 의견"] if total else confirmed.get("확정", 0)}
+    elif total:
+        out["내용 검수"] = {"남음": total["미반영 후보"], "전체": total["총 의견"], "확정": False, "확인 필요": total["확인 필요"],
+                        "총 의견": total["총 의견"]}
+    both, evidence = rights.get("합계"), rights.get("권리 증빙")
+    if both or evidence:
+        out["저작권 검수"] = {"남음": both["정정 필요"] if both else None, "전체": both["총 개수"] if both else None,
+                         "증빙 누락": evidence.get("누락") if evidence else None, "증빙 판정": evidence.get("판정") if evidence else None}
+    return out
+
+
 def build(module_code: str, sources: dict, *, name: str = "") -> dict:
     """기록 → 진행 현황. sources = postgres.progress_sources()의 값:
     {'reviews': {'count', 'first', 'last'}, 'plan': {'count', 'last', 'verdict'}, 'latest_checks': [...], 'last_group': {...}|None,
@@ -185,7 +211,7 @@ def build(module_code: str, sources: dict, *, name: str = "") -> dict:
                "메모": done[no]["note"] if no in done else "",
                "상태": RECORDED if facts[no][0] else EMPTY, "일시": facts[no][1], "내용": facts[no][2]}
               for no, title, who, feature, path in STAGES]
-    return {
+    result = {
         "module_code": module_code, "학습모듈명": name,
         "단계": stages, "단계 근거": BASIS,
         "완료 단계 수": len(done),
@@ -204,6 +230,8 @@ def build(module_code: str, sources: dict, *, name: str = "") -> dict:
                   "그림 검수": sum(r["kind"] == FIGURES for r in records), "출처 검토": sum(r["kind"] == SOURCES for r in records),
                   "분량 산정": sources.get("volume_count", 0)},
     }
+    result["남은 일"] = remaining(result["진행도"])
+    return result
 
 
 def stages_recorded(kinds: set[str]) -> int:

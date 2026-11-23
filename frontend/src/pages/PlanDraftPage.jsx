@@ -18,13 +18,9 @@ import { usePageTitle } from "../lib/hooks.js";
 import { PLAN_CHECK, overallVerdict } from "../lib/checks.js";
 import { formatDate } from "../lib/format.jsx";
 
-const ANCHORS = [
-  { id: "plan-form", label: "초안 만들기" },
-  { id: "plan-check", label: "초안 점검" },
-  { id: "plan-review", label: "개발계획서 점검" },
-  { id: "plan-type", label: "개선 유형 판단 자료" },
-  { id: "plan-compare", label: "계획서 비교" },
-];
+// 이 화면의 도구 넷 — 한 번에 하나만 보인다(탭). 전에는 넷이 세로로 쌓여 화면이 다른 도구 화면의 두세 배 길었다.
+// 탭을 바꿔도 다른 탭에 넣어 둔 파일과 결과는 그대로 남는다(감추기만 한다). 주소 끝의 #plan-review 등으로 그 탭을 바로 열 수 있다
+const TOOLS = [["draft", "초안 만들기", "plan-form"], ["review", "개발계획서 점검", "plan-review"], ["type", "개선 유형 판단 자료", "plan-type"], ["compare", "계획서 비교", "plan-compare"]];
 
 const KINDS = [["신규", "신규 개발"], ["개선", "개선"]];
 // 개선 유형(F05 최소개선 유형 세부 지침, F21 작성 매뉴얼). 정하는 것은 사람(직능연 협의)이고 화면은 적어 둘 뿐이다
@@ -39,6 +35,7 @@ export default function PlanDraftPage() {
   usePageTitle("개발계획서 작성");
   const [catalog, setCatalog] = useState(null);     // /api/plan/subclasses 응답
   const [loadError, setLoadError] = useState(null);
+  const [tool, setTool] = useState(() => (TOOLS.find(([, , id]) => `#${id}` === window.location.hash) || TOOLS[0])[0]);
   const [duty, setDuty] = useState("");
   const [picked, setPicked] = useState({});          // 능력단위 코드 → true
   const [agency, setAgency] = useState("");
@@ -82,10 +79,7 @@ export default function PlanDraftPage() {
   useEffect(() => {
     api.plan.subclasses().then(({ ok, data, error: message }) => {
       if (!ok) { setLoadError(message); return; }
-      setCatalog(data);
-      // 처음에는 바로 초안을 만들 수 있는(기준정보를 받아 둔) 세분류를 고른다. 없으면 비워 두고 검색해서 고르게 한다
-      const first = data.subclasses?.find((s) => s.ready);
-      if (first) setDuty(first.duty);
+      setCatalog(data);      // 세분류는 미리 골라 두지 않는다 — 분야별 검색이 대분류 고르기부터 시작한다
     });
   }, []);
 
@@ -242,15 +236,30 @@ export default function PlanDraftPage() {
 
   return (
     <>
-    <Header anchors={ANCHORS} hasHistory={false} hasResult={!!check} />
+    <Header anchors={[]} hasHistory={false} hasResult={!!check} />
     <main id="container" className="inner page">
-      <h1 className="page-title">NCS 학습모듈 개발계획서 작성 지원</h1>
+      <h1 className="page-title">개발계획서 작성</h1>
       <p className="page-desc">
         세분류를 고르면 NCS 능력단위, 요소, 수행준거를 개발계획서 양식(T01)에 자동으로 채운 초안(hwpx)을 내려받습니다.
         학습 내용명, 선수학습 등 집필자가 정할 칸은 비워 두며, 초안은 바로 개발계획서 점검 ①~⑩을 거칩니다.
-        이어서 작성한 개발계획서는 아래 ‘개발계획서 점검’에 올려 다시 점검합니다.
+        이어서 작성한 개발계획서는 ‘개발계획서 점검’ 탭에 올려 다시 점검합니다.
       </p>
 
+      <div className="krds-tab-area page-tools">
+        <div className="tab line">
+          <ul role="tablist" aria-label="개발계획서 도구">
+            {TOOLS.map(([key, label]) => (
+              <li key={key} role="none" className={tool === key ? "active" : undefined}>
+                <button type="button" role="tab" id={`plan-tab-${key}`} className="btn-tab" aria-selected={tool === key} onClick={() => setTool(key)}>
+                  {label}{tool === key && <span className="sr-only"> 선택됨</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div role="tabpanel" aria-labelledby="plan-tab-draft" hidden={tool !== "draft"}>
       <PageAlert kind="danger">{loadError}</PageAlert>
       {catalog && !catalog.subclasses?.length && (
         <p className="empty">NCS 세분류 목록을 읽지 못했습니다. 관리자에게 문의해 주세요.</p>
@@ -274,7 +283,8 @@ export default function PlanDraftPage() {
           </p>
         </div>
 
-        {/* NCS 기준정보 — 이 세분류의 요소와 수행준거를 언제 받았는지, 다시 받기. 아직 없는 세분류는 고르는 즉시 받아 온다 */}
+        {/* NCS 기준정보 — 세분류를 고른 뒤에만 보인다(고르기 전에는 보일 내용이 없다). 이 세분류의 요소와 수행준거를 언제 받았는지, 다시 받기. 아직 없는 세분류는 고르는 즉시 받아 온다 */}
+        {duty && (
         <div className="form-group form-group-wide plan-refdata" id="plan-refdata">
           <div className="form-tit"><span>NCS 기준정보</span></div>
           <div className="form-conts">
@@ -299,6 +309,7 @@ export default function PlanDraftPage() {
           </div>
           <p className="form-hint">NCS가 개정되면 [NCS에서 다시 받아 오기]로 최신 내용을 받습니다. 달라진 능력단위를 알려 줍니다.</p>
         </div>
+        )}
         </div>
         </div>
 
@@ -453,8 +464,10 @@ export default function PlanDraftPage() {
         </section>
       )}
       {/* ── 개발계획서 점검 ── 작성한 파일을 올려 ①~⑩ 점검. 예전에는 원고 검수 페이지의 선택 목록에 있었다 */}
-      <section id="plan-review" className="nav-anchor plan-review">
-        <h2 className="section-title">개발계획서 점검</h2>
+      </div>
+
+      <section id="plan-review" className="nav-anchor plan-review" role="tabpanel" aria-labelledby="plan-tab-review" hidden={tool !== "review"}>
+        <h2 className="section-title sr-only">개발계획서 점검</h2>{/* 탭 이름과 같아 화면에는 감춘다(화면낭독기용 제목은 남긴다) */}
         <p className="meta section-desc">작성한 개발계획서(hwp, hwpx)를 올리면 점검 ①~⑩을 실행합니다. 원고는 필요하지 않습니다. 1차본은 학습모듈명, 영문명, 기관명, 집필진, 학습 내용명이 비어 있어도 부적합으로 보지 않습니다. 이 칸들은 최종 단계에서 기관이 적습니다.</p>
         <form className="fieldset review-form is-sectioned" onSubmit={runReview}>
           <div className="form-section-grid">
@@ -507,8 +520,8 @@ export default function PlanDraftPage() {
       </section>
 
       {/* ── 개선 유형 판단 자료 ── 기존 학습모듈 원고에서 지침(F05 1항, F21 운영 기준 예시표)이 든 내용 수정 신호를 찾는다. 유형은 정하지 않는다 */}
-      <section id="plan-type" className="nav-anchor plan-review">
-        <h2 className="section-title">개선 유형 판단 자료</h2>
+      <section id="plan-type" className="nav-anchor plan-review" role="tabpanel" aria-labelledby="plan-tab-type" hidden={tool !== "type"}>
+        <h2 className="section-title sr-only">개선 유형 판단 자료</h2>{/* 탭 이름과 같아 화면에는 감춘다(화면낭독기용 제목은 남긴다) */}
         <p className="meta section-desc">
           기존 학습모듈 원고를 올리면 내용 수정이 필요하다는 신호를 찾아 보여 줍니다. 법령 기재, URL 기재, 안전·유의 사항의 ‘해당 사항 없음’, 학습 목표와 NCS 수행준거의 불일치입니다.
           유형은 직능연이 대상 학습모듈을 검토해 분류하고, 바꿀 때는 직능연과 협의합니다. 이 화면은 유형을 정하지 않습니다.
@@ -562,8 +575,8 @@ export default function PlanDraftPage() {
       </section>
 
       {/* ── 계획서 비교 ── 사람 작업의 '결과 비교': 최종결과 예시나 앞 판본과 칸별로 견준다. 판정은 하지 않는다 */}
-      <section id="plan-compare" className="nav-anchor plan-review">
-        <h2 className="section-title">계획서 비교</h2>
+      <section id="plan-compare" className="nav-anchor plan-review" role="tabpanel" aria-labelledby="plan-tab-compare" hidden={tool !== "compare"}>
+        <h2 className="section-title sr-only">계획서 비교</h2>{/* 탭 이름과 같아 화면에는 감춘다(화면낭독기용 제목은 남긴다) */}
         <p className="meta section-desc">개발계획서 둘을 칸별로 견줍니다. 기준에는 최종결과 예시나 앞 판본을, 대상에는 지금 계획서를 올립니다. 같은 칸은 세기만 하고 다른 칸만 보여 줍니다. 판정은 하지 않습니다.</p>
         <form className="fieldset review-form is-sectioned" onSubmit={runCompare}>
           <div className="form-section-grid">

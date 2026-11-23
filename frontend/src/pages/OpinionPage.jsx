@@ -20,7 +20,7 @@ const VERDICT_BADGE = { "반영 후보": "bg-light-success", "미반영 후보":
 const FILTERS = ["전체", "반영 후보", "미반영 후보", "확인 필요", "조치 불필요"];
 
 export default function OpinionPage() {
-  usePageTitle("의견서 반영 검토");
+  usePageTitle("의견 반영 검토");
   const [first, setFirst] = useState(null);
   const [second, setSecond] = useState(null);
   const [third, setThird] = useState(null);
@@ -52,12 +52,12 @@ export default function OpinionPage() {
     <>
     <Header anchors={[]} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page opinion-page">
-      <h1 className="page-title">의견서 반영 검토</h1>
+      <h1 className="page-title">의견 반영 검토</h1>
+      {/* 설명은 2~3줄: 무엇을 올리면 무엇이 나오는지 → 판정의 성격 → 파일 처리. 판정별 세부(확인 필요가 되는 경우, 용어 변경 의견)는 결과 표에서 그 자리에 보인다 */}
       <p className="page-desc">
-        1차, 2차 검토의견서나 심의의견서(PDF, hwp, hwpx)와 의견을 반영한 최종 원고(hwp, hwpx)를 올리면, 의견이 가리키는 표, 그림, 학습 구성에서 고른 원고 문단과
-        의견 전부를 생성형 AI가 한 번에 읽고 의견마다 <strong>반영 후보, 미반영 후보, 확인 필요</strong>를 근거 문단과 함께 보여 줍니다. 근거 문단이 없거나 원고 글로 확인할 수 없는
-        의견(형식, 그림)은 확인 필요로, 용어 변경 의견은 바로 반영으로 보지 않고 집필자에게 확인할 항목으로 따로 표시합니다. 생성형 AI를 쓸 수 없을 때는
-        모든 의견을 확인 필요로 표시하고 이유를 함께 보여 줍니다. 이 화면의 판정은 참고용이며 최종 판단은 담당자가 합니다. 올린 파일은 검토 뒤 바로 지웁니다.
+        검토의견서나 심의의견서(PDF, hwp, hwpx)와 의견을 반영한 최종 원고(hwp, hwpx)를 올리면, 생성형 AI가 의견마다
+        <strong> 반영 후보, 미반영 후보, 확인 필요</strong>를 근거 문단과 함께 보여 줍니다.
+        판정은 참고용이며 최종 판단은 담당자가 합니다. 생성형 AI를 쓸 수 없을 때는 모든 의견을 확인 필요로 표시합니다. 올린 파일은 검토 뒤 바로 지웁니다.
       </p>
       <CaseLinkNote />
 

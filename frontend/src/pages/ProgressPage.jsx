@@ -31,6 +31,30 @@ export function StageBar({ done }) {
   );
 }
 
+// 남은 일 한 칸 — 편집·내용·저작권 검수를 모두 "남은 것 / 전체"로 보인다(서버 progress.remaining과 같은 값).
+// left: {남음, 전체, …} 또는 null(기록 없음). unit: 전체 뒤에 붙는 말('항목', '개'). what: 남은 것의 이름('부적합', '미반영')
+export function Remaining({ left, what, unit, extra }) {
+  if (!left || left.전체 == null) return <span className="meta">{extra || "기록 없음"}</span>;   // 권리 증빙만 점검한 원고는 누락 수만 보인다
+  const clear = left.남음 === 0;
+  return (
+    <span className="progress-left">
+      <span className={`krds-badge ${clear ? "bg-light-success" : "bg-light-warning"}`}>{what} {left.남음}</span>
+      <span className="progress-left-total"> / {left.전체}{unit}</span>
+      {extra && <span className="meta">{extra}</span>}
+    </span>
+  );
+}
+
+// 남은 일의 덧붙임 글(판단불가, 확인 필요, 증빙 누락) — 목록과 상세가 같은 글을 쓴다
+export function leftNotes(left) {
+  const editing = left?.["편집 검수"], content = left?.["내용 검수"], rights = left?.["저작권 검수"];
+  return {
+    editing: editing?.판단불가 ? `판단불가 ${editing.판단불가}` : "",
+    content: content ? (content.확정 ? "담당자 확정 기준" : `담당자 확정 전${content["확인 필요"] ? `, 확인 필요 ${content["확인 필요"]}` : ""}`) : "",
+    rights: rights?.["증빙 누락"] != null ? `권리 증빙 누락 ${rights["증빙 누락"]}` : "",
+  };
+}
+
 export default function ProgressPage() {
   usePageTitle("원고 진행 현황");
   const [params, setParams] = useSearchParams();
@@ -90,8 +114,7 @@ export default function ProgressPage() {
     <main id="container" className="inner page progress-page">
       <h1 className="page-title">원고 진행 현황</h1>
       <p className="page-desc">
-        원고마다 단계 7개의 완료 여부와 검수 진행도를 보여 줍니다. 단계의 완료는 담당자가 직접 표시하고, 남아 있는 기록은 완료를 판단할 근거로 함께 보입니다.
-        파일 이름에 모듈 코드(LM으로 시작)가 있는 원고의 기록만 모입니다.
+        원고마다 편집, 내용, 저작권 검수에서 남은 일과 단계 7개의 완료 여부를 보여 줍니다. 숫자는 가장 최근 검수 기록에서 모은 값이고, 단계의 완료는 담당자가 직접 표시합니다.
       </p>
 
       {history === null && <Spinner label="기록을 확인하는 중" />}
@@ -107,7 +130,7 @@ export default function ProgressPage() {
                        onChange={(e) => setTyped(e.target.value)} aria-describedby="progress-code-hint" />
                 <button type="submit" className="krds-btn medium secondary" disabled={!typed.trim()}>열기</button>
               </div>
-              <p className="form-hint" id="progress-code-hint">아직 기록이 없는 원고도 열어서 단계를 표시할 수 있습니다.</p>
+              <p className="form-hint" id="progress-code-hint">아직 기록이 없는 원고도 열어서 단계를 표시할 수 있습니다. 파일 이름에 모듈 코드가 있는 원고의 기록만 모입니다.</p>
             </div>
           </div>
         </form>
@@ -121,21 +144,26 @@ export default function ProgressPage() {
           <PageAlert kind="danger">{listError}</PageAlert>
           {!list && !listError && <Spinner label="목록을 읽는 중" />}
           {list && (list.length === 0 ? (
-            <p className="empty">아직 기록이 없습니다. 파일 이름에 모듈 코드가 있는 원고로 검수나 산정을 하면 여기에 모입니다.</p>
+            <p className="empty">아직 기록이 없습니다. 파일 이름에 모듈 코드(LM으로 시작)가 있는 원고로 검수나 산정을 하면 여기에 모입니다.</p>
           ) : (
+            <>
+            <ListSummary list={list} />
             <div className="krds-table-wrap">
               <table className="tbl col data progress-table">
-                <caption>기록이 있는 원고와 완료한 단계</caption>
+                <caption>원고마다 남은 일(남은 것 / 전체)과 완료한 단계</caption>
                 <thead>
-                  <tr><th scope="col">학습모듈</th><th scope="col">완료한 단계</th><th scope="col">근거 기록</th><th scope="col">최근 기록</th><th scope="col">열기</th></tr>
+                  <tr><th scope="col">학습모듈</th><th scope="col">편집 검수</th><th scope="col">내용 검수</th><th scope="col">저작권 검수</th>
+                      <th scope="col">완료한 단계</th><th scope="col">최근 기록</th><th scope="col">열기</th></tr>
                 </thead>
                 <tbody>
                   {list.map((row) => (
                     <tr key={row.module_code} className={row.module_code === code ? "is-open" : ""}>
                       <th scope="row">{row.name || row.module_code}{row.name && <span className="meta">{row.module_code}</span>}</th>
+                      <td><Remaining left={row["남은 일"]?.["편집 검수"]} what="부적합" unit="항목" extra={leftNotes(row["남은 일"]).editing} /></td>
+                      <td><Remaining left={row["남은 일"]?.["내용 검수"]} what="미반영" unit="개" extra={leftNotes(row["남은 일"]).content} /></td>
+                      <td><Remaining left={row["남은 일"]?.["저작권 검수"]} what="정정 필요" unit="개" extra={leftNotes(row["남은 일"]).rights} /></td>
                       <td><StageBar done={row.stages_done} /></td>
-                      <td>{row.records}건<span className="meta">{row.stages_recorded}개 단계</span></td>
-                      <td>{dateOnly(row.last_at)}</td>
+                      <td>{dateOnly(row.last_at)}<span className="meta">기록 {row.records}건</span></td>
                       <td>
                         <button type="button" className="krds-btn small tertiary" aria-pressed={row.module_code === code}
                                 aria-label={`${row.name || row.module_code} 열기`} onClick={() => setParams({ code: row.module_code })}>열기</button>
@@ -145,6 +173,7 @@ export default function ProgressPage() {
                 </tbody>
               </table>
             </div>
+            </>
           ))}
         </section>
       )}
@@ -161,6 +190,25 @@ export default function ProgressPage() {
     </main>
     <Footer />
     </>
+  );
+}
+
+// 목록 위 한 줄 — 보이는 원고 가운데 남은 일이 있는 권 수. 사업 담당자가 가장 먼저 찾는 값
+function ListSummary({ list }) {
+  const has = (row, key) => (row["남은 일"]?.[key]?.남음 || 0) > 0;
+  const none = (row, key) => !row["남은 일"]?.[key] || row["남은 일"][key].전체 == null;
+  const parts = [["편집 검수", "부적합이 남은 원고"], ["내용 검수", "미반영 의견이 남은 원고"], ["저작권 검수", "정정이 필요한 원고"]];
+  return (
+    <dl className="upscale-summary progress-summary" aria-label="원고 전체 요약">
+      <div><dt>원고</dt><dd><strong>{list.length}</strong>권</dd></div>
+      {parts.map(([key, label]) => (
+        <div key={key}>
+          <dt>{label}</dt>
+          <dd><strong>{list.filter((row) => has(row, key)).length}</strong>권</dd>
+          <dd className="meta">{key} 기록 없음 {list.filter((row) => none(row, key)).length}권</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -189,6 +237,7 @@ function ProgressDetail({ detail, onChange, onClose }) {
         </h2>
         <button type="button" className="krds-btn small tertiary" onClick={onClose}>닫기</button>
       </div>
+      <ProgressFigures detail={detail} />
       {!detail.건 && <p className="progress-overall"><StageBar done={detail["완료 단계 수"]} /></p>}
 
       {detail.건 ? (
@@ -263,8 +312,6 @@ function ProgressDetail({ detail, onChange, onClose }) {
 
         </>
       )}
-
-      <ProgressFigures detail={detail} />
     </section>
   );
 }
@@ -281,36 +328,32 @@ export function ProgressFigures({ detail }) {
   const copyright = progress["저작권 검수"].합계;            // 총 저작권 개수 / 정정 필요 개수(그림 + 출처)
   const confirmed = content.확정;                           // 의견 반영 검토의 담당자 확정
   const volume = progress.분량;
+  const left = detail["남은 일"] || {};                       // 서버 progress.remaining — 목록과 같은 값
   return (
     <>
-      <h3 className="table-title" id="progress-numbers-title">검수 진행도 <span className="meta">남아 있는 기록에서 모은 값</span></h3>
+      <h3 className="table-title" id="progress-numbers-title">남은 일 <span className="meta">가장 최근 검수 기록에서 모은 값(남은 것 / 전체)</span></h3>
       <dl className="upscale-summary" aria-labelledby="progress-numbers-title">
         <div>
           <dt>편집 검수</dt>
-          {editing.항목 ? (
-            <>
-              <dd><strong>{editing["적합 비율"] ?? "-"}</strong>% 적합</dd>
-              <dd className="meta">적합 {editing.항목.적합}, 부적합 {editing.항목.부적합}, 판단불가 {editing.항목.판단불가}</dd>
-            </>
-          ) : <dd className="meta">기록 없음</dd>}
+          <dd><Remaining left={left["편집 검수"]} what="부적합" unit="항목" /></dd>
+          {editing.항목 && <dd className="meta">적합 {editing.항목.적합}, 부적합 {editing.항목.부적합}, 판단불가 {editing.항목.판단불가}. 판단불가는 담당자가 확인할 항목입니다.</dd>}
         </div>
         <div>
           <dt>내용 검수(의견 반영)</dt>
-          {content.합계 ? (
+          <dd><Remaining left={left["내용 검수"]} what="미반영" unit="개" /></dd>
+          {content.합계 && (
             <>
-              <dd>의견 <strong>{content.합계["총 의견"]}</strong>개</dd>
-              <dd className="meta">반영 후보 {content.합계["반영 후보"]}, 미반영 후보 {content.합계["미반영 후보"]}, 확인 필요 {content.합계["확인 필요"]}</dd>
+              <dd className="meta">의견 {content.합계["총 의견"]}개: 반영 후보 {content.합계["반영 후보"]}, 미반영 후보 {content.합계["미반영 후보"]}, 확인 필요 {content.합계["확인 필요"]}</dd>
               <dd className="meta">{confirmed
                 ? `담당자 확정 ${confirmed.확정}개: 반영 ${confirmed.반영}, 미반영 ${confirmed.미반영}${confirmed.오차율 ? ` (후보 대비 오차율 ${confirmed.오차율})` : ""}`
-                : "담당자 확정 기록 없음"}</dd>
+                : "담당자가 확정하기 전의 값입니다."}</dd>
             </>
-          ) : <dd className="meta">기록 없음</dd>}
+          )}
         </div>
         <div>
           <dt>저작권 검수</dt>
-          {copyright
-            ? <dd>정정 필요 <strong>{copyright["정정 필요"]}</strong> / 총 {copyright["총 개수"]}개</dd>
-            : <dd className="meta">그림 검수와 출처 검토 기록 없음</dd>}
+          <dd><Remaining left={left["저작권 검수"]} what="정정 필요" unit="개" /></dd>
+          {!copyright && <dd className="meta">그림 검수와 출처 검토 기록 없음</dd>}
           {figures && <dd className="meta">그림 검수: 그림 {figures.그림}개 중 고위험 {figures.고위험}, 확인 필요 {figures["확인 필요"]}, 문제없음 {figures.문제없음}</dd>}
           {cited && <dd className="meta">출처 검토: 출처 {cited["총 출처"]}개 중 부적합 {cited.부적합}, 판단불가 {cited.판단불가}, 적합 {cited.적합}</dd>}
           {rights ? (

@@ -193,8 +193,12 @@ class PostgresStore:
         from . import postgres
         from .workflow.progress import stages_done, stages_recorded
 
+        from .workflow.progress import build
+
         rows = postgres.list_manuscripts(self.dsn, **filters)
-        return [{**row, "stages_recorded": stages_recorded(set(row["kinds"])), "stages_done": stages_done(set(row["kinds"]))} for row in rows]
+        # 목록에서 원고끼리 견줄 수 있게 원고마다 남은 일(편집·내용·저작권 검수)을 함께 싣는다. 한 쪽에 50건까지라 원고마다 읽어도 된다
+        return [{**row, "stages_recorded": stages_recorded(set(row["kinds"])), "stages_done": stages_done(set(row["kinds"])),
+                 "남은 일": build(row["module_code"], postgres.progress_sources(self.dsn, row["module_code"]) or {})["남은 일"]} for row in rows]
 
     def get_progress(self, module_code: str, *, name: str = "") -> dict:
         """기록이 하나도 없는 원고도 빈 현황을 돌려준다 — 일을 시작하기 전에 원고를 열어 단계를 표시할 수 있어야 한다."""

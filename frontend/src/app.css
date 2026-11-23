@@ -80,6 +80,7 @@ html { scrollbar-gutter: stable; }
   border-color: var(--krds-light-color-border-gray-light); background-color: var(--krds-light-color-surface-secondary-subtler); }
 .review-form .file-slot .file-upload .txt { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
 .review-form .file-slot .file-upload .file-upload-btn-wrap, .review-form .file-slot .file-upload .krds-btn { width: auto; }
+.review-form .file-slot .file-upload .krds-btn { gap: var(--krds-gap-2); }   /* 올리기 아이콘과 '파일 선택' 글자 사이 — 아이콘이 글자에 붙어 보이지 않게 */
 .review-form .file-slot .upload-list .krds-btn { width: auto; white-space: nowrap; }
 .review-form .file-slot .file-info { gap: var(--krds-gap-3); }
 /* 파일 이름은 한 줄, 길면 말줄임(KRDS 파일 업로드 사용성). [확장자, 크기]는 잘리지 않게 따로 둔다. KRDS 규칙(선택자 5단)보다 앞서도록 선택자를 길게 쓴다 */
@@ -367,7 +368,8 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 
 /* ── 구획으로 나눈 입력 묶음(.review-form.is-sectioned) ── 격자 하나에 모든 칸을 흘려 넣지 않고 구획(파일 올리기 / 조건 / 실행)을 세로로 쌓는다.
    구획 안 격자(.form-section-grid)는 열 수를 정해 둔다(3 → 2 → 1). 창 폭에 따라 칸 수가 제멋대로 바뀌어 한 칸만 다음 줄에 남는 일이 없다.
-   칸(.form-group)은 subgrid로 레이블 / 입력 / 도움말 줄을 옆 칸과 맞춘다 — 도움말 길이나 올린 파일 수가 달라도 같은 줄의 입력과 도움말이 같은 높이에서 시작한다 */
+   칸(.form-group)은 레이블 / 입력 / 도움말을 위에서부터 붙여 쌓는다 — 도움말은 자기 입력 바로 아래에 온다. 전에는 subgrid로 옆 칸과 도움말 줄을 맞췄는데,
+   높이가 다른 입력(놓는 자리 옆의 한 줄 입력)에서는 도움말이 자기 입력에서 멀리 떨어져 어느 칸의 말인지 알기 어려웠다. 레이블은 한 줄이라 입력의 시작 높이는 그대로 맞는다 */
 .review-form.fieldset.is-sectioned { display: flex; flex-direction: column; align-items: stretch; gap: var(--krds-gap-8); }
 .form-section { min-width: 0; }
 .form-section + .form-section, .form-section + .form-actions, .form-section-grid + .form-actions { padding-top: var(--krds-padding-8); border-top: 1px solid var(--krds-light-color-divider-gray-light); }
@@ -379,9 +381,7 @@ summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-prim
 .form-section-grid { --form-cols: 3; display: grid; grid-template-columns: repeat(var(--form-cols), minmax(0, 1fr)); gap: var(--krds-gap-7); }
 @media (max-width: 1023px) { .form-section-grid { --form-cols: 2; } }
 @media (max-width: 599px) { .form-section-grid { --form-cols: 1; } }
-@supports (grid-template-rows: subgrid) {
-  .form-section-grid > .form-group { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: subgrid; grid-row: span 3; row-gap: var(--krds-form-group--gap); align-content: start; }
-}
+.form-section-grid > .form-group { display: flex; flex-direction: column; justify-content: flex-start; gap: var(--krds-form-group--gap); }
 .form-section-grid > .form-group > * { min-width: 0; }
 /* 두 열을 차지하는 칸(긴 이름을 고르는 셀렉트 등). 한 열로 쌓이는 폭에서는 한 열 */
 .form-section-grid > .form-group-span2 { grid-column: span 2; }
@@ -601,13 +601,17 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 .image-filters .filter.grow { flex: 1 1 24rem; width: auto; }
 .image-filters label { font-size: var(--krds-pc-font-size-label-small); color: var(--krds-light-color-text-subtle); }
 .image-filters .krds-input { width: 100%; }
-.image-filters .krds-btn { flex: none; height: var(--krds-size-height-7); }
+/* 걸러 보기 줄은 표 위의 보조 도구라 한 단계 낮은 높이(48px)로 통일한다 — 전에는 입력과 셀렉트가 56px, [검색] 버튼이 48px라 높이가 어긋났다
+   (버튼 높이를 맞추려던 규칙은 .krds-btn.medium보다 약해 듣지 않았다) */
+.image-filters .krds-input, .image-filters .krds-form-select, .image-filters .krds-btn.medium { height: 4.8rem; min-height: 0; }   /* KRDS 버튼 medium의 높이 */
+.image-filters .krds-input, .image-filters .krds-form-select { font-size: var(--krds-pc-font-size-body-medium); }
+.image-filters .krds-btn { flex: none; }
 /* 목록 표 — 열 너비 고정(쪽을 넘겨도 칸이 흔들리지 않게). 남는 폭은 이름 칸 */
 .image-section .krds-table-wrap { margin-top: var(--krds-gap-5); }
 .image-table { table-layout: fixed; width: 100%; }
 .image-table td, .image-table th { vertical-align: middle; overflow-wrap: anywhere; word-break: keep-all; }
 .image-table .col-thumb { width: 12.4rem; }
-.image-table .col-category { width: 15rem; }
+.image-table .col-category { width: 19rem; }   /* 가장 긴 이름 '공공누리·공유마당'이 한 줄에 들어가는 폭 — 15rem에서는 '당'만 다음 줄로 떨어졌다. 늘린 만큼은 그림명 열이 줄어든다 */
 .image-table .col-license { width: 17rem; }
 .image-table .col-source { width: 16rem; }
 .image-table .col-scope { width: 14rem; }
@@ -953,7 +957,7 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 /* 원고 진행 현황(/progress) — 짜임은 이미지 저작권 DB와 같다(입력 묶음 → 목록 → 아래에 열리는 상세). 색·간격·글자 크기는 KRDS 토큰만 쓴다. */
 .review-form .form-conts.progress-open { display: flex; flex-direction: row; align-items: center; gap: var(--krds-gap-3); }   /* 입력 칸과 [열기]를 한 줄에 */
 .review-form .progress-open .krds-input { flex: 1 1 auto; min-width: 0; }
-.review-form .progress-open .krds-btn { flex: none; width: auto; height: var(--krds-size-height-7); }
+.review-form .progress-open .krds-btn, .review-form .progress-open .krds-btn.medium { flex: none; width: auto; height: 5.6rem; }   /* 입력 칸(56px)과 같은 높이 — .medium(48px)보다 먼저 듣게 선택자를 맞춘다 */
 .progress-table th .meta, .progress-table td .meta { display: block; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); }
 .progress-table tr.is-open > * { background: var(--krds-light-color-surface-secondary-subtler); }
 .progress-table .krds-btn { white-space: nowrap; }
@@ -1014,8 +1018,10 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 .cases-todo-list .meta, .cases-action .meta, .cases-volume p.meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
 .cases-todo-list .krds-btn { flex: none; }
 .cases-new { margin-top: var(--krds-gap-7); }
-.cases-new > summary { cursor: pointer; font-weight: var(--krds-font-weight-bold); }
-.cases-new > .review-form { margin-top: var(--krds-gap-4); }
+#cases-new-form { margin-top: var(--krds-gap-4); }
+/* 도구 탭(개발계획서 작성)처럼 hidden으로 접어 둔 영역은 어떤 display 규칙보다 먼저 감춘다 */
+main [hidden] { display: none !important; }
+.page-tools { margin-bottom: var(--krds-gap-7); }
 .cases-volume { margin-top: var(--krds-gap-7); padding: var(--krds-padding-7); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); }
 .cases-volume > .section-head .table-title { margin-top: 0; }
 .progress-steps > li.is-current .progress-step-no { border-color: var(--krds-light-color-border-primary); color: var(--krds-light-color-text-primary); font-weight: var(--krds-font-weight-bold); }
@@ -1162,4 +1168,14 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 .review-decide { margin-top: var(--krds-gap-9); }
 .review-decide .section-title .meta { font-weight: 400; margin-left: var(--krds-gap-3); }
 .review-decide .decide-table select, .review-decide .decide-table input { width: 100%; }
+/* 담당자 확정 칸: 가장 긴 선택지 '확정 안 함'이 화살표에 가려 잘리지 않을 너비(글자 + KRDS select의 좌우 안쪽 여백) */
+.review-decide .decide-table col.decide-col { width: 20rem; }
+.review-decide .decide-table select { min-width: 16rem; }
 .review-decide .decide-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); margin-bottom: var(--krds-gap-5); }
+
+/* 원고 진행 현황 — 남은 일 한 칸(남은 것 / 전체)과 목록 위 요약 */
+.progress-left { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--krds-gap-1) var(--krds-gap-2); }
+.progress-left-total { color: var(--krds-light-color-text-subtle); white-space: nowrap; }
+.progress-left .meta { flex-basis: 100%; }
+.progress-table td .meta, .progress-table th .meta { display: block; }
+.progress-summary { margin-bottom: var(--krds-gap-5); }

@@ -281,7 +281,7 @@ export default function ReviewPage() {
     <>
     <Header hasHistory={!!history} hasResult={!!(allRun || result)} />
     <main id="container" className="inner page">
-      <h1 className="page-title">NCS 학습모듈 원고 검수</h1>
+      <h1 className="page-title">원고 검수</h1>
       <p className="page-desc">
         원고(hwp, hwpx)를 올리면 검수 확인서 양식에 맞춰 항목별 검수 결과를 보여 줍니다. 개발계획서와 출력본 PDF는 선택 사항이며 각자의 칸에 따로 올립니다. 개발계획서를 올리면 ‘위치’와 대조 항목을, 원고를 한글에서 PDF로 저장한 출력본을 올리면 차례 ⑦(쪽수)을 함께 검수합니다.
         원고 여러 권을 한 번에 검수하려면 <a href="/review/batch">원고 폴더 일괄 검수</a>를 씁니다.

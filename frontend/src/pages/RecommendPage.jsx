@@ -137,7 +137,7 @@ export default function RecommendPage() {
   const context = result?.context;
   return (
     <>
-    <Header anchors={ready === true ? (result ? ANCHORS : ANCHORS.slice(0, 1)) : []} hasHistory={false} hasResult={false} />
+    <Header anchors={ready === true && result ? ANCHORS : []} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page image-db-page recommend-page">
       <h1 className="page-title">이미지 추천</h1>
       <p className="page-desc">

@@ -44,7 +44,7 @@ def cmd_check(args) -> None:
     from .marks import open_marks
     asker = load_model(args.model) if args.vlm else None
     lookup = open_lookup(args.db or None)
-    marks = open_marks()                       # ② 로컬 OCR(Windows) — FIG_OCR=0이면 끔
+    marks = open_marks()                       # ② 로컬 OCR(Windows 내장 또는 PaddleOCR) — FIG_OCR=0이면 끔
     submissions = None
     if args.submit:                            # ⑥⑦ 집필자 제출 서류(+출력본 PDF는 쪽수 맞대기)
         from .submissions import read_documents

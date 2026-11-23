@@ -133,6 +133,7 @@ export default function CasesPage() {
   const [detail, setDetail] = useState(null);
   const [detailError, setDetailError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);   // 새 건 만들기 입력 묶음을 펼쳤는가
   const detailBox = useRef(null);
 
   async function refreshList() {
@@ -182,7 +183,7 @@ export default function CasesPage() {
   return (
     <>
     <Header anchors={ANCHORS} />
-    <main id="main" className="inner page">
+    <main id="container" className="inner page">
       <h1 className="page-title">세분류 건</h1>
       <p className="page-desc">세분류 한 건이 일의 단위입니다. 권마다 단계를 순서대로 지나고, 제출과 확인이 오갈 때마다 누가 언제 무엇을 했는지 기록에 남습니다.</p>
 
@@ -212,10 +213,16 @@ export default function CasesPage() {
       )}
 
       {history && list?.can_manage && options && (
-        <details className="cases-new">
-          <summary>새 건 만들기</summary>
-          <CreateForm options={options} onCreated={(created) => { setDetail(created); refreshList(); open({ case: created.id }); }} />
-        </details>
+        <div className="cases-new">
+          <button type="button" className="krds-btn medium secondary" aria-expanded={creating} aria-controls="cases-new-form" onClick={() => setCreating((now) => !now)}>
+            {creating ? "새 건 만들기 닫기" : "새 건 만들기"}
+          </button>
+          {creating && (
+            <div id="cases-new-form">
+              <CreateForm options={options} onCreated={(created) => { setCreating(false); setDetail(created); refreshList(); open({ case: created.id }); }} />
+            </div>
+          )}
+        </div>
       )}
 
       {history && (
