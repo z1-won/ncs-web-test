@@ -381,7 +381,7 @@ def _block_text(lines: list[str]) -> list[str]:
 def parse_lines(lines: list[str], source: str = "", round_: str = "") -> OpinionSheet:
     """의견서 PDF의 줄(위에서 아래, 여러 쪽을 이어 붙임) → OpinionSheet."""
     lines = [clean(l) for l in lines]
-    round_ = round_ or next((_round(l) for l in lines[:6] if _round(l)), "")
+    round_ = next((_round(l) for l in lines[:6] if _round(l)), "") or round_   # 제목의 'N차 검토' 표기가 지정 차수보다 앞선다
     module = next((MODULE_NAME.match(l).group(1).strip() for l in lines if MODULE_NAME.match(l)), "")
     head = next((i for i, l in enumerate(lines) if TABLE_HEAD.match(l)), None)
     if head is None:
@@ -407,7 +407,10 @@ def parse_lines(lines: list[str], source: str = "", round_: str = "") -> Opinion
 # --- hwp/hwpx 표 ----------------------------------------------------------------
 
 def parse_tables(tables: list[dict], source: str = "", round_: str = "") -> OpinionSheet:
-    """의견서 hwp/hwpx의 표(ncs_core Document.tables, 문서 순서) → OpinionSheet. 쪽을 넘긴 표는 이어서 읽는다."""
+    """의견서 hwp/hwpx의 표(ncs_core Document.tables, 문서 순서) → OpinionSheet. 쪽을 넘긴 표는 이어서 읽는다.
+
+    round_(지정 차수)는 'N차 검토' 표기가 없는 표에만 쓴다 — 실물 2차 의견서 파일에는 1차 표가 함께 들어 있어, 지정 차수를
+    앞세우면 그 1차 의견이 '2차'로 붙어 1차 파일의 같은 의견과 겹쳐 세어진다. 결과의 차수는 지정 차수(없으면 마지막 표의 표기)."""
     rows: list[list[str]] = []
     for table in tables:
         by_row: dict[int, list[tuple[int, str]]] = {}
@@ -429,7 +432,7 @@ def parse_tables(tables: list[dict], source: str = "", round_: str = "") -> Opin
             continue
         first = cells[0]
         if ROUND.match(first):            # 2차 의견서 파일 안에 1차 의견서 표가 앞에 함께 든 경우가 있다 → 표마다 차수를 다시 읽는다
-            round_, state = fixed_round or _round(first), "head"
+            round_, state = _round(first) or fixed_round, "head"   # 표의 'N차 검토' 표기가 지정 차수보다 앞선다
             continue
         if HEADER_LINE.search(first):
             continue
@@ -480,7 +483,7 @@ def parse_tables(tables: list[dict], source: str = "", round_: str = "") -> Opin
                                         part, page, t))
     if state == "head" and not opinions:
         raise ValueError(f"검토의견서 표(구분·쪽수·검토의견)를 찾지 못했습니다: {source}")
-    return OpinionSheet(source, round_, module, opinions)
+    return OpinionSheet(source, fixed_round or round_, module, opinions)
 
 
 def flipped(lines: list[str]) -> bool:

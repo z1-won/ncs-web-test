@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m ncs_opinion", description="검토의견서 반영 여부를 검토한다(REQ-02-003).")
     parser.add_argument("manuscript", type=Path, help="의견을 반영한 최종 원고(hwp/hwpx)")
     parser.add_argument("opinions", type=Path, nargs="+", help="검토의견서(PDF·hwp·hwpx), 1차·2차 여러 개")
-    parser.add_argument("--rounds", nargs="+", help="의견서 차수를 순서대로(예: 1차 2차) — 없으면 의견서 제목에서 읽음")
+    parser.add_argument("--rounds", nargs="+", help="의견서 차수를 순서대로(예: 1차 2차) — 의견서 표에 'N차 검토' 표기가 있으면 그 표기를 씀")
     parser.add_argument("--print", dest="print_pdf", type=Path, help="최종 원고 출력본 PDF(근거 쪽 표시, 선택)")
     parser.add_argument("--previous", type=Path, help="의견 반영 전 원고(초고본·완성본, 선택)")
     parser.add_argument("--json", type=Path, help="결과를 이 JSON 파일로도 저장")

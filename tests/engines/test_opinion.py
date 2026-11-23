@@ -145,6 +145,20 @@ class SheetTests(unittest.TestCase):
         self.assertFalse(any(text == "없음" for *_, text in rows))
         self.assertEqual(sheet.module_name, "SW제품 시장성 분석")
 
+    def test_round_mark_in_table_wins_over_given_round(self):
+        def table(rows):
+            return {"cells": {(r, c): text for r, row in enumerate(rows) for c, text in enumerate(row)}}
+
+        inner_first = table([["1차 검토", "초고본 검토의견서"], ["구분", "쪽수", "검토의견"], ["학습 1-1", "필요지식", "4", "- 용어 정의 보완 필요"]])
+        second = table([["2차 검토", "완성본 검토의견서"], ["구분", "쪽수", "검토의견"], ["학습 1-1", "수행 내용", "9", "- 사례 추가 필요"]])
+        sheet = parse_tables([inner_first, second], "2차_의견서.hwp", "2차")
+        self.assertEqual([(o.round, o.text) for o in sheet.opinions], [("1차", "용어 정의 보완 필요"), ("2차", "사례 추가 필요")])
+        self.assertEqual(sheet.round, "2차")
+        unmarked = table([["구분", "쪽수", "검토의견"], ["기타", "", "", "- 참고자료 최신화 필요"]])
+        self.assertEqual([o.round for o in parse_tables([unmarked], "x.hwp", "2차").opinions], ["2차"])   # 표기가 없으면 지정 차수
+        self.assertEqual(parse_lines(PDF_LINES, "의견서.pdf", "1차").round, "2차")                         # PDF도 제목 표기가 앞선다
+        self.assertEqual(parse_lines(PDF_LINES[4:], "의견서.pdf", "1차").round, "1차")
+
     def test_split_bullets_keeps_hyphen_words(self):
         self.assertEqual(split_bullets("- 교수-학습 방법이 적합함. - 표 1-3 수정 필요 -> 반영"),
                          ["교수-학습 방법이 적합함.", "표 1-3 수정 필요 -> 반영"])
@@ -437,6 +451,24 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual((row["판정"], row["유형"], row["근거"]), (CHECK, KIND_UNKNOWN, []))
         self.assertTrue(row["비고"][-1].startswith("LLM 미설정"))
         self.assertEqual(row["LLM"]["상태"], result["LLM"])
+
+    def test_given_rounds_do_not_count_first_round_table_twice(self):
+        import make_fixtures as mf
+
+        head1 = [["1차 검토", "초고본 검토의견서", "", ""], ["구분", "쪽수", "검토의견", ""]]
+        rows1 = head1 + [["학습 1-1", "필요지식", "4", "- <표 1-3> 보안기능 확인서도 추가되면 좋을 것"]]
+        rows2 = [["2차 검토", "완성본 검토의견서", "", ""], ["구분", "쪽수", "검토의견", ""],
+                 ["학습 1-1", "수행 내용", "17", "- [그림 1-1] 범례 추가 필요"]]
+        with tempfile.TemporaryDirectory() as folder:
+            final, _ = self.write(folder)
+            first, second = Path(folder) / "1차.hwpx", Path(folder) / "2차.hwpx"
+            mf.write_hwpx(first, [[mf.table(rows1)]])
+            mf.write_hwpx(second, [[mf.table(rows1), mf.table(rows2)]])       # 2차 파일 안에 1차 표가 함께 든 실물 모양
+            given = review([first, second], final, rounds=["1차", "2차"])
+            auto = review([first, second], final)
+        self.assertEqual(given["요약"]["총 의견"], 2)
+        self.assertEqual([(r["차수"], r["의견서"]) for r in given["의견"]], [("1차", "1차.hwpx"), ("2차", "2차.hwpx")])
+        self.assertEqual(given["요약"], auto["요약"])
 
     def test_no_opinions_is_error(self):
         with self.assertRaises(ValueError):

@@ -63,7 +63,7 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
            config: OpinionConfig = DEFAULT_CONFIG) -> dict:
     """의견서들 × 최종 원고 → 판정 후보표(JSON으로 그대로 내보낼 수 있는 dict).
 
-    rounds: 의견서와 같은 순서의 차수('1차'·'2차') — 주면 파일 안의 표기 대신 쓴다. print_pdf: 최종 원고 출력본(근거 쪽 표시).
+    rounds: 의견서와 같은 순서의 차수('1차'·'2차') — 표에 'N차 검토' 표기가 없을 때만 쓴다(표기가 앞선다). print_pdf: 최종 원고 출력본(근거 쪽 표시).
     previous: 반영 전 원고(초고본·완성본, 선택). 판정은 LLM(Claude)이 한다 — ANTHROPIC_API_KEY·반출 승인(LLM_ALLOW_UPLOAD=1)이
     있으면 자동으로 부르고, 없으면 모든 의견을 '확인 필요'와 이유로 둔다. generate: 테스트용 가짜 Claude(llm_check.ask_all).
     결과의 'usage'는 ncs_llmreview와 같은 키(calls, new_calls, input, output, cache_read, cost_usd, dropped, seconds).
