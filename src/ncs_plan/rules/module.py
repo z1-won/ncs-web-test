@@ -9,13 +9,14 @@
 """
 
 import difflib
+import re
 
 from ncs_core import NA, O, TRI, X, visible
 from ncs_core.goals import normalize
 from ncs_core.lexicon import ActionNounLexicon
 
 from ..patterns import DEFINITION_END, DEFINITION_SUBJECT, GOAL_END, LESSON_END, SEPARATOR, TRAILING_NOTE
-from .common import compact, pair, row, same_loose, similarity
+from .common import DOTS, compact, pair, row, same_loose, similarity
 
 SIMILARITY_MIN = 0.85        # ③ 정의↔목표
 
@@ -77,6 +78,13 @@ def check_goal(module: dict) -> list[dict]:
 
 # ── ④ 학습명·요소 배정 ───────────────────────────────────────────────────────────
 
+def _name_words(text: str | None) -> list[str]:
+    """이름을 어절로 — 띄어쓰기를 견주기 위한 것. 가운뎃점은 꼴(･ ・ ·)과 앞뒤 공백을 하나로 맞추고, 그 밖의 기호는 뺀다
+    (글꼴·입력 차이는 띄어쓰기 차이가 아니다: '객실 · 부대시설'과 '객실·부대시설'은 같다)."""
+    tight = re.sub(r"\s*·\s*", "·", DOTS.sub("·", normalize(text or "")))
+    return re.sub(r"[^\w\s·]", "", tight).split()
+
+
 def check_lessons(module: dict) -> list[dict]:
     label_end, label_name, label_assign = "④ '~하기' 종결", "④ 요소명 준용", "④ 요소 배정"
     if module["머리행"] is None:
@@ -105,8 +113,13 @@ def check_lessons(module: dict) -> list[dict]:
                 notes[label_assign] = "다른 능력단위의 요소가 섞여 있음: " + ", ".join(foreign)
             if len(own) == 1:
                 element_name = own[0]["명칭"]
-                if same_loose(element_name, name):
+                element_words, name_words = _name_words(element_name), _name_words(name)
+                if name and element_words == name_words:
                     checks[label_name] = O
+                elif name and "".join(element_words) == "".join(name_words):
+                    # 학습명은 능력단위요소명의 띄어쓰기를 따른다(F04 준용 집필 기준 2-4) — 학습 목표 ⑥과 같은 기준으로 부적합(2026-11-23 결정)
+                    checks[label_name] = X
+                    notes[label_name] = pair(element_name, name, "학습명", "능력단위요소명") + " — 띄어쓰기도 능력단위요소명과 같아야 함"
                 elif not name:
                     checks[label_name] = X
                     notes[label_name] = f"학습명이 비어 있음 — 능력단위요소명 「{element_name}」 준용"
@@ -118,7 +131,7 @@ def check_lessons(module: dict) -> list[dict]:
                 checks[label_name] = TRI
                 notes[label_name] = f"요소 {len(own)}개를 통합한 학습 — 학습명이 요소명(" + " / ".join(e["명칭"] for e in own) + ")을 아우르는지 확인"
         rows.append(row("④", _region(module, f"학습 {lesson['번호']}"), f"학습 {lesson['번호']}", visible(name), checks, notes,
-                        "학습명은 능력단위요소명을 준용해 '~하기'로 적고 요소를 하나 이상 배정할 것" if X in checks.values() else None,
+                        "학습명은 능력단위요소명을 띄어쓰기까지 그대로 준용해 '~하기'로 적고 요소를 하나 이상 배정할 것" if X in checks.values() else None,
                         요소=[e["명칭"] for e in own]))
     unassigned = [e for e in module["요소"] if e["코드"] not in assigned]
     if unassigned:

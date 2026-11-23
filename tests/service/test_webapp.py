@@ -58,6 +58,40 @@ class WebappTests(unittest.TestCase):
         self.assertEqual(base64.b64decode(body["content"])[:2], b"PK")
         self.assertEqual([row["번호"] for row in body["check"]], list("①②③④⑤⑥⑦⑧⑨⑩"))
         self.assertEqual(self.client.post("/api/plan/draft", json={"duty": "99999999"}).status_code, 400)
+        # 개선 계획서: 개선 양식(개선 유형 열 + 변경 전·후 대조표)에 채운다. 유형 이름이 틀리면 400
+        units = [u["code"] for u in self.client.get(f"/api/plan/subclasses/{duty}").json()["units"]]
+        improved = self.client.post("/api/plan/draft", json={"duty": duty, "kind": "개선", "types": {units[0]: "최소개선"}, "previous": {units[0]: units[0]}})
+        self.assertEqual(improved.status_code, 200, improved.text)
+        self.assertEqual(self.client.post("/api/plan/draft", json={"duty": duty, "kind": "개선", "types": {units[0]: "대충 개선"}}).status_code, 400)
+        self.assertEqual(self.client.post("/api/plan/draft", json={"duty": duty, "kind": "수정"}).status_code, 400)
+        # 비교: 신규 초안(기준)과 개선 초안(대상) — 능력단위는 같고 개선 유형·대조표만 대상에 있다
+        files = {"base": ("신규.hwpx", base64.b64decode(body["content"])), "target": ("개선.hwpx", base64.b64decode(improved.json()["content"]))}
+        compared = self.client.post("/api/plan/compare", files=files)
+        self.assertEqual(compared.status_code, 200, compared.text)
+        result = compared.json()
+        self.assertEqual(result["요약"]["능력단위"], {"기준": len(units), "대상": len(units)})
+        self.assertEqual(result["요약"]["수정 금지 칸 변경"], 0)
+        self.assertEqual(len(result["개선 유형 변경"]), 1)       # 유형을 고르지 않은 능력단위는 빈 칸으로 둔다(기본값 없음)
+        self.assertEqual(next(row for row in result["개선 유형 변경"] if row["코드"] == units[0])["대상"], "최소개선")
+        self.assertIn(("변경 전·후 대조표", "분석 결과", "대상에만 있음"), {(row["구역"], row["칸"], row["차이"]) for row in result["차이"]})
+        self.assertEqual(self.client.post("/api/plan/compare", files={"base": ("a.hwpx", b"not a file"), "target": files["target"]}).status_code, 400)
+        # 반영: 고른 칸만 대상 사본에 넣는다. 한쪽이 빈 칸은 반영하지 않고 알린다. 비교 결과에 없는 행은 받지 않는다
+        import json
+
+        picked = [row for row in result["차이"] if row["칸"] == "개선 유형"][:1]
+        applied = self.client.post("/api/plan/apply", files=files, data={"rows": json.dumps(picked)})
+        self.assertEqual(applied.status_code, 200, applied.text)
+        self.assertEqual(base64.b64decode(applied.json()["content"])[:2], b"PK")
+        self.assertEqual((applied.json()["report"]["반영"], len(applied.json()["report"]["반영 못 함"])), (0, 1))
+        forged = [{"구역": "모듈 표", "자리": "", "칸": "학습명", "기준": "아무 글", "대상": "없는 글", "차이": "다름"}]
+        self.assertEqual(self.client.post("/api/plan/apply", files=files, data={"rows": json.dumps(forged)}).status_code, 400)
+        self.assertEqual(self.client.post("/api/plan/apply", files=files, data={"rows": "[]"}).status_code, 400)
+        # 개선 유형 판단 자료: 원고에서 신호를 찾을 뿐 유형을 정하지 않는다
+        manuscript = sorted(FIXTURES.glob("원고_*.hwpx"))[0]
+        signals = self.client.post("/api/plan/type-signals", files={"file": (manuscript.name, manuscript.read_bytes())})
+        self.assertEqual(signals.status_code, 200, signals.text)
+        self.assertEqual(set(signals.json()) >= {"신호", "확인 못 한 것", "안내", "파일", "모듈 코드"}, True)
+        self.assertNotIn("판정", signals.json())
 
     def test_all_engines_match_direct_results_and_save(self):
         for check, package in PACKAGES.items():

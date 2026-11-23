@@ -1,8 +1,9 @@
 """개발계획서 자동 입력(REQ-02-001 '작성') — T01 양식 hwpx에 NCS 정보를 채워 초안 hwpx를 만든다.
 
 입력 `spec`(dict):
-  기본: {세분류명, 영문 세분류명, 신규/개선, 개발기관명}
-  총괄표: [{코드, 명칭, LM 코드, LM 명칭, 집필진, 검토진}]           # 비우면 모듈에서 만든다
+  기본: {세분류명, 영문 세분류명, 신규/개선, 개발기관명}            # 신규/개선이 '개선'이면 개선 양식(대조표 + 개선 유형 열)에 채운다
+  총괄표: [{코드, 명칭, 개선 유형, LM 코드, LM 명칭, 집필진, 검토진}] # 비우면 모듈에서 만든다. 개선 유형은 개선 양식에서만 쓴다
+  대조표: [{개선 전 코드, 개선 전 명칭, 개선 후 코드, 개선 후 명칭, 분석 결과}]   # 개선 양식에서만. 비우면 개선 후만 채운다(개선 전은 사람이 적는다)
   위치:   {대분류, 중분류, 소분류, 세분류: [...], 모듈: [{능력단위, 학습모듈명}]}
   모듈:   [{코드, 명칭, 정의, 요소: [{코드, 명칭, 수행준거: [...]}]}]
 NCS 쪽(왼쪽)은 spec 그대로, 학습모듈 쪽(오른쪽)은 양식 작성 안내대로 초안을 만든다:
@@ -24,6 +25,11 @@ from xml.etree import ElementTree as ET
 from .rules.module import goal_from_definition
 
 FORM_FILE = "T01_개발계획서_양식.hwpx"
+# 개선 양식: 1쪽에 NCS 변경 전·후 대조표, 총괄표에 개선 유형 열이 있다(F21 작성 매뉴얼). 직능연 1차본에서 내용을 비워 만든 틀 — scripts/data/build_plan_form.py
+IMPROVE_FORM_FILE = "T01_개발계획서_양식_개선.hwpx"
+CHANGE_LABELS = ("능력단위번호", "개선된NCS분석결")       # 대조표를 찾는 머리 글
+IMPROVE_TYPES = ("신규 개발", "기존 개선", "양식 편집", "최소개선")
+DEFAULT_TYPE = ""       # 개선 유형에 기본값은 없다 — 유형은 직능연이 대상 학습모듈을 검토해 분류한다(F21 운영 기준, F05 2항). 고르지 않으면 빈 칸
 HP = "{http://www.hancom.co.kr/hwpml/2011/paragraph}"
 WRITER_NOTE = "(집필자 작성)"
 for _prefix, _uri in (("hp", HP[1:-1]), ("hs", "http://www.hancom.co.kr/hwpml/2011/section"), ("hc", "http://www.hancom.co.kr/hwpml/2011/core"),
@@ -125,6 +131,7 @@ def fill_summary(root: ET.Element, rows: list[dict]) -> None:
         raise ValueError("양식에서 총괄표를 찾지 못했습니다")
     trs = table.findall(HP + "tr")
     head = next(i for i, tr in enumerate(trs) if squash(cell_text(cells_by_col(tr).get(0, tr))) == "능력단위번호")
+    with_type = any("개선유형" in squash(cell_text(tc)) for tr in trs[:head + 1] for tc in tr.findall(HP + "tc"))
     body = trs[head + 1:]
     proto = copy.deepcopy(body[0])
     for tr in body:
@@ -134,6 +141,8 @@ def fill_summary(root: ET.Element, rows: list[dict]) -> None:
         cells = cells_by_col(tr)
         values = [entry.get("코드", ""), entry.get("명칭", ""), entry.get("LM 코드") or f"LM{entry.get('코드', '')}",
                   entry.get("LM 명칭") or entry.get("명칭", ""), entry.get("집필진", ""), entry.get("검토진", "")]
+        if with_type:      # 개선 양식: 능력단위번호 | 능력단위명 | 개선 유형 | LM 코드 | LM 명칭 | 집필진 | 검토진
+            values.insert(2, entry.get("개선 유형") or DEFAULT_TYPE)
         for col, value in enumerate(values):
             if col in cells:
                 set_cell(cells[col], value)
@@ -142,6 +151,46 @@ def fill_summary(root: ET.Element, rows: list[dict]) -> None:
         table.append(tr)
     table.set("rowCnt", str(head + 1 + len(rows)))
     fit_row_heights(table)
+
+
+def fill_change(root: ET.Element, rows: list[dict]) -> bool:
+    """1쪽 NCS 변경 전·후 대조표(개선 양식에만 있다): 개선 전 번호·명 | 개선 후 번호·명 | 분석 결과. 표가 없으면 False."""
+    table = find_table(root, *CHANGE_LABELS)
+    if table is None:
+        return False
+    trs = table.findall(HP + "tr")
+    head = next(i for i, tr in enumerate(trs) if squash(cell_text(cells_by_col(tr).get(0, tr))) == "능력단위번호")
+    body = trs[head + 1:]
+    proto = copy.deepcopy(body[0])
+    for tr in body:
+        table.remove(tr)
+    for i, entry in enumerate(rows):
+        tr = copy.deepcopy(proto)
+        cells = cells_by_col(tr)
+        values = [entry.get("개선 전 코드", ""), entry.get("개선 전 명칭", ""), entry.get("개선 후 코드", ""), entry.get("개선 후 명칭", ""), entry.get("분석 결과", "")]
+        for col, value in enumerate(values):
+            if col in cells:
+                set_cell(cells[col], value or "")
+        for tc in tr.findall(HP + "tc"):
+            set_addr(tc, head + 1 + i)
+        table.append(tr)
+    table.set("rowCnt", str(head + 1 + len(rows)))
+    fit_row_heights(table)
+    return True
+
+
+def change_from_modules(modules: list[dict], previous: dict[str, dict] | None = None) -> list[dict]:
+    """대조표 초안 — 개선 후는 지금의 능력단위. previous: {능력단위 코드: {'코드': 개선 전 번호, '명칭': 개선 전 이름}}(없으면 비워 둔다).
+    분석 결과는 개선 전 번호를 받았을 때만 적는다(번호가 같으면 '변경 없음', 다르면 '능력단위 코드 변경', 개선 전이 '없음'이면 '능력단위 신설')."""
+    rows = []
+    for module in modules:
+        before = (previous or {}).get(module["코드"]) or {}
+        code, name = (before.get("코드") or "").strip(), (before.get("명칭") or "").strip()
+        new = code in ("없음", "-", "신설")
+        analysis = "" if not code else "능력단위 신설" if new else "변경 없음" if code == module["코드"] else "능력단위 코드 변경"
+        rows.append({"개선 전 코드": "" if new else code, "개선 전 명칭": "" if new else name, "개선 후 코드": module["코드"], "개선 후 명칭": module["명칭"],
+                     "분석 결과": analysis})
+    return rows
 
 
 def fill_position(root: ET.Element, position: dict) -> None:
@@ -353,8 +402,8 @@ def fill_modules(section: ET.Element, modules: list[dict]) -> None:
 # ── 전체 ──────────────────────────────────────────────────────────────────────
 
 def summary_from_modules(modules: list[dict]) -> list[dict]:
-    return [{"코드": m["코드"], "명칭": m["명칭"], "LM 코드": f"LM{m['코드']}", "LM 명칭": m.get("학습모듈명") or m["명칭"], "집필진": "", "검토진": ""}
-            for m in modules]
+    return [{"코드": m["코드"], "명칭": m["명칭"], "개선 유형": m.get("개선 유형") or "", "LM 코드": f"LM{m['코드']}", "LM 명칭": m.get("학습모듈명") or m["명칭"],
+             "집필진": "", "검토진": ""} for m in modules]
 
 
 def build_plan(spec: dict, *, form: bytes | None = None) -> bytes:
@@ -364,15 +413,20 @@ def build_plan(spec: dict, *, form: bytes | None = None) -> bytes:
         raise ValueError("spec에 모듈(능력단위)이 하나는 있어야 합니다")
     summary = spec.get("총괄표") or summary_from_modules(modules)
     position = dict(spec.get("위치") or {})
-    position.setdefault("모듈", [{"능력단위": m["명칭"], "학습모듈명": m["학습모듈명"]} for m in modules])
+    # 위치 표의 학습모듈명은 비워 둔다 — "'학습모듈명'은 추후 기관에서 기재"(F21 개발계획서 작성 매뉴얼 3쪽). 총괄표의 학습모듈명(안)은 능력단위명과 같게 채운다(2쪽)
+    position.setdefault("모듈", [{"능력단위": m["명칭"], "학습모듈명": ""} for m in modules])
     if spec.get("기본", {}).get("세분류명") and not position.get("세분류"):
         position["세분류"] = [spec["기본"]["세분류명"]]
-    form = form if form is not None else (files("ncs_core") / "data" / FORM_FILE).read_bytes()
+    improve = squash((spec.get("기본") or {}).get("신규/개선") or "").startswith("개선")
+    if form is None:
+        form = (files("ncs_core") / "data" / (IMPROVE_FORM_FILE if improve else FORM_FILE)).read_bytes()
     source = zipfile.ZipFile(io.BytesIO(form))
     sections = {name: ET.fromstring(source.read(name)) for name in source.namelist() if name.startswith("Contents/section")}
     front = next(root for name, root in sorted(sections.items()) if find_table(root, "(한글)세분류명") is not None)
     fill_basic(front, spec.get("기본") or {})
     fill_summary(front, summary)
+    if improve and not fill_change(front, spec.get("대조표") or change_from_modules(modules)):
+        raise ValueError("개선 양식에서 NCS 변경 전·후 대조표를 찾지 못했습니다")
     fill_position(front, position)
     for name in sorted(sections):
         try:

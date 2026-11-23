@@ -1,11 +1,11 @@
-"""1~3쪽 규칙 — ① NCS 목록 대조, ② 학습모듈 코드·명칭, ⑧ 필수 기재, ⑨ 변경 전후 대조표."""
+"""1~3쪽 규칙 — ① NCS 목록 대조(+ 모듈 표의 NCS 쪽을 기준정보와 대조), ② 학습모듈 코드·명칭, ⑧ 필수 기재, ⑨ 변경 전후 대조표."""
 
 from ncs_core import NA, O, TRI, X
 from ncs_core.ncs_catalog import Catalog
 
 from ..parsers import LM_CODE, UNIT_CODE, squash
 from ..patterns import IMPROVE_TYPES, PLACEHOLDER
-from .common import pair, row, same_loose, same_text
+from .common import DOTS, pair, row, same_loose, same_text
 
 REGION = "개발계획서"
 
@@ -75,6 +75,103 @@ def check_catalog(plan: dict, catalog: Catalog | None) -> list[dict]:
     return rows
 
 
+# ── ① NCS 기준정보 대조(모듈 표의 NCS 수정 금지 쪽) ──────────────────────────────
+
+def _spaced(text: str | None) -> str:
+    """띄어쓰기를 견주는 꼴 — 가운뎃점은 꼴과 앞뒤 공백을 하나로 맞춘다(글꼴·입력 차이는 띄어쓰기 차이가 아니다. ④와 같은 기준)."""
+    import re
+
+    return " ".join(re.sub(r"\s*·\s*", "·", DOTS.sub("·", text or "")).split())
+
+
+def _text_kind(reference: str | None, written: str | None) -> str:
+    """'같음' / '띄어쓰기' / '다름'."""
+    a, b = _spaced(reference), _spaced(written)
+    return "같음" if a == b else "띄어쓰기" if a.replace(" ", "") == b.replace(" ", "") else "다름"
+
+
+def check_ncs_text(plan: dict, catalog) -> list[dict]:
+    """모듈 표의 NCS 쪽(능력단위 정의·능력단위요소·수행준거)이 받아 둔 NCS 기준정보(ncs_elements.tsv)와 같은가 — 사람 작업 2번 'NCS 기준정보 확인'.
+    이 칸들은 고치는 칸이 아니므로 글자가 다르거나 빠진 것은 X. 띄어쓰기만 다른 것은 △ — 기준정보(NCS API)와 NCS 원문 파일(F22)의
+    띄어쓰기가 다른 사례가 있어 어느 쪽이 맞는지 원문으로 확인해야 한다. 기준정보를 받아 두지 않은 능력단위는 대조하지 못했다고 한 줄로 알린다(△).
+    능력단위번호(버전 포함)가 같은 기준정보하고만 대조한다 — 버전이 다르면 앞의 '① 능력단위 코드·명칭'이 알린다."""
+    modules = plan.get("모듈") or []
+    if catalog is None or not modules:
+        return []
+    label_def, label_set, label_name, label_crit, label_space = "① 능력단위 정의", "① 능력단위요소 구성", "① 능력단위요소명", "① 수행준거", "① NCS 표기 띄어쓰기"
+    rows, unknown = [], []
+    for module in modules:
+        code = module.get("코드") or ""
+        detail = catalog.unit_detail(code) if UNIT_CODE.match(code) else None
+        if detail is None or detail.get("code") != code:
+            unknown.append(code or "(코드 없음)")
+            continue
+        checks, notes, spacing = {}, {}, []
+
+        def judge(label: str, where: str, reference: str, written: str, wrong: list) -> None:
+            kind = _text_kind(reference, written)
+            if kind == "다름":
+                wrong.append(f"{where}: " + pair(reference, written, "계획서", "NCS 기준정보"))
+            elif kind == "띄어쓰기":
+                spacing.append(f"{where}: 계획서 「{_spaced(written)}」, NCS 기준정보 「{_spaced(reference)}」")
+
+        wrong = []
+        if module.get("정의") or detail.get("definition"):
+            judge(label_def, "정의", detail.get("definition") or "", module.get("정의") or "", wrong)
+            checks[label_def] = X if wrong else O
+            if wrong:
+                notes[label_def] = "\n".join(wrong)
+        reference = {e["code"]: e for e in detail.get("elements") or []}
+        written = {e["코드"]: e for e in module.get("요소") or []}
+        missing, extra = [c for c in reference if c not in written], [c for c in written if c not in reference]
+        checks[label_set] = X if missing or extra else O
+        if missing or extra:
+            notes[label_set] = " / ".join(part for part in ("NCS에 있는데 계획서에 없는 요소: " + ", ".join(f"{c} {reference[c]['name']}" for c in missing) if missing else "",
+                                                            "NCS에 없는 요소: " + ", ".join(extra) if extra else "") if part)
+        wrong_names, wrong_criteria = [], []
+        for element_code, ref in reference.items():
+            mine = written.get(element_code)
+            if mine is None:
+                continue
+            judge(label_name, element_code, ref["name"], mine.get("명칭") or "", wrong_names)
+            left = list(ref.get("criteria") or [])
+            right = list(mine.get("수행준거") or [])
+            for text in list(left):          # 글자가 같은 것(띄어쓰기는 달라도)끼리 먼저 짝짓는다
+                twin = next((other for other in right if _text_kind(text, other) != "다름"), None)
+                if twin is not None:
+                    left.remove(text)
+                    right.remove(twin)
+                    judge(label_crit, element_code, text, twin, wrong_criteria)
+            for text in list(left):          # 남은 것은 번호(1.1 …)가 같은 것끼리 — 글자가 달라진 수행준거
+                number = text.split(" ", 1)[0]
+                twin = next((other for other in right if other.split(" ", 1)[0] == number), None)
+                if twin is not None:
+                    left.remove(text)
+                    right.remove(twin)
+                    judge(label_crit, element_code, text, twin, wrong_criteria)
+            wrong_criteria.extend(f"{element_code}: NCS 수행준거가 계획서에서 빠짐 「{text}」" for text in left)
+            wrong_criteria.extend(f"{element_code}: NCS에 없는 수행준거 「{text}」" for text in right)
+        checks[label_name] = X if wrong_names else O
+        checks[label_crit] = X if wrong_criteria else O
+        if wrong_names:
+            notes[label_name] = "\n".join(wrong_names)
+        if wrong_criteria:
+            notes[label_crit] = "\n".join(wrong_criteria)
+        if spacing:
+            checks[label_space] = TRI
+            more = f" 외 {len(spacing) - 3}곳" if len(spacing) > 3 else ""
+            notes[label_space] = (f"NCS 기준정보와 띄어쓰기만 다른 곳 {len(spacing)}곳 — NCS 원문(F22)의 띄어쓰기를 확인\n" + "\n".join(spacing[:3]) + more)
+        bad = any(value == X for value in checks.values())
+        rows.append(row("①", f"{REGION} > 모듈 표", code, f"{code} {module.get('명칭') or ''}".strip(), checks, notes,
+                        "NCS(수정 금지) 쪽의 정의·능력단위요소·수행준거를 NCS와 같게 되돌릴 것" if bad else None))
+    if unknown:
+        label = "① NCS 기준정보"
+        shown = ", ".join(unknown[:5]) + (f" 외 {len(unknown) - 5}개" if len(unknown) > 5 else "")
+        rows.append(row("①", f"{REGION} > 모듈 표", "", None, {label: TRI},
+                        {label: f"능력단위 {len(unknown)}개는 같은 번호의 NCS 기준정보(요소·수행준거)를 받아 두지 않아 대조하지 못함: {shown}"}))
+    return rows
+
+
 # ── ② 학습모듈 코드·명칭 ─────────────────────────────────────────────────────────
 
 DRAFT_NOTE = "1차 문서 — 최종 단계에서 개발기관이 기재"
@@ -110,9 +207,13 @@ def check_identity(plan: dict, *, draft: bool = False) -> list[dict]:
             checks[label_name] = X if not same_text(entry["명칭"], entry["LM 명칭"]) else O
             notes[label_name] = pair(entry["명칭"], entry["LM 명칭"], "총괄표 학습모듈명", "능력단위명")
         cross = []
-        if position_pairs and not any(same_loose(entry["명칭"], u) and (same_loose(entry["LM 명칭"], m) or (draft and not entry["LM 명칭"] and not m))
+        # 1차 문서: 위치 표의 학습모듈명은 추후 기관에서 기재한다(F21 3쪽) — 비어 있어도 된다
+        if position_pairs and not any(same_loose(entry["명칭"], u) and (same_loose(entry["LM 명칭"], m) or (draft and not m))
                                       for u, m in position_pairs):
-            cross.append(f"위치 표에 「{entry['명칭']} / {entry['LM 명칭']}」 짝이 없음")
+            if any(same_loose(entry["명칭"], u) and not m for u, m in position_pairs):
+                cross.append(f"위치 표의 「{entry['명칭']}」 학습모듈명이 비어 있음 — 개발기관이 기재할 것")
+            else:
+                cross.append(f"위치 표에 「{entry['명칭']} / {entry['LM 명칭']}」 짝이 없음")
         module = module_by_code.get(code)
         if module is None:
             cross.append(f"모듈 표(NCS 수정 금지)에 능력단위 「{code}」 표가 없음")
@@ -138,10 +239,38 @@ def check_identity(plan: dict, *, draft: bool = False) -> list[dict]:
 DRAFT_OPTIONAL = ("영문 세분류명", "개발기관명")   # 1차 문서에서 비어 있어도 되는 기본 정보 칸(세분류명·신규/개선은 1차에도 있어야 함)
 
 
+MINIMAL = "최소개선"       # 개선 유형(띄어쓰기를 뺀 꼴)
+TYPE_BASIS = "F05 최소개선 유형 세부 지침 1항"
+
+
+def _is_type(value: str | None, kind: str) -> bool:
+    return squash(value or "") == kind
+
+
+def _type_against_change(summary: list[dict], change: list[dict] | None) -> list[str] | None:
+    """개선 유형이 대조표의 분석 결과와 어울리지 않는 능력단위(후보). 대조표가 없거나 유형 열이 없으면 None(체크를 내지 않는다).
+
+    최소개선은 "NCS 능력단위 코드 및 기본 구조에는 변경이 없"을 때 적용한다(F05 1항) — 대조표에 '코드 변경'·'신설'로 적힌 능력단위가 최소개선이면 유형을 확인한다.
+    양식 편집은 코드 변경이 "없거나 경미"하면 되므로(F21 양식편집 운영 기준) 코드 변경만으로는 후보로 올리지 않는다.
+    '신설이면 신규 개발'이라는 기준은 지침에 없어 보지 않는다. 유형은 직능연이 분류하고 변경은 협의로 정하므로 X로 올리지 않는다.
+    """
+    if not change or all(e["개선 유형"] is None for e in summary):
+        return None
+    result = {entry["개선 후 코드"]: squash(entry["분석 결과"] or "") for entry in change if entry["개선 후 코드"]}
+    odd = []
+    for e in summary:
+        kind, analysis = squash(e["개선 유형"] or ""), result.get(e["코드"], "")
+        if kind == MINIMAL and ("코드변경" in analysis or "신설" in analysis):
+            odd.append(f"{e['코드']} — 대조표의 분석 결과는 「{analysis.replace('능력단위', '능력단위 ').replace('코드변경', '코드 변경')}」인데 개선 유형이 「{e['개선 유형']}」임. "
+                       f"최소개선은 능력단위 코드와 기본 구조에 변경이 없을 때 적용({TYPE_BASIS}) — 직능연과 유형 확인")
+    return odd
+
+
 def check_required(plan: dict, module_cells: list[str], *, draft: bool = False) -> list[dict]:
     basic = plan.get("기본") or {}
     summary = plan.get("총괄표") or []
     label_basic, label_type, label_people, label_placeholder = "⑧ 기본 정보", "⑧ 개선 유형", "⑧ 담당 집필진·검토진", "⑧ 안내 문구·자리표시"
+    label_lead, label_change = "⑧ 최소개선 담당", "⑧ 개선 유형과 대조표"
     checks, notes = {}, {}
     missing = [k for k, v in basic.items() if not v and not (draft and k in DRAFT_OPTIONAL)]
     deferred = [k for k, v in basic.items() if not v and draft and k in DRAFT_OPTIONAL]
@@ -166,14 +295,27 @@ def check_required(plan: dict, module_cells: list[str], *, draft: bool = False) 
             checks[label_type] = X if bad_type else O
             if bad_type:
                 notes[label_type] = "개선 유형은 신규 개발/기존 개선/양식 편집/최소개선 중 하나: " + ", ".join(bad_type)
-        no_people = [e["코드"] for e in summary if not e["집필진"] or not e["검토진"]]
+        # 최소개선은 대표집필자 1인이 일괄 담당하고 별도 검토진을 두지 않는 것이 원칙이다(F05 최소개선 유형 세부 지침 2항) — 검토진 칸은 비어도 된다
+        minimal = [e for e in summary if _is_type(e["개선 유형"], MINIMAL)]
+        no_people = [e["코드"] for e in summary if not e["집필진"] or (not e["검토진"] and e not in minimal)]
         if draft and no_people:
             checks[label_people] = NA
             notes[label_people] = DRAFT_NOTE
         else:
             checks[label_people] = X if no_people else O
             if no_people:
-                notes[label_people] = "집필진 또는 검토진이 비어 있음: " + ", ".join(no_people)
+                notes[label_people] = "집필진 또는 검토진이 비어 있음(최소개선은 검토진을 비워도 됨): " + ", ".join(no_people)
+        writers = sorted({squash(e["집필진"]) for e in minimal if e["집필진"]})
+        if minimal and not draft:
+            checks[label_lead] = TRI if len(writers) > 1 else O
+            if len(writers) > 1:
+                notes[label_lead] = ("최소개선 학습모듈의 담당 집필진이 여럿임: " + ", ".join(f"{e['코드']} 「{e['집필진']}」" for e in minimal if e["집필진"])
+                                     + " — 대표집필자 1인이 일괄 담당하는지 확인(F05 최소개선 유형 세부 지침 2항)")
+        odd = _type_against_change(summary, plan.get("대조표"))
+        if odd is not None:
+            checks[label_change] = TRI if odd else O
+            if odd:
+                notes[label_change] = "\n".join(odd)
     placeholders = sorted({m.group(0) for text in module_cells for m in [PLACEHOLDER.search(text)] if m})
     checks[label_placeholder] = X if placeholders else O
     if placeholders:
@@ -222,7 +364,10 @@ def check_change_table(plan: dict) -> list[dict]:
             checks[label_match] = NA
         expected = expected_analysis(before, after)
         actual = entry["분석 결과"]
-        if not actual:
+        if not actual and not before:
+            checks[label_analysis] = X
+            notes[label_analysis] = "개선 전 능력단위번호와 분석 결과가 비어 있음 — 변경전후대조표를 보고 적을 것(개선 전이 없는 능력단위면 「능력단위 신설」)"
+        elif not actual:
             checks[label_analysis] = X
             notes[label_analysis] = f"분석 결과가 비어 있음 — 코드 비교로는 「{expected}」"
         elif squash(expected) in squash(actual) or squash(actual) in squash(expected):

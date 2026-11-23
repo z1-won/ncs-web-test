@@ -2,7 +2,7 @@
 
 from ncs_core import Rule
 
-from .rules.front import check_catalog, check_change_table, check_identity, check_required
+from .rules.front import check_catalog, check_change_table, check_identity, check_ncs_text, check_required
 from .rules.laws import check_laws
 from .rules.module import check_element_codes, check_goal, check_lessons, check_subs, check_targets
 
@@ -33,7 +33,8 @@ def _module_rule(no: str, fn):
 
 
 DEFAULT_RULES = (
-    Rule("catalog", "PLAN-①", lambda c: check_catalog(c.data, c.catalog if c.config.use_catalog else None)),
+    Rule("catalog", "PLAN-①", lambda c: check_catalog(c.data, c.catalog if c.config.use_catalog else None)
+                                     + check_ncs_text(c.data, c.catalog if c.config.use_catalog else None)),
     Rule("identity", "PLAN-②", lambda c: check_identity(c.data, draft=c.config.stage == "draft")),
     Rule("goal", "PLAN-③", _module_rule("③", check_goal)),
     Rule("lessons", "PLAN-④", _module_rule("④", check_lessons)),

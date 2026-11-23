@@ -48,6 +48,9 @@ class PlanDraftRequest(BaseModel):
     english: str = ""                           # 영문 세분류명
     writers: dict[str, str] = {}                # 능력단위 코드 → 담당 집필진
     reviewers: dict[str, str] = {}              # 능력단위 코드 → 담당 검토진
+    kind: str = "신규"                          # "신규" | "개선" — 개선이면 개선 양식(NCS 변경 전·후 대조표 + 총괄표의 개선 유형 열)에 채운다
+    types: dict[str, str] = {}                  # 개선일 때: 능력단위 코드 → 개선 유형(신규 개발/기존 개선/양식 편집/최소개선). 없으면 기존 개선
+    previous: dict[str, str] = {}               # 개선일 때: 능력단위 코드 → 개선 전 능력단위번호('없음'이면 신설). 없으면 대조표의 개선 전 칸을 비워 둔다
 
 
 class UploadResponse(BaseModel):
