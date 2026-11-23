@@ -12,6 +12,6 @@
   llm_review  LLM 검토(/api/llm-review/status, /api/uploads/{token}/llm-review…) — 사용자가 눌렀을 때만 토큰을 쓴다
   volume   원고 분량 산정(/api/volume) · 산정 이력(/api/volumes) — 이력은 이력을 지원하는 저장소일 때만
   opinion  검토의견서 반영 여부 검토(/api/opinion)
-  suggest  원고 문장 추천(/api/suggest, /api/suggest/sentence, /api/suggest/kinds)
+  suggest  원고 문장 추천(/api/suggest, /api/suggest/sentence, /api/suggest/kinds, 채택 문장 메모 원고 /api/suggest/memo)
   aiimage  AI 활용 표기와 생성형 AI 결과물 현황(/api/ai-image/…)
 """

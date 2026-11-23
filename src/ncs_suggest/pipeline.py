@@ -5,7 +5,7 @@
 문장 범위를 반으로 나눠 다시, 원고 블록은 캐시 읽기) → 받은 후보 검증·근거 문장 붙이기·순위(llm_suggest.parse·screen) → 카드와 참고 예문.
 원고 블록의 문장 아래에는 자리와 참고 문장(corpus — 기존 학습모듈·공공저작물)을 붙인다(REQ-02-004). 후보문장표는 candidate_table.
 카드 하나 = LLM이 고칠 문장이라고 본 문장 하나:
-  {'번호','구성','종류','자리','원문','본문','앞 번호','문맥': {'앞','뒤'},'상태'(LLM 사유 유형),'사유','규정 꼴',
+  {'번호','구성','종류','자리','원문','본문','앞 번호','문맥': {'앞','뒤','학습 목표': [같은 학습 내용의 학습 목표 — 수행 내용 문장만]},'상태'(LLM 사유 유형),'사유','규정 꼴',
    '후보': [{'순위','문장','출처'('AI 생성'),'근거','근거 문장': {'문장','출처','자리','유사도'}|None,'모델'}] (최대 5),
    '추천 없음': 이유|None, '참고 예문': [...], '버린 AI 후보': [...], 'AI': 상태}
 근거 문장은 참고 문장 묶음에서 후보와 가장 비슷한 문장이고, 근거 문장이 있는 후보가 앞 순위다. 묶음이 없으면 모두 None(알림에 적는다).
@@ -32,7 +32,9 @@ SETUP_ERRORS = ("ANTHROPIC_API_KEY", "LLM_ALLOW_UPLOAD", "anthropic 패키지", 
 ASSUMPTIONS = {
     "역할": "고칠 문장과 정정 후보는 AI가 냅니다. 종결·표현만 고치며 직무 내용을 새로 만들거나 교육 내용의 적절성을 판정하지 않습니다. 채택은 집필자가 합니다.",
     "출처 표시": "후보는 모두 'AI 생성'입니다(AI 문장은 집필자 서약서 고지 대상일 수 있음). 참고 예문은 같은 원고에서 AI가 지적하지 않은 같은 종류 문장입니다.",
-    "문맥": "모은 문장을 종류별로 원고 순서대로 한 번에 AI에 보내 앞뒤 문장의 흐름을 보게 하고, 문장마다 자리를 함께 적습니다.",
+    "문맥": "모은 문장을 종류별로 원고 순서대로 한 번에 AI에 보내 앞뒤 문장의 흐름을 보게 하고, 문장마다 자리를 함께 적습니다. "
+          "수행 내용 제목과 수행 순서에는 같은 학습 내용의 학습 목표를 함께 가리켜 낱말이 목표와 어긋나는지 보게 합니다. "
+          "문장 직접 입력에서는 함께 넣은 앞 문장과 뒤 문장을 보냅니다.",
     "근거 문장": "참고 문장 묶음(기존 학습모듈·공공저작물에서 규정 꼴을 지킨 문장)에서 비슷한 문장을 AI에 표현 참고로 보내고, 후보마다 가장 비슷한 문장을 "
               "근거 문장(출처·자리·유사도)으로 붙입니다. 근거 문장이 있는 후보가 앞 순위입니다. 표현의 근거이며 직무 내용이 맞다는 보증이 아닙니다.",
     "검사 범위": "학습모듈의 목표·학습 목표 · 차례 학습명·학습 내용명 · 수행 내용 제목·수행 순서 네모 번호 줄 · 교수 방법·학습 방법 · 평가 항목",
@@ -57,7 +59,7 @@ def llm_ready(generate=None) -> tuple[bool, str]:
 
 def _card(sentence: Sentence, info: dict, model: str) -> dict:
     return {"구성": sentence.part, "종류": sentence.kind, "자리": sentence.where, "원문": sentence.text, "본문": sentence.body,
-            "앞 번호": sentence.prefix, "문맥": {"앞": sentence.before, "뒤": sentence.after}, "상태": info["kind"], "사유": [info["reason"]] if info["reason"] else [],
+            "앞 번호": sentence.prefix, "문맥": {"앞": sentence.before, "뒤": sentence.after, "학습 목표": list(sentence.goals)}, "상태": info["kind"], "사유": [info["reason"]] if info["reason"] else [],
             "규정 꼴": KINDS[sentence.kind], "후보": info["후보"],
             "추천 없음": None if info["후보"] else f"{NO_SUGGESTION} — AI가 고칠 문장으로 보았으나 검증을 통과한 정정 후보가 없음",
             "참고 예문": [], "버린 AI 후보": info["버린"], "AI": f"AI 사용({model})"}
@@ -121,11 +123,21 @@ def ask_all(sentences: list[Sentence], *, extra: frozenset[str] = frozenset(), c
             where[no] = at
             numbers.append(no)
             # 문장 아래에 붙일 줄(REQ-02-004): 자리, 참고 문장 묶음에서 고른 기존 학습모듈 문장. 앞뒤 문장은 블록 안의 윗줄·아랫줄이다
+            # (문장 직접 입력은 블록에 그 문장뿐이라 집필자가 넣은 앞뒤 문장을 줄로 붙인다)
             found = corpus.find(kind, sentences[at].body, limit=config.max_references, minimum=config.reference_min)
-            place = "" if sentences[at].part == DIRECT else sentences[at].where
-            if place or found:
-                extras[no] = {"자리": place, "참고 문장": [ref["문장"] for ref in found]}
+            direct = sentences[at].part == DIRECT
+            extra_lines = {"자리": "" if direct else sentences[at].where, "참고 문장": [ref["문장"] for ref in found],
+                           "앞 문장": sentences[at].before if direct else "", "뒤 문장": sentences[at].after if direct else ""}
+            if any(extra_lines.values()):
+                extras[no] = extra_lines
         request.append((kind, numbers))
+    # 수행 내용 문장 아래에 같은 학습 내용의 학습 목표를 문장 번호로 가리킨다 — 블록에 이미 있는 문장이라 글을 되풀이하지 않는다
+    goal_numbers = {body: no for no, (kind, body) in numbered.items()
+                    if kind == "학습 목표" and sentences[where[no]].part == "필요 지식"}
+    for no, at in where.items():
+        linked = [goal_numbers[goal] for goal in sentences[at].goals if goal in goal_numbers]
+        if linked:
+            extras.setdefault(no, {})["학습 목표"] = linked
     if not request:
         return cards, asked, stats
     system, document, schema = build_system(), document_text(numbered, extras), out_schema()
@@ -171,15 +183,21 @@ def _ai_state(state: str, stats: dict) -> str:
     return text
 
 
-def suggest_sentence(text: str, kind: str, *, generate=None, corpus: Corpus | None = None, config: SuggestConfig = DEFAULT_CONFIG) -> dict:
+CONTEXT_LIMIT = 400       # 문장 직접 입력의 앞뒤 문장 글자 수 상한(원고에서 모은 문장의 앞뒤 문단과 같은 값)
+
+
+def suggest_sentence(text: str, kind: str, *, before: str = "", after: str = "", generate=None, corpus: Corpus | None = None,
+                     config: SuggestConfig = DEFAULT_CONFIG) -> dict:
     """문장 하나 + 종류 → 카드. AI가 지적하지 않으면 '상태': '지적 없음', AI를 부르지 못하면 '판단불가'와 이유(빈 후보).
+    before·after: 집필자가 함께 넣은 앞 문장·뒤 문장(선택) — AI에 문맥으로만 보내고 고치지 않는다.
     참고 문장 묶음이 있으면 후보에 근거 문장을 붙인다."""
     if kind not in KINDS:
         raise ValueError(f"알 수 없는 문장 종류: {kind} (가능: {', '.join(KINDS)})")
     if not (text or "").strip():
         raise ValueError("추천받을 문장을 넣으세요")
     prefix, body = split_prefix(text)
-    sentence = Sentence(kind, DIRECT, DIRECT, text.strip(), prefix, body)
+    before, after = " ".join((before or "").split())[:CONTEXT_LIMIT], " ".join((after or "").split())[:CONTEXT_LIMIT]
+    sentence = Sentence(kind, DIRECT, DIRECT, text.strip(), prefix, body, before, after)
     corpus = corpus if corpus is not None else load_corpus()
     on, state = llm_ready(generate)
     found = None
@@ -190,7 +208,7 @@ def suggest_sentence(text: str, kind: str, *, generate=None, corpus: Corpus | No
         status, reasons = (UNDECIDED, [f"AI 호출 실패: {stats['실패'][0]}"]) if stats["실패"] else (NO_FINDING, [])
     if found is None:
         found = {"구성": "직접 입력", "종류": kind, "자리": "직접 입력", "원문": text.strip(), "본문": body, "앞 번호": prefix,
-                 "문맥": {"앞": "", "뒤": ""}, "상태": status, "사유": reasons, "규정 꼴": KINDS[kind], "후보": [], "추천 없음": None,
+                 "문맥": {"앞": before, "뒤": after, "학습 목표": []}, "상태": status, "사유": reasons, "규정 꼴": KINDS[kind], "후보": [], "추천 없음": None,
                  "참고 예문": [], "버린 AI 후보": []}
     found["AI"] = state
     found["참고 문장"] = corpus_state(corpus)
@@ -252,6 +270,43 @@ def suggest_manuscript(path: Path | str, *, generate=None, corpus: Corpus | None
         "구성": parts, "AI": llm, "참고 문장": {"상태": corpus_state(corpus), "문장 수": len(corpus), "종류별": corpus.counts()},
         "알림": notes, "가정": ASSUMPTIONS,
     }
+
+
+MEMO_AUTHOR = "문장 추천"     # 채택 문장 메모의 작성자 이름 — 한글에서 작성자별로 거르고 한꺼번에 지울 수 있다
+MEMO_LIMIT = 500              # 메모로 달 채택 기록 수 상한(원고 한 건)
+FRONT_PARTS = ("학습모듈의 개요", "차례")
+SOURCE_EDITED = "AI 생성 후 집필자 수정"
+SOURCE_OWN = "집필자 작성"
+
+
+def memo_notes(records: list[dict]) -> tuple[list[dict], list[str]]:
+    """채택 기록(화면이 보낸 행) → (원고에 달 메모 재료, 총괄 메모 줄). 메모를 다는 일은 ncs_service.annotate.annotate_notes가 한다.
+
+    records: [{'원문', '본문', '앞 번호', '구성', '자리', '사유 유형', '사유', '채택 문장', '채택 순위', '채택 출처', '활용 AI', '채택 일시'}] — 채택한 것만.
+    메모 줄: '[문장 추천] 사유 유형: 사유' / '채택 문장: …' / '출처: …'. 출처 줄은 집필자 서약서의 AI 고지에 쓸 값이다(AI 생성인지, 집필자가
+    고쳤는지, 활용 AI). 원문과 채택 문장이 없는 행·글이 아닌 값은 ValueError."""
+    if not isinstance(records, list) or not records:
+        raise ValueError("채택한 문장이 없습니다")
+    if len(records) > MEMO_LIMIT:
+        raise ValueError(f"채택 기록이 너무 많습니다({len(records)}개, 상한 {MEMO_LIMIT}개)")
+    notes = []
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("채택 기록은 행(객체)의 목록이어야 합니다")
+        values = {key: " ".join(str(record.get(key) or "").split()) for key in
+                  ("원문", "본문", "구성", "자리", "사유 유형", "사유", "채택 문장", "채택 순위", "채택 출처", "활용 AI", "채택 일시")}
+        if not values["원문"] or not values["채택 문장"]:
+            raise ValueError("채택 기록에 원문과 채택 문장이 있어야 합니다")
+        source = values["채택 출처"] or SOURCE_OWN
+        detail = [part for part in (f"후보 {values['채택 순위']}순위" if values["채택 순위"] else "", values["활용 AI"],
+                                    f"채택 {values['채택 일시']}" if values["채택 일시"] else "") if part]
+        head = f"[문장 추천] {values['사유 유형'] or '집필자 수정'}" + (f": {values['사유']}" if values["사유"] else "")
+        notes.append({"text": values["원문"], "also": [values["본문"]] if values["본문"] else [], "front": values["구성"] in FRONT_PARTS,
+                      "lines": [head, f"채택 문장: {values['채택 문장']}", f"출처: {source}" + (f" ({', '.join(detail)})" if detail else "")]})
+    made = sum(1 for record in records if str(record.get("채택 출처") or "") != SOURCE_OWN)
+    summary = [f"[문장 추천 총괄] 집필자가 채택한 문장 {len(notes)}개를 그 문장 자리에 메모로 달았습니다. 본문은 고치지 않았습니다 — 메모를 보고 직접 옮기세요.",
+               f"이 가운데 생성형 AI가 만든 문장(집필자가 고친 것 포함)은 {made}개입니다. 원고에 옮기면 집필자 서약서의 생성형 AI 활용 고지 대상일 수 있습니다."]
+    return notes, summary
 
 
 def basis_text(basis: dict | None) -> str:

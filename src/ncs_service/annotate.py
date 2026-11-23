@@ -11,6 +11,7 @@
   1. 원고 문자열(또는 목록의 문자열들)과 같은 문단 → 포함 관계(6자 이상)
   2. region_path의 마지막 조각부터: '1-3. 이용정보 제공' 같은 소제목, '학습 1' 같은 머리, '수행 내용 2'(N번째), '참고 자료 > 1번'(N번째 항목)
   3. 못 찾으면 총괄 메모로
+체크리스트 행이 아닌 메모(문장 추천의 채택 문장, REQ-02-004)는 annotate_notes가 같은 방법으로 단다 — 달 문단의 글과 메모 줄을 받는다.
 메모 XML은 한글이 저장한 실제 파일의 구조를 그대로 따른다(ctrl/fieldBegin[parameters, subList] … ctrl/fieldEnd). 메모 모양은 기본(65535).
 메모 날짜는 검사 실행 시각(created_at, 없으면 지금): 한글은 Command의 4·5번째 수(UTC FILETIME 하위·상위 32비트)로 날짜를 보여 주고,
 CreateDateTime에는 한국 시각을 끝에 Z를 붙여 적는다(한글이 저장하는 꼴 그대로).
@@ -478,6 +479,14 @@ class Annotator:
         top = next((p for p in self.paras if p.section == self.body_section and p.has_text), None) or next((p for p in self.paras if p.has_text), None)
         if top is not None:
             self._attach(top, self.summary_lines(rows))
+        return self.pack()
+
+    def top_paragraph(self) -> Para | None:
+        """총괄 메모를 달 문단 — 본문 섹션의 첫 글 문단(없으면 문서 첫 글 문단)."""
+        return next((p for p in self.paras if p.section == self.body_section and p.has_text), None) or next((p for p in self.paras if p.has_text), None)
+
+    def pack(self) -> bytes:
+        """메모를 단 섹션·머리 XML로 hwpx를 다시 묶는다(다른 파일은 그대로, mimetype은 무압축 첫 엔트리)."""
         out = io.BytesIO()
         with zipfile.ZipFile(out, "w") as target:
             section_xml = {name: ET.tostring(root, encoding="utf-8", xml_declaration=True) for name, root in self.sections}
@@ -495,3 +504,46 @@ def annotate_hwpx(source: bytes, rows: list[dict], *, author: str = AUTHOR, crea
     content = worker.build(rows)
     return content, {"placed": sum(len(p.rows) for p in worker.placed.values()), "memos": len(worker.placed) + 1,
                      "unplaced": len(worker.unplaced)}
+
+
+def annotate_notes(source: bytes, notes: list[dict], *, author: str, summary: list[str] | None = None,
+                   created_at: str | datetime | None = None) -> tuple[bytes, dict]:
+    """체크리스트 행이 아닌 메모(문장 추천의 채택 문장 등)를 원고 hwpx에 단다 → (hwpx 바이트, {'placed','memos','unplaced': [못 단 메모의 글]}).
+
+    notes: [{'text': 메모를 달 문단의 글(원고 문장 그대로), 'also': [대신 찾을 글 — 번호 뗀 본문 등], 'lines': [메모 줄], 'front': 앞부분(개요·차례) 문장인가}]
+    문단 찾기: front면 본문 밖 섹션에서, 아니면 본문 섹션에서 먼저 — 글이 같은 문단 가운데 아직 메모를 달지 않은 것 → 그 글을 품은 문단
+    (6자 이상 — 차례 줄 '1-1. 이름 3'처럼 번호·쪽수가 붙은 줄). 그쪽 섹션에 없으면 다른 섹션에서 같은 순서로, 그래도 없으면 Annotator의 나머지 찾기.
+    같은 문단에 여러 메모가 오면 하나로 합친다. 원고 본문은 한 글자도 바꾸지 않는다.
+    summary: 총괄 메모의 줄(없으면 달지 않는다). 못 단 메모가 있으면 그 문장을 총괄 메모 끝에 적는다."""
+    worker = Annotator(source, author=author, created_at=created_at)
+    placed: dict[int, list[str]] = {}
+    unplaced: list[str] = []
+    for note in notes:
+        candidates = [text for text in [note.get("text"), *(note.get("also") or [])] if text and _norm(text)]
+        keys = [_norm(text) for text in candidates]
+        front = bool(note.get("front"))
+        texts = [n for n, para in enumerate(worker.paras) if para.has_text]
+        same = {n for n in texts if worker.paras[n].key in keys and n not in placed}
+        holds = {n for n in texts if any(len(key) >= 6 and key in worker.paras[n].key for key in keys)}
+        # 바라는 쪽 섹션이 먼저, 그 안에서는 글이 같은 문단이 품은 문단보다 먼저, 그다음 문서 순서
+        found = sorted(same | holds, key=lambda n: ((worker.paras[n].section == worker.body_section) == front, n not in same, n))
+        if found:
+            at = found[0]
+        else:
+            para = worker._find_text(candidates)
+            at = worker.paras.index(para) if para is not None else None
+        if at is None:
+            unplaced.append(str(note.get("text") or ""))
+            continue
+        placed.setdefault(at, []).extend(str(line)[:MAX_LINE] for line in note.get("lines") or [])
+    for at, lines in sorted(placed.items()):
+        worker._attach(worker.paras[at], lines)
+    top = worker.top_paragraph()
+    if top is not None and summary:
+        lines = [str(line)[:MAX_LINE * 2] for line in summary]
+        if unplaced:
+            lines.append(f"원고에서 자리를 찾지 못한 문장 {len(unplaced)}개:")
+            lines += [f"  {text}"[:MAX_LINE] for text in unplaced[:MAX_UNPLACED_LISTED]]
+        worker._attach(top, lines)
+    return worker.pack(), {"placed": len(notes) - len(unplaced), "memos": len(placed) + (1 if top is not None and summary else 0),
+                           "unplaced": unplaced}

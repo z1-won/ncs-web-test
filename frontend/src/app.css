@@ -952,6 +952,33 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 .suggest-none { margin: var(--krds-gap-3) 0 0; color: var(--krds-light-color-text-subtle); }
 .suggest-examples { margin-top: var(--krds-gap-3); }
 .suggest-direct textarea { width: 100%; }
+.suggest-direct input.krds-input { width: 100%; }
+/* 문장 추천: 거르기·일괄 채택 줄(업스케일 도구 줄과 같은 꼴), 문맥, 바뀐 글자, 고쳐 쓰기, 유용성 문항 */
+.suggest-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-4); margin-top: var(--krds-gap-5); }
+.suggest-tools .check-select { flex: 0 1 24rem; width: auto; min-width: 18rem; }
+.suggest-tools .krds-form-select { height: 4.8rem; min-height: 0; font-size: var(--krds-pc-font-size-body-medium); }
+.suggest-tools .suggest-tools-end { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); margin-left: auto; }
+.suggest-context { margin: var(--krds-gap-2) 0; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.suggest-context summary { cursor: pointer; }
+.suggest-context dl { margin: var(--krds-gap-2) 0 0; }
+.suggest-context dt { font-weight: var(--krds-font-weight-bold); }
+.suggest-context dd { margin: 0 0 var(--krds-gap-2); overflow-wrap: anywhere; }
+/* 바뀐 글자는 색만으로 구분하지 않는다: 들어간 글자는 바탕색과 밑줄, 빠진 글자는 취소선 */
+.suggest-ins { background: var(--krds-light-color-surface-success-subtler); text-decoration: underline; text-decoration-thickness: 0.2rem; text-underline-offset: 0.3rem; }
+.suggest-del { color: var(--krds-light-color-text-subtle); text-decoration: line-through; }
+.suggest-candidates .candidate-actions, .suggest-own .candidate-actions, .suggest-edit .candidate-actions { display: inline-flex; flex: none; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-2); }
+.suggest-own { margin: var(--krds-gap-3) 0 0; padding: var(--krds-padding-3) var(--krds-padding-4); background: var(--krds-light-color-surface-primary-subtler); border-radius: var(--krds-radius-medium2); overflow-wrap: anywhere; }
+.suggest-edit { margin-top: var(--krds-gap-3); padding-top: var(--krds-padding-3); border-top: 1px solid var(--krds-light-color-border-gray-light); }
+.suggest-edit label { display: block; margin-bottom: var(--krds-gap-2); font-weight: var(--krds-font-weight-bold); }
+.suggest-edit textarea { width: 100%; }
+.suggest-card-foot { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3); margin-top: var(--krds-gap-3); }
+.suggest-survey { margin: var(--krds-gap-5) 0; padding: 0; border: 0; }
+.suggest-survey legend { padding: 0; margin-bottom: var(--krds-gap-3); font-weight: var(--krds-font-weight-bold); }
+.suggest-survey .krds-check-area { display: flex; flex-wrap: wrap; gap: var(--krds-gap-5); padding: 0; margin-bottom: var(--krds-gap-3); }
+.suggest-survey textarea { width: 100%; }
+.suggest-tally .run-buttons { flex-wrap: wrap; }
+.suggest-tally .run-buttons .krds-btn { flex: none; }
+.suggest-kept { margin-top: var(--krds-gap-4); }
 
 /* ── 처음 화면(/)·원고 진행 현황(/progress)·머리글의 진행 현황 자리 ─────────────────────────────────────────────── */
 /* 원고 진행 현황(/progress) — 짜임은 이미지 저작권 DB와 같다(입력 묶음 → 목록 → 아래에 열리는 상세). 색·간격·글자 크기는 KRDS 토큰만 쓴다. */

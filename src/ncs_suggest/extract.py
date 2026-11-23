@@ -9,6 +9,7 @@
 수행 내용·교수·학습 방법 블록 읽기는 ncs_perform.blocks·ncs_teaching.blocks와 같은 양식 가정을 줄여 옮긴 것이다
 (기능 패키지는 검수 엔진을 import하지 않는다 — tests/contract/test_layering.py). 코어로 올리는 것은 팀장 요청 이슈.
 수행 순서는 엔진처럼 네모 번호(수준 1) 줄만 본다 — 하위 번호·설명 문단은 종결 규정이 없다.
+수행 내용 제목·수행 순서 문장에는 같은 학습 내용(N-M)의 학습 목표 본문을 goals로 싣는다 — AI가 낱말을 고를 때 볼 문맥이다.
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ class Sentence:
     body: str          # 번호 뗀 본문 — 추천은 여기에 한다
     before: str = ""   # 앞 문단(AI 후보 문맥)
     after: str = ""    # 뒤 문단
+    goals: tuple[str, ...] = ()   # 그 문장이 속한 학습 내용(N-M)의 학습 목표 본문 — 수행 내용 제목·수행 순서에만(문맥)
 
 
 def join_surrogates(text: str) -> str:
@@ -60,13 +62,13 @@ def split_prefix(text: str) -> tuple[str, str]:
     return visible(m.group(0).strip()), text[m.end():].strip()
 
 
-def _sentence(kind, part, where, text, before="", after="") -> Sentence:
+def _sentence(kind, part, where, text, before="", after="", goals=()) -> Sentence:
     prefix, body = split_prefix(text)
-    return Sentence(kind, part, where, visible(join_surrogates(text)), prefix, body, visible(before)[:400], visible(after)[:400])
+    return Sentence(kind, part, where, visible(join_surrogates(text)), prefix, body, visible(before)[:400], visible(after)[:400], tuple(goals))
 
 
-def _list(kind, part, where_of, items: list[str]) -> list[Sentence]:
-    return [_sentence(kind, part, where_of(n), t, items[n - 1] if n > 0 else "", items[n + 1] if n + 1 < len(items) else "")
+def _list(kind, part, where_of, items: list[str], goals=()) -> list[Sentence]:
+    return [_sentence(kind, part, where_of(n), t, items[n - 1] if n > 0 else "", items[n + 1] if n + 1 < len(items) else "", goals)
             for n, t in enumerate(items)]
 
 
@@ -168,16 +170,19 @@ def collect(document: Document) -> list[Sentence]:
     aside = document.section_aside_paragraphs(1) or frozenset()
     styles = document.section_styles(1)
     body = parse_body(document.sections, max(1, len(toc["학습"])), table_paragraphs=in_table, aside_paragraphs=aside, styles=styles)
+    unit_goals: dict[str, tuple[str, ...]] = {}      # '1-2' → 그 학습 내용의 학습 목표 본문들(수행 내용 문장의 문맥)
     for unit in unit_regions(body):
         goals = unit["goal"]
         sentences += _list("학습 목표", "필요 지식", lambda n, u=unit: f"{u['no']}-{u['sub']} 학습 목표 {n + 1}", goals)
+        unit_goals[f"{unit['no']}-{unit['sub']}"] = tuple(body for goal in goals if (body := split_prefix(goal)[1]))   # 글머리만 있는 빈 줄은 뺀다
     paragraphs = document.sections[1]
     for block in perform_blocks(paragraphs, styles, in_table, aside):
         where = f"{block['unit']} 수행 내용{(' ' + block['no']) if block['no'] else ''}"
+        goals = unit_goals.get(block["unit"], ())
         if block["title"]:
-            sentences.append(_sentence("수행 내용 제목", "수행 내용", f"{where} 제목", block["title"]))
+            sentences.append(_sentence("수행 내용 제목", "수행 내용", f"{where} 제목", block["title"], goals=goals))
         steps = [text for _, text in block["steps"]]
-        sentences += _list("수행 순서", "수행 내용", lambda n, w=where: f"{w} 수행 순서 {n + 1}", steps)
+        sentences += _list("수행 순서", "수행 내용", lambda n, w=where: f"{w} 수행 순서 {n + 1}", steps, goals)
     for block in teaching_items(paragraphs, styles, document.section_numbers(1), in_table, aside):
         for part in ("교수 방법", "학습 방법"):
             sentences += _list(part, "교수·학습 방법", lambda n, b=block, p=part: f"학습 {b['lesson']} {p} {n + 1}", block[part])

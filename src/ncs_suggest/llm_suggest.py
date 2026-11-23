@@ -5,6 +5,8 @@
   원고 블록    [원고 문장] ## 교수 방법 (규정 꼴: ~한다.)  [41] …  [42] …   — 모은 문장을 종류별로 번호 붙여 한 번씩(캐시됨)
               문장 아래에 '자리'(그 문장이 놓인 곳)와 '참고 문장'(참고 문장 묶음에서 고른 기존 학습모듈 문장)을 붙인다(있을 때만).
               같은 묶음의 앞뒤 문장은 블록 안에서 바로 윗줄·아랫줄이라 따로 적지 않는다. 참고 문장은 원고 밖 자료라 원고에서 새로 나가는 글은 없다.
+              수행 내용 제목·수행 순서 아래에는 '학습 목표'(같은 학습 내용의 학습 목표 문장 번호 — 블록에 이미 있는 문장을 가리키기만 한다)를,
+              문장 직접 입력에는 집필자가 함께 넣은 '앞 문장'·'뒤 문장'을 붙인다.
   요청 블록    [검토 요청] - 교수 방법 (규정 꼴: ~한다.): 문장 [41]~[52]       — 이번에 볼 종류와 번호 범위
   받는 것      {"findings": [{"line": 문장 번호, "kind": 종결형 위반|주어 군더더기|어색한 낱말|중복 표현|문장부호|기타 표현,
                               "reason": 한 문장, "suggestions": [정정 후보, 순위 순]}]}  (out_schema)
@@ -120,7 +122,8 @@ def out_schema() -> dict:
 
 def document_text(numbered: dict[int, tuple[str, str]], extras: dict[int, dict] | None = None) -> str:
     """원고 블록 — {문장 번호: (종류, 본문)}(같은 종류끼리 번호가 이어짐) → '[원고 문장]\\n## 종류 (규정 꼴: …)\\n[n] 본문 …'.
-    extras: {문장 번호: {'자리': 그 문장이 놓인 곳, '참고 문장': [참고 문장 묶음에서 고른 문장]}} — 있으면 문장 아래 줄로 붙인다(REQ-02-004)."""
+    extras: {문장 번호: {'자리': 그 문장이 놓인 곳, '학습 목표': [같은 학습 내용의 학습 목표 문장 번호], '앞 문장'·'뒤 문장': 문장 직접 입력에서
+    집필자가 함께 넣은 앞뒤 문장, '참고 문장': [참고 문장 묶음에서 고른 문장]}} — 있으면 문장 아래 줄로 붙인다(REQ-02-004)."""
     parts, last = ["[원고 문장]"], None
     for no, (kind, body) in numbered.items():
         if kind != last:
@@ -130,6 +133,12 @@ def document_text(numbered: dict[int, tuple[str, str]], extras: dict[int, dict] 
         extra = (extras or {}).get(no) or {}
         if extra.get("자리"):
             parts.append(f"   자리 — {extra['자리']}")
+        if extra.get("학습 목표"):
+            parts.append("   학습 목표 — " + ", ".join(f"[{goal}]" for goal in extra["학습 목표"]))
+        if extra.get("앞 문장"):
+            parts.append(f"   앞 문장 — 「{extra['앞 문장']}」")
+        if extra.get("뒤 문장"):
+            parts.append(f"   뒤 문장 — 「{extra['뒤 문장']}」")
         if extra.get("참고 문장"):
             parts.append("   참고 문장 — " + " / ".join(f"「{text}」" for text in extra["참고 문장"]))
     return "\n".join(parts)

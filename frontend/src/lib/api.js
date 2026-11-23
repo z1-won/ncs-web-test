@@ -355,13 +355,20 @@ export const api = {
     get: (id) => request(`/api/volumes/${id}`),
     remove: (id) => request(`/api/volumes/${id}`, { method: "DELETE" }),
   },
-  // 원고 문장 추천(REQ-02-004): 원고 → 구성별 정정 후보, 문장 하나 → 후보, 문장 종류 목록
+  // 원고 문장 추천(REQ-02-004): 원고 → 구성별 정정 후보, 문장 하나(+ 앞뒤 문장) → 후보, 문장 종류 목록,
+  // 원고 hwpx + 채택 기록 → 채택 문장을 그 문장 자리에 메모로 단 원고(결과의 summary = { placed, memos, unplaced: [자리를 못 찾은 문장] })
   suggest: {
     kinds: () => request("/api/suggest/kinds"),
     manuscript: ({ file, signal }) =>
       request("/api/suggest", { method: "POST", body: multipart({ manuscript: file }), signal }),
-    sentence: ({ text, kind }) =>
-      request("/api/suggest/sentence", { method: "POST", body: multipart({ text, kind }) }),
+    sentence: ({ text, kind, before = "", after = "" }) =>
+      request("/api/suggest/sentence", { method: "POST", body: multipart({ text, kind, before, after }) }),
+    memo: ({ file, records, filename }) => {
+      const form = new FormData();
+      form.append("manuscript", file, file.name);
+      form.append("records", JSON.stringify(records));
+      return download("/api/suggest/memo", form, filename);
+    },
   },
   groups: {
     list: () => request("/api/groups"),

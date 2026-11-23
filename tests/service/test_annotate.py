@@ -3,6 +3,7 @@
 import io
 import re
 import json
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -11,7 +12,7 @@ from xml.etree import ElementTree as ET
 from ncs_core import load_document
 from ncs_core.hwpx import HP
 from ncs_service import ReviewRequest, execute_review
-from ncs_service.annotate import Annotator, annotate_hwpx
+from ncs_service.annotate import Annotator, annotate_hwpx, annotate_notes
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -146,6 +147,66 @@ class AnnotateTests(unittest.TestCase):
         self.assertIn('snapToGrid="0"', added_para)
         self.assertTrue(all('type="PERCENT" value="160"' in ls for ls in re.findall(r"<hh:lineSpacing[^>]*/>", added_para)) and "lineSpacing" in added_para, added_para)
         self.assertEqual(set(re.findall(r'<hp:run charPrIDRef="(\d+)"><hp:t>', memo)), {new_ids[0]})
+
+
+class AnnotateNotesTests(unittest.TestCase):
+    """체크리스트 행이 아닌 메모(문장 추천의 채택 문장, REQ-02-004) — 문장 자리에 달고 본문은 그대로 둔다."""
+
+    @classmethod
+    def setUpClass(cls):
+        from ncs_suggest.extract import collect
+
+        cls.sentences = collect(load_document(MANUSCRIPT))
+
+    def memos(self, content):
+        """[(섹션 순번, 메모가 달린 문단의 글, 작성자, [메모 줄])] — 문서 순서."""
+        from ncs_core.hwpx import para_text, section_names
+
+        out = []
+        with zipfile.ZipFile(io.BytesIO(content)) as z:
+            for index, name in enumerate(section_names(z)):
+                for p in ET.fromstring(z.read(name)).iter(HP + "p"):
+                    for run in p.findall(HP + "run"):
+                        for fb in run.findall(HP + "ctrl/" + HP + "fieldBegin"):
+                            if fb.get("type") == "MEMO":
+                                lines = ["".join(t.text or "" for t in mp.iter(HP + "t")) for mp in fb.find(HP + "subList").findall(HP + "p")]
+                                author = {e.get("name"): e.text for e in fb.find(HP + "parameters")}["Author"]
+                                out.append((index, para_text(p), author, lines))
+        return out
+
+    def test_notes_land_on_their_sentences_and_text_is_unchanged(self):
+        names = [s for s in self.sentences if s.kind == "학습 내용명"][:2]       # 차례 줄 — 번호·쪽수가 붙어 글이 같지는 않다
+        self.assertEqual(len({s.body for s in names}), 2, "픽스처에 서로 다른 학습 내용명이 둘 있어야 의미 있는 테스트")
+        notes = [{"text": s.text, "also": [s.body], "lines": ["[문장 추천] 종결형 위반", f"채택 문장: 고친 문장 {n}"], "front": True}
+                 for n, s in enumerate(names, 1)]
+        notes.append({"text": "원고에 없는 문장이라 자리를 찾지 못한다 가나다라마바사", "lines": ["x"], "front": False})
+        content, summary = annotate_notes(MANUSCRIPT.read_bytes(), notes, author="문장 추천", summary=["[문장 추천 총괄] 2개"])
+        self.assertEqual((summary["placed"], summary["memos"], summary["unplaced"]), (2, 3, [notes[-1]["text"]]))
+        memos = self.memos(content)
+        self.assertEqual({author for _, _, author, _ in memos}, {"문장 추천"})
+        body_section = max(index for index, _, _, _ in memos)
+        for n, s in enumerate(names, 1):
+            found = [(index, text) for index, text, _, lines in memos if lines == ["[문장 추천] 종결형 위반", f"채택 문장: 고친 문장 {n}"]]
+            self.assertEqual(len(found), 1, s.where)
+            self.assertIn(s.body.replace(" ", ""), found[0][1].replace(" ", ""))
+            self.assertLess(found[0][0], body_section, "차례 문장의 메모는 본문이 아니라 앞부분(차례)에 단다")
+        top = [lines for _, _, _, lines in memos if lines[0].startswith("[문장 추천 총괄]")]
+        self.assertEqual(top[0][1:], ["원고에서 자리를 찾지 못한 문장 1개:", "  " + notes[-1]["text"]])
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder) / "메모.hwpx"
+            out.write_bytes(content)
+            after = load_document(out)
+        before = load_document(MANUSCRIPT)
+        self.assertEqual([t for i, s in enumerate(after.sections) for j, t in enumerate(s) if t and j not in (after.section_aside_paragraphs(i) or frozenset())],
+                         [t for s in before.sections for t in s if t])
+
+    def test_same_sentence_twice_goes_to_two_paragraphs(self):
+        """글이 같은 문장(픽스처의 평가 항목 '항목' 셋)을 둘 채택하면 서로 다른 문단에 하나씩 단다. 총괄 줄이 없으면 총괄 메모도 없다."""
+        item = next(s for s in self.sentences if s.kind == "평가 항목")
+        notes = [{"text": item.text, "lines": ["첫째"]}, {"text": item.text, "lines": ["둘째"]}]
+        content, summary = annotate_notes(MANUSCRIPT.read_bytes(), notes, author="문장 추천")
+        self.assertEqual((summary["placed"], summary["memos"], summary["unplaced"]), (2, 2, []))
+        self.assertEqual([(text, lines) for _, text, _, lines in self.memos(content)], [(item.text, ["첫째"]), (item.text, ["둘째"])])
 
 
 class WebAnnotateTests(unittest.TestCase):

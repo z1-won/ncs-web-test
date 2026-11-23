@@ -399,6 +399,75 @@ class ContextPromptTests(unittest.TestCase):
         suggest_sentence("절차를 설명함.", "교수 방법", generate=spy, corpus=Corpus([], name="빈 묶음"))
         self.assertNotIn("자리 —", seen[0])
 
+    def test_perform_sentences_point_to_goals_of_same_unit(self):
+        """수행 내용 제목·수행 순서 아래에 같은 학습 내용(1-1)의 학습 목표를 문장 번호로 가리킨다 — 목표 글을 되풀이하지 않는다."""
+        seen = []
+
+        def spy(system, document, request, *, task, tasks=None, out_schema=None):
+            seen.append(document)
+            return {"data": {"findings": [finding(int(re.search(r"^\[(\d+)\] 요구사항을 확인$", document, re.M).group(1)),
+                                                  suggestions=["요구사항을 확인한다."])]}, "model": "spy", "cached": False, "usage": {}}
+
+        with tempfile.TemporaryDirectory() as folder:
+            result = suggest_manuscript(write_manuscript(Path(folder) / "원고_LM1203020201_24v3.hwpx"), generate=spy, corpus=Corpus([], name="빈 묶음"))
+        lines = seen[0].splitlines()
+        number = {body: int(no) for no, body in re.findall(r"^\[(\d+)\] (.*)$", seen[0], re.M)}
+        goals = f"   학습 목표 — [{number['요구사항을 수집할 수 있다.']}], [{number['학습자는 이해관계자를 식별할 수 있다.']}]"
+        for body in ("요구사항 수집함", "요구사항을 확인", "이해관계자를 식별한다."):       # 제목, 수행 순서 1·2
+            at = lines.index(f"[{number[body]}] {body}")
+            self.assertIn(goals, lines[at + 1:at + 3], body)
+        self.assertEqual(seen[0].count("요구사항을 수집할 수 있다."), 1)               # 목표 문장은 블록에 한 번만
+        teach = lines.index(f"[{number['사례를 중심으로 설명함.']}] 사례를 중심으로 설명함.")
+        self.assertFalse(any(line.startswith("   학습 목표") for line in lines[teach + 1:teach + 3]))   # 교수 방법에는 붙이지 않는다
+        (card,) = [c for part in result["구성"] for c in part["문장"]]
+        self.assertEqual(card["문맥"]["학습 목표"], ["요구사항을 수집할 수 있다.", "학습자는 이해관계자를 식별할 수 있다."])
+        self.assertIn("학습 목표", build_system())
+
+    def test_direct_input_sends_typed_neighbours(self):
+        seen = []
+
+        def spy(system, document, request, *, task, tasks=None, out_schema=None):
+            seen.append(document)
+            return {"data": {"findings": []}, "model": "spy", "cached": False, "usage": {}}
+
+        card = suggest_sentence("절차를 설명함.", "교수 방법", before=" 사례를  제시한다. ", after="가" * 500, generate=spy,
+                                corpus=Corpus([], name="빈 묶음"))
+        lines = seen[0].splitlines()
+        self.assertEqual(lines[-2], "   앞 문장 — 「사례를 제시한다.」")                # 공백을 정리해 보낸다
+        self.assertEqual(lines[-1], "   뒤 문장 — 「" + "가" * 400 + "」")              # 400자까지만
+        self.assertEqual((card["문맥"]["앞"], len(card["문맥"]["뒤"])), ("사례를 제시한다.", 400))
+        self.assertIn("앞 문장", build_system())
+
+
+class MemoNotesTests(unittest.TestCase):
+    """채택 기록 → 원고 메모 재료(pipeline.memo_notes). 출처 줄은 집필자 서약서의 AI 고지에 쓸 값이다."""
+
+    def test_lines_tell_who_wrote_the_sentence(self):
+        from ncs_suggest import memo_notes
+
+        records = [
+            {"원문": "• 사례를 설명함.", "본문": "사례를 설명함.", "구성": "교수·학습 방법", "사유 유형": "종결형 위반", "사유": "끝말이 다름",
+             "채택 문장": "• 사례를 설명한다.", "채택 순위": 1, "채택 출처": "AI 생성", "활용 AI": "claude-x", "채택 일시": "2026-11-23T16:00:00+09:00"},
+            {"원문": "학습자는 요구사항을 수집한다.", "구성": "학습모듈의 개요", "사유 유형": "주어 군더더기", "채택 문장": "요구사항을\n수집할 수 있다.",
+             "채택 순위": 2, "채택 출처": "AI 생성 후 집필자 수정", "활용 AI": "claude-x"},
+            {"원문": "요구사항 수집함", "구성": "차례", "채택 문장": "요구사항 수집하기", "채택 출처": "집필자 작성"},
+        ]
+        notes, summary = memo_notes(records)
+        self.assertEqual(notes[0], {"text": "• 사례를 설명함.", "also": ["사례를 설명함."], "front": False, "lines": [
+            "[문장 추천] 종결형 위반: 끝말이 다름", "채택 문장: • 사례를 설명한다.", "출처: AI 생성 (후보 1순위, claude-x, 채택 2026-11-23T16:00:00+09:00)"]})
+        self.assertEqual(notes[1]["lines"][1:], ["채택 문장: 요구사항을 수집할 수 있다.", "출처: AI 생성 후 집필자 수정 (후보 2순위, claude-x)"])   # 줄바꿈은 한 칸으로
+        self.assertEqual((notes[1]["front"], notes[2]["front"]), (True, True))
+        self.assertEqual(notes[2]["lines"], ["[문장 추천] 집필자 수정", "채택 문장: 요구사항 수집하기", "출처: 집필자 작성"])
+        self.assertIn("채택한 문장 3개", summary[0])
+        self.assertIn("2개입니다", summary[1])                                # AI가 만든 문장(고친 것 포함)만 센다
+
+    def test_bad_records(self):
+        from ncs_suggest import memo_notes
+
+        for records in ([], {}, ["글"], [{"원문": "문장"}], [{"채택 문장": "문장"}]):
+            with self.subTest(records=records), self.assertRaises(ValueError):
+                memo_notes(records)
+
 
 class CorpusTests(unittest.TestCase):
     """참고 문장 묶음 — 요구사항 수행예시 (1-3) '근거 있는 문장(기존 학습모듈·공공저작물) 기반 정정 후보'."""
