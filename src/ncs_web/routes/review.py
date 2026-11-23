@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from ..common import Services, error_response, logger, own_and_link, parse_roles
+from ..uploads import EMPTY_FILE
 from ..schemas import CheckName, ErrorResponse, ReviewResponse, SavedPaths, UploadResponse
 
 
@@ -112,6 +113,7 @@ def register(app: FastAPI, services: Services) -> None:
                     raise ValueError("group은 upload 토큰과 함께만 쓸 수 있습니다")
                 with tempfile.TemporaryDirectory(prefix="ncs_upload_") as folder:
                     saved = []
+                    empty = []
                     named = [item for item in files or [] if item.filename]
                     given = parse_roles(roles, len(named))
                     assigned: dict[str, str] = {}
@@ -125,12 +127,14 @@ def register(app: FastAPI, services: Services) -> None:
                         path = directory / name
                         with path.open("wb") as target:
                             shutil.copyfileobj(item.file, target)
-                        if path.stat().st_size:
+                        if not path.stat().st_size:
+                            empty.append(name)
+                        else:
                             saved.append((name, path))
                             if given is not None:
                                 assigned[str(path)] = given[index]
                     if not saved:
-                        raise ValueError("업로드된 파일이 없습니다")
+                        raise ValueError(EMPTY_FILE.format(names=", ".join(empty)) if empty else "업로드된 파일이 없습니다")
                     payload = _run(saved, check, module_code, None, stage=stage, roles=assigned or None, image_dpi=image_dpi, work_stage=marked)
                     own_and_link(request, store, "review", payload.id)
         except ValueError as error:

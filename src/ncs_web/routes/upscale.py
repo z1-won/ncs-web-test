@@ -160,7 +160,7 @@ def register(app: FastAPI, services: Services) -> None:
             if account is not None and account.get("role") not in MANAGER_ROLES:
                 return error_response(403, "이미지 저작권 DB에 올리는 일은 에디터와 직능연 계정만 할 수 있습니다")
             if not services.store.supports_history:
-                raise ValueError("이미지 저작권 DB에 올리려면 데이터베이스(DATABASE_URL)가 필요합니다")
+                raise ValueError("이 서버에는 이미지 저작권 DB가 연결되어 있지 않아 올릴 수 없습니다. 관리자에게 문의해 주세요")
             who = actor(request, by)
             if not who:
                 raise ValueError("by(변경한 사람)가 필요합니다. 변경 이력에 남습니다")

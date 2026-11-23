@@ -417,7 +417,7 @@ class WebTests(RightsCase):
 
         self.assertIn("YYYY-MM-DD", self.post(manuscript, [], expect=400, first_review_on="10/01")["error"])
         self.assertIn("portrait", self.post(manuscript, [], expect=400, portrait="yes")["error"])
-        self.assertIn("데이터베이스", self.post(manuscript, [], expect=400, save="true", by="누구")["error"])
+        self.assertIn("이미지 저작권 DB가 연결되어 있지 않아", self.post(manuscript, [], expect=400, save="true", by="누구")["error"])
         self.assertIn("같은 이름", self.post(manuscript, [forms[0], forms[0]], expect=400)["error"])
         broken = self.folder / "깨진.hwpx"
         broken.write_bytes(b"not a zip")

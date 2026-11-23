@@ -477,8 +477,8 @@ def spec_from_catalog(duty: str, *, units: list[str] | None = None, agency: str 
     subclass = cat.subclass(duty)
     details = [u for u in cat.units_with_detail(duty) if not units or u["code"][8:10] in units]
     if not details:
-        raise ValueError(f"세분류 {duty}의 요소·수행준거를 아직 받아 두지 않았습니다. 화면에서 세분류를 다시 고르면 NCS에서 받아 옵니다"
-                         f"(터미널: scripts/data/build_ncs_elements.py --duty {duty})")
+        # 명령줄에서는 scripts/data/build_ncs_elements.py --duty <코드>로 받아 둔다(이 문구는 화면에도 나오므로 명령은 적지 않는다)
+        raise ValueError(f"세분류 {duty}의 요소·수행준거를 아직 받아 두지 않았습니다. 화면에서 세분류를 다시 고르면 NCS에서 받아 옵니다")
     modules = [{"코드": u["code"], "명칭": u["name"], "정의": u["definition"],
                 "요소": [{"코드": e["code"], "명칭": e["name"], "수행준거": e["criteria"]} for e in u["elements"]]} for u in details]
     names = subclass.names if subclass else {}

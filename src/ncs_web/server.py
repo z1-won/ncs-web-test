@@ -31,6 +31,43 @@ SECURITY_HEADERS = {
 }
 
 
+# 입력 칸 이름(코드) → 화면의 이름. 입력 오류를 이용자가 읽을 말로 알리는 데 쓴다(없는 이름은 '입력값')
+FIELD_NAMES = {
+    "unit_price": "원고료 단가", "contract_pages": "계약 분량", "manual_pages": "수작업으로 센 쪽수", "manuscript": "원고",
+    "previous": "기존 원고", "print_copy": "출력본 PDF", "print_pdf": "출력본 PDF", "opinions": "의견서", "rounds": "의견서 차수",
+    "forms": "제출 서류", "text": "문장", "kind": "종류", "file": "파일", "base": "기준 파일", "target": "대상 파일", "plan": "개발계획서",
+    "duty": "세분류 코드", "module_code": "모듈 코드", "by": "변경한 사람", "rows": "결과 행", "tasks": "검토 항목", "limit": "개수",
+}
+FILE_FIELDS = {"manuscript", "previous", "print_copy", "print_pdf", "opinions", "forms", "file", "base", "target", "plan"}
+
+
+def _particle(word: str, with_final: str, without: str) -> str:
+    """받침에 맞는 조사('단가는', '의견서를')."""
+    last = word.rstrip(")")[-1:] if word else ""
+    final = "가" <= last <= "힣" and (ord(last) - 0xAC00) % 28 != 0
+    return word + (with_final if final else without)
+
+
+def _input_message(field: str, detail: dict) -> str:
+    """요청 검증 오류 한 건 → 한국어 안내. 영어 문구와 내부 칸 이름을 그대로 보이지 않는다(2026-11-23 QA)."""
+    name = FIELD_NAMES.get(field, "입력값")
+    kind = detail.get("type", "")
+    limit = (detail.get("ctx") or {})
+    if kind == "missing":
+        return f"{_particle(name, '을', '를')} 올려 주세요" if field in FILE_FIELDS else f"{_particle(name, '을', '를')} 넣어 주세요"
+    if kind in ("int_parsing", "float_parsing", "int_from_float", "decimal_parsing"):
+        return f"{_particle(name, '은', '는')} 숫자로 적어 주세요"
+    if kind in ("greater_than", "greater_than_equal"):
+        bound = limit.get("gt", limit.get("ge"))
+        return f"{_particle(name, '은', '는')} {bound:g}보다 커야 합니다" if kind == "greater_than" else f"{_particle(name, '은', '는')} {bound:g} 이상이어야 합니다"
+    if kind in ("less_than", "less_than_equal"):
+        bound = limit.get("lt", limit.get("le"))
+        return f"{_particle(name, '은', '는')} {bound:g}보다 작아야 합니다" if kind == "less_than" else f"{_particle(name, '은', '는')} {bound:g} 이하여야 합니다"
+    if kind.startswith("string_too_long") or kind == "too_long":
+        return f"{_particle(name, '이', '가')} 너무 깁니다"
+    return f"{_particle(name, '의', '의')} 값이 올바르지 않습니다"
+
+
 def create_app(
     *, out_dir: str | Path = "결과",
     dist_dir: str | Path | None = None,
@@ -95,8 +132,8 @@ def create_app(
             elif field == "check":
                 messages.append("check는 position / toc / overview / knowledge / perform / teaching / evaluation / references / colophon / misc / plan 중 하나여야 합니다")
             else:
-                messages.append(f"{field}: {detail['msg']}")
-        return error_response(400, "; ".join(messages))
+                messages.append(_input_message(field, detail))
+        return error_response(400, "; ".join(dict.fromkeys(messages)))
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, error: HTTPException) -> JSONResponse:

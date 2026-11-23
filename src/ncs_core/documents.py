@@ -106,13 +106,13 @@ def detect_format(path) -> str:
         return "pdf"
     if head == hwp.OLE_MAGIC:
         if not hwp.is_hwp(path.read_bytes()):
-            raise ValueError(f"OLE 파일이지만 HWP 서명이 아님: {path.name}")
+            raise ValueError(f"한글 파일(hwp)이 아닙니다. 다른 프로그램의 문서로 보입니다: {path.name}")
         return "hwp"
     if head[:2] == b"PK":
         if hwpx.is_hwpx(path):
             return "hwpx"
-        raise ValueError(f"zip이지만 hwpx가 아님: {path.name}")
-    raise ValueError(f"hwp/hwpx 둘 다 아님 (머리 바이트 {head!r}): {path.name}")
+        raise ValueError(f"한글 파일(hwpx)이 아닙니다. 다른 형식의 묶음 파일로 보입니다: {path.name}")
+    raise ValueError(f"한글 파일(hwp, hwpx)이 아닙니다: {path.name}")
 
 
 def _clean(text: str) -> str:

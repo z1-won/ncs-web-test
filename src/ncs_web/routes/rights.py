@@ -68,7 +68,7 @@ def register(app: FastAPI, services: Services) -> None:
             if account is not None and account.get("role") not in MANAGER_ROLES:
                 raise HTTPException(403, "이미지 저작권 DB에 반영하는 일은 에디터와 직능연 계정만 할 수 있습니다")
         if save and not store.supports_history:
-            raise HTTPException(400, "이미지 저작권 DB에 반영하려면 데이터베이스(DATABASE_URL)가 필요합니다")
+            raise HTTPException(400, "이 서버에는 이미지 저작권 DB가 연결되어 있지 않아 반영할 수 없습니다. 관리자에게 문의해 주세요")
         by = actor(request, by)      # 로그인했으면 계정 이름 — 보낸 이름은 쓰지 않는다
         if save and not by:
             raise HTTPException(400, "by(변경한 사람)가 필요합니다 — 변경 이력에 남습니다")

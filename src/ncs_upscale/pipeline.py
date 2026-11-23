@@ -96,6 +96,8 @@ def plan(records: list[dict], binaries: dict[str, dict], engine: Engine, *, targ
             skipped.append({"record": r, "이유": "그림 파일 없음"})
         elif r["dpi"] is None or not r["format"]:
             skipped.append({"record": r, "이유": f"그림 형식을 읽지 못함({r['format'] or '알 수 없음'})"})
+        elif r["dpi"] <= 0:      # 아주 작은 그림을 크게 넣으면 해상도가 0으로 반올림된다 — 몇 배 키울지 정할 수 없다
+            skipped.append({"record": r, "이유": "해상도를 계산하지 못함(그림 크기가 0에 가까움)"})
         else:
             by_bin.setdefault(r["bin_id"], []).append(r)
     jobs = []

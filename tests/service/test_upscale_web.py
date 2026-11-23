@@ -226,7 +226,7 @@ class UpscaleWebTests(unittest.TestCase):
         # 이미지 저작권 DB 등록은 데이터베이스가 있을 때만
         register = self.client.post(f"/api/uploads/{self.token}/pictures/register", data={"by": "김에디터"})
         self.assertEqual(register.status_code, 400)
-        self.assertIn("데이터베이스", register.json()["error"])
+        self.assertIn("이미지 저작권 DB가 연결되어 있지 않아", register.json()["error"])
 
 
 if __name__ == "__main__":

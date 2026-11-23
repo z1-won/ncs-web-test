@@ -160,6 +160,10 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
     if not layout.measured:
         warnings.append("줄 배치 정보가 없어(한글이 아닌 도구로 만든 파일 등) 행·쪽은 추정치입니다. 한글에서 저장한 hwp/hwpx로 다시 산정하세요.")
         notes.append(warnings[-1])
+    if not any(name.startswith("학습 —") for name in found) and len(found) < 3:
+        # 개발계획서나 서약서처럼 학습모듈 원고가 아닌 문서도 줄은 세어지므로 분량과 집필료가 나온다 — 그 값은 뜻이 없으니 산정하지 않는다
+        raise ValueError("학습모듈 원고가 아닌 것으로 보입니다. 학습(필요 지식, 수행 내용)과 차례, 개요 같은 원고의 구성을 찾지 못했습니다. "
+                         "최종 원고 파일을 올려 주세요")
     counted_names = [name for name, counted in SEGMENTS if config.counted(name)]
     missing = [name for name in counted_names if name not in found]
     if not any(name.startswith("학습 —") for name in found):

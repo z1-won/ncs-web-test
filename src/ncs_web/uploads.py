@@ -16,6 +16,7 @@ from pathlib import Path
 from uuid import uuid4
 
 DEFAULT_TTL = 10 * 60          # 초. 전체 실행은 보통 1~2분 안에 끝난다
+EMPTY_FILE = "내용이 없는 파일입니다(0바이트): {names}. 파일을 다시 저장해 올려 주세요"
 DEFAULT_MAX_BYTES = 200 << 20  # 보관함 한 건의 파일 합계 상한(200MB)
 
 
@@ -46,6 +47,7 @@ class UploadStore:
             raise ValueError(f"업로드 용량이 상한({self.max_bytes >> 20}MB)을 넘습니다")
         directory = Path(tempfile.mkdtemp(prefix="ncs_upload_"))
         saved = []
+        empty = []
         for index, (filename, content) in enumerate(files):
             if not filename:
                 continue  # 파일을 고르지 않은 빈 입력 칸은 브라우저가 이름 없는 부분으로 보낸다
@@ -54,6 +56,7 @@ class UploadStore:
                 shutil.rmtree(directory, ignore_errors=True)
                 raise ValueError("유효하지 않은 업로드 파일명입니다")
             if not content:
+                empty.append(name)
                 continue
             folder = directory / str(index)   # 같은 이름의 파일도 서로 덮어쓰지 않게 한다
             folder.mkdir()
@@ -62,7 +65,7 @@ class UploadStore:
             saved.append((name, path))
         if not saved:
             shutil.rmtree(directory, ignore_errors=True)
-            raise ValueError("업로드된 파일이 없습니다")
+            raise ValueError(EMPTY_FILE.format(names=", ".join(empty)) if empty else "업로드된 파일이 없습니다")
         upload = Upload(secrets.token_urlsafe(24), str(uuid4()), directory, saved, time.monotonic() + self.ttl)
         with self._lock:
             self._items[upload.token] = upload
