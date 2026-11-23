@@ -16,7 +16,8 @@ from __future__ import annotations
 
 RECORDED, EMPTY = "기록 있음", "기록 없음"
 OPINION, RIGHTS = "opinion", "rights"
-KINDS = (OPINION, RIGHTS)
+FIGURES, SOURCES = "figures", "sources"      # 그림 검수(REQ-02-005)·출처 검토(REQ-02-008) — 저작권 검수 진행도에 모은다
+KINDS = (OPINION, RIGHTS, FIGURES, SOURCES)
 UNKNOWN_ROUND = "차수 모름"
 OPINION_KEYS = ("총 의견", "조치 요구", "반영 후보", "미반영 후보", "확인 필요", "조치 불필요")
 RIGHTS_KEYS = ("판정", "원고 그림", "목록 행", "적합", "부적합", "판단불가", "누락", "확인 필요")
@@ -47,6 +48,27 @@ def summarize_opinion(result: dict) -> dict:
     summary = result.get("요약", {})
     return {"전체": {key: summary.get(key, 0) for key in OPINION_KEYS}, "차수별": by_round,
             "생성형 AI": "사용" if str(result.get("LLM", "")).startswith("사용") else "미사용"}
+
+
+def summarize_figures(result: dict) -> dict:
+    """그림 검수 결과(/api/uploads/{token}/figures) → 남길 개수. 그림·출처 문구는 넣지 않는다. 정정 필요 = 확인 필요 + 고위험."""
+    summary = (result.get("review") or {}).get("summary") or {}
+    levels = summary.get("위험도") or {}
+    counts = {"그림": summary.get("그림", 0), "검수 대상": summary.get("검수 대상", 0),
+              "문제없음": levels.get("문제없음", 0), "확인 필요": levels.get("확인 필요", 0), "고위험": levels.get("고위험", 0)}
+    counts["정정 필요"] = counts["확인 필요"] + counts["고위험"]
+    return counts
+
+
+def summarize_sources(result: dict) -> dict:
+    """출처 검토 결과(ncs_sources.review_sources) → 남길 개수. 출처 원문은 넣지 않는다. 정정 필요 = 부적합 + 판단불가."""
+    summary = result.get("summary") or {}
+    verdicts = summary.get("판정") or {}
+    counts = {"총 출처": sum(verdicts.values()), "적합": verdicts.get("적합", 0), "부적합": verdicts.get("부적합", 0), "판단불가": verdicts.get("판단불가", 0)}
+    counts["정정 필요"] = counts["부적합"] + counts["판단불가"]
+    for key in ("참고 자료 항목", "문장 단위 출처 후보", "AI 표기"):
+        counts[key] = summary.get(key, 0)
+    return counts
 
 
 def summarize_rights(report: dict) -> dict:
@@ -82,7 +104,10 @@ def content_progress(records: list[dict]) -> dict:
         rounds.setdefault(row["차수"], row)
     rows = [rounds[name] for name in sorted(rounds)]
     total = {key: sum(row.get(key, 0) for row in rows) for key in OPINION_KEYS}
-    return {"차수": rows, "합계": total if rows else None}
+    # 담당자 확정(REQ-02-003 사람 작업 4) — 가장 최근에 확정을 적은 의견 반영 검토 기록. 의견별 값은 싣지 않는다
+    confirmed = next((r["counts"]["확정"] for r in records if r["kind"] == OPINION and isinstance(r["counts"].get("확정"), dict)), None)
+    return {"차수": rows, "합계": total if rows else None,
+            "확정": {key: value for key, value in confirmed.items() if key != "의견별"} if confirmed else None}
 
 
 def editing_progress(latest_checks: list[dict]) -> dict:
@@ -112,6 +137,16 @@ def build(module_code: str, sources: dict, *, name: str = "") -> dict:
     reviews, plan = sources.get("reviews") or {}, sources.get("plan") or {}
     group, volume, images = sources.get("last_group"), sources.get("volume"), sources.get("images") or {}
     rights = _latest(records, RIGHTS)
+    figures, cited = _latest(records, FIGURES), _latest(records, SOURCES)
+
+    def counted(row: dict | None) -> dict | None:
+        return {"일시": row["created_at"], "원고": row["manuscript"], **row["counts"]} if row else None
+
+    # 사람 작업 3 '저작권 검수 진행도: 총 저작권 개수 / 정정 필요 개수' — 그림 검수의 그림과 출처 검토의 출처를 합친다(둘 다 없으면 None)
+    copyright_total = None
+    if figures or cited:
+        copyright_total = {"총 개수": (figures["counts"].get("그림", 0) if figures else 0) + (cited["counts"].get("총 출처", 0) if cited else 0),
+                           "정정 필요": (figures["counts"].get("정정 필요", 0) if figures else 0) + (cited["counts"].get("정정 필요", 0) if cited else 0)}
     first = _round_records(records, lambda n: n.startswith("1차") and not _is_review(n))
     second = _round_records(records, lambda n: n.startswith("2차") and not _is_review(n))
     review = _round_records(records, _is_review)
@@ -160,11 +195,13 @@ def build(module_code: str, sources: dict, *, name: str = "") -> dict:
             "편집 검수": editing_progress(sources.get("latest_checks", [])),
             "내용 검수": content_progress(records),
             "저작권 검수": {"권리 증빙": {"일시": rights["created_at"], "원고": rights["manuscript"], **rights["counts"]} if rights else None,
-                        "이미지 저작권 DB": {"그림": images.get("total", 0), "확정": images.get("confirmed", 0)}},
+                        "이미지 저작권 DB": {"그림": images.get("total", 0), "확정": images.get("confirmed", 0)},
+                        "그림 검수": counted(figures), "출처 검토": counted(cited), "합계": copyright_total},
             "분량": volume,
         },
         "기록 수": {"원고 검수": reviews.get("count", 0), "개발계획서 점검": plan.get("count", 0),
                   "의견 반영 검토": sum(r["kind"] == OPINION for r in records), "권리 증빙 점검": sum(r["kind"] == RIGHTS for r in records),
+                  "그림 검수": sum(r["kind"] == FIGURES for r in records), "출처 검토": sum(r["kind"] == SOURCES for r in records),
                   "분량 산정": sources.get("volume_count", 0)},
     }
 

@@ -4,8 +4,8 @@ import json
 import tempfile
 import unittest
 
-from ncs_service.progress import (EMPTY, OPINION, RECORDED, RIGHTS, STAGES, build, content_progress, editing_progress,
-                                  stages_recorded, summarize_opinion, summarize_rights)
+from ncs_service.progress import (EMPTY, FIGURES, OPINION, RECORDED, RIGHTS, SOURCES, STAGES, build, content_progress, editing_progress,
+                                  stages_recorded, summarize_figures, summarize_opinion, summarize_rights, summarize_sources)
 
 CODE = "LM2001021701_25v1"
 
@@ -75,7 +75,7 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(by[7]["일시"], "2026-11-21T00:00:00+00:00")
         self.assertIn("분량 80매", by[7]["내용"])
         self.assertEqual(result["학습모듈명"], "AIoT 운영 플랫폼 요구사항 분석")
-        self.assertEqual(result["기록 수"], {"원고 검수": 12, "개발계획서 점검": 1, "의견 반영 검토": 2, "권리 증빙 점검": 1, "분량 산정": 2})
+        self.assertEqual(result["기록 수"], {"원고 검수": 12, "개발계획서 점검": 1, "의견 반영 검토": 2, "권리 증빙 점검": 1, "그림 검수": 0, "출처 검토": 0, "분량 산정": 2})
 
     def test_done_is_marked_by_a_person_not_inferred_from_records(self):
         """기록이 있어도 완료가 아니다. 완료는 담당자가 표시한 단계만이고, 기록이 없는 단계도 완료로 표시할 수 있다."""
@@ -117,13 +117,46 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(progress["저작권 검수"]["이미지 저작권 DB"], {"그림": 12, "확정": 5})
         self.assertEqual(progress["분량"]["pages"], 80)
 
+    def test_figure_and_source_reviews_are_counted_in_copyright_progress(self):
+        """그림 검수(REQ-02-005)와 출처 검토(REQ-02-008)의 결과도 저작권 검수 진행도에 모은다 — 정의서: 002·003·005·008을 종합, 집계 누락 0건."""
+        figures = summarize_figures({"review": {"summary": {"그림": 20, "검수 대상": 17, "위험도": {"문제없음": 10, "확인 필요": 5, "고위험": 2},
+                                                            "체크별 X/△": {"① 출처": [3, 1]}}, "rows": [{"원고": "비밀"}]}})
+        self.assertEqual(figures, {"그림": 20, "검수 대상": 17, "문제없음": 10, "확인 필요": 5, "고위험": 2, "정정 필요": 7})
+        sources_counts = summarize_sources({"summary": {"그림 출처": 17, "표": 28, "표 중 출처 있음": 3, "본문 출처 줄": 1, "참고 자료 항목": 4,
+                                                        "문장 단위 출처 후보": 2, "판정": {"적합": 43, "부적합": 2, "판단불가": 1}, "AI 표기": 3}, "rows": [{"원고": "비밀"}]})
+        self.assertEqual(sources_counts, {"총 출처": 46, "적합": 43, "부적합": 2, "판단불가": 1, "정정 필요": 3, "참고 자료 항목": 4,
+                                         "문장 단위 출처 후보": 2, "AI 표기": 3})
+        self.assertNotIn("비밀", json.dumps([figures, sources_counts], ensure_ascii=False))
+        sources = self.sources()
+        sources["records"] = [record(FIGURES, figures, "2026-11-22T00:00:00+00:00"), record(SOURCES, sources_counts, "2026-11-22T01:00:00+00:00"),
+                              record(FIGURES, {"그림": 1, "정정 필요": 1}, "2026-11-01T00:00:00+00:00")] + sources["records"]
+        result = build(CODE, sources)
+        rights = result["진행도"]["저작권 검수"]
+        self.assertEqual((rights["그림 검수"]["그림"], rights["그림 검수"]["정정 필요"], rights["그림 검수"]["일시"]), (20, 7, "2026-11-22T00:00:00+00:00"))
+        self.assertEqual((rights["출처 검토"]["총 출처"], rights["출처 검토"]["정정 필요"]), (46, 3))
+        self.assertEqual(rights["합계"], {"총 개수": 66, "정정 필요": 10})          # 사람 작업 3: 총 저작권 개수 / 정정 필요 개수
+        self.assertEqual((result["기록 수"]["그림 검수"], result["기록 수"]["출처 검토"]), (2, 1))
+        self.assertIsNone(build(CODE, self.sources())["진행도"]["저작권 검수"]["그림 검수"])      # 기록이 없으면 None
+        self.assertIsNone(build(CODE, self.sources())["진행도"]["저작권 검수"]["합계"])
+
+    def test_confirmed_decisions_show_in_content_progress(self):
+        """의견 반영 검토의 담당자 확정(REQ-02-003 사람 작업 4)이 내용 검수 진행도에 나온다 — 가장 최근에 확정을 적은 기록."""
+        sources = self.sources()
+        confirmed = {"의견별": {"1": "반영", "2": "미반영"}, "확정": 2, "반영": 1, "미반영": 1, "후보와 다름": 0, "보류였던 것": 0, "오차율": "0.0%",
+                     "결과": "통과", "확정 시각": "2026-11-23T00:00:00+00:00"}
+        sources["records"][1]["counts"] = {**sources["records"][1]["counts"], "확정": confirmed}
+        content = build(CODE, sources)["진행도"]["내용 검수"]
+        self.assertEqual((content["확정"]["확정"], content["확정"]["반영"], content["확정"]["미반영"], content["확정"]["오차율"]), (2, 1, 1, "0.0%"))
+        self.assertNotIn("의견별", content["확정"])
+        self.assertIsNone(build(CODE, self.sources())["진행도"]["내용 검수"]["확정"])
+
     def test_only_volume_record(self):
         result = build(CODE, {"volume": self.sources()["volume"], "volume_count": 1, "records": [], "images": {"total": 0, "confirmed": 0}})
         self.assertEqual([s["상태"] for s in result["단계"]], [EMPTY] * 6 + [RECORDED])
         self.assertIsNone(result["진행도"]["편집 검수"]["항목"])
         self.assertIsNone(result["진행도"]["내용 검수"]["합계"])
         self.assertIsNone(result["진행도"]["저작권 검수"]["권리 증빙"])
-        self.assertEqual(content_progress([]), {"차수": [], "합계": None})
+        self.assertEqual(content_progress([]), {"차수": [], "합계": None, "확정": None})
         self.assertEqual(editing_progress([])["적합 비율"], None)
 
     def test_stage_count_for_list(self):

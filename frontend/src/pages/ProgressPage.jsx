@@ -276,6 +276,10 @@ export function ProgressFigures({ detail }) {
   const content = progress["내용 검수"];
   const rights = progress["저작권 검수"]["권리 증빙"];
   const images = progress["저작권 검수"]["이미지 저작권 DB"];
+  const figures = progress["저작권 검수"]["그림 검수"];      // 그림 검수(REQ-02-005)의 가장 최근 개수
+  const cited = progress["저작권 검수"]["출처 검토"];        // 출처 검토(REQ-02-008)의 가장 최근 개수
+  const copyright = progress["저작권 검수"].합계;            // 총 저작권 개수 / 정정 필요 개수(그림 + 출처)
+  const confirmed = content.확정;                           // 의견 반영 검토의 담당자 확정
   const volume = progress.분량;
   return (
     <>
@@ -296,11 +300,19 @@ export function ProgressFigures({ detail }) {
             <>
               <dd>의견 <strong>{content.합계["총 의견"]}</strong>개</dd>
               <dd className="meta">반영 후보 {content.합계["반영 후보"]}, 미반영 후보 {content.합계["미반영 후보"]}, 확인 필요 {content.합계["확인 필요"]}</dd>
+              <dd className="meta">{confirmed
+                ? `담당자 확정 ${confirmed.확정}개: 반영 ${confirmed.반영}, 미반영 ${confirmed.미반영}${confirmed.오차율 ? ` (후보 대비 오차율 ${confirmed.오차율})` : ""}`
+                : "담당자 확정 기록 없음"}</dd>
             </>
           ) : <dd className="meta">기록 없음</dd>}
         </div>
         <div>
           <dt>저작권 검수</dt>
+          {copyright
+            ? <dd>정정 필요 <strong>{copyright["정정 필요"]}</strong> / 총 {copyright["총 개수"]}개</dd>
+            : <dd className="meta">그림 검수와 출처 검토 기록 없음</dd>}
+          {figures && <dd className="meta">그림 검수: 그림 {figures.그림}개 중 고위험 {figures.고위험}, 확인 필요 {figures["확인 필요"]}, 문제없음 {figures.문제없음}</dd>}
+          {cited && <dd className="meta">출처 검토: 출처 {cited["총 출처"]}개 중 부적합 {cited.부적합}, 판단불가 {cited.판단불가}, 적합 {cited.적합}</dd>}
           {rights ? (
             <>
               <dd>권리 증빙 <Badge value={rights.판정} /></dd>
