@@ -34,8 +34,11 @@ def render(result: dict) -> str:
     change = result["변경"]
     if change:
         amount = change["변경 분량"]
-        out.append(f"기존 원고 대비({change['기존 원고']}): 변경 {change['변경 행']:,}행 = {amount['쪽']}쪽 {amount['행']}행 → "
+        out.append(f"기존 원고 대비({change['기존 원고']}): 변경 {change['변경 행']:,}행 = 이어 붙여 {amount['쪽 환산']}쪽 환산 → "
                    f"변경 분량 {amount['기입 분량']}매 (전체 행의 {change['변경 비율']})")
+        out.append(f"  방법: {amount['방법']}")
+        ref = change["물리 쪽 기준(참고)"]
+        out.append(f"  참고(물리 쪽마다 ½쪽 규칙, 산정에 쓰지 않음): {ref['쪽']}쪽 {ref['행']}행 → {ref['기입 분량']}매")
         out.append("  구성별 변경 행: " + ", ".join(f"{r['구성']} {r['변경 행']}" for r in change["구성별 변경 행"]))
     printed = result.get("출력본")
     if printed:

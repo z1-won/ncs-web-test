@@ -17,6 +17,7 @@ from ncs_volume import DEFAULT_CONFIG, VolumeConfig, manual_check, measure, roun
 from ncs_volume.__main__ import main
 from ncs_volume.diff import changed_lines
 from ncs_volume.layout import Layout, Line, Unit, hwp_paragraphs, read_layout
+from ncs_volume.pipeline import gathered
 from ncs_volume.segments import assign
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -111,6 +112,19 @@ class Tally(unittest.TestCase):
         out = tally(lines, self.layout(measured=False), DEFAULT_CONFIG)
         self.assertEqual((out["쪽"], out["행"], out["기입 분량"]), (2, 17, 3))   # 85/34 = 2.5 → ½ 이상 올림
 
+    def test_changed_lines_are_gathered_without_blank_space(self):
+        """개선 변경 분량은 바뀐 행을 이어 붙여 센다(F16 인쇄 20쪽) — 쪽마다 ½쪽 넘게 바뀐 세 쪽이 물리 쪽 기준으로는 3쪽이지만
+        이어 붙이면 54행 × 1,980 ÷ 68,598 = 1.56쪽 → 온 쪽 1 + 남은 0.56(½ 이상) = 2쪽."""
+        lines = [Line(1, PITCH, page, k * PITCH, 0, 0) for page in range(3) for k in range(18)]
+        self.assertEqual(tally(lines, self.layout(), DEFAULT_CONFIG)["기입 분량"], 3)
+        out = gathered(lines, self.layout(), DEFAULT_CONFIG)
+        self.assertEqual((out["기입 분량"], out["쪽 환산"], out["온 쪽"], out["남은 부분(쪽)"], out["행 합계"]), (2, 1.56, 1, 0.56, 54))
+        self.assertIn("빈 공간 없이", out["방법"])
+        few = gathered(lines[:5], self.layout(), DEFAULT_CONFIG)
+        self.assertEqual((few["기입 분량"], few["남은 부분(쪽)"]), (0, 0.14))                  # ½쪽 미만은 쪽이 되지 않는다
+        guess = gathered([Line(1, PITCH, -1, 0, 0, 0)] * 51, self.layout(measured=False), DEFAULT_CONFIG)
+        self.assertEqual((guess["쪽 환산"], guess["기입 분량"]), (1.5, 2))                       # 추정: 51행 ÷ 34행
+
     def test_manual_check_reports_error_rate(self):
         self.assertEqual(manual_check(80, 80, DEFAULT_CONFIG)["결과"], "기준 충족")
         result = manual_check(81, 80, DEFAULT_CONFIG)
@@ -183,6 +197,14 @@ class HwpxLayout(unittest.TestCase):
         self.assertGreaterEqual(by.get("학습 — 필요 지식", 0), 1)   # 문단 글이 바뀐 줄만(줄 위치만 밀린 줄은 아님)
         self.assertLess(by.get("학습 — 필요 지식", 0), 20)
         self.assertNotIn("평가", by)
+        amount = change["변경 분량"]
+        self.assertEqual(amount["행 합계"], change["변경 행"])
+        self.assertEqual(amount["기입 분량"], amount["온 쪽"] + (1 if amount["남은 부분(쪽)"] >= 0.5 else 0))
+        self.assertEqual(change["물리 쪽 기준(참고)"]["행 합계"], change["변경 행"])
+        from ncs_volume.__main__ import render
+        text = render(measure(edited, previous=self.path))
+        self.assertIn("이어 붙여", text)
+        self.assertIn("참고(물리 쪽마다 ½쪽 규칙, 산정에 쓰지 않음)", text)
 
 
 class UnderstandingSection(unittest.TestCase):
