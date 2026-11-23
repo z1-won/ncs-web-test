@@ -193,7 +193,9 @@ def change_from_modules(modules: list[dict], previous: dict[str, dict] | None = 
     return rows
 
 
-def fill_position(root: ET.Element, position: dict) -> None:
+def fill_position(root: ET.Element, position: dict, own: str = "") -> None:
+    """own: 이 계획서의 세분류명. 소분류의 세분류가 양식의 칸보다 많으면 뒤쪽이 잘리는데, 이 세분류만은 마지막 칸에 남긴다
+    (없으면 점검 ① '위치 표 세분류 목록에 이 세분류가 없음'이 초안 그대로에서 나온다). 나머지는 사람이 행을 늘려 적는다."""
     table = find_table(root, "대분류", "중분류", "소분류")
     if table is not None:
         for tr in table.findall(HP + "tr"):
@@ -208,6 +210,9 @@ def fill_position(root: ET.Element, position: dict) -> None:
     trs = table.findall(HP + "tr")
     subclasses, modules = list(position.get("세분류") or []), list(position.get("모듈") or [])
     head = next((i for i, tr in enumerate(trs) if squash(cell_text(cells_by_col(tr).get(3, tr))) == "능력단위"), 0)
+    slots = sum(1 for tr in trs if 0 in cells_by_col(tr) and squash(cell_text(cells_by_col(tr)[0])) != "세분류")
+    if own and slots and own in subclasses[slots:]:
+        subclasses = subclasses[:slots - 1] + [own]
     sub_i = mod_i = 0
     for i, tr in enumerate(trs):
         cells = cells_by_col(tr)
@@ -427,7 +432,7 @@ def build_plan(spec: dict, *, form: bytes | None = None) -> bytes:
     fill_summary(front, summary)
     if improve and not fill_change(front, spec.get("대조표") or change_from_modules(modules)):
         raise ValueError("개선 양식에서 NCS 변경 전·후 대조표를 찾지 못했습니다")
-    fill_position(front, position)
+    fill_position(front, position, own=(spec.get("기본") or {}).get("세분류명") or "")
     for name in sorted(sections):
         try:
             module_table_paragraph(sections[name])

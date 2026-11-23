@@ -178,3 +178,15 @@ class PrerequisiteLevelTests(unittest.TestCase):
         os.environ["NCS_CATALOG_FILE"] = str(REAL) + ".missing"
         row = self.run_items(["연회 판촉(LM1203020401_23v3)"])
         self.assertEqual(row["판정"], "판단불가")
+
+
+class ElementNumberTests(unittest.TestCase):
+    """NCS 원자료의 수행준거 글이 제 번호로 시작하면('4.7 4.7 …') 번호가 두 번 적힌다 — 읽을 때 하나로 줄인다."""
+
+    def test_doubled_criterion_number_is_read_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ncs_elements.tsv"
+            path.write_text("12030201\t1203020102_23v2\t관광숙박 판촉\t4\t정의\t1203020102_23v2.4\t충성고객 관리하기\t"
+                            "4.6 기호를 파악할 수 있다. ‖ 4.7 4.7 요청사항에 응대할 수 있다. ‖ 4.8 4.7 버전을 확인할 수 있다.\n", encoding="utf-8")
+            criteria = ncs_catalog.read_elements(path)["1203020102"]["elements"][0]["criteria"]
+        self.assertEqual(criteria, ["4.6 기호를 파악할 수 있다.", "4.7 요청사항에 응대할 수 있다.", "4.8 4.7 버전을 확인할 수 있다."])

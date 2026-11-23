@@ -59,6 +59,10 @@ class Subclass:
         return self.code[:6]
 
 
+# NCS 원자료의 수행준거 글이 제 번호로 시작하는 것이 있다('4.7 4.7 충성고객들을 …'). 계획서에는 번호가 한 번만 적히므로 하나로 줄인다
+DOUBLED_NUMBER = re.compile(r"^(\d+\.\d+)\s+\1\s+")
+
+
 def read_elements(path: Path) -> dict[str, dict]:
     """ncs_elements.tsv → {능력단위 10자리: {'duty','code','name','level','definition','fetched','elements':[{'code','no','name','criteria':[…]}]}}.
     fetched는 받아 온 날(YYYY-MM-DD, 아홉째 열) — 패키지 표에는 없어 None."""
@@ -76,7 +80,7 @@ def read_elements(path: Path) -> dict[str, dict]:
         unit = out.setdefault(code[:10], {"duty": duty, "code": code, "name": name, "level": int(level) if level.strip() else None,
                                           "definition": definition, "fetched": fetched.strip() or None, "elements": []})
         unit["elements"].append({"code": element_code, "no": int(element_code.rsplit(".", 1)[-1] or 0), "name": element_name,
-                                 "criteria": [c for c in criteria.split(CRITERIA_SEP) if c]})
+                                 "criteria": [DOUBLED_NUMBER.sub(r"\1 ", c) for c in criteria.split(CRITERIA_SEP) if c]})
     return out
 
 

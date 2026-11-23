@@ -687,3 +687,45 @@ class ElementsTableTests(unittest.TestCase):
             self.assertEqual((unit["name"], unit["level"], len(unit["elements"])), ("객실 예약 관리", 3, 2))
             self.assertEqual(unit["elements"][0]["criteria"], C1)
             self.assertEqual(unit["elements"][1]["no"], 2)
+
+
+class DraftRoundTripTests(unittest.TestCase):
+    """초안(NCS 기준정보로 채움)을 그대로 점검에 넣으면 NCS 대조(①)에 부적합이 없어야 한다 — 검증 기준 실측(scripts/measure)에서 드러난 두 가지."""
+
+    def setUp(self):
+        import os
+        from pathlib import Path
+
+        import ncs_core.ncs_catalog as module
+
+        self.saved = os.environ.get("NCS_CATALOG_FILE")      # 다른 테스트가 목록을 꺼 두었을 수 있다 — 패키지에 든 실제 목록으로
+        os.environ["NCS_CATALOG_FILE"] = str(Path(module.__file__).with_name("data") / module.CATALOG_FILE)
+
+    def tearDown(self):
+        import os
+
+        if self.saved is None:
+            os.environ.pop("NCS_CATALOG_FILE", None)
+        else:
+            os.environ["NCS_CATALOG_FILE"] = self.saved
+
+    def _first_rows(self, duty):
+        import tempfile
+        from pathlib import Path
+
+        from ncs_plan.fill import build_plan, spec_from_catalog
+        from ncs_plan.pipeline import run_review
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "개발계획서.hwpx"
+            path.write_bytes(build_plan(spec_from_catalog(duty)))
+            return [row for row in run_review([path], roles={str(path): "plan"}).checklist if row["item_id"] == "PLAN-①"]
+
+    def test_own_subclass_stays_when_siblings_overflow_the_form(self):
+        """소분류의 세분류가 양식의 칸보다 많아도(20010217: 17개) 이 세분류는 위치 표에 남는다."""
+        bad = [row["비고"] for row in self._first_rows("20010217") if row["체크"].get("① 분류 명칭") == "X"]
+        self.assertEqual(bad, [])
+
+    def test_draft_criteria_match_the_catalog(self):
+        bad = [row["비고"] for duty in ("12030201", "20010217") for row in self._first_rows(duty) if row["체크"].get("① 수행준거") == "X"]
+        self.assertEqual(bad, [])
