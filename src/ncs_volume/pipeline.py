@@ -25,9 +25,11 @@ from .diff import changed_lines
 from .fee import compute_fee
 from .layout import Layout, Line, Unit, read_layout
 from .printed import measure_printed
-from .segments import assign
+from .segments import OPTIONAL, assign, toc_tail
 
 UNDECIDED = "판단불가"
+VISUAL_NOTE = ("이 산정은 계약서 제2조 5항 기준(시각 자료 전부 제외)입니다. F16 정산지침 검수 기준과 다른 점(인용된 사진·삽화는 원고 매수에 넣음, "
+               "같은 세분류 기개발 학습모듈에서 재인용한 글·표는 원고료에서 뺌)은 반영하지 않았으니 사람이 확인하세요.")
 
 
 def tally(lines: list[Line], layout: Layout, config: VolumeConfig) -> dict:
@@ -80,6 +82,28 @@ def _counted_units(layout: Layout, names: list[str], config: VolumeConfig) -> li
     return [(name, unit) for block, name in zip(layout.blocks, names) if config.counted(name) for unit in block.units]
 
 
+def _missing_notes(missing: list[str], toc: list[str]) -> list[str]:
+    """찾지 못한 구성 알림. 활용 서식·부록은 필수가 아니므로(F11 인쇄 20~21쪽) 차례에도 없으면 '원고에 없음'으로, 차례에는 있는데
+    본문에서 못 찾았으면 경고로 나눈다. 차례의 꼬리 목록을 읽지 못했으면 선택 구성이라고만 적는다."""
+    required = [name for name in missing if name not in OPTIONAL]
+    optional = [name for name in missing if name in OPTIONAL]
+    notes = []
+    if required:
+        notes.append("찾지 못한 구성(원고에 없거나 제목을 읽지 못함): " + ", ".join(required))
+    if not optional:
+        return notes
+    absent = [name for name in optional if toc and name not in toc]
+    listed = [name for name in optional if name in toc]
+    unknown = [name for name in optional if not toc]
+    if absent:
+        notes.append(f"원고에 없음(필수 아님 — 차례에도 없음, F11 매뉴얼 인쇄 20~21쪽): {', '.join(absent)}")
+    if listed:
+        notes.append(f"차례에는 있는데 본문에서 찾지 못한 구성(제목을 읽지 못했을 수 있음): {', '.join(listed)}")
+    if unknown:
+        notes.append(f"찾지 못한 선택 구성(필수 집필 사항 아님 — F11 매뉴얼 인쇄 20~21쪽, 차례를 읽지 못해 원고에 없는지는 확인 못함): {', '.join(unknown)}")
+    return notes
+
+
 def _method(layout: Layout, config: VolumeConfig) -> str:
     if layout.measured:
         return f"배치 정보(한글이 {layout.format} 파일에 저장한 줄 배치 — 화면에 보이는 줄·쪽)"
@@ -115,10 +139,11 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
     missing = [name for name in counted_names if name not in found]
     if not any(name.startswith("학습 —") for name in found):
         notes.append(f"{UNDECIDED}: 학습(내비게이터·필요 지식) 제목을 찾지 못해 구성 구분을 믿을 수 없습니다. 합계는 표지 뒤 전체를 센 값입니다.")
-    if missing:
-        notes.append("찾지 못한 구성(원고에 없거나 제목을 읽지 못함): " + ", ".join(missing))
+    notes += _missing_notes(missing, toc_tail(layout.blocks, names))
     if not config.include_appendix:
-        notes.append("부록을 산정에서 뺐습니다(요구사항정의서 V0.23 해석). 계약서 제13조 4항 ①은 부록을 산정 대상에 넣습니다.")
+        notes.append("부록을 산정에서 뺐습니다(요구사항정의서 V0.23 해석). 계약서 제13조 4항 ①, F16 정산지침 인쇄 19쪽 검수 대상 표(부록 ○), "
+                     "F11 매뉴얼 인쇄 20~21쪽(집필 인정 범위 '2. 위치'~'7. 활용 서식/부록')은 부록을 산정 대상에 넣습니다.")
+    notes.append(VISUAL_NOTE)
 
     rows = []
     for name, counted in SEGMENTS:
@@ -144,7 +169,10 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
             "줄 간격": f"{layout.pitch} HWPUNIT ({round(layout.pitch * MM_PER_UNIT, 2)}㎜)"
                       + (" — 이 원고에서 가장 많은 본문 줄 간격" if layout.measured else " — 설정값"),
             "½쪽 기준": f"쪽마다 산정 대상 높이 ≥ {config.half_page:g} × 본문 높이면 1쪽",
-            "부록": "포함(계약서 제13조 4항 ①)" if config.include_appendix else "제외",
+            "부록": "포함(계약서 제13조 4항 ①, F16 정산지침 인쇄 19쪽 검수 대상 표, F11 매뉴얼 인쇄 20~21쪽)" if config.include_appendix else "제외",
+            "권고 분량": f"{config.recommended[0]}~{config.recommended[1]}쪽 — F11 매뉴얼 인쇄 20~21쪽 '권당 평균 매수(약 80쪽 내외)를 "
+                       "과도하게 넘지 않도록' 권장, 범위는 3차 멘토 미팅 답변(계약 조건 아님, 참고 표시)",
+            "시각 자료": "계약서 제2조 5항 기준 — 사진·삽화·도면·차트·그래프는 인용·직접 제작 구분 없이 모두 뺌",
         },
         "물리 쪽 수": layout.pages if layout.measured else None,
         "구성": rows,

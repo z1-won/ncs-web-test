@@ -89,7 +89,7 @@ export default function VolumePage() {
           <div className="form-conts">
             <div className="krds-form-check">
               <input type="checkbox" id="volume-appendix" checked={appendix} disabled={busy} onChange={(e) => setAppendix(e.target.checked)} />
-              <label htmlFor="volume-appendix">부록을 산정에 넣기 (계약서 제13조 4항 ①)</label>
+              <label htmlFor="volume-appendix">부록을 산정에 넣기 (계약서 제13조 4항 ①, 정산지침 F16 인쇄 19쪽, 매뉴얼 F11 인쇄 20~21쪽)</label>
             </div>
           </div>
         </div>

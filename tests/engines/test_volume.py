@@ -18,7 +18,7 @@ from ncs_volume.__main__ import main
 from ncs_volume.diff import changed_lines
 from ncs_volume.layout import Layout, Line, Unit, hwp_paragraphs, read_layout
 from ncs_volume.pipeline import gathered
-from ncs_volume.segments import assign
+from ncs_volume.segments import assign, toc_tail
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -172,7 +172,23 @@ class HwpxLayout(unittest.TestCase):
         self.assertEqual(result["합계"]["쪽"], 2)
         self.assertFalse(result["추정"])
         self.assertEqual(result["권고 분량"]["상태"], "권고보다 적음")
-        self.assertIn("찾지 못한 구성(원고에 없거나 제목을 읽지 못함): 활용 서식, 부록", result["알림"])
+        self.assertIn("원고에 없음(필수 아님 — 차례에도 없음, F11 매뉴얼 인쇄 20~21쪽): 활용 서식, 부록", result["알림"])   # 차례에 참고 자료만
+        self.assertFalse(any(note.startswith("찾지 못한 구성") for note in result["알림"]))
+        self.assertTrue(any(note.startswith("이 산정은 계약서 제2조 5항 기준") and "재인용" in note for note in result["알림"]))
+        self.assertIn("F11 매뉴얼 인쇄 20~21쪽", result["가정"]["권고 분량"])
+        self.assertIn("F16 정산지침 인쇄 19쪽", result["가정"]["부록"])
+
+    def test_missing_optional_parts_are_split_by_toc(self):
+        from ncs_volume.pipeline import _missing_notes
+
+        self.assertEqual(_missing_notes(["평가", "부록"], ["참고 자료", "부록"]),
+                         ["찾지 못한 구성(원고에 없거나 제목을 읽지 못함): 평가",
+                          "차례에는 있는데 본문에서 찾지 못한 구성(제목을 읽지 못했을 수 있음): 부록"])
+        self.assertTrue(_missing_notes(["활용 서식"], [])[0].startswith("찾지 못한 선택 구성(필수 집필 사항 아님"))
+        toc = Page().table([["차  례"]], 3 * PITCH).text("참고 자료 30").text("부록 33")
+        layout = read_layout(hwpx(Path(self.folder.name) / "차례.hwpx", [toc]))
+        names, _ = assign(layout.blocks)
+        self.assertEqual(toc_tail(layout.blocks, names), ["참고 자료", "부록"])
 
     def test_banner_picture_starts_tail_in_toc_order(self):
         layout = read_layout(self.path)
