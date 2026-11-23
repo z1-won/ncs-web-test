@@ -1,7 +1,8 @@
 """python -m ncs_opinion 최종원고.hwp 1차의견서.pdf 2차의견서.pdf [--print 출력본.pdf] [--previous 반영전원고.hwp] [--json 결과.json] [--labels 정답.json]
 
 검토의견서의 의견별 반영 여부 후보(반영 후보·미반영 후보·확인 필요·조치 불필요)와 근거 문단을 출력한다(REQ-02-003).
-판정은 LLM이 한다 — .env의 LLM 설정·반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면 자동으로 부르고, 없으면 모든 의견이 '확인 필요'와 이유다.
+판정은 LLM(Claude)이 한다 — 저장소 루트 .env(자동으로 읽음)나 환경 변수에 ANTHROPIC_API_KEY와 반출 승인(LLM_ALLOW_UPLOAD=1)이
+있으면 자동으로 부르고, 없으면 모든 의견이 '확인 필요'와 이유다. 모델·노력은 LLM_REVIEW_MODEL·LLM_REVIEW_EFFORT.
 --labels: {의견 번호: "반영"|"미반영"} JSON을 주면 판단 오차율(기준 6% 이내)을 함께 낸다.
 """
 

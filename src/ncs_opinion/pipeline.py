@@ -1,7 +1,7 @@
 """검토의견서 반영 여부 검토(REQ-02-003) — 의견서 여러 개와 최종 원고(+ 출력본 PDF, 반영 전 원고)를 읽어 의견별 판정 후보표를 낸다.
 
-단계: 의견서 읽기(sheet) → 의견마다 원고 범위 정하기(regions.locate) → 같은 범위 의견끼리 LLM에 묻기(llm_check.ask_all)
-→ 답 검증·정책(judge.judge) → 요약. LLM을 부르지 못하면 모든 의견이 '확인 필요'와 그 이유다.
+단계: 의견서 읽기(sheet) → 의견마다 원고 범위 정하기(regions.locate) → 고른 문단(원고 블록 하나) + 의견 전부를 Claude에 한 번에
+묻기(llm_check.ask_all, 잘리면 반으로 나눠 다시) → 답 검증·정책(judge.judge) → 요약·사용량. LLM을 부르지 못하면 모든 의견이 '확인 필요'와 그 이유다.
 
 읽기는 모두 ncs_core로 한다: 원고·hwp 의견서는 documents.load_document, PDF는 pdf.load_pdf(선택 extra pypdf).
 의견서 PDF는 머리말·꼬리말 띠를 나누지 않도록 band를 음수로 주어 모든 줄을 본문으로 받는다(의견서에는 띠가 없고,
@@ -59,13 +59,14 @@ def summarize(rows: list[dict]) -> dict:
 
 
 def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[str] | None = None,
-           print_pdf: Path | str | None = None, previous: Path | str | None = None, asker=None,
+           print_pdf: Path | str | None = None, previous: Path | str | None = None, generate=None,
            config: OpinionConfig = DEFAULT_CONFIG) -> dict:
     """의견서들 × 최종 원고 → 판정 후보표(JSON으로 그대로 내보낼 수 있는 dict).
 
     rounds: 의견서와 같은 순서의 차수('1차'·'2차') — 주면 파일 안의 표기 대신 쓴다. print_pdf: 최종 원고 출력본(근거 쪽 표시).
-    previous: 반영 전 원고(초고본·완성본, 선택). 판정은 LLM이 한다 — 설정·반출 승인·허용 목록이 있으면 자동으로 부르고,
-    없으면 모든 의견을 '확인 필요'와 이유로 둔다. asker: 테스트용 가짜 LLM(llm_check.ask_all).
+    previous: 반영 전 원고(초고본·완성본, 선택). 판정은 LLM(Claude)이 한다 — ANTHROPIC_API_KEY·반출 승인(LLM_ALLOW_UPLOAD=1)이
+    있으면 자동으로 부르고, 없으면 모든 의견을 '확인 필요'와 이유로 둔다. generate: 테스트용 가짜 Claude(llm_check.ask_all).
+    결과의 'usage'는 ncs_llmreview와 같은 키(calls, new_calls, input, output, cache_read, cost_usd, dropped, seconds).
     """
     if not opinions:
         raise ValueError("검토의견서를 하나 이상 올려 주세요")
@@ -92,13 +93,16 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
             seen.add(key)
             _, where, place_notes, _ = locate(opinion, final, config)
             items.append((opinion, where, place_notes))
-    llm_on, llm_state = llm_status(asker)
+    llm_on, llm_state = llm_status(generate)
     answers: list[dict | None] = [None] * len(items)
+    usage = None
     if llm_on and items:
-        answers, stats = ask_all([(o, where) for o, where, _ in items], final, before, asker=asker, config=config)
+        answers, stats = ask_all([(o, where) for o, where, _ in items], final, before, generate=generate, config=config)
+        usage = stats["usage"]
         if stats["모델"]:
             llm_state = f"사용({stats['모델']})"
-        llm_state += f" · 호출 {stats['호출']}번, 의견 {stats['물은 의견']}개" + (f", 실패 {stats['실패']}번" if stats["실패"] else "")
+        llm_state += f" · 호출 {usage['calls']}번(새 호출 {usage['new_calls']}번), 의견 {stats['물은 의견']}개" + (f", 실패 {stats['실패']}번" if stats["실패"] else "")
+        llm_state += f" · 입력 {usage['input']:,}(캐시 읽기 {usage['cache_read']:,})·출력 {usage['output']:,}토큰 · 약 ${usage['cost_usd']}"
     rows = []
     for (opinion, where, place_notes), answer in zip(items, answers):
         row = judge(opinion, where, place_notes, answer, final, previous=before, llm_off="" if llm_on else llm_state,
@@ -123,6 +127,7 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
         "요약": summarize(rows),
         "의견": rows,
         "LLM": llm_state,
+        "usage": usage,
         "알림": notes,
         "판정 원칙": "판정은 LLM이 내고 모두 후보다(사람이 확정). 근거 문단이 없거나 원고 글로 확인할 수 없는 의견은 '확인 필요', "
                     "용어 변경은 집필자 확인. LLM을 부르지 못하면 모든 의견이 '확인 필요'다.",
