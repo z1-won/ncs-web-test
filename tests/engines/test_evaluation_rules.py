@@ -70,11 +70,13 @@ class CriteriaGoalsTests(unittest.TestCase):
         self.assertIn("띄어쓰기·마침표·영문 대소문자만 다름", rows[1]["비고"]["② 평가 준거 학습 목표 계획서 일치"])
         self.assertEqual(rows[1]["개발계획서"], ["2.1 " + C])
 
-    def test_word_difference_is_still_x(self):
-        """낱말이 다르면 여전히 X(△로 넘기지 않는다)."""
+    def test_word_difference_is_a_change_candidate(self):
+        """낱말이 바뀐 문장은 '변경 확인' 후보(△) — 허용 변경(용어·법령 사유)일 수 있다(F04 2-1·2-2, 정의서 V0.23). 필요 지식 ⑤와 같은 기준."""
         units = [{"name": "상품 설명", "goals": ["- " + C.replace("판매할", "안내할")], "row": 4}]
         [row] = check_criteria_goals([region(criteria=[units], criteria_tables=1)], PLAN)
-        self.assertEqual(row["판정"], "부적합")
+        self.assertEqual(row["판정"], "판단불가")
+        self.assertIn("변경 확인", row["비고"]["② 평가 준거 학습 목표 계획서 일치"])
+        self.assertIsNotNone(row["수정 제안"])
         # 학습 내용명은 띄어쓰기를 무시하고 계획서와 연결한다(연결 실패로 대조를 건너뛰지 않음)
         spaced = [{"name": "상품설명", "goals": ["- " + C], "row": 4}]
         [row] = check_criteria_goals([region(criteria=[spaced], criteria_tables=1)], PLAN)
@@ -91,6 +93,11 @@ class CriteriaGoalsTests(unittest.TestCase):
         self.assertEqual(row["체크"], {"② 평가 준거 학습 목표 계획서 일치": "△"})   # 계획서 없음 → 판단불가(적합으로 접히지 않게)
         [row] = check_criteria_goals([region(found=False, notes=["평가 머리를 찾지 못함"])], PLAN)
         self.assertEqual(row["판정"], "판단불가")
+        # 개발계획서가 없어도 NCS 기준정보(수행준거)가 있으면 그것과 대조한다: 모두 있는 문장이면 O, 아니면 △까지만
+        criteria = ["1.1 " + A, "1.2 " + B, "2.1 " + C]
+        rows = check_criteria_goals([region(criteria=[self.units()], criteria_tables=1)], None, criteria)
+        self.assertEqual([r["판정"] for r in rows], ["적합", "판단불가"])
+        self.assertIn("NCS 기준정보", rows[1]["비고"]["② 평가 준거 학습 목표 계획서 일치"])
 
 
 class MethodsTests(unittest.TestCase):

@@ -1,6 +1,8 @@
 """평가 규칙 등록. ①(학습 내용명) ②(평가 준거 학습 목표) ③(평가 방법 수) ④(평가 항목 명사형·목표와 구별 + 구체성·목표 연관 LLM 후보) ⑤(방법별 피드백)."""
 from ncs_core import Rule
 
+from ncs_core.ncs_catalog import criteria_of
+
 from .rules.feedback import check_feedback
 from .rules.goals import check_criteria_goals
 from .rules.item_content import check_item_content
@@ -10,7 +12,7 @@ from .rules.names import check_names
 
 DEFAULT_RULES = (
     Rule("names", "F02-평가-①", check_names),
-    Rule("criteria_goals", "F02-평가-②", lambda c: check_criteria_goals(c.regions, c.plan_goals)),
+    Rule("criteria_goals", "F02-평가-②", lambda c: check_criteria_goals(c.regions, c.plan_goals, None if c.plan_goals is not None else criteria_of(c.module_code))),
     Rule("methods", "F02-평가-③", lambda c: check_methods(c.regions, min_methods=c.config.min_methods)),
     Rule("items", "F02-평가-④", lambda c: check_items(c.regions)),
     Rule("item_content", "F02-평가-④", lambda c: check_item_content(c.regions)),   # 내용(구체성·목표 연관)은 LLM 후보

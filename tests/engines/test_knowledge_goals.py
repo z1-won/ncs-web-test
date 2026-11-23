@@ -71,6 +71,43 @@ class CheckGoalsTests(unittest.TestCase):
         self.assertTrue(bad["비고"]["개발계획서 학습 목표 일치"].startswith("1-1 2번째 본문 학습 목표 「종류(공표 요금,」, 개발계획서 「종류(공표요금,」"))
         self.assertEqual(bad["개발계획서"], ["1.1 " + A, "1.2 " + B])
 
+    def test_no_plan_falls_back_to_ncs_criteria(self):
+        """개발계획서가 없어도 NCS 기준정보(수행준거)를 받아 두었으면 그것과 대조한다 — 사람 작업 2번 'NCS 기준정보 확인'.
+        모두 수행준거에 있는 문장이면 O. 다른 것은 △까지만(개발계획서가 정식 기준이고, 기준정보의 띄어쓰기는 NCS 원문 확인 전이다)."""
+        criteria = ["1.1 " + A, "1.2 " + B, "2.1 " + C]
+        [ok] = check_goals(None, [self.unit(["•" + B, "•" + A])], criteria)
+        self.assertEqual((ok["판정"], ok["비고"]), ("적합", {}))
+        [spaced] = check_goals(None, [self.unit(["•" + A.replace("구분할", "구분 할")])], criteria)
+        self.assertEqual(spaced["판정"], "판단불가")
+        self.assertIn("NCS 기준정보", spaced["비고"]["개발계획서 학습 목표 일치"])
+        self.assertIn("띄어쓰기만 다름", spaced["비고"]["개발계획서 학습 목표 일치"])
+        [new] = check_goals(None, [self.unit(["•예약 접수 절차와 취소 규정을 고객에게 안내할 수 있다."])], criteria)
+        self.assertEqual(new["판정"], "판단불가")
+        self.assertIn("수행준거에 없는 문장", new["비고"]["개발계획서 학습 목표 일치"])
+        [none] = check_goals(None, [self.unit(["•" + A])], None)          # 기준정보도 없으면 지금처럼 대조하지 못함
+        self.assertIn("개발계획서가 없어", none["비고"]["개발계획서 학습 목표 일치"])
+
+    def test_word_change_is_a_change_candidate(self):
+        """낱말이 바뀐 문장은 '변경 확인' 후보(△) — 용어·법령 사유의 허용 변경일 수 있다(F04 2-1·2-2, 정의서 V0.23 REQ-02-002).
+        띄어쓰기·부호·대소문자만 다른 것, 빠진 문장, 계획서에 없는 문장은 그대로 X다. 둘이 섞이면 X이고 바뀐 문장에는 후보 표시를 단다."""
+        plan = {"내용": {(1, 1): {"text": "호텔정보 구분", "goals": ["1.1 " + A, "1.2 " + B]}}}
+        changed = B.replace("마켓별", "시장별")
+        [row] = check_goals(plan, [self.unit(["•" + A, "•" + changed])])
+        self.assertEqual((row["체크"]["개발계획서 학습 목표 일치"], row["판정"]), ("△", "판단불가"))
+        note = row["비고"]["개발계획서 학습 목표 일치"]
+        self.assertIn("본문 학습 목표 「시장별」, 개발계획서 「마켓별」", note)
+        self.assertIn("변경 확인", note)
+        self.assertIn("2-1·2-2", note)
+        [mixed] = check_goals(plan, [self.unit(["•" + A.replace("구분할", "구분 할"), "•" + changed])])
+        self.assertEqual(mixed["판정"], "부적합")
+        self.assertIn("(변경 확인 후보)", mixed["비고"]["개발계획서 학습 목표 일치"])
+        [missing] = check_goals(plan, [self.unit(["•" + A])])
+        self.assertEqual(missing["판정"], "부적합")
+        [other] = check_goals(plan, [self.unit(["•" + A, "•예약 접수 절차와 취소 규정을 고객에게 안내할 수 있다."])])     # 딴 문장은 변경 후보가 아니다
+        self.assertEqual(other["판정"], "부적합")
+        [case] = check_goals({"내용": {(1, 1): {"text": "x", "goals": ["Early Check-In 가능 여부를 확인할 수 있다."]}}}, [self.unit(["Early Check-in 가능 여부를 확인할 수 있다."])])
+        self.assertEqual(case["판정"], "부적합")
+
     def test_missing_goal_block_and_unknown_unit(self):
         plan = {"내용": {(2, 1): {"text": "x", "goals": [A]}}}
         [row] = check_goals(plan, [self.unit([], goal_k=None)])

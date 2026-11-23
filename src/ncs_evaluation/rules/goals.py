@@ -1,4 +1,6 @@
-"""평가 ②: '평가 준거'의 학습 목표 = 개발계획서 학습 목표(NCS 수행 준거). 학습 내용당 1행, 동일 여부만(O/X).
+"""평가 ②: '평가 준거'의 학습 목표 = 개발계획서 학습 목표(NCS 수행 준거). 학습 내용당 1행.
+판정은 필요 지식 ⑤와 같다: 표기(띄어쓰기·부호·대소문자)만 다름·누락·추가·딴 문장은 X, 짝은 맞는데 낱말이 바뀐 문장만 있으면 '변경 확인' 후보(△)
+— 정의서 V0.23 REQ-02-002 ① 표준 지침, F04 준용 집필 기준 2-1·2-2.
 
 비교 함수는 필요 지식 ⑤와 같은 ncs_core.goals.compare_lists다. 학습 내용명은 평가 준거 표의 '학습 내용' 셀을
 계획서의 같은 학습(N) 안 학습 내용명과 이름으로 맞춘다(번호가 셀에 없으므로).
@@ -7,7 +9,7 @@
 import re
 
 from ncs_core import O, TRI, X, verdict, visible
-from ncs_core.goals import compare_lists, normalize
+from ncs_core.goals import compare_kinds, compare_to_pool, describe_kinds, normalize
 
 ITEM_ID = "F02-평가-②"
 CHECK = "② 평가 준거 학습 목표 계획서 일치"
@@ -39,8 +41,10 @@ def _loose(text: str) -> str:
 MINOR = "띄어쓰기·마침표·영문 대소문자만 다름 — 개발계획서 학습 목표와 글자 그대로 맞출 것: "
 
 
-def check_criteria_goals(regions: list[dict], plan_goals: dict | None) -> list[dict]:
+def check_criteria_goals(regions: list[dict], plan_goals: dict | None, ncs_criteria: list[str] | None = None) -> list[dict]:
+    """ncs_criteria: 개발계획서가 없을 때 쓰는 그 능력단위의 NCS 수행준거 전부(ncs_core.ncs_catalog.criteria_of). 없으면 대조하지 못한다."""
     rows = []
+    pool = [normalize(c) for c in ncs_criteria or []]
     for region in regions:
         lesson = region["lesson"]
         base = f"section1 > 학습 {lesson} > 평가 > 평가 준거"
@@ -49,6 +53,16 @@ def check_criteria_goals(regions: list[dict], plan_goals: dict | None) -> list[d
             continue
         if not region["criteria"]:
             rows.append(_row(lesson, base, None, {CHECK: X}, {CHECK: "평가 준거 표(학습 내용 | 학습 목표)를 찾지 못함"}, "평가 준거 표 작성"))
+            continue
+        if plan_goals is None and pool:
+            # 계획서가 없으면 받아 둔 NCS 수행준거와 대조한다 — '수행준거에 있는 문장인가'만 보고, 다르면 △까지만(필요 지식 ⑤와 같은 기준)
+            for units in region["criteria"]:
+                for unit in units:
+                    problems = compare_to_pool([visible(normalize(a)) for a in unit["goals"]], pool, where="평가 준거")
+                    note = ("개발계획서가 없어 NCS 기준정보(수행준거)와 대조함 — " + " · ".join(text for _, text in problems)
+                            + " — 개발계획서가 정식 기준이므로 계획서를 함께 올려 확정(기준정보의 띄어쓰기는 NCS 원문과 다를 수 있음)") if problems else ""
+                    rows.append(_row(lesson, f"{base} > {unit['name']}", [visible(g) for g in unit["goals"]],
+                                     {CHECK: TRI if problems or not unit["goals"] else O}, {CHECK: note} if note else {}, "개발계획서를 함께 올려 다시 검수"))
             continue
         if plan_goals is None:
             for units in region["criteria"]:
@@ -72,11 +86,14 @@ def check_criteria_goals(regions: list[dict], plan_goals: dict | None) -> list[d
                                      "학습 내용명을 개발계획서와 같게 한 뒤 학습 목표 대조"))
                     continue
                 expected = own[keys[0]]["goals"]
-                problems = compare_lists([normalize(e) for e in expected], [visible(normalize(a)) for a in unit["goals"]], where="평가 준거", basis="개발계획서")
-                # 차이가 있으면 모두 X(체크리스트는 '일치'를 요구 — 완화하지 않음). 띄어쓰기·마침표·대소문자만 다르면 비고 머리에 그렇게 적는다
+                problems = compare_kinds([normalize(e) for e in expected], [visible(normalize(a)) for a in unit["goals"]], where="평가 준거", basis="개발계획서")
+                only_wording, note = describe_kinds(problems)
+                # 띄어쓰기·마침표·대소문자만 다르면 비고 머리에 그렇게 적는다(판정은 X — 수행준거의 표기를 따른다)
                 minor = bool(problems) and (sorted(_loose(normalize(e)) for e in expected)
                                             == sorted(_loose(visible(normalize(a))) for a in unit["goals"]))
-                checks = {CHECK: X if problems else O}
-                notes = {CHECK: (MINOR if minor else "") + f"{keys[0][0]}-{keys[0][1]} " + " · ".join(problems)} if problems else {}
-                rows.append(_row(lesson, region_path, shown, checks, notes, "개발계획서 학습 목표 문장으로 통일", 개발계획서=expected))
+                checks = {CHECK: O if not problems else TRI if only_wording else X}
+                notes = {CHECK: (MINOR if minor else "") + f"{keys[0][0]}-{keys[0][1]} {note}"} if problems else {}
+                fix = ("허용 변경(용어·법령 사유)이면 개발계획서와 맞는지 확인하고, 아니면 개발계획서 학습 목표 문장으로 통일" if only_wording
+                       else "개발계획서 학습 목표 문장으로 통일")
+                rows.append(_row(lesson, region_path, shown, checks, notes, fix, 개발계획서=expected))
     return rows

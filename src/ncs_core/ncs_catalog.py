@@ -170,3 +170,15 @@ def catalog() -> Catalog | None:
 def reload() -> None:
     """읽어 둔 목록을 버린다 — 기준정보 폴더의 표를 새로 썼을 때 부른다(다음 catalog()가 다시 읽는다)."""
     _load.cache_clear()
+
+
+def criteria_of(module_code: str) -> list[str] | None:
+    """학습모듈(능력단위) 코드 → 받아 둔 NCS 기준정보의 수행준거 문장 전부. 목록이 꺼져 있거나, 그 능력단위를 받아 두지 않았거나,
+    버전이 다른 기준정보뿐이면 None — 개발계획서가 없을 때 학습 목표를 대조하는 데 쓴다(필요 지식 ⑤, 평가 ②)."""
+    cat = catalog()
+    code = (module_code or "").replace("LM", "")
+    detail = cat.unit_detail(code) if cat is not None and code else None
+    if detail is None or detail.get("code") != code:
+        return None
+    return [criterion for element in detail.get("elements") or [] for criterion in element.get("criteria") or []] or None
+

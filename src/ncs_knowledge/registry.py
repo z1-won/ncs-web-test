@@ -4,6 +4,8 @@ from ncs_core import Rule
 
 from .rules.contents import check_contents
 from .rules.figures import check_figures
+from ncs_core.ncs_catalog import criteria_of
+
 from .rules.goals import check_goals
 from .rules.navigator import check_navigator
 from .rules.numbering import check_numbering
@@ -19,7 +21,7 @@ DEFAULT_RULES = (
     Rule("navigator", "F02-필요지식-", lambda c: check_navigator(c.toc, c.overview, c.body),
          failure_item_ids=("F02-필요지식-①", "F02-필요지식-②", "F02-필요지식-③")),
     Rule("contents", "F02-필요지식-④", lambda c: check_contents(c.toc, c.overview, c.body, c.units)),
-    Rule("goals", "F02-필요지식-⑤", lambda c: check_goals(c.plan_goals, c.units)),
+    Rule("goals", "F02-필요지식-⑤", lambda c: check_goals(c.plan_goals, c.units, None if c.plan_goals else criteria_of(c.module_code))),
     Rule("numbering", "F02-필요지식-⑥", lambda c: check_numbering(c.body, c.units, c.table_paragraphs, c.manuscript.section_numbers(c.config.body_section),
                                                                  c.manuscript.section_styles(c.config.body_section))),
     Rule("figures", "F02-필요지식-⑦", lambda c: check_figures(_sections(c), c.labels, min_agreement=c.config.figtab_min_agreement)),

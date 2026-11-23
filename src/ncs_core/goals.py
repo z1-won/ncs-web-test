@@ -64,15 +64,27 @@ def explain_pair(expected: str, actual: str, where: str = "원고", basis: str =
     return f"{where} 「{actual}」, {basis} 「{expected}」 ({why})"
 
 
-def compare_lists(expected: list[str], actual: list[str], where: str = "본문", basis: str = "계획서") -> list[str]:
-    """정규화된 두 문장 목록을 비교해 문제 설명 목록을 돌려준다. 빈 목록이면 일치(순서 차이는 문제로 보지 않는다).
+MARK, WORDING, OTHER, COUNT, MISSING, EXTRA = "표기", "변경", "다른 문장", "개수", "누락", "추가"
+WORDING_RATIO = 0.7      # 이만큼 닮았으면 같은 문장의 낱말이 바뀐 것으로 본다(그 아래는 딴 문장). 판정은 규칙이 정한다
 
+
+def _marks_only(expected: str, actual: str) -> bool:
+    """띄어쓰기·부호·영문 대소문자만 다른가."""
+    return PUNCT_ONLY.sub("", expected).casefold() == PUNCT_ONLY.sub("", actual).casefold()
+
+
+def compare_kinds(expected: list[str], actual: list[str], where: str = "본문", basis: str = "계획서") -> list[tuple[str, str]]:
+    """정규화된 두 문장 목록을 비교해 (종류, 설명) 목록을 돌려준다. 빈 목록이면 일치(순서 차이는 문제로 보지 않는다).
+
+    종류: '개수' / '표기'(짝은 있는데 띄어쓰기·부호·대소문자만 다름) / '변경'(짝은 있는데 낱말이 다름 — 유사도 WORDING_RATIO 이상) /
+          '다른 문장'(가장 비슷한 문장과도 많이 다름) / '누락'(기준에만 있음) / '추가'(원고에만 있음).
+    여기서는 가르기만 한다 — 무엇을 부적합으로 볼지는 규칙이 정한다(필요 지식 ⑤, 평가 ②).
     설명은 '2번째 본문 「다른 어절」, 계획서 「다른 어절」', '2번째 누락: 계획서에는 「…」가 있는데 본문에 없음', '본문에만 있음 「…」 (계획서에 없음)',
     '개수: 본문 1개, 계획서 2개' 꼴이다. 한 항목 = 한 줄. where/basis로 문서 이름을 바꾼다(평가 ②는 '평가 준거').
     """
     problems = []
     if len(expected) != len(actual):
-        problems.append(f"개수: {where} {len(actual)}개, {basis} {len(expected)}개")
+        problems.append((COUNT, f"개수: {where} {len(actual)}개, {basis} {len(expected)}개"))
     remaining = list(actual)
     unmatched = []
     for i, e in enumerate(expected):
@@ -81,15 +93,49 @@ def compare_lists(expected: list[str], actual: list[str], where: str = "본문",
         else:
             unmatched.append((i, e))
     for i, e in unmatched:
-        # 판정은 이미 X. 가장 비슷한 본문 문장을 짝지어 어디가 다른지만 보여준다(유사도는 짝 고르기에만 쓴다).
+        # 가장 비슷한 본문 문장을 짝지어 어디가 다른지 보여준다
         best = max(((difflib.SequenceMatcher(None, e, a, autojunk=False).ratio(), j) for j, a in enumerate(remaining)), default=(0, None))
         if best[1] is not None and best[0] >= 0.5:
             a = remaining.pop(best[1])
-            problems.append(f"{i + 1}번째 {difference(e, a, where, basis)}")
+            kind = MARK if _marks_only(e, a) else WORDING if best[0] >= WORDING_RATIO else OTHER
+            problems.append((kind, f"{i + 1}번째 {difference(e, a, where, basis)}"))
         else:
-            problems.append(f"{i + 1}번째 누락: {basis}에는 「{e}」가 있는데 {where}에 없음")
+            problems.append((MISSING, f"{i + 1}번째 누락: {basis}에는 「{e}」가 있는데 {where}에 없음"))
     for a in remaining:
-        problems.append(f"{where}에만 있음 「{a}」 ({basis}에 없음)")
+        problems.append((EXTRA, f"{where}에만 있음 「{a}」 ({basis}에 없음)"))
     return problems
+
+
+def compare_lists(expected: list[str], actual: list[str], where: str = "본문", basis: str = "계획서") -> list[str]:
+    """compare_kinds의 설명만 — 종류를 가리지 않는 호출처용."""
+    return [text for _, text in compare_kinds(expected, actual, where, basis)]
+
+
+def compare_to_pool(actual: list[str], pool: list[str], where: str = "본문", basis: str = "NCS 기준정보") -> list[tuple[str, str]]:
+    """정규화된 문장들이 문장 묶음(pool — 능력단위의 수행준거 전부) 안에 있는가. 어느 학습 내용에 어느 문장이 가는지는 모를 때 쓴다.
+    → (종류, 설명): '표기'(띄어쓰기·부호·대소문자만 다른 문장이 있음) / '변경'(닮은 문장이 있음) / '추가'(묶음에 없는 문장). 빈 목록이면 모두 있다."""
+    problems = []
+    for i, a in enumerate(actual):
+        if a in pool:
+            continue
+        best = max(((difflib.SequenceMatcher(None, e, a, autojunk=False).ratio(), e) for e in pool), default=(0, ""))
+        if best[1] and _marks_only(best[1], a):
+            problems.append((MARK, f"{i + 1}번째 {difference(best[1], a, where, basis)}"))
+        elif best[0] >= WORDING_RATIO:
+            problems.append((WORDING, f"{i + 1}번째 {difference(best[1], a, where, basis)}"))
+        else:
+            problems.append((EXTRA, f"{i + 1}번째 {where} 「{a}」 — {basis}의 수행준거에 없는 문장"))
+    return problems
+
+
+CHANGE_NOTE = "변경 확인: 용어·법령 사유의 허용 변경인지 확인(F04 준용 집필 기준 2-1·2-2)"
+
+
+def describe_kinds(problems: list[tuple[str, str]]) -> tuple[bool, str]:
+    """(낱말만 바뀐 문장뿐인가, 비고 문장). 낱말이 바뀐 문장에는 '변경 확인' 표시를 단다 — 섞여 있으면 문장마다, 그것뿐이면 끝에 한 번."""
+    only_wording = bool(problems) and all(kind == WORDING for kind, _ in problems)
+    if only_wording:
+        return True, " · ".join(text for _, text in problems) + f" — {CHANGE_NOTE}"
+    return False, " · ".join(text + (" (변경 확인 후보)" if kind == WORDING else "") for kind, text in problems)
 
 
