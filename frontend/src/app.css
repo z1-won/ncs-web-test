@@ -979,3 +979,8 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 .plan-signal-table th:nth-child(1) { width: 14rem; }
 .plan-signal-table th:nth-child(2) { width: 6rem; }
 .plan-signal-list { margin: 0; padding-left: 1.8rem; list-style: disc; }
+
+/* 원고 폴더 일괄 검수 */
+.batch-table td { vertical-align: middle; }
+.batch-table th:nth-child(n+2) { width: 9rem; }
+.batch-table th:nth-child(2) { width: 16rem; }

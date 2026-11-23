@@ -13,6 +13,7 @@ import ProgressPage from "./pages/ProgressPage.jsx";
 import RightsPage from "./pages/RightsPage.jsx";
 import RecommendPage from "./pages/RecommendPage.jsx";
 import ReviewPage from "./pages/ReviewPage.jsx";
+import BatchReviewPage from "./pages/BatchReviewPage.jsx";
 import SuggestPage from "./pages/SuggestPage.jsx";
 import UpscalePage from "./pages/UpscalePage.jsx";
 import VolumePage from "./pages/VolumePage.jsx";
@@ -44,6 +45,7 @@ createRoot(document.getElementById("root")).render(
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/review" element={<ReviewPage />} />
+        <Route path="/review/batch" element={<BatchReviewPage />} />
         <Route path="/plan" element={<PlanDraftPage />} />
         <Route path="/upscale" element={<UpscalePage />} />
         <Route path="/images" element={<ImageDbPage />} />
