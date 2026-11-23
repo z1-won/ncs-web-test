@@ -1,6 +1,6 @@
-"""원고 문장 추천(ncs_suggest, REQ-02-004): 종류별 규정 꼴(출력 검증용), 참고 예문, AI 판정·후보 검증(가짜 응답 주입 — 순위 재부여·
-버림·종결형 오지적의 사유 바꿈·번호 검증), AI 미설정(판단불가), 원고 전체(합성 hwpx), CLI,
-문맥(자리·앞뒤 문장)과 참고 문장을 붙인 질문, 참고 문장 묶음(만들기·읽기·찾기)과 후보의 근거 문장·순위, 후보문장표.
+"""원고 문장 추천(ncs_suggest, REQ-02-004): 종류별 규정 꼴(출력 검증용), 참고 예문, AI 판정·후보 검증(가짜 Claude 주입 — 순위 재부여·
+버림·종결형 오지적의 사유 바꿈·번호 검증, 원고 블록 하나·잘리면 나눠 다시), AI 미설정(판단불가), 원고 전체(합성 hwpx), CLI,
+자리와 참고 문장을 붙인 원고 블록, 참고 문장 묶음(만들기·읽기·찾기)과 후보의 근거 문장·순위, 후보문장표.
 
 실제 원고(samples/, git 제외)를 실제 LLM으로 돌린 결과는 README의 문장 추천 단락에 적는다. 테스트는 실제 호출을 하지 않는다.
 """
@@ -9,6 +9,7 @@ import contextlib
 import csv
 import io
 import json
+import re
 import tempfile
 import unittest
 import zipfile
@@ -16,7 +17,7 @@ from pathlib import Path
 from unittest import mock
 from xml.sax.saxutils import escape
 
-from ncs_core.llm import LlmError
+from ncs_llmreview.claude import ClaudeError
 from ncs_suggest import KINDS, Corpus, Reference, candidate_table, suggest_manuscript, suggest_sentence
 from ncs_suggest import corpus as corpus_module
 from ncs_suggest.__main__ import main
@@ -24,7 +25,7 @@ from ncs_suggest.config import DEFAULT_CONFIG, NO_FINDING, SOURCE_AI, UNDECIDED
 from ncs_suggest.examples import similar
 from ncs_suggest.extract import split_prefix
 from ncs_suggest.kinds import check
-from ncs_suggest.llm_suggest import ask_lines, prompt, validate
+from ncs_suggest.llm_suggest import build_request, build_system, document_text, out_schema, parse, validate
 from ncs_suggest.pipeline import table_columns
 
 HP = "http://www.hancom.co.kr/hwpml/2011/paragraph"
@@ -88,31 +89,59 @@ def finding(line, kind="종결형 위반", reason="종결이 규정과 다름", 
     return {"line": line, "kind": kind, "reason": reason, "suggestions": list(suggestions)}
 
 
+REQUEST_LINE = re.compile(r"^- (.+?) \(규정 꼴: .*\): 문장 \[(\d+)\](?:~\[(\d+)\])?$", re.M)
+
+
+def asked_of(document, request):
+    """요청 블록이 묻는 [(종류, [(문장 번호, 본문)])] — 본문은 원고 블록에서 찾는다."""
+    bodies = {int(n): body for n, body in re.findall(r"^\[(\d+)\] (.*)$", document, re.M)}
+    out = []
+    for kind, first, last in REQUEST_LINE.findall(request):
+        numbers = range(int(first), int(last or first) + 1)
+        out.append((kind, [(n, bodies[n]) for n in numbers]))
+    return out
+
+
 def fake(findings=None, model="fake-model"):
-    """가짜 LLM — findings가 함수면 (종류, 문장 목록) → 지적 목록, 아니면 그대로 돌려준다. 받은 질문을 calls에 남긴다."""
+    """가짜 Claude(generate) — findings가 함수면 종류마다 (종류, 문장 목록) → 그 목록 안 번호(1부터)의 지적 목록을 받아 원고 블록 번호로
+    바꿔 돌려주고, 아니면 그대로 돌려준다. 호출마다 [(종류, 문장 목록)]을 calls에 남긴다."""
     calls = []
 
-    def asker(kind, bodies):
-        calls.append((kind, list(bodies)))
-        found = findings(kind, bodies) if callable(findings) else list(findings or [])
-        return {"data": {"findings": found}, "model": model}
+    def generate(system, document, request, *, task, tasks=None, out_schema=None):
+        assert task == "sentence_suggest" and out_schema["required"] == ["findings"]
+        asked = asked_of(document, request)
+        calls.append([(kind, [body for _, body in pairs]) for kind, pairs in asked])
+        if not callable(findings):
+            return {"data": {"findings": list(findings or [])}, "model": model, "cached": False, "usage": {"input": 500, "output": 50}}
+        found = []
+        for kind, pairs in asked:
+            for item in findings(kind, [body for _, body in pairs]):
+                line = item["line"]
+                found.append({**item, "line": pairs[line - 1][0] if isinstance(line, int) and 1 <= line <= len(pairs) else line})
+        return {"data": {"findings": found}, "model": model, "cached": False, "usage": {"input": 500, "output": 50}}
 
-    return asker, calls
+    return generate, calls
 
 
 class AiTests(unittest.TestCase):
     """AI 판정과 후보 검증 — 가짜 응답으로만 검사한다(실제 호출 없음)."""
 
-    def test_prompt_has_kind_form_and_numbered_lines(self):
-        text = prompt("교수 방법", ["절차를 설명함.", "사례를 든다."])
-        self.assertIn("[문장 종류] 교수 방법 — 규정 꼴: ~한다.", text)
-        self.assertIn("1. 절차를 설명함.\n2. 사례를 든다.", text)
+    def test_document_has_kinds_forms_and_numbered_lines_once(self):
+        text = document_text({1: ("교수 방법", "절차를 설명함."), 2: ("교수 방법", "사례를 든다."), 3: ("평가 항목", "분석 능력.")})
+        self.assertIn("## 교수 방법 (규정 꼴: ~한다.)\n[1] 절차를 설명함.\n[2] 사례를 든다.", text)
+        self.assertIn("## 평가 항목 (규정 꼴: ~여부 / ~능력 / ~수준 / ~정도 (마침표 없이))\n[3] 분석 능력.", text)
+        request = build_request([("교수 방법", [1, 2]), ("평가 항목", [3])])
+        self.assertIn("- 교수 방법 (규정 꼴: ~한다.): 문장 [1]~[2]", request)
+        self.assertTrue(request.endswith("문장 [3]"))
+        self.assertIn("안긴 문장의 주어는 군더더기가 아닙니다", build_system())
+        item = out_schema()["properties"]["findings"]["items"]
+        self.assertEqual((set(item["required"]), item["additionalProperties"]), (set(item["properties"]), False))
 
     def test_candidates_are_screened_and_reranked(self):
         asker, calls = fake([finding(1, suggestions=["사례 중심으로 절차를 3단계로 설명한다.", "사례 중심으로 절차를 설명한다.",
                                                      "사례 중심으로 절차를 설명한다.", "사례를 중심으로 절차를 설명한다."])])
-        result = suggest_sentence("• 사례 중심으로 절차를 설명함.", "교수 방법", asker=asker)
-        self.assertEqual(calls, [("교수 방법", ["사례 중심으로 절차를 설명함."])])        # 번호·글머리 뗀 문장 줄만 보낸다
+        result = suggest_sentence("• 사례 중심으로 절차를 설명함.", "교수 방법", generate=asker)
+        self.assertEqual(calls, [[("교수 방법", ["사례 중심으로 절차를 설명함."])]])      # 번호·글머리 뗀 문장 줄만 보낸다
         self.assertEqual(result["상태"], "종결형 위반")
         self.assertEqual(result["앞 번호"], "•")
         self.assertEqual([(c["순위"], c["문장"]) for c in result["후보"]],
@@ -120,47 +149,49 @@ class AiTests(unittest.TestCase):
         self.assertEqual({c["출처"] for c in result["후보"]}, {SOURCE_AI})
         self.assertEqual(result["후보"][0]["근거"], ["종결이 규정과 다름", "규칙 재검사 통과"])
         self.assertIn("수치", result["버린 AI 후보"][0]["이유"])
-        self.assertTrue(result["AI"].startswith("AI 사용(fake-model) · 호출 1번, 문장 1개"))
+        self.assertTrue(result["AI"].startswith("AI 사용(fake-model) · 호출 1번(새 호출 1번), 문장 1개 · 입력 500"), result["AI"])
 
     def test_at_most_five_candidates(self):
         many = [f"절차를 단계별로 {word}." for word in ("설명한다", "안내한다", "제시한다", "정리한다", "소개한다", "시연한다")]
         asker, _ = fake([finding(1, "어색한 낱말", suggestions=many)])
-        result = suggest_sentence("절차를 단계별로 저격한다.", "교수 방법", asker=asker)
+        result = suggest_sentence("절차를 단계별로 저격한다.", "교수 방법", generate=asker)
         self.assertEqual(len(result["후보"]), DEFAULT_CONFIG.max_candidates)
         self.assertEqual(result["상태"], "어색한 낱말")
 
     def test_no_usable_candidate_is_honest(self):
         asker, _ = fake([finding(1, "어색한 낱말", suggestions=["절차를 5단계로 설명한다."])])
-        result = suggest_sentence("절차를 단계별로 저격한다.", "교수 방법", asker=asker)
+        result = suggest_sentence("절차를 단계별로 저격한다.", "교수 방법", generate=asker)
         self.assertEqual(result["후보"], [])
         self.assertTrue(result["추천 없음"].startswith("추천 없음(사람이 고쳐야 함)"))
         self.assertIn("수치", result["버린 AI 후보"][0]["이유"])
 
     def test_ending_claim_on_compliant_sentence_is_relabeled(self):
         asker, _ = fake([finding(1, reason="'명한다'는 끝말 오류", suggestions=["절차를 단계별로 설명한다."])])
-        result = suggest_sentence("절차를 단계별로 명한다.", "교수 방법", asker=asker)
+        result = suggest_sentence("절차를 단계별로 명한다.", "교수 방법", generate=asker)
         self.assertEqual(result["상태"], "기타 표현")                            # 끝말은 '~한다.'로 규정 꼴에 맞다
         self.assertIn("끝말은 규정 꼴에 맞음", result["사유"][0])
         self.assertEqual([c["문장"] for c in result["후보"]], ["절차를 단계별로 설명한다."])
 
     def test_numbers_and_unknown_kind_are_checked(self):
-        flagged, rejected, model = ask_lines("교수 방법", ["절차를 설명함.", "사례를 든다."], asker=fake([
-            finding(9, suggestions=["x"]), finding("둘", suggestions=["x"]), {"line": 1, "kind": "이상한 유형", "reason": "", "suggestions": "절차를 설명한다."},
-            finding(1, suggestions=["두 번째 답"])])[0])
-        self.assertEqual(sorted(flagged), [0])
-        self.assertEqual((flagged[0]["kind"], [c["문장"] for c in flagged[0]["후보"]]), ("기타 표현", ["절차를 설명한다."]))
-        self.assertEqual((rejected, model), ([], "fake-model"))
+        asked = {4: ("교수 방법", "절차를 설명함."), 5: ("교수 방법", "사례를 든다.")}
+        data = {"findings": [finding(9, suggestions=["x"]), finding("둘", suggestions=["x"]),
+                             {"line": 4, "kind": "이상한 유형", "reason": "", "suggestions": "절차를 설명한다."},
+                             finding(4, suggestions=["두 번째 답"])]}
+        flagged, rejected, dropped = parse(data, asked, "fake-model")
+        self.assertEqual((sorted(flagged), dropped), ([4], 3))                     # 묻지 않은 번호·글 번호·두 번째 답은 버림
+        self.assertEqual((flagged[4]["kind"], [c["문장"] for c in flagged[4]["후보"]]), ("기타 표현", ["절차를 설명한다."]))
+        self.assertEqual(rejected, [])
 
     def test_no_finding_and_failure(self):
         asker, _ = fake([])
-        self.assertEqual(suggest_sentence("절차를 단계별로 설명한다.", "교수 방법", asker=asker)["상태"], NO_FINDING)
+        self.assertEqual(suggest_sentence("절차를 단계별로 설명한다.", "교수 방법", generate=asker)["상태"], NO_FINDING)
 
-        def broken(kind, bodies):
-            raise LlmError("연결 실패")
+        def broken(system, document, request, *, task, tasks=None, out_schema=None):
+            raise ClaudeError("Claude 연결 실패")
 
-        failed = suggest_sentence("절차를 설명함.", "교수 방법", asker=broken)
+        failed = suggest_sentence("절차를 설명함.", "교수 방법", generate=broken)
         self.assertEqual((failed["상태"], failed["후보"]), (UNDECIDED, []))
-        self.assertIn("AI 호출 실패: 연결 실패", failed["사유"][0])
+        self.assertIn("AI 호출 실패: Claude 연결 실패", failed["사유"][0])
 
     def test_not_configured_is_undecided_without_rule_fallback(self):
         result = suggest_sentence("절차를 설명함.", "교수 방법")   # 테스트 환경에는 키·승인이 없다
@@ -226,7 +257,7 @@ class ManuscriptTests(unittest.TestCase):
         cls.folder = tempfile.TemporaryDirectory()
         cls.path = write_manuscript(Path(cls.folder.name) / "원고_LM1203020201_24v3.hwpx")
         cls.asker, cls.calls = fake(fixing)
-        cls.result = suggest_manuscript(cls.path, asker=cls.asker)
+        cls.result = suggest_manuscript(cls.path, generate=cls.asker)
         cls.cards = {c["자리"]: c for part in cls.result["구성"] for c in part["문장"]}
 
     @classmethod
@@ -247,12 +278,40 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(self.first("학습 1 교수 방법 1"), "사례를 중심으로 설명한다.")
         self.assertEqual(self.first("평가 표 요구사항 수집 · 평가 항목 1"), "요구사항 수집 능력")
         self.assertNotIn("차례 1-2", self.cards)                                  # AI가 지적하지 않은 문장은 카드가 없다
+        models = {c["모델"] for card in self.cards.values() for c in card["후보"]}
+        self.assertEqual(models, {"fake-model"})      # 후보마다 모델 이름 — 채택 기록의 '활용 AI'(집필자 서약서 F09 고지)에 쓴다
 
-    def test_same_kind_batched_and_lines_only(self):
-        self.assertEqual(self.result["AI"]["호출"], len(self.calls))
+    def test_one_call_for_all_kinds_and_lines_only(self):
+        self.assertEqual((self.result["AI"]["호출"], len(self.calls)), (1, 1))      # 종류 전부를 한 번에 묻는다
         self.assertEqual(self.result["AI"]["물은 문장 수"], self.result["요약"]["검사한 문장"])
-        self.assertLess(len(self.calls), self.result["AI"]["물은 문장 수"])        # 같은 종류끼리 묶어 묻는다
-        self.assertFalse(any("세부 설명" in b for _, bodies in self.calls for b in bodies))   # 하위 번호 줄은 보내지 않는다
+        self.assertEqual(sum(len(bodies) for _, bodies in self.calls[0]), self.result["요약"]["검사한 문장"])
+        self.assertGreater(len(self.calls[0]), 3)
+        self.assertFalse(any("세부 설명" in b for _, bodies in self.calls[0] for b in bodies))   # 하위 번호 줄은 보내지 않는다
+        usage = self.result["AI"]["usage"]
+        self.assertEqual((usage["calls"], usage["new_calls"], usage["input"], usage["output"]), (1, 1, 500, 50))
+        self.assertIn("호출 1번(새 호출 1번)", self.result["AI"]["상태"])
+
+    def test_cut_output_is_split_by_kind_then_by_range(self):
+        seen = []
+
+        def cut(system, document, request, *, task, tasks=None, out_schema=None):
+            asked = asked_of(document, request)
+            seen.append((document, [(kind, [n for n, _ in pairs]) for kind, pairs in asked]))
+            if len(asked) > 1 or len(asked[0][1]) > 1:
+                raise ClaudeError("출력이 max_tokens에서 잘림")
+            return {"data": {"findings": []}, "model": "fake-model", "cached": False, "usage": {}}
+
+        result = suggest_manuscript(self.path, generate=cut)
+        self.assertEqual(len({document for document, _ in seen}), 1)              # 원고 블록은 같다(캐시 읽기)
+        answered = [group for _, group in seen if len(group) == 1 and len(group[0][1]) == 1]
+        self.assertEqual(len(answered), result["요약"]["검사한 문장"])           # 결국 문장 하나씩까지 나눠 모두 물음
+        self.assertEqual(result["AI"]["물은 문장 수"], result["요약"]["검사한 문장"])
+        self.assertEqual(result["AI"]["실패"], 0)
+        full = dict(seen[0][1])                                                   # 첫 호출 = 종류 전부, 범위 전부
+        self.assertGreater(len(full), 1)
+        self.assertEqual(seen[1][1], seen[0][1][: len(full) // 2])               # 먼저 종류 묶음을 반으로
+        parts = [(kind, numbers) for _, group in seen if len(group) == 1 for kind, numbers in group]
+        self.assertTrue(any(len(numbers) < len(full[kind]) for kind, numbers in parts))   # 종류 하나가 잘리면 그 종류의 범위를 반으로
 
     def test_examples_come_from_unflagged_sentences(self):
         examples = self.cards["학습 1 교수 방법 1"]["참고 예문"]
@@ -268,8 +327,8 @@ class ManuscriptTests(unittest.TestCase):
         from ncs_suggest.config import SuggestConfig
 
         asker, calls = fake([])
-        result = suggest_manuscript(self.path, asker=asker, config=SuggestConfig(llm_max_sentences=3, llm_batch=2))
-        self.assertEqual(sum(len(bodies) for _, bodies in calls), 3)
+        result = suggest_manuscript(self.path, generate=asker, config=SuggestConfig(llm_max_sentences=3))
+        self.assertEqual(sum(len(bodies) for call in calls for _, bodies in call), 3)
         self.assertTrue(any("AI에 묻지 못한 문장" in note for note in result["알림"]))
 
     def test_not_configured_gives_no_cards(self):
@@ -304,64 +363,41 @@ REFS = Corpus([
 
 
 class ContextPromptTests(unittest.TestCase):
-    """문맥(자리·앞뒤 문장)과 참고 문장이 질문에 붙는가 — 요구사항 '문맥의 흐름을 고려하여'."""
+    """자리와 참고 문장이 원고 블록에 붙는가 — 요구사항 '문맥의 흐름을 고려하여'. 앞뒤 문장은 블록 안의 윗줄·아랫줄이다."""
 
-    def test_prompt_adds_context_and_reference_lines(self):
-        text = prompt("교수 방법", ["절차를 설명함.", "사례를 든다."],
-                      contexts=[{"자리": "학습 1 교수 방법 1", "앞": "", "뒤": "사례를 든다."}, {"자리": "", "앞": "", "뒤": ""}],
-                      references=[[{"문장": "사례를 중심으로 절차를 설명한다."}], []])
-        self.assertIn("1. 절차를 설명함.\n   문맥 — 자리: 학습 1 교수 방법 1 | 뒤 문장: 사례를 든다.\n   참고 문장 — 「사례를 중심으로 절차를 설명한다.」\n2. 사례를 든다.", text)
-        self.assertTrue(text.endswith("2. 사례를 든다."))                         # 빈 문맥·참고 문장은 줄을 만들지 않는다
+    def test_document_adds_place_and_reference_lines(self):
+        text = document_text({1: ("교수 방법", "절차를 설명함."), 2: ("교수 방법", "사례를 든다.")},
+                             {1: {"자리": "학습 1 교수 방법 1", "참고 문장": ["사례를 중심으로 절차를 설명한다."]}, 2: {"자리": "", "참고 문장": []}})
+        self.assertIn("[1] 절차를 설명함.\n   자리 — 학습 1 교수 방법 1\n   참고 문장 — 「사례를 중심으로 절차를 설명한다.」\n[2] 사례를 든다.", text)
+        self.assertTrue(text.endswith("[2] 사례를 든다."))                         # 빈 자리·참고 문장은 줄을 만들지 않는다
+        self.assertIn("참고 문장", build_system())                                 # 붙는 줄을 어떻게 쓰는지 system에 적혀 있다
 
-    def test_context_is_cut_and_can_be_turned_off(self):
-        from ncs_suggest.config import SuggestConfig
-
-        contexts = [{"자리": "학습 1", "앞": "가" * 300, "뒤": ""}]
-        self.assertIn("앞 문장: " + "가" * 120 + "…", prompt("교수 방법", ["절차를 설명함."], contexts=contexts))
-        self.assertNotIn("문맥", prompt("교수 방법", ["절차를 설명함."], contexts=contexts, config=SuggestConfig(context_chars=0)))
-
-    def test_pipeline_sends_neighbours_and_references(self):
+    def test_pipeline_sends_places_neighbours_and_references(self):
         seen = []
 
-        def spy(kind, bodies, **kwargs):
-            seen.append((kind, bodies, kwargs["contexts"], kwargs["references"]))
-            return {}, [], "spy"
+        def spy(system, document, request, *, task, tasks=None, out_schema=None):
+            seen.append(document)
+            return {"data": {"findings": []}, "model": "spy", "cached": False, "usage": {}}
 
-        with tempfile.TemporaryDirectory() as folder, mock.patch("ncs_suggest.pipeline.ask_lines", spy):
-            suggest_manuscript(write_manuscript(Path(folder) / "원고_LM1203020201_24v3.hwpx"), asker=lambda *a: None, corpus=REFS)
-        kind, bodies, contexts, references = next(item for item in seen if item[0] == "교수 방법")
-        self.assertEqual(bodies, ["사례를 중심으로 설명함.", "절차를 단계별로 설명한다."])
-        self.assertEqual(contexts, [{"자리": "학습 1 교수 방법 1", "앞": "", "뒤": ""}, {"자리": "학습 1 교수 방법 2", "앞": "", "뒤": ""}])   # 이웃이 같은 질문에 있으면 자리만
-        self.assertEqual(references[0][0]["출처"], "기존모듈A.hwpx")
+        with tempfile.TemporaryDirectory() as folder:
+            suggest_manuscript(write_manuscript(Path(folder) / "원고_LM1203020201_24v3.hwpx"), generate=spy, corpus=REFS)
+        (document,) = seen                                                         # 원고 블록 하나
+        lines = document.splitlines()
+        first = next(i for i, line in enumerate(lines) if line.endswith("사례를 중심으로 설명함."))
+        self.assertEqual(lines[first + 1], "   자리 — 학습 1 교수 방법 1")
+        self.assertTrue(lines[first + 2].startswith("   참고 문장 — 「"))           # 참고 문장 묶음에서 고른 문장
+        following = [line for line in lines[first + 1:] if line.startswith("[")][0]
+        self.assertTrue(following.endswith("절차를 단계별로 설명한다."))            # 뒤 문장은 같은 블록의 다음 번호
 
-    def test_neighbours_are_written_when_the_batch_splits_them(self):
-        from ncs_suggest.config import SuggestConfig
-
+    def test_direct_input_has_no_place_line(self):
         seen = []
 
-        def spy(kind, bodies, **kwargs):
-            seen.append((kind, bodies, kwargs["contexts"]))
-            return {}, [], "spy"
+        def spy(system, document, request, *, task, tasks=None, out_schema=None):
+            seen.append(document)
+            return {"data": {"findings": []}, "model": "spy", "cached": False, "usage": {}}
 
-        with tempfile.TemporaryDirectory() as folder, mock.patch("ncs_suggest.pipeline.ask_lines", spy):
-            suggest_manuscript(write_manuscript(Path(folder) / "원고_LM1203020201_24v3.hwpx"), asker=lambda *a: None, corpus=REFS,
-                               config=SuggestConfig(llm_batch=1))
-        teach = [contexts[0] for kind, _, contexts in seen if kind == "교수 방법"]
-        self.assertEqual(teach[0], {"자리": "학습 1 교수 방법 1", "앞": "", "뒤": "절차를 단계별로 설명한다."})   # 글머리는 뗀다
-        self.assertEqual(teach[1]["앞"], "사례를 중심으로 설명함.")
-        steps = [contexts[0] for kind, _, contexts in seen if kind == "수행 순서"]
-        self.assertEqual(steps[0]["뒤"], "이해관계자를 식별한다.")                 # 하위 번호 줄이 아니라 다음 네모 번호 줄(번호 글자는 뗀다)
-
-    def test_direct_input_has_no_place_context(self):
-        seen = []
-
-        def spy(kind, bodies, **kwargs):
-            seen.append(kwargs["contexts"])
-            return {}, [], "spy"
-
-        with mock.patch("ncs_suggest.pipeline.ask_lines", spy):
-            suggest_sentence("절차를 설명함.", "교수 방법", asker=lambda *a: None, corpus=REFS)
-        self.assertEqual(seen, [[{"자리": "", "앞": "", "뒤": ""}]])
+        suggest_sentence("절차를 설명함.", "교수 방법", generate=spy, corpus=Corpus([], name="빈 묶음"))
+        self.assertNotIn("자리 —", seen[0])
 
 
 class CorpusTests(unittest.TestCase):
@@ -380,7 +416,7 @@ class CorpusTests(unittest.TestCase):
         from ncs_suggest.config import SuggestConfig
 
         asker, _ = fake([finding(1, suggestions=["사례 중심으로 절차를 안내한다.", "사례 중심으로 절차를 설명한다."])])
-        result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", asker=asker, corpus=REFS, config=SuggestConfig(ground_min=0.9))
+        result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", generate=asker, corpus=REFS, config=SuggestConfig(ground_min=0.9))
         first, second = result["후보"]
         self.assertEqual((first["순위"], first["문장"]), (1, "사례 중심으로 절차를 설명한다."))      # AI는 2순위로 냈지만 근거 문장이 있어 앞으로
         self.assertEqual(first["근거 문장"]["출처"], "기존모듈A.hwpx")
@@ -390,7 +426,7 @@ class CorpusTests(unittest.TestCase):
 
     def test_without_corpus_order_is_unchanged_and_noted(self):
         asker, _ = fake([finding(1, suggestions=["사례 중심으로 절차를 안내한다.", "사례 중심으로 절차를 설명한다."])])
-        result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", asker=asker)
+        result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", generate=asker)
         self.assertEqual([c["문장"] for c in result["후보"]], ["사례 중심으로 절차를 안내한다.", "사례 중심으로 절차를 설명한다."])
         self.assertEqual([c["근거 문장"] for c in result["후보"]], [None, None])
         self.assertTrue(result["참고 문장"].startswith("참고 문장 묶음 없음"))
@@ -435,7 +471,7 @@ class CandidateTableTests(unittest.TestCase):
     def setUpClass(cls):
         cls.folder = tempfile.TemporaryDirectory()
         cls.path = write_manuscript(Path(cls.folder.name) / "원고_LM1203020201_24v3.hwpx")
-        cls.result = suggest_manuscript(cls.path, asker=fake(fixing)[0], corpus=REFS)
+        cls.result = suggest_manuscript(cls.path, generate=fake(fixing)[0], corpus=REFS)
         cls.rows = candidate_table(cls.result)
 
     @classmethod
@@ -458,7 +494,7 @@ class CandidateTableTests(unittest.TestCase):
 
     def test_single_card_and_cli_csv(self):
         card = suggest_sentence("• 사례 중심으로 절차를 설명함.", "교수 방법", corpus=REFS,
-                                asker=fake([finding(1, suggestions=["사례 중심으로 절차를 설명한다."])])[0])
+                                generate=fake([finding(1, suggestions=["사례 중심으로 절차를 설명한다."])])[0])
         (row,) = candidate_table(card)
         self.assertEqual((row["원고"], row["정정 후보 1순위"]), ("", "• 사례 중심으로 절차를 설명한다."))
         self.assertIn("「사례를 중심으로 절차를 설명한다.」 (기존모듈A.hwpx, 학습 1 교수 방법 1, 유사도", row["근거 문장 1순위"])

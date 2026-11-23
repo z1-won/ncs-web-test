@@ -14,6 +14,8 @@ import re
 from .layout import Block
 
 TAIL = ("참고 자료", "활용 서식", "부록")
+OPTIONAL = ("활용 서식", "부록")      # 필수 집필 사항이 아니다(F11 매뉴얼 인쇄 20~21쪽) — 쓰지 않으면 차례에서도 지운다
+_TOC_TAIL = re.compile(r"(참고자료|활용서식|부록)\d+")
 _NOT_WORD = re.compile(r"[^0-9A-Za-z가-힣]")
 _LESSON = re.compile(r"학습\s*(\d+)")
 
@@ -77,7 +79,7 @@ def assign(blocks: list[Block]) -> tuple[list[str], list[str]]:
     for block in blocks:
         name = heading(block, state)
         if name is None and state == "차례":
-            match = re.fullmatch(r"(참고자료|활용서식|부록)\d+", norm(block.head))
+            match = _TOC_TAIL.fullmatch(norm(block.head))
             if match:
                 toc_tail.append(_tail_name(match.group(1)) or "")
         if (name is None and block.kind == "picture" and not block.has_caption and block.page_top
@@ -93,3 +95,13 @@ def assign(blocks: list[Block]) -> tuple[list[str], list[str]]:
                 found.append(name)
         out.append(state)
     return out, found
+
+
+def toc_tail(blocks: list[Block], names: list[str]) -> list[str]:
+    """차례 면 줄('참고 자료 63')에서 읽은 꼬리 구성 이름(차례 순서). 읽지 못했으면 빈 목록."""
+    out = []
+    for block, name in zip(blocks, names):
+        match = _TOC_TAIL.fullmatch(norm(block.head)) if name == "차례" else None
+        if match and _tail_name(match.group(1)) not in out:
+            out.append(_tail_name(match.group(1)))
+    return out

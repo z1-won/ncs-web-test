@@ -155,7 +155,7 @@ export default function VolumePage() {
           <div className="form-conts">
             <div className="krds-form-check">
               <input type="checkbox" id="volume-appendix" checked={appendix} disabled={busy} onChange={(e) => setAppendix(e.target.checked)} />
-              <label htmlFor="volume-appendix">부록을 산정에 넣기 (계약서 제13조 4항 ①)</label>
+              <label htmlFor="volume-appendix">부록을 산정에 넣기 (계약서 제13조 4항 ①, 정산지침 F16 인쇄 19쪽, 매뉴얼 F11 인쇄 20~21쪽)</label>
             </div>
           </div>
         </div>
@@ -264,7 +264,7 @@ function VolumeResult({ result }) {
         <div><dt>행 합계</dt><dd>{total["행 합계"].toLocaleString()}행</dd></div>
         <div><dt>높이로 환산한 쪽수</dt><dd>{total["쪽 환산"]}쪽</dd></div>
         {result["물리 쪽 수"] != null && <div><dt>원고 전체 쪽수</dt><dd>{result["물리 쪽 수"]}쪽</dd></div>}
-        {change && <div><dt>변경 분량</dt><dd><strong>{change["변경 분량"]["기입 분량"]}매</strong> ({change["변경 행"].toLocaleString()}행, {change["변경 비율"]})</dd></div>}
+        {change && <div><dt>변경 분량</dt><dd><strong>{change["변경 분량"]["기입 분량"]}매</strong> ({change["변경 행"].toLocaleString()}행을 이어 붙여 {change["변경 분량"]["쪽 환산"]}쪽, {change["변경 비율"]})</dd></div>}
         {manual && <div><dt>수작업 대조</dt><dd>오차율 {manual.오차율} ({manual.결과})</dd></div>}
       </dl>
       <Notes notes={result.알림} warnings={result.경고} />
@@ -297,7 +297,11 @@ function VolumeResult({ result }) {
       </div>
       {change && (
         <p className="meta section-desc">
-          기존 원고 {change["기존 원고"]}: {change["기존 원고 분량"]["기입 분량"]}매{change["기존 원고 추정"] ? "(추정)" : ""}, 변경 {change["변경 분량"].쪽}쪽 {change["변경 분량"].행}행. {change.방법}
+          기존 원고 {change["기존 원고"]}: {change["기존 원고 분량"]["기입 분량"]}매{change["기존 원고 추정"] ? "(추정)" : ""}. {change.방법}
+          <br />변경 분량: {change["변경 분량"].방법}. 온 쪽 {change["변경 분량"]["온 쪽"]}쪽, 남은 부분 {change["변경 분량"]["남은 부분(쪽)"]}쪽
+          {change["물리 쪽 기준(참고)"]?.["쪽마다 기준"] && (
+            <><br />참고(산정에 쓰지 않음): 바뀐 행을 원고의 쪽에 둔 채 세면 ½쪽 이상 바뀐 쪽이 {change["물리 쪽 기준(참고)"]["쪽마다 기준"].쪽}쪽입니다.</>
+          )}
         </p>
       )}
 

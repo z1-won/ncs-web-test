@@ -24,8 +24,9 @@ def register(app: FastAPI, services: Services) -> None:
 
     @app.post("/api/suggest", responses={400: {"model": ErrorResponse}})
     def suggest(manuscript: Annotated[UploadFile, File()]) -> Any:
-        """원고(hwp/hwpx) → 추천 카드(ncs_suggest.suggest_manuscript). 고칠 문장과 후보는 AI가 낸다 — 서버에 LLM 설정·반출 승인이
-        있으면 자동으로 부르고, 없으면 카드 없이 'AI 미설정 — 이유'(결과의 AI.상태)만 낸다."""
+        """원고(hwp/hwpx) → 추천 카드(ncs_suggest.suggest_manuscript). 고칠 문장과 후보는 AI(Claude)가 낸다 — 서버에
+        ANTHROPIC_API_KEY·반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면 자동으로 부르고, 없으면 카드 없이 'AI 미설정 — 이유'(결과의 AI.상태)만
+        낸다. 사용량은 AI.usage."""
         from ncs_suggest import suggest_manuscript
 
         name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", Path(manuscript.filename or "원고.hwp").name).strip(" .") or "원고.hwp"

@@ -17,7 +17,8 @@ from ncs_volume import DEFAULT_CONFIG, VolumeConfig, manual_check, measure, roun
 from ncs_volume.__main__ import main
 from ncs_volume.diff import changed_lines
 from ncs_volume.layout import Layout, Line, Unit, hwp_paragraphs, read_layout
-from ncs_volume.segments import assign
+from ncs_volume.pipeline import gathered
+from ncs_volume.segments import assign, toc_tail
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -129,6 +130,19 @@ class Tally(unittest.TestCase):
         out = tally(lines, self.layout(measured=False), DEFAULT_CONFIG)
         self.assertEqual((out["쪽"], out["행"], out["기입 분량"]), (2, 17, 3))   # 85/34 = 2.5 → ½ 이상 올림
 
+    def test_changed_lines_are_gathered_without_blank_space(self):
+        """개선 변경 분량은 바뀐 행을 이어 붙여 센다(F16 인쇄 20쪽) — 쪽마다 ½쪽 넘게 바뀐 세 쪽이 물리 쪽 기준으로는 3쪽이지만
+        이어 붙이면 54행 × 1,980 ÷ 68,598 = 1.56쪽 → 온 쪽 1 + 남은 0.56(½ 이상) = 2쪽."""
+        lines = [Line(1, PITCH, page, k * PITCH, 0, 0) for page in range(3) for k in range(18)]
+        self.assertEqual(tally(lines, self.layout(), DEFAULT_CONFIG)["쪽마다 기준"]["쪽"], 3)     # 물리 쪽마다 ½쪽 규칙(비교용 값)
+        out = gathered(lines, self.layout(), DEFAULT_CONFIG)
+        self.assertEqual((out["기입 분량"], out["쪽 환산"], out["온 쪽"], out["남은 부분(쪽)"], out["행 합계"]), (2, 1.56, 1, 0.56, 54))
+        self.assertIn("빈 공간 없이", out["방법"])
+        few = gathered(lines[:5], self.layout(), DEFAULT_CONFIG)
+        self.assertEqual((few["기입 분량"], few["남은 부분(쪽)"]), (0, 0.14))                  # ½쪽 미만은 쪽이 되지 않는다
+        guess = gathered([Line(1, PITCH, -1, 0, 0, 0)] * 51, self.layout(measured=False), DEFAULT_CONFIG)
+        self.assertEqual((guess["쪽 환산"], guess["기입 분량"]), (1.5, 2))                       # 추정: 51행 ÷ 34행
+
     def test_manual_check_reports_error_rate(self):
         self.assertEqual(manual_check(80, 80, DEFAULT_CONFIG)["결과"], "기준 충족")
         result = manual_check(81, 80, DEFAULT_CONFIG)
@@ -176,7 +190,23 @@ class HwpxLayout(unittest.TestCase):
         self.assertEqual(result["합계"]["쪽"], 2)
         self.assertFalse(result["추정"])
         self.assertEqual(result["권고 분량"]["상태"], "권고보다 적음")
-        self.assertIn("찾지 못한 구성(원고에 없거나 제목을 읽지 못함): 활용 서식, 부록", result["알림"])
+        self.assertIn("원고에 없음(필수 아님 — 차례에도 없음, F11 매뉴얼 인쇄 20~21쪽): 활용 서식, 부록", result["알림"])   # 차례에 참고 자료만
+        self.assertFalse(any(note.startswith("찾지 못한 구성") for note in result["알림"]))
+        self.assertTrue(any(note.startswith("이 산정은 계약서 제2조 5항 기준") and "재인용" in note for note in result["알림"]))
+        self.assertIn("F11 매뉴얼 인쇄 20~21쪽", result["가정"]["권고 분량"])
+        self.assertIn("F16 정산지침 인쇄 19쪽", result["가정"]["부록"])
+
+    def test_missing_optional_parts_are_split_by_toc(self):
+        from ncs_volume.pipeline import _missing_notes
+
+        self.assertEqual(_missing_notes(["평가", "부록"], ["참고 자료", "부록"]),
+                         ["찾지 못한 구성(원고에 없거나 제목을 읽지 못함): 평가",
+                          "차례에는 있는데 본문에서 찾지 못한 구성(제목을 읽지 못했을 수 있음): 부록"])
+        self.assertTrue(_missing_notes(["활용 서식"], [])[0].startswith("찾지 못한 선택 구성(필수 집필 사항 아님"))
+        toc = Page().table([["차  례"]], 3 * PITCH).text("참고 자료 30").text("부록 33")
+        layout = read_layout(hwpx(Path(self.folder.name) / "차례.hwpx", [toc]))
+        names, _ = assign(layout.blocks)
+        self.assertEqual(toc_tail(layout.blocks, names), ["참고 자료", "부록"])
 
     def test_banner_picture_starts_tail_in_toc_order(self):
         layout = read_layout(self.path)
@@ -201,6 +231,14 @@ class HwpxLayout(unittest.TestCase):
         self.assertGreaterEqual(by.get("학습 — 필요 지식", 0), 1)   # 문단 글이 바뀐 줄만(줄 위치만 밀린 줄은 아님)
         self.assertLess(by.get("학습 — 필요 지식", 0), 20)
         self.assertNotIn("평가", by)
+        amount = change["변경 분량"]
+        self.assertEqual(amount["행 합계"], change["변경 행"])
+        self.assertEqual(amount["기입 분량"], amount["온 쪽"] + (1 if amount["남은 부분(쪽)"] >= 0.5 else 0))
+        self.assertEqual(change["물리 쪽 기준(참고)"]["행 합계"], change["변경 행"])
+        from ncs_volume.__main__ import render
+        text = render(measure(edited, previous=self.path))
+        self.assertIn("이어 붙여", text)
+        self.assertIn("참고(물리 쪽마다 ½쪽 규칙, 산정에 쓰지 않음)", text)
 
 
 class UnderstandingSection(unittest.TestCase):

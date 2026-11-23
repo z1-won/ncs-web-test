@@ -4,6 +4,8 @@
 --csv는 '문장 정정 필요 후보문장표'(원본 문장 ⇄ 정정 후보 1~5순위와 근거 문장)를 엑셀에서 열리는 CSV로 쓴다.
 참고 문장 묶음(기존 학습모듈·공공저작물)은 python -m ncs_suggest.corpus 로 만든다 — 있으면 후보마다 근거 문장이 붙는다.
 AI는 .env의 LLM 설정·반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면 자동으로 부르고, 없으면 이유만 출력한다(규칙으로 대신 판정하지 않음).
+AI(Claude)는 저장소 루트 .env(자동으로 읽음)나 환경 변수에 ANTHROPIC_API_KEY와 반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면
+자동으로 부르고, 없으면 이유만 출력한다(규칙으로 대신 판정하지 않음). 모델·노력은 LLM_REVIEW_MODEL·LLM_REVIEW_EFFORT.
 """
 
 from __future__ import annotations

@@ -13,6 +13,8 @@ MANUSCRIPT = ROOT / "samples" / "LM1203020201_24v3_light.hwpx"      # 출처 줄
 
 class SourcesWebTests(unittest.TestCase):
     def setUp(self):
+        if not MANUSCRIPT.is_file():
+            self.skipTest("표본 원고 없음(samples는 저장소 밖 자료)")
         from fastapi.testclient import TestClient
         from ncs_web.server import create_app
 
