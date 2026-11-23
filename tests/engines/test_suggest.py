@@ -273,6 +273,8 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(self.first("학습 1 교수 방법 1"), "사례를 중심으로 설명한다.")
         self.assertEqual(self.first("평가 표 요구사항 수집 · 평가 항목 1"), "요구사항 수집 능력")
         self.assertNotIn("차례 1-2", self.cards)                                  # AI가 지적하지 않은 문장은 카드가 없다
+        models = {c["모델"] for card in self.cards.values() for c in card["후보"]}
+        self.assertEqual(models, {"fake-model"})      # 후보마다 모델 이름 — 채택 기록의 '활용 AI'(집필자 서약서 F09 고지)에 쓴다
 
     def test_one_call_for_all_kinds_and_lines_only(self):
         self.assertEqual((self.result["AI"]["호출"], len(self.calls)), (1, 1))      # 종류 전부를 한 번에 묻는다

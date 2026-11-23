@@ -70,7 +70,7 @@ npm run dev
 
 ## 문장 추천 페이지
 
-메인 메뉴의 **문장 추천**(`/suggest`)은 집필 보조 페이지입니다(REQ-02-004). 원고를 올리면 `POST /api/suggest`(multipart: `manuscript`)가 `src/ncs_suggest`의 구성별 추천 카드 JSON을 돌려주고, 문장 하나는 `POST /api/suggest/sentence`(form: `text`, `kind`)로, 종류 목록은 `GET /api/suggest/kinds`로 받습니다. 고칠 문장과 후보는 LLM(Claude, `ncs_llmreview.claude`)이 내며 서버에 `ANTHROPIC_API_KEY`·반출 승인이 있으면 자동으로 부릅니다(선택 칸 없음). 모은 문장 전부를 한 번에 묻고, 배지에 모델·호출 수·토큰·비용이, 결과의 `AI.usage`에 사용량이 옵니다. 없으면 카드 없이 'AI 미설정 — 이유'(결과 머리 배지 `#suggest-ai-state`, 문장 직접 입력은 '판단불가' 카드)만 옵니다. 결과는 저장하지 않으며 채택/기각 기록과 채택률은 화면이 갖고 JSON·CSV로 내려받게 합니다. 화면은 `frontend/src/pages/SuggestPage.jsx`입니다.
+메인 메뉴의 **문장 추천**(`/suggest`)은 집필 보조 페이지입니다(REQ-02-004). 원고를 올리면 `POST /api/suggest`(multipart: `manuscript`)가 `src/ncs_suggest`의 구성별 추천 카드 JSON을 돌려주고, 문장 하나는 `POST /api/suggest/sentence`(form: `text`, `kind`)로, 종류 목록은 `GET /api/suggest/kinds`로 받습니다. 고칠 문장과 후보는 LLM(Claude, `ncs_llmreview.claude`)이 내며 서버에 `ANTHROPIC_API_KEY`·반출 승인이 있으면 자동으로 부릅니다(선택 칸 없음). 모은 문장 전부를 한 번에 묻고, 배지에 모델·호출 수·토큰·비용이, 결과의 `AI.usage`에 사용량이 옵니다. 없으면 카드 없이 'AI 미설정 — 이유'(결과 머리 배지 `#suggest-ai-state`, 문장 직접 입력은 '판단불가' 카드)만 옵니다. 결과는 저장하지 않으며 채택/기각 기록과 채택률은 화면이 갖고 JSON·CSV로 내려받게 합니다. 기록 행의 '활용 AI'는 채택한 후보의 `모델`(서버가 후보마다 싣는 값), '채택 일시'는 채택을 누른 로컬 시각(ISO, 시간대 포함)으로, 집필자 서약서(F09) AI 고지 표의 '활용 AI'에 옮겨 적을 값입니다(쪽 번호는 결과에 없어 구성·자리로 대신). 화면은 `frontend/src/pages/SuggestPage.jsx`입니다.
 
 ## PostgreSQL 검수 이력
 
