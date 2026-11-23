@@ -99,11 +99,13 @@ def _parse(text: str):
         return json.loads(m.group(0))
 
 
-def generate_json(system: str, document: str, request: str, *, task: str, tasks: list[str] | None = None) -> dict:
-    """→ {'data', 'usage', 'cached', 'model'}. document = [원고](캐시), request = [검토 항목]. 키·승인이 없으면 ClaudeError."""
+def generate_json(system: str, document: str, request: str, *, task: str, tasks: list[str] | None = None,
+                  out_schema: dict | None = None) -> dict:
+    """→ {'data', 'usage', 'cached', 'model'}. document = [원고](캐시), request = [검토 항목]. 키·승인이 없으면 ClaudeError.
+    out_schema: 출력 JSON 스키마(없으면 schema(tasks) — '지적' 목록). 의견 반영 검토·문장 추천처럼 답 모양이 다른 기능이 준다."""
     cfg = settings()
     model, effort = cfg["model"], cfg["effort"]
-    out_schema = schema(tasks)
+    out_schema = out_schema or schema(tasks)
     digest = hashlib.sha256(json.dumps(["claude", model, system, document, request, effort, out_schema],
                                        ensure_ascii=False).encode("utf-8")).hexdigest()[:32]
     path = cfg["cache_dir"] / task / f"{digest}.json"

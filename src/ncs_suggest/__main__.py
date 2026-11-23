@@ -1,7 +1,8 @@
 """python -m ncs_suggest 원고.hwp [--json 결과.json]  |  python -m ncs_suggest --sentence "문장" --kind "교수 방법"
 
 원고를 주면 구성별로 AI가 고칠 문장이라고 본 문장과 순위 붙인 정정 후보(최대 5개)·참고 예문을 출력한다. 원고는 고치지 않는다.
-AI는 .env의 LLM 설정·반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면 자동으로 부르고, 없으면 이유만 출력한다(규칙으로 대신 판정하지 않음).
+AI(Claude)는 저장소 루트 .env(자동으로 읽음)나 환경 변수에 ANTHROPIC_API_KEY와 반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면
+자동으로 부르고, 없으면 이유만 출력한다(규칙으로 대신 판정하지 않음). 모델·노력은 LLM_REVIEW_MODEL·LLM_REVIEW_EFFORT.
 """
 
 from __future__ import annotations

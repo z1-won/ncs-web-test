@@ -4,7 +4,8 @@
 - 1행에 1자 이상 → 1행. 행 띄움·문단 나누기(빈 문단)도 1행. 출처를 밝힌 인용·캡션 글도 넣는다. 시각 자료는 뺀다.
 - 쪽: 줄 배치를 읽은 원고는 물리 쪽마다 산정 대상이 차지한 높이가 본문 높이의 ½ 이상이면 1쪽, 아니면 그 쪽의 행을 '행'으로 남긴다.
   기입 분량(매) = 쪽 + (남은 행 ÷ 쪽당 행 수, ½ 이상 올림). 배치 정보가 없으면 전체 행 ÷ 쪽당 행 수(½ 이상 올림)로 '추정'한다.
-- 변경 분량: 변경된 행만 같은 방식으로 센다.
+- 변경 분량(개선): 바뀐 행만 따로 모아 빈 공간 없이 이어 붙인 분량으로 센다(F16 정산지침 인쇄 20쪽) — gathered.
+  물리 쪽마다 ½쪽 규칙을 적용한 값은 '물리 쪽 기준(참고)'으로만 남긴다.
 - 출력본 PDF를 함께 주면 전체 쪽 수·구성별 쪽 범위·쪽별 채움 높이를 PDF에서 재고(printed.py) 그 기입 분량을 산정에 쓴다.
   한글 줄 배치 계산값은 '합계'에 그대로 두고 나란히 보여 준다. 다른 원고의 PDF면 판단불가로 알리고 한글 값을 쓴다.
 - 집필료: 채택한 기입 분량 × 단가(fee.py, 계약서 F07·정산지침 F16 근거).
@@ -13,6 +14,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from pathlib import Path
 
@@ -23,9 +25,11 @@ from .diff import changed_lines
 from .fee import compute_fee
 from .layout import Layout, Line, Unit, read_layout
 from .printed import measure_printed
-from .segments import assign
+from .segments import OPTIONAL, assign, toc_tail
 
 UNDECIDED = "판단불가"
+VISUAL_NOTE = ("이 산정은 계약서 제2조 5항 기준(시각 자료 전부 제외)입니다. F16 정산지침 검수 기준과 다른 점(인용된 사진·삽화는 원고 매수에 넣음, "
+               "같은 세분류 기개발 학습모듈에서 재인용한 글·표는 원고료에서 뺌)은 반영하지 않았으니 사람이 확인하세요.")
 
 
 def tally(lines: list[Line], layout: Layout, config: VolumeConfig) -> dict:
@@ -52,8 +56,52 @@ def tally(lines: list[Line], layout: Layout, config: VolumeConfig) -> dict:
             "쪽 환산": round(sum(fill.values()) / body, 2), "행 합계": total}
 
 
+def gathered(lines: list[Line], layout: Layout, config: VolumeConfig) -> dict:
+    """바뀐 행 → 개선 기준 변경 분량. F16 정산지침 인쇄 20쪽 '(개선) 새로 수정한 부분만을 별도로 모아 … 빈 공간 없이 새로운 문서로
+    작성'에 따라 행을 원고의 물리 쪽에 두지 않고 이어 붙여 센다: 쪽 환산 = 바뀐 행 높이 합 ÷ 본문 높이(줄 배치가 없으면 행 수 ÷ 쪽당 행 수),
+    온 쪽 + 남은 부분이 ½쪽 이상이면 1쪽.
+
+    '행 띄움·문단 나누기는 그대로 둔다': Line.height는 같은 쪽 다음 줄까지의 거리라 바뀐 줄에 딸린 줄 사이·문단 간격이 들어 있다
+    (쪽 마지막 줄은 줄 높이 + 줄 사이). 빈 문단(행 띄움)은 그 자체가 행이라 새로 생겼거나 바뀌었을 때만 들어간다.
+    """
+    count = sum(line.count for line in lines)
+    if layout.measured:
+        pages = sum(line.height for line in lines) / config.body_height
+        how = "바뀐 행을 빈 공간 없이 이어 붙임 — 바뀐 행 높이 합(줄 사이·문단 간격 포함) ÷ 본문 높이"
+    else:
+        pages = count / layout.lines_per_page
+        how = f"바뀐 행을 빈 공간 없이 이어 붙임 — 바뀐 행 수 ÷ 쪽당 {layout.lines_per_page}행(추정)"
+    full = math.floor(pages)
+    rest = pages - full
+    return {"기입 분량": full + (1 if rest >= config.half_page else 0), "쪽 환산": round(pages, 2), "온 쪽": full,
+            "남은 부분(쪽)": round(rest, 2), "행 합계": count,
+            "방법": f"{how}, 온 쪽 + 남은 부분이 {config.half_page:g}쪽 이상이면 1쪽(F16 정산지침 인쇄 20쪽 개선 기준)"}
+
+
 def _counted_units(layout: Layout, names: list[str], config: VolumeConfig) -> list[tuple[str, Unit]]:
     return [(name, unit) for block, name in zip(layout.blocks, names) if config.counted(name) for unit in block.units]
+
+
+def _missing_notes(missing: list[str], toc: list[str]) -> list[str]:
+    """찾지 못한 구성 알림. 활용 서식·부록은 필수가 아니므로(F11 인쇄 20~21쪽) 차례에도 없으면 '원고에 없음'으로, 차례에는 있는데
+    본문에서 못 찾았으면 경고로 나눈다. 차례의 꼬리 목록을 읽지 못했으면 선택 구성이라고만 적는다."""
+    required = [name for name in missing if name not in OPTIONAL]
+    optional = [name for name in missing if name in OPTIONAL]
+    notes = []
+    if required:
+        notes.append("찾지 못한 구성(원고에 없거나 제목을 읽지 못함): " + ", ".join(required))
+    if not optional:
+        return notes
+    absent = [name for name in optional if toc and name not in toc]
+    listed = [name for name in optional if name in toc]
+    unknown = [name for name in optional if not toc]
+    if absent:
+        notes.append(f"원고에 없음(필수 아님 — 차례에도 없음, F11 매뉴얼 인쇄 20~21쪽): {', '.join(absent)}")
+    if listed:
+        notes.append(f"차례에는 있는데 본문에서 찾지 못한 구성(제목을 읽지 못했을 수 있음): {', '.join(listed)}")
+    if unknown:
+        notes.append(f"찾지 못한 선택 구성(필수 집필 사항 아님 — F11 매뉴얼 인쇄 20~21쪽, 차례를 읽지 못해 원고에 없는지는 확인 못함): {', '.join(unknown)}")
+    return notes
 
 
 def _method(layout: Layout, config: VolumeConfig) -> str:
@@ -91,10 +139,11 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
     missing = [name for name in counted_names if name not in found]
     if not any(name.startswith("학습 —") for name in found):
         notes.append(f"{UNDECIDED}: 학습(내비게이터·필요 지식) 제목을 찾지 못해 구성 구분을 믿을 수 없습니다. 합계는 표지 뒤 전체를 센 값입니다.")
-    if missing:
-        notes.append("찾지 못한 구성(원고에 없거나 제목을 읽지 못함): " + ", ".join(missing))
+    notes += _missing_notes(missing, toc_tail(layout.blocks, names))
     if not config.include_appendix:
-        notes.append("부록을 산정에서 뺐습니다(요구사항정의서 V0.23 해석). 계약서 제13조 4항 ①은 부록을 산정 대상에 넣습니다.")
+        notes.append("부록을 산정에서 뺐습니다(요구사항정의서 V0.23 해석). 계약서 제13조 4항 ①, F16 정산지침 인쇄 19쪽 검수 대상 표(부록 ○), "
+                     "F11 매뉴얼 인쇄 20~21쪽(집필 인정 범위 '2. 위치'~'7. 활용 서식/부록')은 부록을 산정 대상에 넣습니다.")
+    notes.append(VISUAL_NOTE)
 
     rows = []
     for name, counted in SEGMENTS:
@@ -120,7 +169,10 @@ def measure(path: Path | str, *, previous: Path | str | None = None, manual_page
             "줄 간격": f"{layout.pitch} HWPUNIT ({round(layout.pitch * MM_PER_UNIT, 2)}㎜)"
                       + (" — 이 원고에서 가장 많은 본문 줄 간격" if layout.measured else " — 설정값"),
             "½쪽 기준": f"쪽마다 산정 대상 높이 ≥ {config.half_page:g} × 본문 높이면 1쪽",
-            "부록": "포함(계약서 제13조 4항 ①)" if config.include_appendix else "제외",
+            "부록": "포함(계약서 제13조 4항 ①, F16 정산지침 인쇄 19쪽 검수 대상 표, F11 매뉴얼 인쇄 20~21쪽)" if config.include_appendix else "제외",
+            "권고 분량": f"{config.recommended[0]}~{config.recommended[1]}쪽 — F11 매뉴얼 인쇄 20~21쪽 '권당 평균 매수(약 80쪽 내외)를 "
+                       "과도하게 넘지 않도록' 권장, 범위는 3차 멘토 미팅 답변(계약 조건 아님, 참고 표시)",
+            "시각 자료": "계약서 제2조 5항 기준 — 사진·삽화·도면·차트·그래프는 인용·직접 제작 구분 없이 모두 뺌",
         },
         "물리 쪽 수": layout.pages if layout.measured else None,
         "구성": rows,
@@ -170,12 +222,13 @@ def compare(layout: Layout, names: list[str], units: list[tuple[str, Unit]], pre
     for index, line in changed:
         by_segment[units[index][0]] += line.count
     lines = [line for _, line in changed]
-    count = tally(lines, layout, config)
+    count = gathered(lines, layout, config)
     total = sum(line.count for _, unit in units for line in unit.lines)
     old_total = tally([line for _, unit in old_units for line in unit.lines], old, config)
     return {
         "기존 원고": Path(previous).name, "기존 원고 분량": old_total, "기존 원고 추정": not old.measured,
         "변경 행": count["행 합계"], "변경 분량": count,
+        "물리 쪽 기준(참고)": tally(lines, layout, config),   # 바뀐 행을 새 원고의 물리 쪽에 둔 채 쪽마다 ½쪽 규칙 — 산정에 쓰지 않음
         "변경 비율": f"{(count['행 합계'] / total * 100) if total else 0:.1f}%",
         "구성별 변경 행": [{"구성": name, "변경 행": by_segment[name]} for name, _ in SEGMENTS if name in by_segment],
         "방법": "문단·표 행 단위로 짝을 짓고, 바뀐 글자가 1자라도 든 행을 1행 변경으로 셈(새 문단·새 표 행은 전부 변경)",

@@ -1,6 +1,6 @@
 // 원고 문장 추천(REQ-02-004) — 원고를 올리면 AI가 작성 규칙(종결형·표현)에 어긋난 문장을 구성별로 찾아 정정 후보를 순위와 함께 최대 5개 보여 준다.
 // 집필자가 후보 하나를 '채택'하거나 '기각'하고, 채택률과 채택 결과(JSON·CSV)를 내려받는다. 원고 본문은 고치지 않는다. 계산은 서버(ncs_suggest)가 한다.
-// AI는 서버에 LLM 설정이 있으면 자동으로 부른다(체크박스 없음). 없으면 'AI 미설정 — 이유'만 보인다. 후보 출처는 모두 'AI 생성'이다 — 집필자 서약서 고지 대상일 수 있다.
+// AI(Claude, ncs_llmreview.claude)는 서버에 ANTHROPIC_API_KEY·반출 승인이 있으면 자동으로 부른다(체크박스 없음). 없으면 'AI 미설정 — 이유'만 보인다. 후보 출처는 모두 'AI 생성'이다 — 집필자 서약서 고지 대상일 수 있다.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
@@ -29,7 +29,8 @@ function saveFile(text, filename, type) {
   URL.revokeObjectURL(url);
 }
 
-// 채택 기록 → 행 목록(카드마다 한 행). 채택이면 고른 후보의 순위·출처·문장을 적는다.
+// 채택 기록 → 행 목록(카드마다 한 행). 채택이면 고른 후보의 순위·출처·문장과 AI 고지(집필자 서약서 F09 '활용 AI')에 쓸
+// 모델 이름·채택 일시를 적는다. 쪽 번호는 결과에 없어 구성·자리로 대신한다.
 function decisionRows(cards, decisions) {
   return cards.map((card) => {
     const decision = decisions[card.key];
@@ -37,9 +38,19 @@ function decisionRows(cards, decisions) {
     return {
       번호: card.key, 원고: card.원고명 || "", 구성: card.구성, 자리: card.자리, 종류: card.종류, 원문: card.원문,
       결정: decision?.choice || "미정", "채택 순위": chosen?.순위 ?? "", "채택 출처": chosen?.출처 ?? "", "채택 문장": chosen?.문장 ?? "",
+      "활용 AI": chosen?.모델 ?? "", "채택 일시": chosen ? decision.at : "",
       "후보 수": card.후보.length,
     };
   });
+}
+
+// 지금 시각을 로컬 시각 ISO 문자열로('2026-11-23T14:05:09+09:00').
+function localIso(date = new Date()) {
+  const pad = (n) => String(Math.trunc(Math.abs(n))).padStart(2, "0");
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? "+" : "-";
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    + `${sign}${pad(offset / 60)}:${pad(offset % 60)}`;
 }
 
 function toCsv(rows) {
@@ -106,7 +117,7 @@ export default function SuggestPage() {
     setDecisions((old) => {
       const same = old[card.key]?.choice === choice && old[card.key]?.rank === rank;
       const next = { ...old };
-      if (same) delete next[card.key]; else next[card.key] = { choice, rank };
+      if (same) delete next[card.key]; else next[card.key] = { choice, rank, at: localIso() };
       return next;
     });
   }
@@ -130,7 +141,8 @@ export default function SuggestPage() {
         학습 내용명 행동명사, 평가 항목 명사형)과 표현(주어 군더더기·어색한 낱말·중복 표현·문장부호)에 어긋난 문장을 찾아 정정 후보를 순위와 함께 최대 5개 보여 줍니다.
         AI 후보는 규정 꼴·원문에 없던 수치·영문·상호·원문과의 유사도로 다시 걸러 통과한 것만 보여 주고, 버린 후보는 이유와 함께 접어 둡니다.
         후보 중 하나를 채택하거나 기각하세요. 직무 내용을 새로 쓰거나 교육 내용이 적절한지 판단하지 않으며, 원고는 고치지 않습니다.
-        서버에 AI(LLM) 설정이 없으면 고칠 문장을 찾지 않고 그 이유만 보여 줍니다. 올린 파일은 계산 뒤 바로 지웁니다.
+        모은 문장은 한 번에 AI(Claude)에 보내고, 결과 위 뱃지에 모델·호출 수·토큰·비용을 보여 줍니다.
+        서버에 Claude 설정(ANTHROPIC_API_KEY·반출 승인)이 없으면 고칠 문장을 찾지 않고 그 이유만 보여 줍니다. 올린 파일은 계산 뒤 바로 지웁니다.
       </p>
 
       <form className="fieldset review-form" onSubmit={submit}>

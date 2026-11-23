@@ -35,8 +35,8 @@ def register(app: FastAPI, services: Services) -> None:
         previous: Annotated[UploadFile | None, File()] = None,
     ) -> Any:
         """판정 후보표 JSON(ncs_opinion.review). opinions: 검토의견서(PDF·hwp·hwpx), rounds: 의견서 순서대로 '1차'·'2차'(선택),
-        print_pdf: 최종 원고 출력본(근거 쪽 표시), previous: 반영 전 원고. 판정은 LLM이 한다 — 서버에 LLM 설정·반출 승인이 있으면
-        자동으로 부르고, 없으면 모든 의견이 '확인 필요'와 이유(결과의 'LLM' 값)다."""
+        print_pdf: 최종 원고 출력본(근거 쪽 표시), previous: 반영 전 원고. 판정은 LLM(Claude)이 한다 — 서버에 ANTHROPIC_API_KEY·반출 승인
+        (LLM_ALLOW_UPLOAD=1)이 있으면 자동으로 부르고, 없으면 모든 의견이 '확인 필요'와 이유(결과의 'LLM' 값)다. 사용량은 'usage'."""
         from ncs_opinion import review
 
         with tempfile.TemporaryDirectory(prefix="ncs_opinion_") as folder:

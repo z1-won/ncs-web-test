@@ -2,20 +2,20 @@
 LLM 미설정·실패, 오차율.
 
 실물 의견서·원고는 저장소에 없으므로 PDF 추출 결과를 흉내 낸 줄 목록, 표 dict, 합성 원고 문단으로 검사한다.
-LLM은 가짜 응답(asker)으로만 검사한다 — 실제 호출 없음. 테스트 환경은 tests/_env.py가 키를 비우므로 미설정 경로도 검사한다.
+LLM은 가짜 Claude(generate — ncs_llmreview.claude.generate_json과 같은 서명)로만 검사한다 — 실제 호출 없음. 테스트 환경은 tests/_env.py가 키를 비우므로 미설정 경로도 검사한다.
 """
 
 import tempfile
 import unittest
 from pathlib import Path
 
-from ncs_core.llm import LlmError
+from ncs_llmreview.claude import ClaudeError
 from ncs_opinion import error_rate, review
 from ncs_opinion.config import (CHECK, KIND_CONTENT, KIND_TERM, KIND_UNKNOWN, NO_ACTION, NO_PLACE, NOT_REFLECTED, REFLECTED, WHOLE,
                                 OpinionConfig)
 from ncs_opinion.judge import invented, judge
 from ncs_opinion.keys import refs_of
-from ncs_opinion.llm_check import ask_all, build_prompt, parse_answer
+from ncs_opinion.llm_check import _ranges, ask_all, build_prompt, build_request, build_system, out_schema, parse_answer
 from ncs_opinion.regions import find, locate, map_manuscript, pick_paragraphs, ref_region
 from ncs_opinion.sheet import Opinion, flipped, parse_lines, parse_tables, split_bullets
 
@@ -69,6 +69,22 @@ MANUSCRIPT = [
      "4-1.", "판매 및 유통 시스템 구축 전략 수립", "필요 지식", "<표 4-1> 공공조달 판매 방식", "조달청 디지털 서비스몰",
      "학습 4", "교수⋅학습 방법", "평 가", "국내 자료", "∙SP인증관리포털(http://www.sp-info.or.kr/)에서 검색."],
 ]
+
+
+def deliberation_tables(filled):
+    """심의의견서(F25 양식) 표 모양 — 머리 표(심의 위원·검토 자료) + `심의 항목 | 세분류 | 심의 의견` 표. ④⑤는 의견 칸이 세분류 칸까지 합쳐져 열 1에 있다."""
+    def text(value):
+        return value if filled else ""
+
+    head = {(0, 0): "심의 위원", (0, 1): "성명", (0, 3): "소속기관", (1, 1): text("홍길동"), (1, 3): "",
+            (2, 0): "심의 분야", (2, 1): "소위원회", (2, 2): "소분류", (2, 3): "검토 자료", (3, 3): "세분류", (3, 4): "학습모듈 원고명",
+            (4, 1): "", (4, 2): "", (4, 3): text("SW제품기획"), (4, 4): text("SW제품 판매 계획 수립")}
+    body = {(0, 0): "심의 항목", (0, 1): "세분류", (0, 2): "심의 의견",
+            (1, 0): "① 학습모듈과\nNCS 능력단위와의 정합성", (1, 1): "", (1, 2): text("※ 작성 요령: 항목별로 적는다\n- 수행준거와 학습 목표가 맞음"),
+            (2, 0): "② 학습모듈의 적정성", (2, 1): text("SW제품기획"), (2, 2): text("- <표 1-3> 인증 종류 최신화 필요\n- 수행 내용 사례 보강 필요"),
+            (3, 0): "③ 교육현장 활용의 용이성", (3, 1): "", (3, 2): text("- 의견 없음"),
+            (4, 0): "④ 기타 소위원회 상정 안건", (4, 1): text("-"), (5, 0): "⑤ 총 평", (5, 1): text("전반적으로 잘 구성됨")}
+    return [{"cells": head}, {"cells": body}]
 
 
 def opinion(text, group="학습 1", lesson=1, part="필요 지식", page="4"):
@@ -145,9 +161,46 @@ class SheetTests(unittest.TestCase):
         self.assertFalse(any(text == "없음" for *_, text in rows))
         self.assertEqual(sheet.module_name, "SW제품 시장성 분석")
 
+    def test_round_mark_in_table_wins_over_given_round(self):
+        def table(rows):
+            return {"cells": {(r, c): text for r, row in enumerate(rows) for c, text in enumerate(row)}}
+
+        inner_first = table([["1차 검토", "초고본 검토의견서"], ["구분", "쪽수", "검토의견"], ["학습 1-1", "필요지식", "4", "- 용어 정의 보완 필요"]])
+        second = table([["2차 검토", "완성본 검토의견서"], ["구분", "쪽수", "검토의견"], ["학습 1-1", "수행 내용", "9", "- 사례 추가 필요"]])
+        sheet = parse_tables([inner_first, second], "2차_의견서.hwp", "2차")
+        self.assertEqual([(o.round, o.text) for o in sheet.opinions], [("1차", "용어 정의 보완 필요"), ("2차", "사례 추가 필요")])
+        self.assertEqual(sheet.round, "2차")
+        unmarked = table([["구분", "쪽수", "검토의견"], ["기타", "", "", "- 참고자료 최신화 필요"]])
+        self.assertEqual([o.round for o in parse_tables([unmarked], "x.hwp", "2차").opinions], ["2차"])   # 표기가 없으면 지정 차수
+        self.assertEqual(parse_lines(PDF_LINES, "의견서.pdf", "1차").round, "2차")                         # PDF도 제목 표기가 앞선다
+        self.assertEqual(parse_lines(PDF_LINES[4:], "의견서.pdf", "1차").round, "1차")
+
+    def test_deliberation_sheet_items_and_empty_form(self):
+        sheet = parse_tables(deliberation_tables(filled=True), "심의의견서.hwp", "2차")
+        rows = [(o.round, o.group, o.lesson, o.part, o.page, o.text) for o in sheet.opinions]
+        self.assertEqual(rows, [
+            ("심의", "학습모듈과 NCS 능력단위와의 정합성", None, None, None, "수행준거와 학습 목표가 맞음"),
+            ("심의", "학습모듈의 적정성", None, None, None, "<표 1-3> 인증 종류 최신화 필요"),
+            ("심의", "학습모듈의 적정성", None, None, None, "수행 내용 사례 보강 필요"),
+            ("심의", "총 평", None, None, None, "전반적으로 잘 구성됨"),
+        ])
+        self.assertEqual(sheet.opinions[1].notes, ["세분류: SW제품기획"])
+        self.assertEqual((sheet.round, sheet.module_name), ("심의", "SW제품 판매 계획 수립"))
+        empty = parse_tables(deliberation_tables(filled=False), "F25.hwp")
+        self.assertEqual((empty.round, empty.opinions), ("심의", []))       # 빈 양식은 오류 없이 0개
+
     def test_split_bullets_keeps_hyphen_words(self):
         self.assertEqual(split_bullets("- 교수-학습 방법이 적합함. - 표 1-3 수정 필요 -> 반영"),
                          ["교수-학습 방법이 적합함.", "표 1-3 수정 필요 -> 반영"])
+
+    def test_before_after_lines_stay_in_one_opinion(self):
+        cell = "목표 문장을 아래와 같이 고치면 좋겠음 - 수정전: 1.1 자료를 수집 할 수 있다. - 수정 후: 1.1 자료를 수집할 수 있다. - 표 2-1 출처 필요"
+        self.assertEqual(split_bullets(cell), ["목표 문장을 아래와 같이 고치면 좋겠음 - 수정전: 1.1 자료를 수집 할 수 있다. - 수정 후: 1.1 자료를 수집할 수 있다.",
+                                               "표 2-1 출처 필요"])
+        lines = ["1차 검토 초고본 검토의견서", "개발계획서", "검토 의견", "-목표 문장 띄어쓰기 수정 필요", "-수정전: 자료를 수집 할 수 있다.",
+                 "-수정후: 자료를 수집할 수 있다.", "※ 형식", "구분 쪽수 검토의견", "기타 - -", "※ 학습이 추가될 경우"]
+        plan = [o.text for o in parse_lines(lines, "x.pdf").opinions if o.group == "개발계획서"]
+        self.assertEqual(plan, ["목표 문장 띄어쓰기 수정 필요 -수정전: 자료를 수집 할 수 있다. -수정후: 자료를 수집할 수 있다."])
 
 
 def answer(no, type_="내용", verdict="반영", evidence=(), **more):
@@ -158,18 +211,26 @@ def answer(no, type_="내용", verdict="반영", evidence=(), **more):
 
 
 def fake(*items, calls=None):
-    """가짜 LLM — build_prompt의 질문을 받아 items를 돌려준다. items 자리에 (질문 → 답 목록) 함수 하나를 줘도 된다."""
-    def asker(prompt):
+    """가짜 Claude(generate) — 받은 질문({'system','document','request'})을 calls에 남기고 items를 돌려준다.
+    items 자리에 (질문 → 답 목록) 함수 하나를 줘도 된다."""
+    def generate(system, document, request, *, task, tasks=None, out_schema=None):
+        assert task == "opinion_reflection" and out_schema["required"] == ["opinions"]
+        call = {"system": system, "document": document, "request": request}
         if calls is not None:
-            calls.append(prompt)
-        found = items[0](prompt) if items and callable(items[0]) else list(items)
-        return {"data": {"opinions": found}, "model": "가짜"}
-    return asker
+            calls.append(call)
+        found = items[0](call) if items and callable(items[0]) else list(items)
+        return {"data": {"opinions": found}, "model": "가짜", "cached": False, "usage": {"input": 1000, "output": 100}}
+    return generate
 
 
-def number_of(prompt, text):
-    """질문에서 그 글이 든 최종 원고 문단의 번호(1부터)."""
-    lines = [line for line in prompt["user"].split("\n") if line.startswith("[") and not line.startswith("[이전") and text in line]
+def paragraph_lines(call):
+    """원고 블록의 최종 원고 문단 줄들('[n] (위치) 글')."""
+    return [line for line in call["document"].split("\n") if line.startswith("[") and not line.startswith(("[이전", "[원고"))]
+
+
+def number_of(call, text):
+    """원고 블록에서 그 글이 든 최종 원고 문단의 번호(1부터)."""
+    lines = [line for line in paragraph_lines(call) if text in line]
     return int(lines[0][1:lines[0].index("]")])
 
 
@@ -216,28 +277,47 @@ class PromptTests(unittest.TestCase):
     def setUp(self):
         self.ms = map_manuscript("원고.hwpx", MANUSCRIPT)
 
-    def test_prompt_numbers_paragraphs_and_opinions(self):
-        ops = [opinion("<표 1-3> 보안기능 확인서도 추가되면 좋을 것"), opinion("<표 1-3>에 원격 접속 인증도 추가 필요")]
+    def test_prompt_numbers_paragraphs_once_and_lists_opinions(self):
+        ops = [opinion("<표 1-3> 보안기능 확인서도 추가되면 좋을 것"), opinion("<표 1-3>에 원격 접속 인증도 추가 필요"),
+               opinion("전체적으로 잘 작성됨", group="종합 의견", lesson=None, part=None)]
         prompt = build_prompt(ops, self.ms, None)
-        self.assertIn("[1] (학습 1 필요 지식) <표 1-3> SW제품 관련 국내 인증", prompt["user"])
-        self.assertIn("2. (2차 · 학습 1 · 필요 지식 · 4쪽) <표 1-3>에 원격 접속 인증도 추가 필요", prompt["user"])
-        self.assertNotIn("[반영 전 원고 문단]", prompt["user"])
-        self.assertNotIn("ISO/IEC 27017", prompt["user"])                        # 범위 밖 문단은 보내지 않는다
+        document = prompt["document"]
+        self.assertIn("[1] (학습 1 필요 지식) <표 1-3> SW제품 관련 국내 인증", document)
+        self.assertEqual(document.count("보안기능 확인서"), 1)                    # 두 의견이 같은 문단을 봐도 글은 한 번
+        self.assertNotIn("반영 전 원고 문단", document)
+        self.assertNotIn("ISO/IEC 27017", document)                              # 범위 밖 문단은 보내지 않는다
+        self.assertNotIn("원격 접속", document)                                  # 의견 글은 요청 블록에만
+        request = build_request(prompt["lines"], [1, 2, 3])
+        self.assertIn("의견 번호: 1, 2, 3", request)
+        self.assertIn("2. (2차 · 학습 1 · 필요 지식 · 4쪽) [볼 문단: 1-", request)
+        self.assertIn("<표 1-3>에 원격 접속 인증도 추가 필요", request)
+        self.assertEqual(prompt["볼 문단"][3], [])
+        self.assertIn("3. (2차 · 종합 의견 · 4쪽) [볼 문단: 없음 — 가리키는 자리가 없는 의견", request)
         with_before = build_prompt(ops[:1], self.ms, self.ms)
-        self.assertIn("[이전 1] (학습 1 필요 지식) <표 1-3> SW제품 관련 국내 인증", with_before["user"])
-        nowhere = build_prompt([opinion("전체적으로 잘 작성됨", group="종합 의견", lesson=None, part=None)], self.ms, None)
-        self.assertEqual(nowhere["문단"], [])
-        self.assertIn("가리키는 자리가 없는 의견", nowhere["user"])
+        self.assertIn("[이전 1] (학습 1 필요 지식) <표 1-3> SW제품 관련 국내 인증", with_before["document"])
+        self.assertIn("| 반영 전: 이전 1-", build_request(with_before["lines"], [1]))
+        self.assertEqual(_ranges([9, 3, 4, 5, 12, 13]), "3-5, 9, 12-13")
+
+    def test_system_and_schema_from_prompt_file(self):
+        system = build_system()
+        self.assertIn("모든 의견에 대해 빠짐없이 하나씩 답합니다.", system)
+        self.assertIn("표현이 달라도", system)
+        self.assertIn("의견에 적힌 낱말과 요구만으로", system)
+        schema = out_schema()
+        item = schema["properties"]["opinions"]["items"]
+        self.assertFalse(item["additionalProperties"])
+        self.assertEqual(set(item["required"]), set(item["properties"]))   # 구조화 출력: 모든 속성 required
 
     def test_parse_drops_unknown_numbers_and_bad_values(self):
-        data = {"opinions": [answer(1, evidence=[2, 9, 2]), answer(1, verdict="미반영"), answer(5), answer("x"),
+        data = {"opinions": [answer(1, evidence=[2, 9, 2, 3]), answer(1, verdict="미반영"), answer(5), answer("x"),
                              answer(2, type_="모름", verdict="글쎄", old_terms="옛말")]}
-        parsed = parse_answer(data, 2, [10, 11, 12])
-        self.assertEqual(sorted(parsed), [0, 1])
-        self.assertEqual((parsed[0]["판정"], parsed[0]["근거"], parsed[0]["버린 근거 번호"]), ("반영", [11], 1))
-        self.assertEqual((parsed[1]["유형"], parsed[1]["판정"], parsed[1]["옛 용어"]), ("", "", ["옛말"]))
-        self.assertEqual(parse_answer({"opinions": "글"}, 2, []), {})
-        self.assertEqual(parse_answer({}, 2, []), {})
+        parsed, dropped = parse_answer(data, {1: [1, 2], 2: [3]}, {1: 10, 2: 11, 3: 12})
+        self.assertEqual((sorted(parsed), dropped), ([1, 2], 3))
+        # 3은 원고 블록에 있지만 의견 1의 볼 문단이 아니라 버린다
+        self.assertEqual((parsed[1]["판정"], parsed[1]["근거"], parsed[1]["버린 근거 번호"]), ("반영", [11], 2))
+        self.assertEqual((parsed[2]["유형"], parsed[2]["판정"], parsed[2]["옛 용어"]), ("", "", ["옛말"]))
+        self.assertEqual(parse_answer({"opinions": "글"}, {1: []}, {}), ({}, 0))
+        self.assertEqual(parse_answer({}, {1: []}, {}), ({}, 0))
 
 
 class JudgeTests(unittest.TestCase):
@@ -250,7 +330,7 @@ class JudgeTests(unittest.TestCase):
         calls = []
         _, where, notes, _ = locate(op, self.ms)
         asker = fake(reply, calls=calls) if callable(reply) else fake(*reply, calls=calls)
-        answers, stats = ask_all([(op, where)], self.ms, previous, asker=asker)
+        answers, stats = ask_all([(op, where)], self.ms, previous, generate=asker)
         return judge(op, where, notes, answers[0], self.ms, previous=previous), calls, stats
 
     def test_reflected_needs_valid_evidence(self):
@@ -281,7 +361,7 @@ class JudgeTests(unittest.TestCase):
         row, calls, _ = self.run_one(op, reply, previous=self.ms)                 # 반영 전 원고에도 같은 문단
         self.assertEqual(row["판정"], CHECK)
         self.assertIn("반영 전 원고에도 있던 내용", " ".join(row["비고"]))
-        self.assertIn("[반영 전 원고 문단]", calls[0]["user"])
+        self.assertIn("반영 전 원고 문단:", calls[0]["document"])
         older = map_manuscript("초고.hwpx", [["차 례", "1-1.", "인증 조사", "필요 지식", "<표 1-3> SW제품 관련 국내 인증", "GS인증"]])
         row, _, _ = self.run_one(op, reply, previous=older)
         self.assertEqual(row["판정"], REFLECTED)
@@ -307,7 +387,8 @@ class JudgeTests(unittest.TestCase):
         self.assertEqual((figure["판정"], figure["근거"][0]["문단"]), (CHECK, "[그림 2-1] 손익분기점 그래프"))
         plan_op = opinion("4.2항의 리셀러 선정 기준 명시가 필요함", group="개발계획서", lesson=None, part=None, page=None)
         plan, calls, _ = self.run_one(plan_op, [answer(1, "내용", "미반영", suggestion="문장")])
-        self.assertEqual((plan["판정"], plan["찾은 범위"], calls[0]["문단"]), (CHECK, NO_PLACE, []))
+        self.assertEqual((plan["판정"], plan["찾은 범위"], paragraph_lines(calls[0])), (CHECK, NO_PLACE, []))
+        self.assertIn("[볼 문단: 없음", calls[0]["request"])
         praise_op = opinion("전체적으로 적절하게 작성되어 있음", group="종합 의견", lesson=None, part=None, page=None)
         praise, _, _ = self.run_one(praise_op, [answer(1, "조치 불필요", "확인 필요")])
         self.assertEqual(praise["판정"], NO_ACTION)
@@ -319,7 +400,7 @@ class JudgeTests(unittest.TestCase):
         op = opinion("CSAP 인증 내용이 보완되면 좋겠음", group="학습 9", lesson=9, part=None)
         row, calls, _ = self.run_one(op, lambda p: [answer(1, evidence=[number_of(p, "CSAP 인증")])])
         self.assertEqual((row["찾은 범위"], row["판정"]), (WHOLE, CHECK))
-        self.assertLess(len(calls[0]["문단"]), len(self.ms.paras))
+        self.assertLess(len(paragraph_lines(calls[0])), len(self.ms.paras))
 
     def test_unanswered_unknown_and_failure_are_check(self):
         op = opinion("<표 1-3>에 원격 접속 인증도 추가 필요")
@@ -329,22 +410,38 @@ class JudgeTests(unittest.TestCase):
         row, _, _ = self.run_one(op, [answer(1, "모름", "반영", evidence=[1])])
         self.assertEqual((row["판정"], row["유형"]), (CHECK, KIND_UNKNOWN))
 
-        def broken(prompt):
-            raise LlmError("연결 실패")
+        def broken(system, document, request, *, task, tasks=None, out_schema=None):
+            raise ClaudeError("Claude 연결 실패")
 
         _, where, notes, _ = locate(op, self.ms)
-        answers, stats = ask_all([(op, where)], self.ms, None, asker=broken)
+        answers, stats = ask_all([(op, where)], self.ms, None, generate=broken)
         row = judge(op, where, notes, answers[0], self.ms)
         self.assertEqual((row["판정"], stats["실패"]), (CHECK, 1))
         self.assertTrue(row["LLM"]["상태"].startswith("LLM 호출 실패"))
 
-    def test_same_region_in_one_call(self):
+    def test_all_opinions_in_one_call_and_split_when_cut(self):
         ops = [opinion("<표 1-3> 보안기능 확인서도 추가되면 좋을 것"), opinion("<표 1-3>에 원격 접속 인증도 추가 필요"),
                opinion("제목 가운데 정렬 필요", group="학습모듈 개요", lesson=None, part=None)]
         calls = []
         items = [(op, locate(op, self.ms)[1]) for op in ops]
-        _, stats = ask_all(items, self.ms, None, asker=fake(calls=calls))
-        self.assertEqual((stats["호출"], [len(c["의견"]) for c in calls]), (2, [2, 1]))   # 같은 표를 가리키는 의견은 한 번에
+        _, stats = ask_all(items, self.ms, None, generate=fake(calls=calls))
+        self.assertEqual((stats["호출"], stats["물은 의견"], stats["usage"]["calls"]), (1, 3, 1))   # 범위가 달라도 한 번에
+        self.assertEqual((stats["usage"]["input"], stats["usage"]["new_calls"]), (1000, 1))
+
+        seen = []
+
+        def cut_when_many(system, document, request, *, task, tasks=None, out_schema=None):
+            asked = [int(n) for n in request.split("의견 번호: ", 1)[1].split("\n", 1)[0].split(", ")]
+            seen.append((document, asked))
+            if len(asked) > 1:
+                raise ClaudeError("출력이 max_tokens에서 잘림")
+            return {"data": {"opinions": [answer(asked[0], "형식", "확인 필요")]}, "model": "가짜", "cached": False, "usage": {}}
+
+        answers, stats = ask_all(items, self.ms, None, generate=cut_when_many)
+        self.assertEqual([asked for _, asked in seen], [[1, 2, 3], [1], [2, 3], [2], [3]])   # 반으로 나눠 다시
+        self.assertEqual(len({document for document, _ in seen}), 1)                         # 원고 블록은 같다(캐시 읽기)
+        self.assertEqual((stats["호출"], stats["usage"]["calls"], stats["실패"]), (3, 5, 0))
+        self.assertEqual([a["유형"] for a in answers], ["형식"] * 3)
 
 
 class PipelineTests(unittest.TestCase):
@@ -362,20 +459,20 @@ class PipelineTests(unittest.TestCase):
         return final, sheet
 
     def test_review_with_injected_llm_and_error_rate(self):
-        def reply(prompt):
-            if "보안기능 확인서도" in prompt["user"]:
-                return [answer(1, evidence=[number_of(prompt, "보안기능 확인서")]),
-                        answer(2, verdict="미반영", suggestion="원격 접속 인증을 추가한다.")]
-            if "명칭 변경" in prompt["user"]:
-                return [answer(1, "용어 변경", old_terms=["한국소프트웨어산업협회"], new_terms=["한국인공지능·소프트웨어산업협회"])]
-            return [answer(1, "조치 불필요", "확인 필요")]
+        def reply(call):
+            return [answer(1, evidence=[number_of(call, "보안기능 확인서")]),
+                    answer(2, verdict="미반영", suggestion="원격 접속 인증을 추가한다."),
+                    answer(3, "용어 변경", old_terms=["한국소프트웨어산업협회"], new_terms=["한국인공지능·소프트웨어산업협회"]),
+                    answer(4, "조치 불필요", "확인 필요")]
 
         with tempfile.TemporaryDirectory() as folder:
             final, sheet = self.write(folder)
-            result = review([sheet, sheet], final, asker=fake(reply))
+            result = review([sheet, sheet], final, generate=fake(reply))
         self.assertEqual(result["요약"], {"총 의견": 4, "조치 요구": 3, "반영 후보": 1, "미반영 후보": 1, "확인 필요": 1,
                                          "조치 불필요": 1, "용어 변경(집필자 확인)": 1})        # 같은 파일 두 번 → 한 번만
-        self.assertTrue(result["LLM"].startswith("사용(가짜) · 호출 3번, 의견 4개"), result["LLM"])
+        self.assertTrue(result["LLM"].startswith("사용(가짜) · 호출 1번(새 호출 1번), 의견 4개 · 입력 1,000"), result["LLM"])
+        self.assertEqual({k: result["usage"][k] for k in ("calls", "new_calls", "input", "output")},
+                         {"calls": 1, "new_calls": 1, "input": 1000, "output": 100})
         self.assertEqual([r["판정"] for r in result["의견"]], [REFLECTED, NOT_REFLECTED, CHECK, NO_ACTION])
         self.assertEqual(result["의견"][0]["참조"], ["<표 1-3>"])
         rate = error_rate(result["의견"], {1: "반영", 2: "반영", 3: "미반영"})
@@ -387,11 +484,83 @@ class PipelineTests(unittest.TestCase):
             final, sheet = self.write(folder)
             result = review([sheet], final)                     # 테스트 환경에는 키·승인이 없다
         self.assertTrue(result["LLM"].startswith("LLM 미설정"), result["LLM"])
+        self.assertIsNone(result["usage"])
         self.assertEqual(result["요약"]["확인 필요"], 4)
         row = result["의견"][0]
         self.assertEqual((row["판정"], row["유형"], row["근거"]), (CHECK, KIND_UNKNOWN, []))
         self.assertTrue(row["비고"][-1].startswith("LLM 미설정"))
         self.assertEqual(row["LLM"]["상태"], result["LLM"])
+
+    def test_given_rounds_do_not_count_first_round_table_twice(self):
+        import make_fixtures as mf
+
+        head1 = [["1차 검토", "초고본 검토의견서", "", ""], ["구분", "쪽수", "검토의견", ""]]
+        rows1 = head1 + [["학습 1-1", "필요지식", "4", "- <표 1-3> 보안기능 확인서도 추가되면 좋을 것"]]
+        rows2 = [["2차 검토", "완성본 검토의견서", "", ""], ["구분", "쪽수", "검토의견", ""],
+                 ["학습 1-1", "수행 내용", "17", "- [그림 1-1] 범례 추가 필요"]]
+        with tempfile.TemporaryDirectory() as folder:
+            final, _ = self.write(folder)
+            first, second = Path(folder) / "1차.hwpx", Path(folder) / "2차.hwpx"
+            mf.write_hwpx(first, [[mf.table(rows1)]])
+            mf.write_hwpx(second, [[mf.table(rows1), mf.table(rows2)]])       # 2차 파일 안에 1차 표가 함께 든 실물 모양
+            given = review([first, second], final, rounds=["1차", "2차"])
+            auto = review([first, second], final)
+        self.assertEqual(given["요약"]["총 의견"], 2)
+        self.assertEqual([(r["차수"], r["의견서"]) for r in given["의견"]], [("1차", "1차.hwpx"), ("2차", "2차.hwpx")])
+        self.assertEqual(given["요약"], auto["요약"])
+
+    def test_same_text_in_rows_of_one_file_stays_separate_and_only_cross_file_copy_drops(self):
+        import make_fixtures as mf
+
+        same = "- 작성 지침에 맞게 작성되어 있음"
+        head1 = [["1차 검토", "초고본 검토의견서", "", ""], ["구분", "쪽수", "검토의견", ""]]
+        rows1 = head1 + [["학습 1-1", "필요지식", "4", same], ["", "수행 내용", "9", same], ["", "평가", "12", same],
+                         ["기타", "", "", "- 참고자료 최신화 필요"]]
+        rows2 = [["2차 검토", "완성본 검토의견서", "", ""], ["구분", "쪽수", "검토의견", ""], ["학습 1-1", "필요지식", "5", same]]
+        calls = []
+        with tempfile.TemporaryDirectory() as folder:
+            final, _ = self.write(folder)
+            first, second = Path(folder) / "1차.hwpx", Path(folder) / "2차.hwpx"
+            mf.write_hwpx(first, [[mf.table(rows1)]])
+            mf.write_hwpx(second, [[mf.table(rows1), mf.table(rows2)]])      # 2차 파일 안에 1차 표가 함께 든 실물 모양
+            alone = review([first], final)
+            both = review([first, second], final, rounds=["1차", "2차"],
+                          generate=fake(lambda call: [answer(n, "조치 불필요", "확인 필요") for n in range(1, 6)], calls=calls))
+        self.assertEqual(alone["요약"]["총 의견"], 4)                                 # 한 파일 안 같은 문구 3행 → 3개
+        self.assertEqual([(r["차수"], r["구성"], r["쪽"]) for r in alone["의견"][:3]],
+                         [("1차", "필요 지식", "4"), ("1차", "수행 내용", "9"), ("1차", "평가", "12")])
+        self.assertEqual(both["요약"]["총 의견"], 5)                                  # 2차 파일의 1차 표 4개는 겹침이라 빠지고 2차 1개만 더해진다
+        self.assertEqual([r["번호"] for r in both["의견"]], [1, 2, 3, 4, 5])
+        self.assertEqual([(r["차수"], r["의견서"]) for r in both["의견"]][-1], ("2차", "2차.hwpx"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(both["요약"]["조치 불필요"], 5)                              # LLM 답이 의견 번호마다 붙는다
+
+    def test_deliberation_sheet_runs_through_review(self):
+        import make_fixtures as mf
+
+        rows = [["심의 항목", "세분류", "심의 의견"], ["① 학습모듈과 NCS 능력단위와의 정합성", "", "- 수행준거와 학습 목표가 맞음"],
+                ["② 학습모듈의 적정성", "SW제품기획", "- <표 1-3> 보안기능 확인서 추가 필요"], ["⑤ 총 평", "전반적으로 잘 구성됨"]]
+        calls = []
+
+        def reply(call):
+            return [answer(1, "조치 불필요", "확인 필요"), answer(2, evidence=[number_of(call, "보안기능 확인서")]),
+                    answer(3, "조치 불필요", "확인 필요")]
+
+        with tempfile.TemporaryDirectory() as folder:
+            final, _ = self.write(folder)
+            sheet = Path(folder) / "심의의견서.hwpx"
+            mf.write_hwpx(sheet, [[mf.table(rows)]])
+            result = review([sheet], final, rounds=["2차"], generate=fake(reply, calls=calls))
+            empty = Path(folder) / "빈양식.hwpx"
+            mf.write_hwpx(empty, [[mf.table(rows[:1] + [r[:1] + [""] * (len(r) - 1) for r in rows[1:]])]])
+            blank = review([empty], final, generate=fake(calls=calls))
+        self.assertEqual(result["의견서"][0]["차수"], "심의")
+        self.assertEqual([(r["차수"], r["구분"], r["판정"]) for r in result["의견"]],
+                         [("심의", "학습모듈과 NCS 능력단위와의 정합성", NO_ACTION), ("심의", "학습모듈의 적정성", REFLECTED),
+                          ("심의", "총 평", NO_ACTION)])
+        self.assertEqual(result["의견"][1]["찾은 범위"], "<표 1-3> 캡션 주변")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual((blank["요약"]["총 의견"], blank["의견"]), (0, []))
 
     def test_no_opinions_is_error(self):
         with self.assertRaises(ValueError):

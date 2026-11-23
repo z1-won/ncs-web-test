@@ -1,7 +1,8 @@
 """원고 문장 추천(REQ-02-004) — 원고 전체(구성별·문장별 카드) 또는 문장 하나(종류 지정)에 AI 판정과 정정 후보를 낸다.
 
-단계: 원고에서 종류별 문장 모으기(extract.collect) → 같은 종류끼리 config.llm_batch개씩 LLM에 묻기(llm_suggest.ask_lines,
-원고 한 건에 config.llm_max_sentences개까지) → 받은 후보 검증·순위(llm_suggest.screen) → 카드와 참고 예문.
+단계: 원고에서 종류별 문장 모으기(extract.collect) → 모은 문장(원고 한 건에 config.llm_max_sentences개까지)을 종류별로 번호 붙인
+원고 블록 하나 + 볼 종류 전부를 요청 블록으로 Claude에 한 번에 묻기(ask_all — 출력이 잘리면 종류 묶음을 반으로, 종류 하나면 그 종류의
+문장 범위를 반으로 나눠 다시, 원고 블록은 캐시 읽기) → 받은 후보 검증·순위(llm_suggest.parse·screen) → 카드와 참고 예문.
 카드 하나 = LLM이 고칠 문장이라고 본 문장 하나:
   {'번호','구성','종류','자리','원문','본문','앞 번호','상태'(LLM 사유 유형),'사유','규정 꼴',
    '후보': [{'순위','문장','출처'('AI 생성'),'근거','모델'}] (최대 5), '추천 없음': 이유|None,
@@ -12,15 +13,18 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from ncs_core.documents import load_document
-from ncs_core.llm import LlmError, settings, task_allowed
+from ncs_llmreview import claude
 
 from .config import DEFAULT_CONFIG, KINDS, LLM_TASK, NO_FINDING, NO_SUGGESTION, REASONS, UNDECIDED, SuggestConfig
 from .examples import similar
 from .extract import Sentence, collect, split_prefix, verbs_in
-from .llm_suggest import ask_lines
+from .llm_suggest import build_request, build_system, document_text, out_schema, parse
+
+SETUP_ERRORS = ("ANTHROPIC_API_KEY", "LLM_ALLOW_UPLOAD", "anthropic 패키지", "모델 이름")   # 끝까지 같은 오류 — 나눠 부르지 않는다
 
 ASSUMPTIONS = {
     "역할": "고칠 문장과 정정 후보는 AI가 냅니다. 종결·표현만 고치며 직무 내용을 새로 만들거나 교육 내용의 적절성을 판정하지 않습니다. 채택은 집필자가 합니다.",
@@ -31,16 +35,15 @@ ASSUMPTIONS = {
 }
 
 
-def llm_ready(asker=None) -> tuple[bool, str]:
-    """AI를 부를 수 있는가 → (가능, 상태 문구). 없으면 'AI 미설정 — 이유'."""
-    if asker is not None:
+def llm_ready(generate=None) -> tuple[bool, str]:
+    """AI를 부를 수 있는가 → (가능, 상태 문구). 없으면 'AI 미설정 — 이유'(claude.why_not)."""
+    if generate is not None:
         return True, "AI 사용(주입된 응답)"
-    if not task_allowed(LLM_TASK):
-        return False, f"AI 미설정 — '{LLM_TASK}' 작업이 허용 목록(LLM_ALLOWED_TASKS)에서 빠져 있음"
-    cfg = settings()
-    if not cfg.ready:
-        return False, f"AI 미설정 — {cfg.why_not}"
-    return True, f"AI 사용({cfg.model})"
+    cfg = claude.settings()
+    problem = claude.why_not(cfg)
+    if problem:
+        return False, f"AI 미설정 — {problem}"
+    return True, f"AI 사용({cfg['model']})"
 
 
 def _card(sentence: Sentence, info: dict, model: str) -> dict:
@@ -51,49 +54,107 @@ def _card(sentence: Sentence, info: dict, model: str) -> dict:
             "참고 예문": [], "버린 AI 후보": info["버린"], "AI": f"AI 사용({model})"}
 
 
-def ask_all(sentences: list[Sentence], *, extra: frozenset[str] = frozenset(), asker=None,
-            config: SuggestConfig = DEFAULT_CONFIG) -> tuple[list[dict | None], list[bool], dict]:
-    """문장들 → (문장마다 카드|None, 문장마다 AI에 물었는가, 통계 {'호출','물은 문장 수','실패','모델','버린 지적'}).
+def _split(group: list[tuple[str, list[int]]]) -> list[list[tuple[str, list[int]]]] | None:
+    """잘린 요청 나누기 — 종류가 여럿이면 종류 묶음을 반으로, 하나면 그 종류의 문장 범위를 반으로. 더 못 나누면 None."""
+    if len(group) > 1:
+        half = len(group) // 2
+        return [group[:half], group[half:]]
+    kind, numbers = group[0]
+    if len(numbers) > 1:
+        half = len(numbers) // 2
+        return [[(kind, numbers[:half])], [(kind, numbers[half:])]]
+    return None
 
-    같은 종류의 문장끼리 config.llm_batch개씩 묶어 묻는다. 원고 한 건에서 묻는 문장은 config.llm_max_sentences개까지.
+
+def _add_usage(usage: dict, answer: dict, model: str) -> None:
+    if answer.get("cached"):
+        return
+    u = answer.get("usage") or {}
+    usage["new_calls"] += 1
+    for key in ("input", "output", "cache_read"):
+        usage[key] += u.get(key, 0)
+    usage["cost_usd"] += claude.cost(model, u) or 0.0
+
+
+def ask_all(sentences: list[Sentence], *, extra: frozenset[str] = frozenset(), generate=None,
+            config: SuggestConfig = DEFAULT_CONFIG) -> tuple[list[dict | None], list[bool], dict]:
+    """문장들 → (문장마다 카드|None, 문장마다 AI에 물었는가, 통계 {'호출','물은 문장 수','실패','모델','사유를 바꾼 지적','usage'}).
+
+    원고 한 건에서 묻는 문장은 config.llm_max_sentences개까지(종류가 처음 나온 순서로 종류마다 앞에서부터).
+    물을 문장 전부를 원고 블록 하나로 번호 붙이고(같은 종류끼리 이어진 번호), 볼 종류 전부를 한 번에 묻는다.
+    usage는 ncs_llmreview.service.review_manuscript와 같은 키(calls, new_calls, input, output, cache_read, cost_usd, dropped, seconds).
     """
+    generate = generate or claude.generate_json
+    started = time.perf_counter()
     cards: list[dict | None] = [None] * len(sentences)
     asked = [False] * len(sentences)
-    stats = {"호출": 0, "물은 문장 수": 0, "실패": [], "모델": "", "사유를 바꾼 지적": []}
+    usage = {"calls": 0, "new_calls": 0, "input": 0, "output": 0, "cache_read": 0, "cost_usd": 0.0, "dropped": 0}
+    stats = {"호출": 0, "물은 문장 수": 0, "실패": [], "모델": "", "사유를 바꾼 지적": [], "usage": usage}
     groups: dict[str, list[int]] = {}
     for at, sentence in enumerate(sentences):
         groups.setdefault(sentence.kind, []).append(at)
     budget = config.llm_max_sentences
+    numbered: dict[int, tuple[str, str]] = {}
+    where: dict[int, int] = {}                 # 문장 번호 → sentences 순번
+    request: list[tuple[str, list[int]]] = []
     for kind, members in groups.items():
-        for start in range(0, len(members), config.llm_batch):
-            chunk = members[start:start + config.llm_batch][:max(budget, 0)]
-            if not chunk:
-                break
-            budget -= len(chunk)
-            try:
-                flagged, rejected, model = ask_lines(kind, [sentences[at].body for at in chunk], extra=extra, asker=asker, config=config)
-            except LlmError as error:
-                stats["실패"].append(str(error))
+        chunk = members[:max(budget, 0)]
+        if not chunk:
+            break
+        budget -= len(chunk)
+        numbers = []
+        for at in chunk:
+            no = len(numbered) + 1
+            numbered[no] = (kind, sentences[at].body)
+            where[no] = at
+            numbers.append(no)
+        request.append((kind, numbers))
+    if not request:
+        return cards, asked, stats
+    system, document, schema = build_system(), document_text(numbered), out_schema()
+    queue = [request]
+    while queue:
+        group = queue.pop(0)
+        usage["calls"] += 1
+        try:
+            reply = generate(system, document, build_request(group), task=LLM_TASK, tasks=None, out_schema=schema)
+        except claude.ClaudeError as error:
+            parts = _split(group) if "max_tokens" in str(error) else None
+            if parts:
+                queue[:0] = parts                   # 잘리면 나눠 다시(원고 블록은 캐시 읽기)
                 continue
-            stats["호출"] += 1
-            stats["물은 문장 수"] += len(chunk)
-            stats["모델"] = model
-            stats["사유를 바꾼 지적"] += rejected
-            for at in chunk:
-                asked[at] = True
-            for order, info in flagged.items():
-                cards[chunk[order]] = _card(sentences[chunk[order]], info, model)
+            stats["실패"].append(str(error))
+            if any(s in str(error) for s in SETUP_ERRORS):
+                break                               # 설정 문제는 끝까지 같은 오류 — 남은 묶음도 묻지 못함
+            continue
+        model = str(reply.get("model") or "")
+        _add_usage(usage, reply, model)
+        mine = {no: numbered[no] for _, numbers in group for no in numbers}
+        flagged, relabeled, dropped = parse(reply.get("data") or {}, mine, model, extra=extra, config=config)
+        stats["호출"] += 1
+        stats["물은 문장 수"] += len(mine)
+        stats["모델"] = model
+        stats["사유를 바꾼 지적"] += relabeled
+        usage["dropped"] += dropped
+        for no in mine:
+            asked[where[no]] = True
+        for no, info in flagged.items():
+            cards[where[no]] = _card(sentences[where[no]], info, model)
+    usage["cost_usd"] = round(usage["cost_usd"], 4)
+    usage["seconds"] = round(time.perf_counter() - started, 1)
     return cards, asked, stats
 
 
 def _ai_state(state: str, stats: dict) -> str:
-    text = (f"AI 사용({stats['모델']})" if stats["모델"] else state) + f" · 호출 {stats['호출']}번, 문장 {stats['물은 문장 수']}개"
+    usage = stats["usage"]
+    text = (f"AI 사용({stats['모델']})" if stats["모델"] else state) + f" · 호출 {usage['calls']}번(새 호출 {usage['new_calls']}번), 문장 {stats['물은 문장 수']}개"
     if stats["실패"]:
         text += f", 실패 {len(stats['실패'])}번({stats['실패'][0]})"
+    text += f" · 입력 {usage['input']:,}(캐시 읽기 {usage['cache_read']:,})·출력 {usage['output']:,}토큰 · 약 ${usage['cost_usd']}"
     return text
 
 
-def suggest_sentence(text: str, kind: str, *, asker=None, config: SuggestConfig = DEFAULT_CONFIG) -> dict:
+def suggest_sentence(text: str, kind: str, *, generate=None, config: SuggestConfig = DEFAULT_CONFIG) -> dict:
     """문장 하나 + 종류 → 카드. AI가 지적하지 않으면 '상태': '지적 없음', AI를 부르지 못하면 '판단불가'와 이유(빈 후보)."""
     if kind not in KINDS:
         raise ValueError(f"알 수 없는 문장 종류: {kind} (가능: {', '.join(KINDS)})")
@@ -101,11 +162,11 @@ def suggest_sentence(text: str, kind: str, *, asker=None, config: SuggestConfig 
         raise ValueError("추천받을 문장을 넣으세요")
     prefix, body = split_prefix(text)
     sentence = Sentence(kind, "직접 입력", "직접 입력", text.strip(), prefix, body)
-    on, state = llm_ready(asker)
+    on, state = llm_ready(generate)
     found = None
     status, reasons = UNDECIDED, [state]
     if on:
-        cards, _, stats = ask_all([sentence], asker=asker, config=config)
+        cards, _, stats = ask_all([sentence], generate=generate, config=config)
         found, state = cards[0], _ai_state(state, stats)
         status, reasons = (UNDECIDED, [f"AI 호출 실패: {stats['실패'][0]}"]) if stats["실패"] else (NO_FINDING, [])
     if found is None:
@@ -117,19 +178,20 @@ def suggest_sentence(text: str, kind: str, *, asker=None, config: SuggestConfig 
     return found
 
 
-def suggest_manuscript(path: Path | str, *, asker=None, config: SuggestConfig = DEFAULT_CONFIG) -> dict:
-    """원고(hwp/hwpx) → 구성별 추천 카드와 요약. AI는 설정·반출 승인·허용 목록이 있으면 자동으로 부른다."""
+def suggest_manuscript(path: Path | str, *, generate=None, config: SuggestConfig = DEFAULT_CONFIG) -> dict:
+    """원고(hwp/hwpx) → 구성별 추천 카드와 요약. AI(Claude)는 ANTHROPIC_API_KEY·반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면 자동으로 부른다.
+    generate: 테스트용 가짜 Claude(system, document, request, *, task, tasks, out_schema) -> {'data','usage','cached','model'}."""
     document = load_document(path)
     sentences = collect(document)
     extra = verbs_in(document)
-    on, state = llm_ready(asker)
-    llm = {"상태": state, "물은 문장 수": 0, "호출": 0, "실패": 0, "사유를 바꾼 지적": []}
+    on, state = llm_ready(generate)
+    llm = {"상태": state, "물은 문장 수": 0, "호출": 0, "실패": 0, "사유를 바꾼 지적": [], "usage": None}
     cards: list[dict | None] = [None] * len(sentences)
     asked = [False] * len(sentences)
     if on and sentences:
-        cards, asked, stats = ask_all(sentences, extra=extra, asker=asker, config=config)
+        cards, asked, stats = ask_all(sentences, extra=extra, generate=generate, config=config)
         llm.update({"상태": _ai_state(state, stats), "물은 문장 수": stats["물은 문장 수"], "호출": stats["호출"],
-                    "실패": len(stats["실패"]), "사유를 바꾼 지적": stats["사유를 바꾼 지적"]})
+                    "실패": len(stats["실패"]), "사유를 바꾼 지적": stats["사유를 바꾼 지적"], "usage": stats["usage"]})
     pools: dict[str, list[tuple[str, str]]] = {}
     for sentence, found, was_asked in zip(sentences, cards, asked):
         if was_asked and found is None:      # AI가 지적하지 않은 같은 종류 문장 — 참고 예문 후보

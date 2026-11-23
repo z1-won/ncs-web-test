@@ -1,4 +1,4 @@
-"""검토의견서 읽기 — 1·2차 검토의견서(PDF 줄 또는 hwp/hwpx 표)를 의견 항목 목록으로 바꾼다. I/O 없음(읽기는 pipeline이 한다).
+"""검토의견서 읽기 — 1·2차 검토의견서(PDF 줄 또는 hwp/hwpx 표)와 심의의견서(F25, hwp/hwpx 표)를 의견 항목 목록으로 바꾼다. I/O 없음(읽기는 pipeline이 한다).
 
 의견 항목 = (차수, 구분, 학습 번호, 구성, 쪽, 의견 문장). 판정·유형은 여기서 정하지 않는다.
 
@@ -21,9 +21,9 @@ from .config import OTHER, OVERVIEW, PARTS, PLAN, SUMMARY
 
 @dataclass
 class Opinion:
-    round: str                    # '1차' | '2차' | ''
+    round: str                    # '1차' | '2차' | '심의' | ''
     source: str                   # 의견서 파일 이름
-    group: str                    # 학습모듈 개요 | 학습 N | 기타 | 종합 의견 | 개발계획서
+    group: str                    # 학습모듈 개요 | 학습 N | 기타 | 종합 의견 | 개발계획서 | 심의 항목 이름
     lesson: int | None            # 학습 번호
     part: str | None              # 필요 지식 | 수행 내용 | 교수·학습 방법 | 평가
     page: str | None              # '4', '3-6' — 의견서의 쪽(초고본·완성본 기준)
@@ -68,6 +68,7 @@ PAGE_ONLY = re.compile(r"^(\d{1,3}(?:\s*[-~]\s*\d{1,3})?)$")
 PAGE_HEAD = re.compile(r"^(\d{1,3}(?:\s*[-~]\s*\d{1,3})?)(?!\d)\s*")
 EMPTY_PAGE = re.compile(r"^-(?:\s+(?=-)|\s*$)")
 BULLET = re.compile(r"^-(?!>)\s*")
+SUB_ITEM = re.compile(r"^[(\[]?\s*(?:수정|변경)\s*[전후]\s*[)\]]?\s*[:：]")
 NOT_OPINION = re.compile(r"^[-\s]*((의견\s*)?없음)?[.\s]*$")
 PAGE_CELL = re.compile(r"^\d{1,3}(?:\s*(?:[-~,]|\s)\s*\d{1,3})*$")   # hwp 쪽수 칸: '3-6', '5 9', '51~56 60'
 
@@ -103,11 +104,24 @@ def norm_part(label: str) -> str | None:
     return None
 
 
+def sub_item(text: str) -> bool:
+    """앞 의견에 딸린 '-' 줄인가 — '수정전: …'·'수정 후: …'처럼 앞 문장이 든 고칠 문장의 전후 예시."""
+    return bool(SUB_ITEM.match(BULLET.sub("", text.strip(), count=1)))
+
+
 def split_bullets(text: str) -> list[str]:
-    """한 칸 글 → '-'로 시작하는 의견들. '-'가 없으면 통째로 한 의견. '교수-학습', '->'는 나누지 않는다."""
+    """한 칸 글 → '-'로 시작하는 의견들. '-'가 없으면 통째로 한 의견. '교수-학습', '->'는 나누지 않는다.
+    '- 수정전: …', '- 수정후: …' 줄은 따로 의견이 아니라 앞 의견에 붙인다(실물 1차 의견서의 개발계획서 칸 — 한 의견이 셋으로 읽혔다)."""
     text = " ".join(text.split())
     parts = re.split(r"(?:^|\s)-(?!>)\s*(?=\S)", text)
-    out = [p.strip() for p in parts if p.strip()]
+    out: list[str] = []
+    for part in (p.strip() for p in parts):
+        if not part:
+            continue
+        if out and sub_item(part):
+            out[-1] = f"{out[-1]} - {part}"
+        else:
+            out.append(part)
     return [p for p in out if is_opinion(p)]
 
 
@@ -225,7 +239,7 @@ def _table_items(lines: list[str], source: str, round_: str) -> list[Opinion]:
         if not rest:
             continue
         starts_ref = REF.match(rest) and current is not None and SENTENCE_END.search(current.lines[-1])
-        if BULLET.match(rest) or current is None or starts_ref:
+        if (BULLET.match(rest) and not (current is not None and sub_item(rest))) or current is None or starts_ref:
             current = _Item(index, [BULLET.sub("", rest, count=1)], index)
             items.append(current)
             continue
@@ -371,7 +385,9 @@ def _block_text(lines: list[str]) -> list[str]:
         return [t for t in [join_lines(body)] if is_opinion(t)]
     items: list[list[str]] = []
     for line in body:
-        if BULLET.match(line) or not items:
+        if items and sub_item(line):
+            items[-1].append(line)
+        elif BULLET.match(line) or not items:
             items.append([BULLET.sub("", line, count=1)])
         else:
             items[-1].append(line)
@@ -381,7 +397,7 @@ def _block_text(lines: list[str]) -> list[str]:
 def parse_lines(lines: list[str], source: str = "", round_: str = "") -> OpinionSheet:
     """의견서 PDF의 줄(위에서 아래, 여러 쪽을 이어 붙임) → OpinionSheet."""
     lines = [clean(l) for l in lines]
-    round_ = round_ or next((_round(l) for l in lines[:6] if _round(l)), "")
+    round_ = next((_round(l) for l in lines[:6] if _round(l)), "") or round_   # 제목의 'N차 검토' 표기가 지정 차수보다 앞선다
     module = next((MODULE_NAME.match(l).group(1).strip() for l in lines if MODULE_NAME.match(l)), "")
     head = next((i for i, l in enumerate(lines) if TABLE_HEAD.match(l)), None)
     if head is None:
@@ -407,7 +423,12 @@ def parse_lines(lines: list[str], source: str = "", round_: str = "") -> Opinion
 # --- hwp/hwpx 표 ----------------------------------------------------------------
 
 def parse_tables(tables: list[dict], source: str = "", round_: str = "") -> OpinionSheet:
-    """의견서 hwp/hwpx의 표(ncs_core Document.tables, 문서 순서) → OpinionSheet. 쪽을 넘긴 표는 이어서 읽는다."""
+    """의견서 hwp/hwpx의 표(ncs_core Document.tables, 문서 순서) → OpinionSheet. 쪽을 넘긴 표는 이어서 읽는다.
+
+    round_(지정 차수)는 'N차 검토' 표기가 없는 표에만 쓴다 — 실물 2차 의견서 파일에는 1차 표가 함께 들어 있어, 지정 차수를
+    앞세우면 그 1차 의견이 '2차'로 붙어 1차 파일의 같은 의견과 겹쳐 세어진다. 결과의 차수는 지정 차수(없으면 마지막 표의 표기)."""
+    if any(_deliberation_head(table) is not None for table in tables):
+        return parse_deliberation(tables, source)
     rows: list[list[str]] = []
     for table in tables:
         by_row: dict[int, list[tuple[int, str]]] = {}
@@ -429,7 +450,7 @@ def parse_tables(tables: list[dict], source: str = "", round_: str = "") -> Opin
             continue
         first = cells[0]
         if ROUND.match(first):            # 2차 의견서 파일 안에 1차 의견서 표가 앞에 함께 든 경우가 있다 → 표마다 차수를 다시 읽는다
-            round_, state = fixed_round or _round(first), "head"
+            round_, state = _round(first) or fixed_round, "head"   # 표의 'N차 검토' 표기가 지정 차수보다 앞선다
             continue
         if HEADER_LINE.search(first):
             continue
@@ -480,7 +501,71 @@ def parse_tables(tables: list[dict], source: str = "", round_: str = "") -> Opin
                                         part, page, t))
     if state == "head" and not opinions:
         raise ValueError(f"검토의견서 표(구분·쪽수·검토의견)를 찾지 못했습니다: {source}")
-    return OpinionSheet(source, round_, module, opinions)
+    return OpinionSheet(source, fixed_round or round_, module, opinions)
+
+
+# --- 심의의견서(F25) hwp/hwpx 표 ------------------------------------------------
+
+DELIBERATION = "심의"                                     # 심의의견서 의견의 차수 자리
+ITEM_LABEL = re.compile(r"^([①-⑳])\s*(.+)$")
+GUIDE_LINE = re.compile(r"^\s*(※|\*|\(?\s*(작성\s*(요령|방법|예시)|예시\s*\)))")
+
+
+def _deliberation_head(table: dict) -> tuple[int, int, int | None] | None:
+    """심의의견서 표 머리 `심의 항목 | 세분류 | 심의 의견` → (머리 행, 심의 의견 열, 세분류 열). 아니면 None."""
+    by_row: dict[int, dict[int, str]] = {}
+    for (r, c), text in table["cells"].items():
+        by_row.setdefault(r, {})[c] = re.sub(r"\s", "", str(text))
+    for r, cells in sorted(by_row.items()):
+        if "심의항목" in cells.values():
+            opinion_col = next((c for c, t in cells.items() if t == "심의의견"), None)
+            if opinion_col is not None:
+                return r, opinion_col, next((c for c, t in cells.items() if t == "세분류"), None)
+    return None
+
+
+def _guide_free(text: str) -> str:
+    """칸 글에서 양식 안내 줄(※ …, 작성 요령 …)을 뺀다 — 줄 단위로 보고 남은 줄을 잇는다."""
+    return clean(" ".join(line for line in str(text).splitlines() if line.strip() and not GUIDE_LINE.match(clean(line))))
+
+
+def parse_deliberation(tables: list[dict], source: str = "") -> OpinionSheet:
+    """심의의견서(F25 양식 '소위원회 심의의견서') hwp/hwpx의 표 → OpinionSheet.
+
+    표 머리는 `심의 항목 | 세분류 | 심의 의견`, 심의 항목은 ① 정합성 ② 적정성 ③ 활용 용이성 ④ 기타 소위원회 상정 안건 ⑤ 총평 꼴이고
+    쪽수 칸이 없다. ④⑤는 세분류 칸 없이 의견 칸이 합쳐져 있다. 차수 자리는 '심의'(지정 차수와 관계없이), 구분은 심의 항목 이름(번호 뺌),
+    학습·구성·쪽은 없다 — 원고 자리는 의견 글의 <표 N-M>·[그림 N-M] 참조로만 찾고, 없으면 자리 없는 의견(확인 필요)이다.
+    세분류 칸 글은 '의견서 읽기 추정'에 남긴다. 빈 양식이면 의견 0개.
+    한계: 채워진 실물 심의의견서는 자료에 없어 빈 양식(F25)과 그 표 모양으로만 맞췄다 — 의견 칸 안의 '-' 나누기는 검토의견서와 같게 본다.
+    PDF 심의의견서는 읽지 않는다(검토의견서 표 머리가 없어 오류).
+    """
+    module = ""
+    opinions: list[Opinion] = []
+    for table in tables:
+        cells = {key: str(text) for key, text in table["cells"].items()}
+        for (r, c), text in cells.items():
+            if re.sub(r"\s", "", text) == "학습모듈원고명" and clean(cells.get((r + 1, c), "")):
+                module = module or clean(cells[(r + 1, c)])
+        head = _deliberation_head(table)
+        if head is None:
+            continue
+        head_row, opinion_col, kind_col = head
+        rows = sorted({r for r, _ in cells if r > head_row})
+        for r in rows:
+            label = ITEM_LABEL.match(clean(cells.get((r, 0), "")))
+            if not label:
+                continue
+            group = label.group(2)
+            has_opinion_cell = (r, opinion_col) in cells
+            notes = []
+            if kind_col is not None and has_opinion_cell and clean(cells.get((r, kind_col), "")):
+                notes.append(f"세분류: {clean(cells[(r, kind_col)])}")
+            first_col = opinion_col if has_opinion_cell else 1      # ④⑤는 의견 칸이 세분류 칸까지 합쳐져 있다
+            texts = [_guide_free(t) for (rr, cc), t in sorted(cells.items()) if rr == r and cc >= first_col]
+            for text in texts:
+                for t in split_bullets(text):
+                    opinions.append(Opinion(DELIBERATION, source, group, None, None, None, t, list(notes)))
+    return OpinionSheet(source, DELIBERATION, module, opinions)
 
 
 def flipped(lines: list[str]) -> bool:

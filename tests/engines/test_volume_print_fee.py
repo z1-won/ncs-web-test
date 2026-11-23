@@ -75,6 +75,8 @@ class FeeRules(unittest.TestCase):
         clauses = [row["조항"] for row in fee["근거"]]
         self.assertIn("F07 계약서 제13조 4항", clauses)
         self.assertIn("F16 정산지침 인쇄 36쪽", clauses)
+        for clause in ("F16 정산지침 인쇄 19쪽", "F11 매뉴얼 인쇄 20~21쪽", "F16 정산지침 인쇄 21쪽", "F16 정산지침 인쇄 19~21쪽"):
+            self.assertIn(clause, clauses)                       # 부록 포함·검수 기준 시점·시각 자료 기준 차이의 문서 근거
 
     def test_entered_unit_and_contract_cap(self):
         over = compute_fee(83, "x", config=DEFAULT_CONFIG, unit=46200, contract_pages=80)
