@@ -5,6 +5,9 @@
   export   확인서·수정 메모 원고 내려받기(/api/export/…)
   plan     개발계획서 작성(/api/plan/…)
   upscale  그림 업스케일(/api/uploads/{token}/pictures…, /proposal)
+  figures  그림 검수(005)·태깅(009) 규칙 결과(/api/uploads/{token}/figures…) · 그림 판독(…/figures/read, 누를 때만)
+  sources  출처 검토(REQ-02-008, /api/uploads/{token}/sources…) — 규칙만, 검수 뒤 바로
+  llm_review  LLM 검토(/api/llm-review/status, /api/uploads/{token}/llm-review…) — 사용자가 눌렀을 때만 토큰을 쓴다
   volume   원고 분량 산정(/api/volume)
   opinion  검토의견서 반영 여부 검토(/api/opinion)
   suggest  원고 문장 추천(/api/suggest, /api/suggest/sentence, /api/suggest/kinds)

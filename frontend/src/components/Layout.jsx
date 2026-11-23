@@ -29,6 +29,9 @@ export function TopButton({ target = "#container" }) {
 export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 동선) → 이력(부차)
   { id: "review-run", label: "검수 실행" },
   { id: "review-result", label: "검수 결과" },
+  { id: "llm-review", label: "LLM 검토", afterResult: true },
+  { id: "figures", label: "그림 검수", afterResult: true },
+  { id: "sources", label: "표 출처 검토", afterResult: true },
   { id: "review-history", label: "검수 이력" },
 ];
 
@@ -45,7 +48,7 @@ export const PAGES = [
 export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
   const location = useLocation();
   const items = useMemo(
-    () => anchors.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" ? hasResult : true)),
+    () => anchors.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" || item.afterResult ? hasResult : true)),
     [anchors, hasHistory, hasResult],
   );
   const header = useRef(null);

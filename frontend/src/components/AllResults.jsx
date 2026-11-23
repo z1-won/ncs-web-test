@@ -7,6 +7,7 @@ import { ChecklistTable, FindingsTable, SheetTable } from "./Tables.jsx";
 import { api } from "../lib/api.js";
 import { countVerdicts, overallVerdict } from "../lib/checks.js";
 import { formatDate } from "../lib/format.jsx";
+import { applyLlm, llmTouches } from "../lib/llm.js";
 
 // 아코디언 머리의 상태 표시: 대기 / 검사 중 / 건너뜀 / 오류 / 판정 + 항목 수
 export function ItemStatus({ item }) {
@@ -28,11 +29,15 @@ export function ItemStatus({ item }) {
   );
 }
 
-export function AllResults({ run, checks, onError, onNotice, uploadToken }) {
+export function AllResults({ run, checks, onError, onNotice, uploadToken, llm }) {
   const [expanded, setExpanded] = useState(() => new Set());
   const [view, setView] = useState("accordion");   // "accordion"(구성요소별) | "sheet"(확인서 한 표)
   const order = checks.filter((c) => !c.all).map((c) => c.value);
-  const items = order.map((check) => ({ check, option: checks.find((c) => c.value === check), ...(run.items[check] || { status: "pending" }) }));
+  const items = order.map((check) => {
+    const state = run.items[check] || { status: "pending" };
+    const data = state.status === "done" ? applyLlm(check, state.data, llm) : state.data;
+    return { check, option: checks.find((c) => c.value === check), ...state, data, llm: state.status === "done" && llmTouches(llm, check) };
+  });
   const finished = items.filter((i) => i.status === "done");
   const verdict = overallVerdict(finished.map((i) => i.data?.요약?.검수결과));
   const total = finished.reduce((acc, i) => {
@@ -113,7 +118,10 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken }) {
                         disabled={!canOpen} onClick={() => toggle(item.check)}>
                   <span className="acc-title">
                     <span className="acc-name">{item.option?.label || item.check}</span>
-                    <ItemStatus item={item} />
+                    <span className="acc-right">
+                      {item.llm && <span className="llm-mark">LLM 검토 ✓</span>}
+                      <ItemStatus item={item} />
+                    </span>
                   </span>
                 </button>
               </h5>

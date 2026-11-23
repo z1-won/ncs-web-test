@@ -13,11 +13,13 @@ function describe(file) {   // KRDS 예제의 파일명 표기: 이름 [확장�
 
 // file: 고른 File 또는 null. uploading: 서버가 역할을 확인하는 중. invalid: 이 칸의 오류 문구. hint: 파일이 없을 때의 안내 한 줄.
 // 도움말은 칸마다 한 줄만 둔다 — 파일이 없으면 오류 또는 안내, 파일이 있으면 그 파일 행 안의 오류(file-hint-invalid)뿐.
-export function FileSlot({ id, label, required, accept, file, onChange, disabled, uploading, invalid, hint }) {
+// multiple: 여러 파일을 고르는 칸(file은 File 배열, 삭제는 전부 비움).
+export function FileSlot({ id, label, required, accept, file, onChange, disabled, uploading, invalid, hint, multiple }) {
   const input = useRef(null);
+  const list = multiple ? (file || []) : (file ? [file] : []);
   function clear() {
     if (input.current) input.current.value = "";   // 같은 파일을 다시 골라도 change가 나도록
-    onChange(null);
+    onChange(multiple ? [] : null);
   }
   return (
     <div className="form-group">
@@ -32,20 +34,20 @@ export function FileSlot({ id, label, required, accept, file, onChange, disabled
       <div className="form-conts">
         <div className="krds-file-upload file-slot">
           <div className="file-upload-btn-wrap">
-            <input ref={input} id={id} type="file" accept={accept} className="sr-only" tabIndex={-1} aria-describedby={`${id}-hint`}
+            <input ref={input} id={id} type="file" accept={accept} multiple={multiple} className="sr-only" tabIndex={-1} aria-describedby={`${id}-hint`}
                    aria-invalid={invalid ? "true" : undefined} aria-required={required ? "true" : undefined}
-                   onChange={(e) => onChange(e.target.files?.[0] || null)} />
+                   onChange={(e) => onChange(multiple ? [...(e.target.files || [])] : (e.target.files?.[0] || null))} />
             {/* 셀렉트·입력칸과 같은 large 높이로 칸의 규격을 맞춘다 */}
             <button type="button" className="krds-btn large tertiary" disabled={disabled} onClick={() => input.current?.click()}>
-              <i className="svg-icon ico-upload" aria-hidden="true"></i>{file ? "파일 바꾸기" : "파일 선택"}<span className="sr-only"> — {label}</span>
+              <i className="svg-icon ico-upload" aria-hidden="true"></i>{list.length ? "파일 바꾸기" : "파일 선택"}<span className="sr-only"> — {label}</span>
             </button>
           </div>
-          {file && (
+          {list.length > 0 && (
             <div className="file-list">
               <ul className="upload-list">
                 <li className={invalid ? "is-error" : undefined}>
                   <div className="file-info">
-                    <div className="file-name" title={file.name}>{describe(file)}</div>
+                    <div className="file-name" title={list.map((f) => f.name).join("\n")}>{list.length === 1 ? describe(list[0]) : `${list.length}개: ${list.map((f) => f.name).join(", ")}`}</div>
                     <div className="btn-wrap">
                       {uploading
                         ? <span className="krds-spinner" role="status"><span className="sr-only">확인 중</span></span>
@@ -62,7 +64,7 @@ export function FileSlot({ id, label, required, accept, file, onChange, disabled
           )}
         </div>
       </div>
-      {!file && (invalid
+      {!list.length && (invalid
         ? <p className="form-hint-invalid" id={`${id}-hint`} role="alert">{invalid}</p>
         : <p className="form-hint" id={`${id}-hint`}>{hint || "선택된 파일 없음"}</p>)}
     </div>

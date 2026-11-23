@@ -15,7 +15,7 @@ from __future__ import annotations
 from ncs_core import NA, O, PASS, TRI, X, verdict, visible
 from ncs_core.brands import find_brands
 from ncs_core.field_terms import field_of
-from ncs_core.llm import LlmError, ask_json, settings
+from ncs_core.llm import PENDING, LlmError
 
 ITEM_ID = "F02-수행-②"
 CHECK = "② 상표·상품·제조사명 노출 없음"
@@ -68,21 +68,10 @@ def _is_heading(text: str) -> bool:
     return text in ("재료·자료", "재료 · 자료", "재료", "기기(장비·공구)", "기기(장비 · 공구)", "기기") or len(text) <= 1
 
 
-def _ask(lines: list[tuple[int, str, str]], system: str = SYSTEM) -> dict:
-    user = "\n".join(f"{no}. [{name}] {text}" for no, name, text in lines)
-    return ask_json(TASK, system, user).__dict__
-
-
 def check_brands(blocks: list[dict], *, module_code: str = "", asker=None) -> list[dict]:
     """module_code: 원고 분야를 프롬프트에 넣는 데 쓴다(LM1203020401_23v3 → 연회관리).
     asker: 테스트에서 LLM 대신 넣는 함수((줄 목록) → LlmAnswer.__dict__ 꼴 dict)."""
     rows = []
-    cfg = settings()
-    if asker is None:
-        system = system_prompt(module_code)
-
-        def asker(lines):
-            return _ask(lines, system)
     for block in blocks:
         lines = _lines(block)
         region = f"section1 > 학습 {block.get('lesson')} > {block.get('unit') or ''} > 수행 내용 {block.get('perform_no') or ''}".replace("  ", " ")
@@ -93,9 +82,8 @@ def check_brands(blocks: list[dict], *, module_code: str = "", asker=None) -> li
             continue
         known, known_notes = _dictionary(lines)
         fix = SUGGESTION if known.get(DICTIONARY) != O else None
-        if not cfg.ready:
-            rows.append(_row(region, where, shown, {**known, CHECK: TRI},
-                             {**known_notes, CHECK: cfg.why_not + " — 사전에 없는 상표·상품·제조사명은 사람이 확인"}, fix))
+        if asker is None:
+            rows.append(_row(region, where, shown, {**known, CHECK: TRI}, {**known_notes, CHECK: PENDING}, fix))
             continue
         try:
             answer = asker(lines)
@@ -105,7 +93,7 @@ def check_brands(blocks: list[dict], *, module_code: str = "", asker=None) -> li
         all_findings = _valid_findings(answer.get("data") or {}, lines)
         findings = [f for f in all_findings if f["confidence"] in MIN_CONFIDENCE]
         low = [f for f in all_findings if f["confidence"] not in MIN_CONFIDENCE]
-        model = answer.get("model", cfg.model)
+        model = answer.get("model", "")
         if not findings:
             notes = {**known_notes, "참고": f"LLM({model}) 탐지 없음" + (f" (확신 낮은 표현 {len(low)}건은 상세 참고)" if low else "")}
             rows.append(_row(region, where, shown, {**known, CHECK: O}, notes, fix, findings=all_findings))

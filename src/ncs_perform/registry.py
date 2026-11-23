@@ -14,5 +14,5 @@ DEFAULT_RULES = (
     Rule("sentences", "F02-수행-④", lambda c: check_perform_sentences(c.blocks, has_styles=c.has_styles)),
 )
 
-# ②③은 LLM 후보(△) — ncs_core.llm 설정이 없으면 △ '미설정'. ②의 사전 대조와 ③의 작성 여부는 LLM 없이도 돈다.
+# ②③의 내용 판단은 △(LLM 검토 전) — 화면의 'LLM 검토'(Claude)가 채운다. ②의 사전 대조와 ③의 작성 여부는 규칙으로 돈다.
 ALL_ITEM_IDS = tuple("F02-수행-" + n for n in "①②③④")
