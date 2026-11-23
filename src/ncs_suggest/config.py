@@ -6,7 +6,7 @@
   교수 방법·학습 방법 '~한다.'(교수·학습 ②④, '~할 수 있다.'는 부적합) · 평가 항목 '~여부/~능력/~수준/~정도' 명사형, 마침표 없음(평가 ④) ·
   학습명·수행 내용 제목 '~하기'(차례 ①, 수행 ①) · 학습 내용명 행동명사 종결(차례 ②). 안전·유의 사항은 F02에 종결 규정이 없어
   문장 직접 입력에서만 '~한다.'를 권장 꼴로 본다(원고 전체 점검에서는 모으지 않는다).
-- 판정: 고칠 문장인지와 정정 후보는 LLM이 낸다(작업 이름 sentence_suggest). 규칙 코드는 문장 모으기(extract)와
+- 판정: 고칠 문장인지와 정정 후보는 LLM(Claude, ncs_llmreview.claude — 작업 이름 sentence_suggest)이 낸다. 규칙 코드는 문장 모으기(extract)와
   AI 후보 검증(llm_suggest.validate — 규정 꼴 재검사, 원문에 없던 수치·영문·상호 금지, 원문 유사도 하한)만 맡는다.
   LLM 설정이 없거나 호출이 실패하면 규칙으로 대신 판정하지 않고 '판단불가'와 이유를 낸다.
 - 후보 수: 기업 기대 시연(「문장정정 후보 5순위 검토자 선택」) — 문장당 최대 5개, 순위를 붙여 검토자가 고른다.
@@ -41,7 +41,7 @@ OTHER_REASON = "기타 표현"
 UNDECIDED = "판단불가"      # 문장 직접 입력에서 AI를 부르지 못함
 NO_FINDING = "지적 없음"     # 문장 직접 입력에서 AI가 고칠 곳을 찾지 못함
 
-LLM_TASK = "sentence_suggest"      # ncs_core.llm.ALLOWED_TASKS에 등록된 작업 이름 — 같은 종류의 문장 줄만 보낸다
+LLM_TASK = "sentence_suggest"      # Claude 호출의 작업 이름(디스크 캐시 폴더 .llm_cache/llmreview/sentence_suggest/) — 모은 문장 줄만 보낸다
 
 
 @dataclass(frozen=True)
@@ -50,9 +50,7 @@ class SuggestConfig:
     max_examples: int = 2           # 같은 원고의 참고 예문 수
     example_min: float = 0.35       # 참고 예문 글자 유사도 하한(difflib ratio)
     ai_min_similarity: float = 0.6  # AI 후보와 원문의 글자 유사도 하한 — 낮으면 내용을 바꾼 것으로 보고 버린다
-    llm_max_sentences: int = 300    # 원고 한 건에서 AI에 물을 문장 수 상한
-    llm_batch: int = 20             # AI 한 번에 묻는 문장 수(같은 종류끼리)
-    llm_output_tokens: int = 6000   # 응답 길이 한도(지적 문장마다 후보 5개)
+    llm_max_sentences: int = 300    # 원고 한 건에서 AI에 물을 문장 수 상한(원고 블록 하나에 모두 넣고 한 번에 묻는다)
 
 
 DEFAULT_CONFIG = SuggestConfig()
