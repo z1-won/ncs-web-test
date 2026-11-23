@@ -8,11 +8,12 @@
 
 import re
 
+from ncs_core.source_line import LM_CODE, SRC_HEAD  # noqa: F401 — 출처 줄 머리말·모듈 코드 꼴의 원본은 코어
+
 BULLET = re.compile(r"^[•·▪ㆍ‧◦○∙●\-–]\s*")  # ∙(U+2219)·●도 실데이터(SW제품기획 최종본)의 글머리
 MEMO = re.compile(r"^[★▶※]|要")
 NOT_CONTINUATION = re.compile(r"^(서식|부록|별지|표|그림)\s*\d+")  # 참고 자료 뒤 서식 목록 줄은 이어지는 서지가 아니다
 NEXT_HEAD = re.compile(r"^(활\s*용\s*서\s*식|부\s*록|NCS\s*학습모듈\s*개발\s*이력|개발\s*이력)")
-SRC_HEAD = re.compile(r"^출\s*처\s*[:：]\s*")
 YEAR_IN_PARENS = re.compile(r"^(?P<author>[^()]{1,80}?)\s*\((?P<year>\[\d{4}\]\s*\d{4}|\d{4}[a-z]?|n\.d\.|작성일 불명|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?)\)")
 SUBHEAD = re.compile(r"^(국내|국외|동양|서양|해외|외국)\s*(자료|문헌)$")  # 참고 자료 안 묶음 제목 — 항목이 아니다
 DOT_BULLET = re.compile(r"^[•·▪ㆍ‧◦○∙●]")  # 위로 넓힐 때 쓰는 글머리('-'는 피드백 줄도 써서 뺀다)
@@ -20,7 +21,6 @@ DOT_BULLET = re.compile(r"^[•·▪ㆍ‧◦○∙●]")  # 위로 넓힐 때 �
 BIB_HINT = re.compile(r"\d{4}|[「『《]|https?://|www\.|출판|발행|학회|연구원|진흥원|센터|Press|Inc|Ltd|Publishing", re.IGNORECASE)
 GUESSED = "제목은 텍스트가 아님"  # section_presence가 제목 없이 참고문헌 꼴 줄로 구역을 추정했다는 표시
 NOT_LITERATURE = re.compile(r"집필진\s*제작|스크린\s*숏")
-LM_CODE = re.compile(r"LM(?:\d{10}|\d{8})_\d{2}v\d+")  # 옛 판본은 8자리(LM20010410_14v2)
 
 
 def key_of(text: str) -> dict | None:

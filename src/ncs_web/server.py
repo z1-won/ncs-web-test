@@ -15,7 +15,8 @@ from starlette.exceptions import HTTPException
 
 from . import auth
 from .common import Services, allowed_origins, error_response
-from .routes import aiimage, cases, export, history, images, opinion, plan, progress, recommend, review, rights, suggest, upscale, volume
+from .routes import (aiimage, cases, export, figures, history, images, llm_review, opinion, plan, progress, recommend, review, rights, sources,
+                     suggest, upscale, volume)
 from .uploads import UploadStore
 
 
@@ -73,7 +74,8 @@ def create_app(
 
     # 기능별 경로 — 새 기능은 routes/에 모듈을 더하고 여기에 한 줄을 붙인다
     services = Services(store=store, uploads=uploads_store)
-    for module in (review, history, export, plan, upscale, images, rights, recommend, volume, opinion, suggest, progress, cases, aiimage):
+    for module in (review, history, export, plan, upscale, images, rights, recommend, volume, opinion, suggest, progress, cases, aiimage,
+                   llm_review, figures, sources):
         module.register(app, services)
 
     # FastAPI가 자동 추가하는 422 대신 기존 프런트엔드와 호환되는 400을 문서화한다.

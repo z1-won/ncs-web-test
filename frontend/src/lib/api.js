@@ -259,6 +259,40 @@ export const api = {
     },
     exportXlsx: (report) => download("/api/rights/export", report, `권리증빙_제출현황_${(report.원고?.파일 || "원고").replace(/\.[^.]+$/, "")}.xlsx`),
   },
+  // LLM 검토: 형식 검수 뒤 사용자가 버튼을 눌렀을 때만 실행(토큰을 쓰는 유일한 경로). tasks = 항목 값 배열
+  llmReview: {
+    status: () => request("/api/llm-review/status"),
+    previous: (token) => request(`/api/uploads/${token}/llm-review`),
+    run: (token, { tasks, moduleCode, signal } = {}) =>
+      request(`/api/uploads/${token}/llm-review`, { method: "POST", body: multipart({ tasks: (tasks || []).join(","), module_code: moduleCode || "" }), signal }),
+    jsonUrl: (token) => `/api/uploads/${token}/llm-review/result.json`,
+    memoUrl: (token) => `/api/uploads/${token}/llm-review/memo`,
+  },
+  // 출처 검토(008): 규칙만 — 형식 검수 뒤 바로
+  sources: {
+    review: (token, { moduleCode, signal } = {}) =>
+      request(`/api/uploads/${token}/sources${moduleCode ? `?module_code=${encodeURIComponent(moduleCode)}` : ""}`, { signal }),
+    csvUrl: (token) => `/api/uploads/${token}/sources/list.csv`,
+  },
+  // 그림 검수(005)·태깅(009): rules는 형식 검수 뒤 바로(규칙만), read는 누를 때만(Claude)
+  figures: {
+    rules: (token, { moduleCode, signal } = {}) =>
+      request(`/api/uploads/${token}/figures${moduleCode ? `?module_code=${encodeURIComponent(moduleCode)}` : ""}`, { signal }),
+    imageUrl: (token, id) => `/api/uploads/${token}/figures/image/${id}.png`,
+    dbImageUrl: (id) => `/api/figures/db-image/${id}.png`,
+    reportUrl: (token) => `/api/uploads/${token}/figures/report.html`,
+    csvUrl: (token) => `/api/uploads/${token}/figures/figures.csv`,
+    jsonUrl: (token) => `/api/uploads/${token}/figures/result.json`,
+    memoUrl: (token) => `/api/uploads/${token}/figures/memo`,
+    // ⑥⑦ 집필자 제출 서류(수록 현황 목록·제작 목록·동의서·서약서) — 올리면 규칙 결과를 다시 만든다
+    uploadSubmissions: (token, files) =>
+      request(`/api/uploads/${token}/figures/submissions`, { method: "POST", body: multipart({}, files) }),
+    clearSubmissions: (token) => request(`/api/uploads/${token}/figures/submissions`, { method: "DELETE" }),
+    visionStatus: () => request("/api/figures/vision-status"),
+    previousRead: (token) => request(`/api/uploads/${token}/figures/read`),
+    read: (token, { limit, signal } = {}) =>
+      request(`/api/uploads/${token}/figures/read`, { method: "POST", body: multipart({ limit: String(limit || 5) }), signal }),
+  },
   // 원고 분량 산정(REQ-02-013): 최종 원고(+ 기존 원고, 출력본 PDF)의 구성별 행·쪽 산정표와 계약서 기준 집필료
   volume: ({ file, previous, printCopy, manualPages, unitPrice, contractPages, includeAppendix = true, signal }) => {
     const form = new FormData();

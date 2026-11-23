@@ -173,7 +173,16 @@ function SlotLabel({ id, label, required }) {
 
 // file: 고른 File 또는 null. uploading: 서버가 역할을 확인하는 중. invalid: 이 칸의 오류 문구. hint: 파일이 없을 때의 안내 한 줄(없으면 형식 안내).
 // 칸 아래 글은 한 줄만 둔다 — 받지 않은 파일의 이유, 없으면 (파일이 없을 때) 오류 또는 안내. 올린 파일의 오류는 그 파일 행 안(file-hint-invalid)에 적는다.
-export function FileSlot({ id, label, required, accept, file, onChange, disabled, uploading, invalid, hint }) {
+// multiple: 여러 파일을 고르는 칸 — file은 File 배열, onChange도 배열을 받는다(MultiFileSlot과 같은 칸). 호출하는 쪽은 한 이름(FileSlot)만 알면 된다.
+export function FileSlot({ multiple, ...props }) {
+  if (multiple) {
+    const { file, ...rest } = props;   // 여러 파일 칸에는 '확인 중' 표시가 없다 — uploading은 받아도 쓰지 않는다
+    return <MultiFileSlot {...rest} files={file || []} />;
+  }
+  return <SingleFileSlot {...props} />;
+}
+
+function SingleFileSlot({ id, label, required, accept, file, onChange, disabled, uploading, invalid, hint }) {
   const input = useRef(null);
   const intake = useFileIntake({ accept, disabled, multiple: false, onFiles: ([picked]) => onChange(picked) });
   function clear() {

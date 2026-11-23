@@ -5,6 +5,7 @@ import time
 import unittest
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 try:
@@ -188,7 +189,9 @@ class UpscaleAndWriteTests(unittest.TestCase):
         self.assertEqual(module.exe_names("waifu2x-ncnn-vulkan.exe", "posix"), ("waifu2x-ncnn-vulkan", "waifu2x-ncnn-vulkan.exe"))
         self.assertEqual(module.DEFAULT_TOOLS[0], Path(module.__file__).resolve().parents[2] / "tools")
         engine = ENGINES["waifu2x-photo"]
-        with tempfile.TemporaryDirectory() as tools, mock.patch.object(module.os, "name", "posix"):
+        # os.name 자체를 바꾸면 Windows의 pathlib가 PosixPath를 만들려다 실패한다(Python 3.12+) — 엔진 모듈이 보는 os만 바꾼다
+        fake_os = SimpleNamespace(name="posix", environ=module.os.environ)
+        with tempfile.TemporaryDirectory() as tools, mock.patch.object(module, "os", fake_os):
             folder = Path(tools) / engine.folder / "waifu2x-macos"
             folder.mkdir(parents=True)
             with self.assertRaises(FileNotFoundError) as caught:

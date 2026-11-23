@@ -739,6 +739,175 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 }
 .krds-date-field .krds-calendar-area .calendar-wrap .calendar-body .calendar-table-wrap .calendar-tbl th { padding-bottom: var(--krds-padding-4); }   /* 제목이 있던 자리(4.6rem)를 비워 두지 않는다 */
 .recommend-context .recommend-method + .recommend-method { margin-top: var(--krds-gap-2); }
+
+/* LLM 검토(형식 검수 아래) — 수정해야 하는 부분 · 근거 · 수정 방안 */
+.llm-review { margin-top: var(--krds-gap-9); padding-top: var(--krds-gap-7); border-top: 1px solid var(--krds-light-color-border-gray-light); }
+.llm-review .llm-tag { font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-warning); margin-left: var(--krds-gap-2); }
+.llm-review .llm-desc { color: var(--krds-light-color-text-subtle); margin: var(--krds-gap-3) 0 var(--krds-gap-5); }
+.llm-review .llm-tasks { border: 0; padding: 0; margin: 0 0 var(--krds-gap-5); }
+.llm-review .llm-tasks .krds-check-area { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3) var(--krds-gap-7); }
+.llm-review .llm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); }
+.llm-review > .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); margin-top: var(--krds-gap-5); z-index: auto; }
+.llm-review .llm-result { margin-top: var(--krds-gap-7); }
+.llm-review .llm-group { margin-top: var(--krds-gap-7); }
+.llm-review .llm-group-title { font-size: var(--krds-pc-font-size-heading-small, 1.125rem); margin-bottom: var(--krds-gap-3); }
+.llm-review .llm-group-title .count { font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); font-weight: var(--krds-font-weight-regular); }
+.tbl.llm td { vertical-align: top; }
+.tbl.llm .where { width: 18%; }
+.tbl.llm td.where .sub, .tbl.llm td .sub { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); margin-top: var(--krds-gap-1); }
+.tbl.llm td .kind { display: inline-block; margin-right: var(--krds-gap-2); padding: 0 var(--krds-gap-2); border-radius: var(--krds-radius-small1, 4px); background: var(--krds-light-color-surface-warning-subtler, #fff4e5); color: var(--krds-light-color-text-warning); font-size: var(--krds-pc-font-size-body-small); }
+.tbl.llm td mark { background: var(--krds-light-color-surface-warning-subtler, #fff4e5); color: inherit; font-weight: var(--krds-font-weight-bold); padding: 0 2px; }
+.tbl.llm td.fix { color: var(--krds-light-color-text-success); }
+
+/* 그림 검수·태깅(규칙) / 그림 판독(API) — FiguresPanel·FigureReadPanel */
+.figures-panel { margin-top: var(--krds-gap-9); padding-top: var(--krds-gap-7); border-top: 1px solid var(--krds-light-color-border-gray-light); }
+.figures-panel .fig-tag, .figure-read .llm-tag { font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); margin-left: var(--krds-gap-2); }
+.figures-panel .fig-tag.free { color: var(--krds-light-color-text-success); }
+.figures-panel .fig-desc { color: var(--krds-light-color-text-subtle); margin: var(--krds-gap-3) 0 var(--krds-gap-4); }
+.fig-how { margin-bottom: var(--krds-gap-5); padding: var(--krds-padding-4) var(--krds-padding-5); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-secondary-subtler); }
+.fig-how summary { cursor: pointer; font-weight: var(--krds-font-weight-bold); }
+.fig-how ol { margin: var(--krds-gap-3) 0 0; padding-left: 1.25rem; list-style: decimal; }
+.fig-how li { margin-top: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); }
+.figures-panel > .krds-spinner, .figure-read > .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); margin-top: var(--krds-gap-5); z-index: auto; }
+.fig-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: var(--krds-gap-3); margin: var(--krds-gap-5) 0; }
+.fig-stat { display: flex; flex-direction: column; gap: var(--krds-gap-1); padding: var(--krds-padding-3) var(--krds-padding-4); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium1, 6px); }
+.fig-stat span { font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); }
+.fig-stat b { font-size: var(--krds-pc-font-size-heading-small); }
+.fig-stat.danger b { color: var(--krds-light-color-text-danger); }
+.fig-stat.warning b { color: var(--krds-light-color-text-warning); }
+.fig-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3) var(--krds-gap-7); margin-bottom: var(--krds-gap-3); }
+.fig-tabs { display: inline-flex; border: 1px solid var(--krds-light-color-border-gray); border-radius: var(--krds-radius-medium2); overflow: hidden; }
+.fig-tabs button { padding: var(--krds-padding-3) var(--krds-padding-5); background: var(--krds-light-color-surface-white); border: 0; cursor: pointer; font-size: var(--krds-pc-font-size-body-small); }
+.fig-tabs button + button { border-left: 1px solid var(--krds-light-color-border-gray); }
+.fig-tabs button.on { background: var(--krds-light-color-button-primary-fill); color: #fff; font-weight: var(--krds-font-weight-bold); }
+.fig-downloads { display: inline-flex; flex-wrap: wrap; gap: var(--krds-gap-2); margin-left: auto; }
+.figures-panel .meta, .figure-read .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); margin-bottom: var(--krds-gap-3); }
+.fig-table td { vertical-align: top; }
+.fig-table .sub { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); margin-top: var(--krds-gap-1); }
+.fig-table .thumb-cell { width: 8.5rem; }
+.fig-thumb { display: inline-flex; align-items: center; justify-content: center; width: 8rem; height: 6rem; border: 1px solid var(--krds-light-color-border-gray-light); background: #fff; }
+.fig-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.fig-thumb.empty { font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); }
+.fig-checks { margin: 0; padding: 0; list-style: none; }
+.fig-checks li + li { margin-top: var(--krds-gap-2); }
+.fig-checks .mark { display: inline-block; min-width: 1.25rem; text-align: center; font-weight: var(--krds-font-weight-bold); }
+.fig-checks .mark.pass { color: var(--krds-light-color-text-success); }
+.fig-checks .mark.fail { color: var(--krds-light-color-text-danger); }
+.fig-checks .mark.undecided { color: var(--krds-light-color-text-warning); }
+.fig-table .krds-badge + div { margin-top: var(--krds-gap-2); }
+.api-divider { margin-top: var(--krds-gap-9); padding: var(--krds-padding-4) var(--krds-padding-5); border-left: 4px solid var(--krds-light-color-border-warning, #b54708); background: var(--krds-light-color-surface-warning-subtler, #fff8e6); font-size: var(--krds-pc-font-size-body-small); }
+.api-divider + .llm-review { border-top: 0; margin-top: var(--krds-gap-5); }
+.figure-read .fig-limit { min-width: 15rem; }
+.figure-read .page-alert { margin-bottom: var(--krds-gap-5); }
+@media (max-width: 767px) { .fig-downloads { margin-left: 0; } .fig-table .thumb-cell { width: 6rem; } .fig-thumb { width: 5.5rem; height: 4.5rem; } }
+
+/* 005·009 표: 출처(어디서 왔나)·내용(주변 글) 칸 */
+.fig-table .fig-nosrc { color: var(--krds-light-color-text-danger); }
+.fig-table .fig-url { word-break: break-all; font-size: var(--krds-pc-font-size-body-small); }
+.fig-ctx { font-size: var(--krds-pc-font-size-body-small); }
+.fig-ctx > div + div, .fig-ctx details > div { margin-top: var(--krds-gap-2); }
+.fig-ctx .ctx-label { display: inline-block; margin-right: var(--krds-gap-1); padding: 0 var(--krds-padding-2, 4px); border-radius: 4px; background: var(--krds-light-color-surface-secondary-subtler); color: var(--krds-light-color-text-subtle); font-size: 0.75rem; }
+.fig-ctx details summary, .fig-why summary { cursor: pointer; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); margin-top: var(--krds-gap-2); }
+.fig-checks.compact { margin-top: var(--krds-gap-2); }
+.fig-checks.compact li + li { margin-top: var(--krds-gap-1); }
+.fig-table th, .fig-table td { min-width: 7rem; }
+.fig-table .thumb-cell { min-width: 0; }
+
+.fig-checks .mark { min-width: 0; margin-right: var(--krds-gap-1); padding: 0 6px; border-radius: 4px; font-size: 0.75rem; background: var(--krds-light-color-surface-secondary-subtler); }
+.fig-checks .mark.na { color: var(--krds-light-color-text-subtle); font-weight: var(--krds-font-weight-regular); }
+
+.fig-sources { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-2); margin: var(--krds-gap-3) 0; font-size: var(--krds-pc-font-size-body-small); }
+.fig-sources span { padding: 2px 8px; border-radius: 999px; background: var(--krds-light-color-surface-secondary-subtler); }
+.fig-sources span.none { color: var(--krds-light-color-text-danger); }
+.figures-panel details.meta summary { cursor: pointer; }
+.figures-panel .page-alert { margin-bottom: var(--krds-gap-4); }
+
+.fig-thumb.small { width: 6rem; height: 4.5rem; margin-bottom: var(--krds-gap-2); }
+.fig-db { font-size: var(--krds-pc-font-size-body-small); }
+.fig-sources .db-size { background: var(--krds-light-color-surface-information-subtler); color: var(--krds-light-color-text-information); }
+
+/* 그림 표 정리(2026-11-20): 주변 글 꼬리표를 작은 굵은 소제목으로, 문단 사이/표 안 묶음 머리 줄, 그림 칸의 캡션 */
+.fig-ctx .ctx-group + .ctx-group { margin-top: var(--krds-gap-3); }
+.fig-ctx .ctx-label { display: block; margin: 0 0 2px; padding: 0; background: none; border-radius: 0; color: var(--krds-light-color-text-basic, #1e2124); font-size: 0.8rem; font-weight: var(--krds-font-weight-bold); }
+.fig-table tr.fig-group th { background: var(--krds-light-color-surface-secondary-subtler); font-weight: var(--krds-font-weight-bold); text-align: left; padding: var(--krds-padding-3) var(--krds-padding-4); }
+.fig-table .fig-caption { margin-top: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-bold); max-width: 8rem; }
+.fig-table .fig-where { display: inline-block; margin-top: var(--krds-gap-2); padding: 1px 8px; border-radius: 999px; font-size: 0.75rem; background: var(--krds-light-color-surface-secondary-subtler); color: var(--krds-light-color-text-subtle); }
+.fig-table .fig-where.table { background: var(--krds-light-color-surface-information-subtler); color: var(--krds-light-color-text-information); }
+.fig-table .fig-pending { margin-top: var(--krds-gap-3); }
+.fig-checks.compact li + li { margin-top: var(--krds-gap-2); }
+/* 글자 크기는 KRDS 토큰으로(이 사이트는 1rem이 작아 rem 값이 너무 작게 보였음), 판정·수정 제안 칸은 넓게 */
+.fig-ctx .ctx-label { font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-bold); }
+.fig-table .fig-where { font-size: var(--krds-pc-font-size-body-small); }
+.fig-checks .mark { font-size: var(--krds-pc-font-size-body-small); }
+.fig-table th, .fig-table td { min-width: 110px; }
+.fig-table .thumb-cell { min-width: 0; }
+.fig-table td.verdict { min-width: 240px; }
+.fig-table td.fix { min-width: 160px; }
+.fig-table .fig-caption { max-width: 140px; }
+.figures-panel .krds-table-wrap, .figure-read .krds-table-wrap { overflow-x: auto; max-width: 100%; }
+
+/* 판정과 근거: 기호·꼬리표 없이 문장으로, 문제는 굵게 / DB 대체 후보 목록 */
+.fig-verdict .v-risk { margin-bottom: var(--krds-gap-3); }
+.fig-verdict .v-line { margin-top: var(--krds-gap-2); }
+.fig-verdict .v-line.bad b { color: var(--krds-light-color-text-danger); }
+.fig-verdict .v-note { margin-top: 2px; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.fig-db .fig-cand + .fig-cand { margin-top: var(--krds-gap-4); padding-top: var(--krds-gap-4); border-top: 1px dashed var(--krds-light-color-border-gray-light); }
+.fig-table td:nth-child(5) { min-width: 200px; }
+.fig-table .fig-where, .fig-table .fig-where.table { display: block; padding: 0; border-radius: 0; background: none; color: var(--krds-light-color-text-subtle); }
+
+/* 출처 검토(008) */
+.sources-panel .src-group { margin-top: var(--krds-gap-7); }
+.sources-panel .src-info .k { display: inline-block; min-width: 4.5em; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.sources-panel .ref-row { margin-bottom: var(--krds-gap-3); }
+.sources-panel .ref-list, .sources-panel .quote-list { margin: var(--krds-gap-3) 0 0; padding-left: 1.25rem; }
+.sources-panel .ref-list { list-style: decimal; }
+.sources-panel .quote-list { list-style: disc; }
+.sources-panel .ref-list li, .sources-panel .quote-list li { margin-top: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); }
+.sources-panel .llm-needed { padding: var(--krds-padding-4) var(--krds-padding-5); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-secondary-subtler); }
+.sources-panel .llm-needed ul { margin: var(--krds-gap-3) 0 0; padding-left: 1.25rem; list-style: disc; }
+.sources-panel .llm-needed li + li { margin-top: var(--krds-gap-3); }
+/* ⑥⑦ 제출 서류 상자 */
+.fig-submit { border: 1px solid var(--krds-light-color-border-gray-light, #d6d6d6); border-radius: 8px; padding: 12px 16px; margin: 12px 0; font-size: var(--krds-pc-font-size-body-small, 15px); }
+.fig-submit p { margin: 6px 0; }
+.fig-submit .bad { color: var(--krds-light-color-text-danger, #c0392b); }
+.fig-submit-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.fig-verdict .v-why { font-size: var(--krds-pc-font-size-body-small, 15px); color: var(--krds-light-color-text-subtle, #555); margin: 2px 0 4px; }
+
+/* 그림 판독 버튼 줄(그림 검수 칸 안) */
+.fig-read-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); margin: var(--krds-gap-4) 0; padding: var(--krds-padding-4, 12px) var(--krds-padding-5, 16px); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: 8px; }
+.fig-read-bar .fig-limit { min-width: 16rem; }
+.fig-read-bar .form-hint { margin: 0; }
+.fig-read-bar .page-alert { flex-basis: 100%; }
+
+/* 005 검수표 — 칸마다 최소 너비를 주고, 표는 화면 폭까지 넓힌다(좁으면 가로로 밀어 봄) */
+.fig-review { table-layout: auto; min-width: 72rem; }
+.fig-review td:nth-child(2) { min-width: 8rem; }
+.fig-review td:nth-child(3) { min-width: 9rem; }
+.fig-review td:nth-child(4) { min-width: 17rem; }
+.fig-review td:nth-child(5) { min-width: 13rem; }
+.fig-review td:nth-child(6) { min-width: 19rem; }
+
+/* 그림 표는 본문 폭(최대 1248px)을 넘어 화면 폭까지 쓴다 — main이 가운데 정렬이라 좌우로 같이 넓어진다 */
+@media (min-width: 1100px) {
+  .figures-panel .krds-table-wrap { width: calc(100vw - 64px); max-width: 2200px; margin-left: calc(50% - min(50vw - 32px, 1100px)); }
+}
+
+/* 판정과 근거 칸 맨 아래 '고칠 것'(따로 있던 수정 제안 칸을 합침) */
+.fig-verdict .v-fix { margin-top: var(--krds-gap-3); padding-top: var(--krds-gap-2); border-top: 1px dashed var(--krds-light-color-border-gray-light); }
+.fig-review { min-width: 62rem; }
+
+.fig-counts { display: inline-flex; flex-wrap: wrap; gap: var(--krds-gap-3); font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); }
+.fig-counts .count.pass { color: var(--krds-light-color-text-success); }
+.fig-counts .count.fail { color: var(--krds-light-color-text-danger); font-weight: var(--krds-font-weight-bold); }
+.fig-counts .count.undecided { color: var(--krds-light-color-text-warning); }
+
+.llm-mark { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-bold); color: var(--krds-light-color-text-information); background: var(--krds-light-color-surface-information-subtler); }
+.all-results .acc-right { display: inline-flex; align-items: center; gap: var(--krds-gap-3); }
+
+.llm-compare th.item { vertical-align: top; font-weight: var(--krds-font-weight-bold); }
+.llm-compare td { vertical-align: top; }
+.llm-compare td.before .note { white-space: pre-line; margin-top: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); }
+.llm-compare .why { margin-top: var(--krds-gap-1); }
 /* 원고 분량 산정 — 산정에서 빠지는 구성(표지·이해·개발진)은 흐리게 */
 .volume-result tr.muted th,
 .volume-result tr.muted td { color: var(--krds-light-color-text-subtle); }

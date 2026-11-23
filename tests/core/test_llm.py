@@ -204,7 +204,7 @@ class BrandRuleTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"LLM_API_KEY": "", "OPENAI_API_KEY": "", "LLM_ALLOW_UPLOAD": ""}, clear=False):
             [row] = check_brands([block(["생수"], ["노트북"])])
         self.assertEqual(row["판정"], "판단불가")
-        self.assertIn("LLM 미설정", row["비고"][CHECK])
+        self.assertIn("LLM 검토 전", row["비고"][CHECK])
 
     def test_findings_become_candidates_and_hallucinations_are_dropped(self):
         answer = {"data": {"findings": [
@@ -312,16 +312,14 @@ class FieldPromptTests(unittest.TestCase):
         self.assertNotIn("원고 분야", prompt)
         self.assertIn("BEO", prompt)
 
-    def test_rule_sends_the_field_prompt(self):
-        from ncs_perform.rules import brands
-        seen = []
+    def test_rule_never_calls_the_network(self):
+        """키가 있어도 검수 실행 때는 부르지 않는다 — 'LLM 검토'(Claude)가 이 행을 채운다."""
         with mock.patch.dict(os.environ, {"LLM_API_KEY": "k", "LLM_ALLOW_UPLOAD": "1"}, clear=False), \
-                mock.patch.object(brands, "ask_json", side_effect=lambda task, system, user: seen.append(system) or
-                                  llm.LlmAnswer({"findings": []}, "m", False, 0, 0)):
+                mock.patch.object(llm, "_post") as post:
             [row] = check_brands([block(["생수"], ["노트북"])], module_code="LM2001021701_25v1")
-        self.assertEqual(row["판정"], "적합")
-        self.assertIn("AIoT운영플랫폼구축", seen[0])
-        self.assertIn("MQTT", seen[0])
+        post.assert_not_called()
+        self.assertEqual(row["판정"], "판단불가")
+        self.assertIn("LLM 검토 전", row["비고"][CHECK])
 
     def test_real_terms_file_is_readable(self):
         from ncs_core.field_terms import _read

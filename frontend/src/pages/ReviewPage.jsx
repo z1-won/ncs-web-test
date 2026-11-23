@@ -10,6 +10,9 @@ import { ConfirmDialog } from "../components/ConfirmDialog.jsx";
 import { ExportButtons } from "../components/ExportButtons.jsx";
 import { FileSlot } from "../components/FileSlot.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
+import { LlmReviewPanel } from "../components/LlmReviewPanel.jsx";
+import { FiguresPanel } from "../components/FiguresPanel.jsx";
+import { SourcesPanel } from "../components/SourcesPanel.jsx";
 import { RawJson } from "../components/RawJson.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
@@ -17,6 +20,7 @@ import { PageAlert } from "../components/PageAlert.jsx";
 import { Pagination } from "../components/Pagination.jsx";
 import { IMAGE_DPI_DEFAULT, IMAGE_DPI_OPTIONS } from "../lib/dpi.js";
 import { usePageTitle } from "../lib/hooks.js";
+import { applyLlm } from "../lib/llm.js";
 
 const HISTORY_PAGE = 10;   // 이력 표 한 쪽 행 수(KRDS 페이지네이션)
 
@@ -38,6 +42,11 @@ export default function ReviewPage() {
   const [checks, setChecks] = useState(CHECKS);
   // 원고·개발계획서·출력본 PDF를 칸마다 따로 고른다(#13). 서버에는 고른 것만 모아 한 번에 올린다(files).
   const [slots, setSlots] = useState({ manuscript: null, plan: null, print: null });
+  // 집필자 제출 서류(수록 현황 목록·제작 목록·동의서·서약서) — 그림 검수 ⑥⑦에만 쓴다. 업로드 토큰이 생기면 그 토큰으로 보낸다.
+  const [submitFiles, setSubmitFiles] = useState([]);
+  const [llmResult, setLlmResult] = useState(null);   // LLM 검토 결과 — 확인서 행에 합쳐 보인다
+  const [submitted, setSubmitted] = useState({ key: 0, status: "idle", error: null });
+  const sentFor = useRef(null);   // 서류를 보낸 업로드 토큰 — 비울 때만 지우기 요청
   const filled = useMemo(() => SLOTS.filter((slot) => slots[slot.role]), [slots]);
   const files = useMemo(() => filled.map((slot) => slots[slot.role]), [filled, slots]);
   const fileRoles = useMemo(() => filled.map((slot) => slot.role), [filled]);   // files와 같은 순서의 역할
@@ -59,6 +68,19 @@ export default function ReviewPage() {
   const aborter = useRef(null);      // 진행 중 요청의 AbortController — 취소 버튼
   const [pendingDelete, setPendingDelete] = useState(null); // 삭제 확인 창에 올라간 이력 행
   const [historyPage, setHistoryPage] = useState(1);   // 이력 표 현재 쪽
+  useEffect(() => {
+    const token = upload.status === "ready" ? upload.token : null;
+    if (!token || (!submitFiles.length && sentFor.current !== token)) return undefined;
+    let live = true;
+    setSubmitted((s) => ({ ...s, status: "uploading", error: null }));
+    (submitFiles.length ? api.figures.uploadSubmissions(token, submitFiles) : api.figures.clearSubmissions(token)).then((res) => {
+      if (!live) return;
+      sentFor.current = submitFiles.length ? token : null;
+      setSubmitted((s) => ({ key: s.key + 1, status: res.ok ? "ready" : "error", error: res.ok ? null : res.error }));
+    });
+    return () => { live = false; };
+  }, [upload.status, upload.token, submitFiles]);
+
   useEffect(() => {
     const pages = Math.max(1, Math.ceil((history?.length || 0) / HISTORY_PAGE));
     if (historyPage > pages) setHistoryPage(pages);
@@ -290,6 +312,10 @@ export default function ReviewPage() {
                       : null
                     } />
         ))}
+        <FileSlot id="file-submit" label="집필자 제출 서류" accept=".hwp,.hwpx" multiple file={submitFiles} disabled={busy}
+                  onChange={(files) => setSubmitFiles(files || [])} uploading={submitted.status === "uploading"}
+                  invalid={submitted.status === "error" ? submitted.error : null}
+                  hint="수록 현황 목록·제작 목록·동의서·서약서(hwp·hwpx, 여러 개) — 그림 검수의 수록 현황·AI 결과물 현황 대조에 씀" />
         </div>
         </div>
 
@@ -357,7 +383,7 @@ export default function ReviewPage() {
       {busy && !allRun && (
         <ResultHead status={<Spinner label={`${selected.label} 검수하는 중`} />} />
       )}
-      {allRun && <AllResults run={allRun} checks={reviewChecks} onError={setError} onNotice={setNotice}
+      {allRun && <AllResults run={allRun} checks={reviewChecks} onError={setError} onNotice={setNotice} llm={llmResult}
                              uploadToken={upload.status === "ready" ? upload.token : null} />}
 
       {result && (
@@ -380,10 +406,23 @@ export default function ReviewPage() {
 
           <h2 className="section-title">검수 확인서</h2>
           {/* 전체 실행의 아코디언 몸통과 같은 구성: 확인서(행마다 지적사항 펼치기) + 진단 경고 + 접힌 지적사항·전체 체크리스트 */}
-          <ComponentResult result={result} showSave={false} />
+          <ComponentResult result={applyLlm(result.check, result, llmResult)} showSave={false} />
 
           <RawJson data={result} title="원본 데이터 보기(개발자용)" />
         </section>
+      )}
+
+      {/* 형식 검수 결과가 나온 뒤:
+          ① 그림 검수·태깅(규칙만, API 없음) — 바로 불러 보여 준다
+          ② API를 쓰는 검토(LLM 검토·그림 판독) — 누를 때만 실행(토큰·비용) */}
+      {(allRun || result) && !busy && (
+        <>
+          <LlmReviewPanel uploadToken={upload.status === "ready" ? upload.token : null} moduleCode={moduleCode} result={llmResult} onResult={setLlmResult}
+                          components={allRun ? Object.entries(allRun.items || {}).filter(([, v]) => v.status === "done").map(([check, v]) => ({ check, data: v.data }))
+                            : result ? [{ check: result.check, data: result }] : []} />
+          <FiguresPanel uploadToken={upload.status === "ready" ? upload.token : null} moduleCode={moduleCode} refresh={submitted.key} />
+          <SourcesPanel uploadToken={upload.status === "ready" ? upload.token : null} moduleCode={moduleCode} />
+        </>
       )}
 
       {history && (

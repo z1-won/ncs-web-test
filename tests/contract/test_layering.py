@@ -7,7 +7,8 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 ENGINES = ("ncs_position", "ncs_toc", "ncs_overview", "ncs_knowledge", "ncs_perform", "ncs_teaching", "ncs_evaluation", "ncs_references", "ncs_colophon", "ncs_misc")
-FEATURES = ("ncs_plan", "ncs_upscale", "ncs_rights", "ncs_recommend", "ncs_volume", "ncs_opinion", "ncs_suggest", "ncs_aiimage")   # 검수 엔진은 아니지만 같은 층(ncs_core 위)에 서는 기능 패키지
+FEATURES = ("ncs_plan", "ncs_upscale", "ncs_rights", "ncs_recommend", "ncs_figures", "ncs_volume", "ncs_opinion", "ncs_suggest", "ncs_aiimage")   # 검수 엔진은 아니지만 같은 층(ncs_core 위)에 서는 기능 패키지
+# ncs_llmreview는 ncs_service와 같은 층 — 엔진의 추출기(ncs_perform·ncs_evaluation)를 쓰지만 ncs_web은 모른다
 IMPORT = re.compile(r"^\s*(?:from|import)\s+(ncs_\w+)", re.MULTILINE)
 
 
@@ -38,6 +39,22 @@ class LayeringTest(unittest.TestCase):
         forbidden = set(ENGINES) | set(FEATURES) | {"ncs_service", "ncs_web"}
         for file, names in imported_packages("ncs_core").items():
             self.assertFalse(names & forbidden, f"{file}이(가) 상위 계층을 import합니다: {sorted(names & forbidden)}")
+
+    def test_llm_review_sits_at_service_level(self):
+        """ncs_llmreview: 엔진·코어는 써도 되고 ncs_web은 모른다. 코어·엔진·기능 패키지는 ncs_llmreview를 모른다."""
+        for file, names in imported_packages("ncs_llmreview").items():
+            self.assertNotIn("ncs_web", names, f"{file}이(가) ncs_web을 import합니다")
+        for package in ("ncs_core", *ENGINES, *FEATURES):
+            for file, names in imported_packages(package).items():
+                self.assertNotIn("ncs_llmreview", names, f"{file}이(가) 상위 계층 ncs_llmreview를 import합니다")
+
+    def test_sources_review_sits_at_service_level(self):
+        """ncs_sources(REQ-02-008): 엔진(참고 자료)·코어는 써도 되고 ncs_web은 모른다. 아래 계층은 ncs_sources를 모른다."""
+        for file, names in imported_packages("ncs_sources").items():
+            self.assertNotIn("ncs_web", names, f"{file}이(가) ncs_web을 import합니다")
+        for package in ("ncs_core", *ENGINES, *FEATURES):
+            for file, names in imported_packages(package).items():
+                self.assertNotIn("ncs_sources", names, f"{file}이(가) 상위 계층 ncs_sources를 import합니다")
 
     def test_engine_cli_is_the_only_service_user(self):
         for engine in ENGINES:

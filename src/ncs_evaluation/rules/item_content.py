@@ -4,13 +4,13 @@
   추상적      무엇을 평가하는지 드러나지 않는 일반적 표현('내용 이해 여부', '수행 능력')
   목표와 무관  그 학습의 어느 학습 목표와도 이어지지 않는 내용
 결과는 사람 확인(△) 후보까지만: 모델이 고른 항목과 이유를 보여 주고, 못 찾으면 O(비고에 모델 이름).
-LLM 미설정·미승인·호출 실패는 △. 보내는 것은 그 학습의 평가 준거 학습 목표와 평가 항목뿐이다.
+검수 실행 때는 LLM을 부르지 않고 △(LLM 검토 전) — 화면의 'LLM 검토'(Claude)가 채운다. 보내는 것은 그 학습의 평가 준거 학습 목표와 평가 항목뿐이다.
 """
 
 from __future__ import annotations
 
 from ncs_core import NA, O, PASS, TRI, verdict, visible
-from ncs_core.llm import LlmError, line_findings, settings
+from ncs_core.llm import PENDING, LlmError, line_findings
 from ncs_core.notes import lines as numbered
 
 ITEM_ID = "F02-평가-④"
@@ -34,7 +34,7 @@ SYSTEM = """당신은 NCS 학습모듈 원고의 검수 보조자입니다. 아�
 
 def check_item_content(regions: list[dict], *, asker=None) -> list[dict]:
     """asker: 테스트에서 LLM 대신 넣는 함수((평가 항목 줄 목록) → {'data': {'findings': […]}, 'model': …})."""
-    rows, cfg = [], settings()
+    rows = []
     for region in regions:
         lesson = region["lesson"]
         items = [entry for table in region.get("method_items", []) for entry in table]
@@ -47,8 +47,8 @@ def check_item_content(regions: list[dict], *, asker=None) -> list[dict]:
         if not goals:
             rows.append(_row(lesson, shown, {CONTENT: TRI}, {CONTENT: "평가 준거의 학습 목표를 읽지 못해 연관성을 확인하지 못함 — 사람 확인"}))
             continue
-        if asker is None and not cfg.ready:
-            rows.append(_row(lesson, shown, {CONTENT: TRI}, {CONTENT: cfg.why_not + " — 평가 항목이 구체적이고 학습 목표와 연관되는지 사람이 확인"}))
+        if asker is None:
+            rows.append(_row(lesson, shown, {CONTENT: TRI}, {CONTENT: PENDING}))
             continue
         user = ("[학습 목표]\n" + "\n".join(f"- {goal}" for goal in goals)
                 + "\n\n[평가 항목]\n" + "\n".join(f"{no}. {text}" for no, text in enumerate(texts, 1)))

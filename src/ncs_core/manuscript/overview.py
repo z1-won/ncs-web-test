@@ -73,6 +73,13 @@ def _structure_from_table(table: Table) -> dict | None:
     for r in rows:
         lesson, content = cells.get((r, col["학습"]), ""), cells.get((r, content_col), "")
         code, name = cells.get((r, col["코드번호"]), ""), cells.get((r, name_col), "")
+        if not any(ELEMENT_CODE.match(part) for part in code.split()):
+            # 병합 셀 때문에 값이 머리칸과 다른 열에 든 표 — 같은 행에서 코드가 든 칸과 그 오른쪽 첫 글 칸을 쓴다
+            row = sorted((c, v) for (rr, c), v in cells.items() if rr == r)
+            at = next((k for k, (_, v) in enumerate(row) if any(ELEMENT_CODE.match(part) for part in v.split())), None)
+            if at is not None:
+                code = row[at][1]
+                name = name or next((v for _, v in row[at + 1:] if v.strip()), "")
         if m := OV_LESSON.match(lesson):
             lessons.append({"no": int(m.group(1)), "text": m.group(2).strip(), "row": r})
         if m := OV_SUB.match(content):
@@ -106,10 +113,13 @@ def parse_overview(document: Document, section: int) -> dict:
     """→ {'목표': {'text','p'}|None, '선수학습': {'items','text','p'}|None,
          '내용체계': {...}|None, '핵심 용어': {'items','text','p'}|None, '개요 제목 p': int|None}"""
     raw = document.sections[section] if section < len(document.sections) else []
-    lines = [(i, l) for i, l in enumerate(raw) if l]
-    head = next((i for i, l in lines if HEAD_OVERVIEW.search(l) and not re.search(r"\d+$", l)), None)
-    if head is not None:
-        lines = [(i, l) for i, l in lines if i > head]
+    every = [(i, l) for i, l in enumerate(raw) if l]
+    heads = [i for i, l in every if HEAD_OVERVIEW.search(l) and not re.search(r"\d+$", l)]
+    # 출판본은 앞에 'NCS학습모듈의 이해' 안내 쪽(개요 설명 그림의 제목 나열, 다른 모듈의 예시 개요)이 있어
+    # '학습모듈의 개요' 제목이 여러 번 나온다. 목표 내용이 비지 않는 마지막 제목이 그 모듈의 개요다. 없으면 첫 제목.
+    head = next((h for h in reversed(heads) if _block([(i, l) for i, l in every if i > h], HEAD_GOAL, HEADINGS)[1]),
+                heads[0] if heads else None)
+    lines = [(i, l) for i, l in every if i > head] if head is not None else every
 
     out: dict = {"개요 제목 p": head}
     p, block = _block(lines, HEAD_GOAL, HEADINGS)

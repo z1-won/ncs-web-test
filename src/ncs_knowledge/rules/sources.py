@@ -13,56 +13,20 @@ import re
 
 from ncs_core import NA, O, TRI, X, visible
 from ncs_core.figures import parse_ai_mark
+from ncs_core.source_line import (  # noqa: F401 — source_check는 공개 이름 유지
+    AI_LINE_EXAMPLE, CAPTION_START, OLD_AGENCY, SRC_HEAD, TEMPLATES, find_source_line, source_check)
 
 from .common import row
 
-SRC_HEAD = re.compile(r"^출\s*처\s*[:：]\s*")
-YEAR = r"(?:\d{4}|\[\d{4}\]\s*\d{4}|\d{4}[a-z])"
-DATE = r"\d{4}\.\s?\d{1,2}\.\s?\d{1,2}\."
-TEMPLATES = [  # (이름, 정규식) — F14 '출처' 예시 14종의 골격
-    ("집필진 제작", re.compile(rf"^집필진\s*제작\s*\({YEAR}\)\.?$")),
-    ("전자 자료·검색", re.compile(rf"^.+?\(.+?\)에서\s*{DATE}\s*검색\.(\s*공공누리\s*제\d유형\.)?$")),
-    ("스크린 숏", re.compile(rf"^.+?(\(.+?\)에서|\.)\s*{DATE}\s*스크린\s*숏\.$")),
-    ("법령", re.compile(rf"^[^()]+\({DATE}(\s[^)]+)?\)\.?$")),
-    ("기사(기자명(보도 연월일). “제목”. 신문사. URL.)", re.compile(rf"^[^()]{{1,40}}\({DATE}\)\.\s.+\.\s*\S+\.$")),
-    ("문헌(저자(연도). 제목. 발행처. p.00.)", re.compile(rf"^[^()]{{1,80}}\({YEAR}\)\.\s.+\.\s*(pp?\.\s*\d+(-\d+)?\.|.*\.)$")),  # 끝 마침표 필수(F02: 마침표 표기 유의)
-]
-AI_MARK = re.compile(r"(AI|GPT|gpt|LM\b|Banana|Gemini|도식화|생성)")  # 출처 줄 안에 AI 활용을 적은 것은 △로 둔다(2026-11-01 결정). 표기 예의 꼴은 아래 AI 활용 줄
-# AI 도구 사용 표기 예(F08)의 AI 활용 줄 — 'ChatGPT를 활용하여 생성함. 2026. 7. 20.' 도구 이름의 마침표는 숫자 사이(판 번호)만
-AI_LINE = re.compile(r"^[^\s.。,](?:[^.。]|(?<=\d)\.(?=\d)){0,40}?[을를] 활용하여 (생성함|수정 보완함)\. \d{4}\. \d{1,2}\. \d{1,2}\.$")
-AI_LINE_EXAMPLE = "‘ChatGPT를 활용하여 수정 보완함. 2026. 7. 20.’"
+# 출처 줄 읽기(SRC_HEAD·TEMPLATES·source_check·find_source_line)는 ncs_core.source_line이 유일한 원본이다. 여기에는 AI 활용 줄의 판정만 둔다.
+# AI 도구 사용 표기 예(F08)의 AI 활용 줄 꼴 — 'ChatGPT를 활용하여 생성함. 2026. 7. 20.' 도구 이름의 마침표는 숫자 사이(판 번호)만.
+# 코어의 AI_LINE은 느슨하게 읽는 정규식이고, 이것은 띄어쓰기·마침표까지 표기 예와 같은지 보는 꼴이다
+AI_LINE_FORM = re.compile(r"^[^\s.。,](?:[^.。]|(?<=\d)\.(?=\d)){0,40}?[을를] 활용하여 (생성함|수정 보완함)\. \d{4}\. \d{1,2}\. \d{1,2}\.$")
 AI_EXTRA = 12        # AI 활용 줄 뒤에 붙을 수 있는 글자 수 — 이보다 길면 본문 문장으로 본다(ncs_core.figures와 같은 값)
 AI_HINT = re.compile(r"생성형\s*AI|AI\s*(?:로|으로|를)?\s*(?:생성|제작|수정|보정|활용)|GPT|Gemini|제미나이|미드저니|Midjourney|DALL")
 AI_HINT_MAX = 60     # AI를 쓴 듯한 줄로 볼 길이 — 본문 문장은 빼기 위해
 SENTENCE = re.compile(r"(다|요|까)\s*[.。?]\s*$")
 AI_SUGGESTION = f"출처 줄 아래, 그림 번호 위에 {AI_LINE_EXAMPLE} 꼴로 적음(생성함 또는 수정 보완함, 활용 일자 포함)"
-OLD_AGENCY = re.compile(r"한국직업능력개발원")
-CAPTION_START = re.compile(r"^[\[〈<]\s*(그림|표)")
-
-
-def source_check(text: str) -> tuple[str, str]:
-    """출처 줄 한 개 → (체크값, 비고 또는 템플릿 이름)."""
-    if not SRC_HEAD.match(text):
-        return X, '"출처:" 로 시작하지 않음'
-    body = SRC_HEAD.sub("", text).strip()
-    if not re.match(r"^출처:\s", text):
-        return X, '"출처:" 뒤 띄어쓰기·콜론 모양이 양식과 다름(출처: ␣)'
-    if AI_MARK.search(body) and not TEMPLATES[0][1].match(body):
-        return TRI, (f'AI 활용 표기 "{body}" — 출처 줄에는 집필진 제작(연도) 또는 원 출처만 적고, AI 활용은 그 아래 줄에 '
-                     f'{AI_LINE_EXAMPLE} 꼴로 따로 적는 것이 표기 예입니다. 확인 필요')
-    for name, pattern in TEMPLATES:
-        if pattern.match(body):
-            return O, name
-    hints = []
-    if re.search(r"\)\s*,", body):
-        hints.append("연도 괄호 뒤가 쉼표 — 마침표로 구분")
-    if not re.search(rf"\({YEAR}\)", body) and not re.search(DATE, body):
-        hints.append("연도 괄호 (YYYY) 없음")
-    if not body.endswith(".") and not TEMPLATES[0][1].match(body):
-        hints.append("끝에 마침표 없음")
-    if re.search(r"집필진\s*제작", body):
-        hints.append("'집필진 제작(연도)' 꼴이 아님")
-    return X, "F14 출처 템플릿과 골격이 다름" + (": " + ", ".join(hints) if hints else "")
 
 
 def _ai_mark(text: str):
@@ -93,7 +57,7 @@ def ai_checks(lines: list[tuple[int, str]], source_at: int | None, source_value:
     elif source_at is not None and at < source_at:
         checks["AI 활용 줄 형식"] = X
         notes["AI 활용 줄 형식"] = f"원고 「{text}」 — AI 활용 줄이 출처 줄 위에 있음(출처 줄 아래, 그림 번호 위에 적음)"
-    elif not AI_LINE.match(text):
+    elif not AI_LINE_FORM.match(text):
         checks["AI 활용 줄 형식"] = TRI
         notes["AI 활용 줄 형식"] = f"원고 「{text}」 — 띄어쓰기·마침표가 표기 예 {AI_LINE_EXAMPLE}와 다르거나 뒤에 다른 글이 있음. 확인 필요"
     else:
@@ -131,12 +95,7 @@ def check_sources(body_raw: list[str], body_section: int, caps: list[dict], tabl
         where = f"학습 {lesson}" if lesson else ""
         src_i = None
         if kind == "그림":
-            for i in range(p - 1, max(p - 1 - lookback, -1), -1):
-                if body_raw[i] and SRC_HEAD.match(body_raw[i]):
-                    src_i = i
-                    break
-                if is_figure_caption(i):
-                    break
+            src_i = find_source_line(body_raw, p, lookback=lookback)
         else:
             for i in range(p + 1, min(p + 1 + lookahead, len(body_raw))):
                 if body_raw[i] and CAPTION_START.match(body_raw[i]):

@@ -37,6 +37,35 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual([len(s) for s in n.sections], [7, 4])
         self.assertEqual(n.sections[1], BODY)
 
+    def test_lesson1_starts_in_toc_section(self):
+        """(e) 표지 / 차례+개요+학습 1 앞부분 / 학습 1 뒷부분~ → 학습 1부터 본문 한 구역으로 잇는다(최종본 9종의 꼴)."""
+        lesson1 = ["학습 1", "가", "1-1.", "학습 목표", "그림"]
+        rest = ["학습 1", "학습 2", "나", "본문", "참고 자료"]                       # 다음 구역은 내비게이터부터
+        d = doc([["표지"], FRONT + lesson1, rest],
+                styles=[["바탕글"], ["바탕글"] * 6 + ["큰학습-숫자"] + ["바탕글"] * 4, ["큰학습-네비게이터", "큰학습-숫자"] + ["바탕글"] * 3],
+                tables=[{"section": 2, "paragraph": 3, "rows": 1, "cols": 1, "cells": {}}],
+                page_breaks=[frozenset(), frozenset({8}), frozenset({1})])
+        n = normalize_sections(d)
+        self.assertEqual([len(s) for s in n.sections], [7, 10])
+        self.assertEqual(n.sections[1], lesson1 + rest)
+        self.assertEqual([(t["section"], t["paragraph"]) for t in n.tables], [(1, 8)])
+        self.assertEqual(n.page_breaks, [frozenset(), frozenset({2, 6})])
+        self.assertEqual(n.styles[1][0], "큰학습-숫자")
+        self.assertEqual(n.layout["결과"], "나눔")
+        self.assertIn("이어 본문", n.layout["설명"])
+        # 앞부분/본문 두 구역인데 학습 1이 앞 구역에서 시작해도 같다
+        two = normalize_sections(doc([FRONT + lesson1, rest], styles=[["바탕글"] * 6 + ["큰학습-숫자"] + ["바탕글"] * 4,
+                                                                     ["큰학습-네비게이터", "큰학습-숫자"] + ["바탕글"] * 3]))
+        self.assertEqual(two.sections, [FRONT, lesson1 + rest])
+
+    def test_lesson1_cell_in_overview_table_is_not_body(self):
+        """hwp(스타일 없음): 개요 '내용 체계' 표 칸의 '학습 1'은 본문 시작이 아니다 → (d) 그대로."""
+        front = FRONT + ["학습 1"]
+        d = doc([["표지"], front, BODY], table_paragraphs=[frozenset(), frozenset({6}), frozenset()])
+        n = normalize_sections(d)
+        self.assertEqual(n.sections, [["표지"] + front, BODY])
+        self.assertEqual(n.layout["결과"], "합침")
+
     def test_usual_two_sections_untouched(self):
         d = doc([FRONT, BODY], styles=[["바탕글"] * 6, BODY_STYLES])
         out = normalize_sections(d)
