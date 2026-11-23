@@ -29,6 +29,7 @@ const GROUPS = [
     { path: "/upscale", label: "업스케일링", desc: "해상도가 낮은 그림의 화질을 높인 제안본을 만듭니다.", files: "원고(hwpx)" },
     { path: "/images", label: "이미지 저작권 DB", desc: "그림과 권리 정보를 등록하고 기관이 확정합니다.", files: "그림 파일과 권리 정보(JSON)" },
     { path: "/recommend", label: "이미지 추천", desc: "문단에 어울리는 그림을 이미지 저작권 DB에서 찾아 줍니다.", files: "파일 없이 문단을 화면에 입력", ai: "켰을 때만 생성형 AI 사용" },
+    { path: "/ai-image", label: "이미지 AI 보완", desc: "AI로 만들거나 고친 그림에 활용 표기를 넣고, 서약서에 붙일 결과물 현황을 만듭니다.", files: "원고(hwp, hwpx). 출력본 PDF는 선택" },
   ] },
   { title: "마무리", items: [
     { path: "/rights", label: "권리 증빙 점검", desc: "원고의 그림과 제출 서류를 대조해 빠진 증빙과 기한을 알려 줍니다.", files: "원고, 제출 서류(수록 현황 목록, 동의서, 서약서)" },

@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
+import { useCanManage } from "../lib/auth.jsx";
 import { Spinner } from "./Badge.jsx";
 import { PageAlert } from "./PageAlert.jsx";
 
@@ -26,7 +27,11 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
   const [state, setState] = useState({ status: "loading" });   // { status: loading|ready|error, data, error }
   const [results, setResults] = useState({});                   // bin_id → 업스케일 결과 정보(서버 JSON) — 마지막에 돌린 것(제안본에 들어감)
   const [variants, setVariants] = useState({});                 // bin_id → { 모델 이름: 결과 정보 } — 모델별 결과를 나란히 보기 위한 것
-  const [busy, setBusy] = useState(null);                       // 업스케일 중인 bin_id 또는 "proposal"
+  const [busy, setBusy] = useState(null);                       // 업스케일 중인 bin_id 또는 "proposal" · "register"
+  const [aiMark, setAiMark] = useState(true);                   // 제안본에 AI 활용 줄을 함께 넣는다 — 화질 보정은 AI 수정 보완이라 표기 대상(REQ-02-006 ②③)
+  const [imageDb, setImageDb] = useState(false);                // 서버에 이미지 저작권 DB가 있는가
+  const canManage = useCanManage();
+  useEffect(() => { api.health().then(({ ok, data }) => { if (ok) setImageDb(!!data.image_db); }); }, []);
   const [busyEngine, setBusyEngine] = useState(null);           // 한 장 업스케일에서 고른 모델 이름(버튼 문구용)
   const [batch, setBatch] = useState(null);                     // 여러 장 실행 중: { total, done }
   const [picked, setPicked] = useState(() => new Set());        // 체크한 bin_id
@@ -151,10 +156,30 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
     setBusy("proposal");
     setError(null);
     setNotice(null);
-    const { ok, error: message, summary } = await api.pictures.proposal(token, moduleCode, `${fileStem(manuscriptName)}_업스케일제안.hwpx`, targetDpi);
+    const { ok, error: message, summary } = await api.pictures.proposal(token, moduleCode, `${fileStem(manuscriptName)}_업스케일제안.hwpx`, targetDpi, aiMark);
     setBusy(null);
     if (!ok) setError(message);
-    else if (summary) setNotice(`업스케일한 그림 ${summary["바꾼 그림"]}장을 원고의 같은 자리에 넣은 제안본을 내려받았습니다. 한글에서 열어 그림을 확인하세요.`);
+    else if (summary) {
+      const marked = summary["AI 표기"];
+      const markText = !marked ? ""
+        : ` 그림 ${marked.넣음}개의 캡션 위에 AI 활용 줄을 넣었습니다${marked["이미 있음"] ? `(이미 있던 그림 ${marked["이미 있음"]}개는 그대로)` : ""}${marked["넣지 못함"] ? `. 캡션을 찾지 못한 ${marked["넣지 못함"]}개는 직접 적어 주세요` : ""}.`;
+      setNotice(`업스케일한 그림 ${summary["바꾼 그림"]}장을 원고의 같은 자리에 넣은 제안본을 내려받았습니다.${markText} 한글에서 열어 그림을 확인하세요.`);
+    }
+  }
+
+  // 보정한 그림을 이미지 저작권 DB에 올린다 — 원본과 업스케일본, 수록 위치, AI 활용 정보(기존 이미지 보정, 수정 보완, 도구, 오늘 날짜)
+  async function register() {
+    setBusy("register");
+    setError(null);
+    setNotice(null);
+    const { ok, data, error: message } = await api.pictures.register(token, moduleCode, targetDpi);
+    setBusy(null);
+    if (!ok) { setError(message); return; }
+    const skipped = data["캡션 없음"].length;
+    setNotice(`보정한 그림 ${data.그림}개를 이미지 저작권 DB에 올렸습니다(새 그림 ${data["새 그림"]}개, 모듈 ${data["모듈 코드"]}).`
+      + `${data["확정 유지"] ? ` 기관이 확정한 ${data["확정 유지"]}개는 권리 정보를 그대로 두었습니다.` : ""}`
+      + `${skipped ? ` 캡션을 찾지 못한 ${skipped}개는 올리지 않았습니다.` : ""}`
+      + `${data.거부.length ? ` 형식이 맞지 않아 ${data.거부.length}개는 올리지 못했습니다.` : ""}`);
   }
 
   return (
@@ -330,6 +355,10 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
         <div className="upscale-bar">
           {error && <PageAlert kind="danger">{error}</PageAlert>}
           {notice && !error && <PageAlert kind="success">{notice}</PageAlert>}
+          <div className="krds-form-check bar-check">
+            <input type="checkbox" id="upscale-ai-mark" checked={aiMark} onChange={(e) => setAiMark(e.target.checked)} />
+            <label htmlFor="upscale-ai-mark">제안본에 AI 활용 표기 넣기<span className="meta"> (보정한 그림의 캡션 위에 ‘모델 이름을 활용하여 수정 보완함. 오늘 날짜’ 한 줄)</span></label>
+          </div>
           <div className="bar-row">
           <span className="meta" role="status">
             {batch ? <>업스케일 중 <strong>{batch.done + 1}</strong> / {batch.total}장</>
@@ -341,6 +370,12 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
               : <button type="button" className="krds-btn medium secondary" disabled={!engine.available || working || picked.size === 0} onClick={runPicked}>
                   선택한 {picked.size}장 업스케일링
                 </button>}
+            {imageDb && canManage && (
+              <button type="button" className="krds-btn medium tertiary" disabled={!ready || working} onClick={register}
+                      title="보정한 그림과 업스케일본을 AI 활용 정보(기존 이미지 보정, 수정 보완)와 함께 이미지 저작권 DB에 올립니다">
+                {busy === "register" ? "올리는 중" : "이미지 저작권 DB에 올리기"}
+              </button>
+            )}
             <button type="button" className="krds-btn medium primary" disabled={!ready || working} onClick={proposal}
                     title="업스케일한 그림만 원고의 같은 자리에 넣은 사본(hwpx). 본문과 그림의 크기, 위치는 그대로입니다">
               {busy === "proposal" ? "만드는 중" : `제안본 내려받기(그림 ${ready}장)`}

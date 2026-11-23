@@ -1,13 +1,14 @@
-// 개발계획서 작성(REQ-02-001) — 세분류를 고르고 능력단위를 체크하면 T01 양식에 NCS 정보를 채운 초안 hwpx를 내려받는다.
+// 개발계획서 작성(REQ-02-001) — 세분류를 고르고(NCS 누리집과 같은 분야별·키워드·코드 검색, components/NcsPicker) 능력단위를 체크하면 T01 양식에 NCS 정보를 채운 초안 hwpx를 내려받는다.
 // 초안은 서버가 바로 ①~⑩ 점검(ncs_plan)을 돌려 요약을 함께 준다(응답 본문의 check). 요소·수행준거 표(ncs_elements.tsv)에 있는 세분류만 고를 수 있다.
 // 이어서 작성한 개발계획서 파일의 점검(①~⑩, 최종본/1차본)도 이 페이지에서만 한다 — 원고 검수 페이지의 선택 목록에는 없다.
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// 개선 계획서면 능력단위마다 개선 유형과 개선 전 능력단위번호를 적어 개선 양식(변경 전·후 대조표 + 개선 유형 열)에 채운다. 끝의 '계획서 비교'는 계획서 둘을 칸별로 견준다(/api/plan/compare).
+import React, { useEffect, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
 import { ComponentResult } from "../components/AllResults.jsx";
 import { FileSlot } from "../components/FileSlot.jsx";
 import { Badge, Spinner } from "../components/Badge.jsx";
-import { KrdsSelect } from "../components/KrdsSelect.jsx";
+import { NcsPicker } from "../components/NcsPicker.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
@@ -21,10 +22,18 @@ const ANCHORS = [
   { id: "plan-form", label: "초안 만들기" },
   { id: "plan-check", label: "초안 점검" },
   { id: "plan-review", label: "개발계획서 점검" },
+  { id: "plan-type", label: "개선 유형 판단 자료" },
+  { id: "plan-compare", label: "계획서 비교" },
 ];
 
+const KINDS = [["신규", "신규 개발"], ["개선", "개선"]];
+// 개선 유형(F05 최소개선 유형 세부 지침, F21 작성 매뉴얼). 정하는 것은 사람(직능연 협의)이고 화면은 적어 둘 뿐이다
+// 기본값은 없다 — 유형은 직능연이 대상 학습모듈을 검토해 분류하고(F21), 바꿀 때는 직능연과 협의한다(F05 2항). 화면이 대신 정하지 않는다
+const TYPES = ["기존 개선", "최소개선", "양식 편집", "신규 개발"].map((name) => ({ value: name, label: name }));
+const DIFF_BADGE = { "다름": "bg-light-danger", "띄어쓰기만 다름": "bg-light-warning", "기준에만 있음": "bg-light-gray", "대상에만 있음": "bg-light-gray" };
+const AREAS = ["기본 정보", "변경 전·후 대조표", "총괄표", "위치", "모듈 표"];
+
 const STAGES = [["final", "최종본 (개발기관)"], ["draft", "1차본 (직능연)"]];
-const MAX_OPTIONS = 100;   // 세분류 목록에 한 번에 펴는 수 — 넘으면 검색어를 더 적게 한다
 
 export default function PlanDraftPage() {
   usePageTitle("개발계획서 작성");
@@ -34,12 +43,29 @@ export default function PlanDraftPage() {
   const [picked, setPicked] = useState({});          // 능력단위 코드 → true
   const [agency, setAgency] = useState("");
   const [english, setEnglish] = useState("");
-  const [people, setPeople] = useState({});          // 코드 → { writer, reviewer }
+  const [people, setPeople] = useState({});          // 코드 → { writer, reviewer, type(개선 유형), previous(개선 전 능력단위번호) }
+  const [kind, setKind] = useState("신규");          // 신규 / 개선 — 개선이면 개선 양식에 채운다
+  // 계획서 비교 — 기준(최종결과 예시나 앞 판본)과 대상(지금 계획서)
+  const [baseFile, setBaseFile] = useState(null);
+  const [targetFile, setTargetFile] = useState(null);
+  const [comparing, setComparing] = useState(false);
+  const [compareError, setCompareError] = useState(null);
+  const [compared, setCompared] = useState(null);
+  const [onlyKind, setOnlyKind] = useState("");      // 비교 결과에서 볼 차이 종류("" 전부)
+  const [applyPick, setApplyPick] = useState({});    // 비교 결과 행 번호 → 반영할지
+  const [applying, setApplying] = useState(false);
+  const [applyNote, setApplyNote] = useState(null);  // { report } | { error }
+  // 개선 유형 판단 자료 — 기존 학습모듈 원고의 내용 수정 신호
+  const [signalFile, setSignalFile] = useState(null);
+  const [signalCode, setSignalCode] = useState("");
+  const [signalBusy, setSignalBusy] = useState(false);
+  const [signalError, setSignalError] = useState(null);
+  const [signals, setSignals] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [check, setCheck] = useState(null);          // 초안 점검 요약 [{번호, 검수결과, 비고}]
   const [made, setMade] = useState(null);            // 마지막으로 만든 세분류·개수
-  const [query, setQuery] = useState("");            // 세분류 검색어
+  const wantUnit = useRef("");                       // 코드 검색에서 능력단위 번호까지 적어 고른 경우 그 두 자리 — 세분류가 열리면 그 능력단위만 체크한다
   const [detail, setDetail] = useState(null);        // 고른 세분류의 상세(/api/plan/subclasses/{duty}) — 능력단위·요소 수·받아 온 날
   const [fetching, setFetching] = useState(false);   // NCS에서 기준정보를 받아 오는 중
   const [fetchError, setFetchError] = useState(null);
@@ -99,38 +125,39 @@ export default function PlanDraftPage() {
   }, [duty, !!catalog]);
 
   const subclass = detail?.ready && detail.duty === duty ? detail : null;   // 초안을 만들 수 있는 상태의 세분류
-  useEffect(() => {   // 세분류를 바꾸면 능력단위는 전부 선택
+  useEffect(() => {   // 세분류를 바꾸면 능력단위는 전부 선택(코드 검색에서 능력단위 번호를 적었으면 그것만)
     if (!subclass) return;
-    setPicked(Object.fromEntries(subclass.units.map((u) => [u.code, true])));
+    applyPicked(subclass);
     setCheck(null);
   }, [subclass]);
 
-  // 세분류는 천 개가 넘어 검색해서 고른다: 이름·코드·분류 이름에 검색어가 든 것만, 받아 둔 세분류를 먼저. 목록은 MAX_OPTIONS개까지만 편다
-  const matches = useMemo(() => {
-    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const all = catalog?.subclasses || [];
-    const hit = words.length
-      ? all.filter((s) => { const text = `${s.name} ${s.duty} ${Object.values(s.classes || {}).join(" ")}`.toLowerCase(); return words.every((w) => text.includes(w)); })
-      : all;
-    return [...hit].sort((a, b) => (a.ready === b.ready ? 0 : a.ready ? -1 : 1));
-  }, [catalog, query]);
-  const shown = matches.slice(0, MAX_OPTIONS);
-  const current = catalog?.subclasses?.find((s) => s.duty === duty);
-  const options = [...(current && !shown.some((s) => s.duty === duty) ? [current] : []), ...shown]
-    .map((s) => ({ value: s.duty, label: `${s.name} (${s.duty}), 능력단위 ${s.units}개${s.ready ? "" : ", NCS에서 받아 와야 함"}` }));
+  function pickDuty(code, unitNo = "") {
+    wantUnit.current = unitNo;
+    if (code === duty && subclass) applyPicked(subclass);     // 같은 세분류를 능력단위 번호만 바꿔 다시 고른 경우
+    setDuty(code);
+  }
+  // 세분류가 열리면 능력단위는 전부 선택. 코드 검색에서 능력단위 번호까지 적었으면 그 능력단위만
+  function applyPicked(found) {
+    const only = wantUnit.current && found.units.some((u) => u.code.slice(8, 10) === wantUnit.current) ? wantUnit.current : "";
+    setPicked(Object.fromEntries(found.units.map((u) => [u.code, only ? u.code.slice(8, 10) === only : true])));
+  }
   const chosen = subclass ? subclass.units.filter((u) => picked[u.code]) : [];
 
   async function submit(e) {
     e.preventDefault();
     if (!subclass || !chosen.length) return;
     setBusy(true); setError(null); setCheck(null);
-    const writers = {}, reviewers = {};
+    const writers = {}, reviewers = {}, types = {}, previous = {};
     chosen.forEach((u) => {
       if (people[u.code]?.writer) writers[u.code] = people[u.code].writer;
       if (people[u.code]?.reviewer) reviewers[u.code] = people[u.code].reviewer;
+      if (improve) {
+        if (people[u.code]?.type) types[u.code] = people[u.code].type;
+        if ((people[u.code]?.previous || "").trim()) previous[u.code] = people[u.code].previous.trim();
+      }
     });
     const { ok, error: message, check: summary } = await api.plan.draft({
-      duty: subclass.duty, units: chosen.map((u) => u.code), agency, english, writers, reviewers,
+      duty: subclass.duty, units: chosen.map((u) => u.code), agency, english, writers, reviewers, kind, types, previous,
     });
     setBusy(false);
     if (!ok) { setError(message); return; }
@@ -154,6 +181,41 @@ export default function PlanDraftPage() {
     setTimeout(() => document.getElementById("plan-review-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
+  async function runCompare(e) {
+    e.preventDefault();
+    if (!baseFile || !targetFile) { setCompareError("기준 계획서와 대상 계획서를 모두 선택해 주세요."); return; }
+    setComparing(true); setCompareError(null); setCompared(null); setOnlyKind("");
+    const { ok, data, error: message } = await api.plan.compare(baseFile, targetFile);
+    setComparing(false);
+    if (!ok) { setCompareError(message); return; }
+    setCompared(data);
+    // 기본으로 고르는 것: NCS 쪽 칸 가운데 글자가 다른 것만. 띄어쓰기만 다른 칸은 고르지 않는다 — NCS 원문(F22)과 기준정보의 띄어쓰기 중 어느 쪽이 맞는지 확인이 먼저다
+    setApplyPick(Object.fromEntries(data.차이.map((row, i) => [i, canApply(row) && row["수정 금지 칸"] && row.차이 === "다름"])));
+    setApplyNote(null);
+    setTimeout(() => document.getElementById("plan-compare-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  const canApply = (row) => !!row.기준 && !!row.대상;       // 한쪽이 빈 칸은 한글에서 직접 적는다
+  const targetIsHwpx = /\.hwpx$/i.test(targetFile?.name || "");
+  const picks = compared ? compared.차이.filter((row, i) => applyPick[i] && canApply(row)) : [];
+  async function runApply() {
+    if (!picks.length || !baseFile || !targetFile) return;
+    setApplying(true); setApplyNote(null);
+    const { ok, report, error: message } = await api.plan.apply(baseFile, targetFile, picks);
+    setApplying(false);
+    setApplyNote(ok ? { report } : { error: message });
+  }
+  async function runSignals(e) {
+    e.preventDefault();
+    if (!signalFile) { setSignalError("기존 학습모듈 원고 파일(hwp, hwpx)을 선택해 주세요."); return; }
+    setSignalBusy(true); setSignalError(null); setSignals(null);
+    const { ok, data, error: message } = await api.plan.typeSignals(signalFile, signalCode.trim());
+    setSignalBusy(false);
+    if (!ok) { setSignalError(message); return; }
+    setSignals(data);
+  }
+
+  const improve = kind === "개선";
   const allPicked = !!subclass && chosen.length === subclass.units.length;
   const somePicked = chosen.length > 0 && !allPicked;
   function pickAll(on) {
@@ -164,9 +226,16 @@ export default function PlanDraftPage() {
     ...(!agency.trim() ? ["개발기관명"] : []),
     ...(!english.trim() ? ["영문 세분류명"] : []),
     ...(chosen.some((u) => !(people[u.code]?.writer || "").trim()) ? ["담당 집필진"] : []),
-    ...(chosen.some((u) => !(people[u.code]?.reviewer || "").trim()) ? ["담당 검토진"] : []),
+    // 최소개선은 담당 검토진을 비워도 된다(점검 ⑧)
+    ...(chosen.some((u) => !(people[u.code]?.reviewer || "").trim() && !(improve && people[u.code]?.type === "최소개선")) ? ["담당 검토진"] : []),
+    ...(improve && chosen.some((u) => !people[u.code]?.type) ? ["개선 유형"] : []),
+    ...(improve && chosen.some((u) => !(people[u.code]?.previous || "").trim()) ? ["개선 전 능력단위번호"] : []),
   ];
 
+  // 체크한 능력단위 전부에 한 칸을 한꺼번에 적는다. pick(능력단위, 지금 값) → 새 값
+  function setBulk(key, pick) {
+    setPeople((prev) => ({ ...prev, ...Object.fromEntries(chosen.map((u) => [u.code, { ...(prev[u.code] || {}), [key]: pick(u, prev[u.code]?.[key] || "") }])) }));
+  }
   function setPerson(code, key, value) {
     setPeople((prev) => ({ ...prev, [code]: { ...(prev[code] || {}), [key]: value } }));
   }
@@ -192,26 +261,16 @@ export default function PlanDraftPage() {
         <div className="form-section" role="group" aria-labelledby="plan-duty-title">
         <h2 className="form-section-title" id="plan-duty-title">세분류 선택</h2>
         <div className="form-section-grid">
-        <div className="form-group">
-          <div className="form-tit"><label htmlFor="duty-query">세분류 검색</label></div>
+        {/* NCS 누리집 'NCS 및 학습모듈검색'과 같은 차례: 분야별(대 › 중 › 소 › 세분류 › 능력단위), 키워드, 코드 */}
+        <div className="form-group form-group-wide">
+          <div className="form-tit"><span id="duty-title">세분류</span></div>
           <div className="form-conts">
-            <input id="duty-query" type="search" className="krds-input" value={query} onChange={(e) => setQuery(e.target.value)}
-                   placeholder="예: 숙박, 12030202" aria-describedby="duty-query-hint" />
+            <NcsPicker subclasses={catalog?.subclasses || []} duty={duty} onPick={pickDuty} detail={detail} loading={fetching || (!!duty && !detail)} />
           </div>
-          <p className="form-hint" id="duty-query-hint">
-            세분류 이름, 코드, 분류 이름으로 찾습니다. {query.trim() ? `찾은 세분류 ${matches.length}개` : `전체 ${matches.length}개`}
-            {matches.length > MAX_OPTIONS ? ` 가운데 ${MAX_OPTIONS}개만 목록에 보입니다. 검색어를 더 적어 주세요.` : "."}
-          </p>
-        </div>
-
-        {/* 세분류 이름이 길어 두 열을 쓰고 셀렉트는 칸 폭 전체 */}
-        <div className="form-group form-group-span2 is-full">
-          <div className="form-tit"><label htmlFor="duty">세분류</label></div>
-          <div className="form-conts">
-            <KrdsSelect id="duty" value={duty} options={options} onChange={setDuty} title="세분류 선택" describedBy="duty-hint" />
-          </div>
-          <p className="form-hint" id="duty-hint">
-            {detail ? `${detail.classes?.대분류 || ""} › ${detail.classes?.중분류 || ""} › ${detail.classes?.소분류 || ""} › ${detail.name}` : "세분류를 선택해 주세요."}
+          <p className="form-hint" id="duty-hint" role="status">
+            {detail && detail.duty === duty
+              ? `고른 세분류: ${detail.classes?.대분류 || ""} › ${detail.classes?.중분류 || ""} › ${detail.classes?.소분류 || ""} › ${detail.name} (${duty})`
+              : duty ? "세분류를 읽는 중입니다." : "세분류를 골라 주세요."}
           </p>
         </div>
 
@@ -247,6 +306,19 @@ export default function PlanDraftPage() {
         <h2 className="form-section-title" id="plan-content-title">개발계획서에 적을 내용</h2>
         <p className="form-section-desc" id="plan-content-desc">개발기관명과 영문 세분류명은 최종본에 꼭 적어야 하는 항목입니다(점검 ⑧). 초안 점검은 1차본(직능연) 기준이라 비워 두어도 됩니다.</p>
         <div className="form-section-grid">
+        <div className="form-group form-group-wide">
+          <div className="form-tit"><span id="plan-kind-label">신규 / 개선</span></div>
+          <div className="form-conts plan-stage" role="radiogroup" aria-labelledby="plan-kind-label">
+            {KINDS.map(([value, label]) => (
+              <div className="krds-form-check" key={value}>
+                <input type="radio" id={`plan-kind-${value}`} name="plan-kind" value={value} checked={kind === value} onChange={() => { setKind(value); setCheck(null); }} />
+                <label htmlFor={`plan-kind-${value}`}>{label}</label>
+              </div>
+            ))}
+          </div>
+          <p className="form-hint">개선을 고르면 개선 양식(NCS 변경 전·후 대조표, 총괄표의 개선 유형)에 채웁니다. 능력단위마다 개선 유형과 개선 전 능력단위번호를 적습니다.</p>
+        </div>
+
         <div className="form-group">
           <div className="form-tit"><label htmlFor="agency">개발기관명 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></label></div>
           <div className="form-conts">
@@ -267,11 +339,25 @@ export default function PlanDraftPage() {
           <div className="form-group form-group-wide">
             <div className="form-tit"><span id="units-title">능력단위 ({chosen.length}/{subclass.units.length})와 담당 집필진, 검토진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></span></div>
             <div className="form-conts">
+              {improve && (
+                <div className="plan-bulk" role="group" aria-label="체크한 능력단위에 한꺼번에 적용">
+                  <span className="plan-bulk-label">체크한 능력단위 {chosen.length}개의 개선 유형</span>
+                  <div className="plan-bulk-buttons">
+                    {TYPES.map((type) => {
+                      const all = chosen.length > 0 && chosen.every((u) => people[u.code]?.type === type.value);
+                      return (
+                        <button type="button" key={type.value} className={`krds-btn small ${all ? "secondary" : "tertiary"}`} aria-pressed={all} disabled={!chosen.length} onClick={() => setBulk("type", () => type.value)}>{type.label}</button>
+                      );
+                    })}
+                  </div>
+                  <button type="button" className="krds-btn small tertiary plan-bulk-fill" disabled={!chosen.some((u) => people[u.code]?.type)} onClick={() => setBulk("type", () => "")}>유형 지우기</button>
+                </div>
+              )}
               <div className="krds-table-wrap">
                 <table className="tbl col data plan-units" aria-labelledby="units-title">
                   <caption>초안에 넣을 능력단위 선택과 담당자</caption>
                   <colgroup>
-                    <col className="col-check" /><col /><col className="col-level" /><col className="col-count" /><col className="col-person" /><col className="col-person" />
+                    <col className="col-check" /><col /><col className="col-level" /><col className="col-count" />{improve && <><col className="col-type" /><col className="col-person" /></>}<col className="col-person" /><col className="col-person" />
                   </colgroup>
                   <thead>
                     <tr>
@@ -283,7 +369,7 @@ export default function PlanDraftPage() {
                           </div>
                         </div>
                       </th>
-                      <th scope="col">능력단위</th><th scope="col">수준</th><th scope="col">요소 / 수행준거</th><th scope="col">담당 집필진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></th><th scope="col">담당 검토진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></th>
+                      <th scope="col">능력단위</th><th scope="col">수준</th><th scope="col">요소 / 수행준거</th>{improve && <><th scope="col">개선 유형</th><th scope="col">개선 전 능력단위번호</th></>}<th scope="col">담당 집필진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></th><th scope="col">담당 검토진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -300,6 +386,17 @@ export default function PlanDraftPage() {
                         <td><strong>{u.name}</strong><br /><span className="code">{u.code}</span></td>
                         <td>{u.level ?? "-"}</td>
                         <td>{u.elements} / {u.criteria}</td>
+                        {improve && (
+                          <>
+                            <td>
+                              <select className={`krds-form-select small${people[u.code]?.type ? " completed" : ""}`} aria-label={`${u.name} 개선 유형`} value={people[u.code]?.type || ""} onChange={(e) => setPerson(u.code, "type", e.target.value)}>
+                                <option value="">선택</option>
+                                {TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                              </select>
+                            </td>
+                            <td><input type="text" className="krds-input small" aria-label={`${u.name} 개선 전 능력단위번호`} placeholder="없으면 ‘없음’" value={people[u.code]?.previous || ""} onChange={(e) => setPerson(u.code, "previous", e.target.value)} /></td>
+                          </>
+                        )}
                         <td><input type="text" className="krds-input small" aria-label={`${u.name} 담당 집필진`} value={people[u.code]?.writer || ""} onChange={(e) => setPerson(u.code, "writer", e.target.value)} /></td>
                         <td><input type="text" className="krds-input small" aria-label={`${u.name} 담당 검토진`} value={people[u.code]?.reviewer || ""} onChange={(e) => setPerson(u.code, "reviewer", e.target.value)} /></td>
                       </tr>
@@ -307,6 +404,14 @@ export default function PlanDraftPage() {
                   </tbody>
                 </table>
               </div>
+              {improve && (
+                <p className="form-hint">
+                  개선 유형은 직능연이 대상 학습모듈을 검토해 분류한 대로 고릅니다. 정해지지 않았으면 ‘선택’으로 두면 빈 칸으로 나갑니다. 유형을 바꿀 때는 직능연과 협의합니다.
+                  개선 전 능력단위번호는 NCS 변경전후대조표 파일에서 확인해 적습니다. 지금 번호나 기존 학습모듈 번호와 다를 수 있으니 두 파일을 모두 확인합니다.
+                  적은 번호가 지금 번호와 같으면 ‘변경 없음’, 다르면 ‘능력단위 코드 변경’, ‘없음’이면 ‘능력단위 신설’로 채웁니다. 비워 두면 대조표의 개선 전 칸도 비워 둡니다.
+                  개선 전 능력단위명은 해당 판의 NCS 파일을 보고 한글에서 적습니다.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -397,6 +502,172 @@ export default function PlanDraftPage() {
             <h3 className="section-title">개발계획서 점검 확인서</h3>
             <ComponentResult result={review.data} showSave={false} />
             <RawJson data={review.data} title="원본 데이터 보기(개발자용)" />
+          </section>
+        )}
+      </section>
+
+      {/* ── 개선 유형 판단 자료 ── 기존 학습모듈 원고에서 지침(F05 1항, F21 운영 기준 예시표)이 든 내용 수정 신호를 찾는다. 유형은 정하지 않는다 */}
+      <section id="plan-type" className="nav-anchor plan-review">
+        <h2 className="section-title">개선 유형 판단 자료</h2>
+        <p className="meta section-desc">
+          기존 학습모듈 원고를 올리면 내용 수정이 필요하다는 신호를 찾아 보여 줍니다. 법령 기재, URL 기재, 안전·유의 사항의 ‘해당 사항 없음’, 학습 목표와 NCS 수행준거의 불일치입니다.
+          유형은 직능연이 대상 학습모듈을 검토해 분류하고, 바꿀 때는 직능연과 협의합니다. 이 화면은 유형을 정하지 않습니다.
+        </p>
+        <form className="fieldset review-form is-sectioned" onSubmit={runSignals}>
+          <div className="form-section-grid">
+            <FileSlot id="plan-signal-file" label="기존 학습모듈 원고" required accept=".hwp,.hwpx" file={signalFile} disabled={signalBusy} onChange={(picked) => { setSignalFile(picked); setSignalError(null); }} />
+            <div className="form-group">
+              <div className="form-tit"><label htmlFor="plan-signal-code">학습모듈 코드</label></div>
+              <div className="form-conts"><input id="plan-signal-code" type="text" className="krds-input" placeholder="예: LM1203020201_24v3" value={signalCode} onChange={(e) => setSignalCode(e.target.value)} aria-describedby="plan-signal-code-hint" /></div>
+              <p className="form-hint" id="plan-signal-code-hint">비워 두면 파일명에서 찾습니다. 수행준거 대조에 씁니다.</p>
+            </div>
+          </div>
+          <div className="form-actions">
+            <div className="run-buttons">
+              <button className="krds-btn primary large" type="submit" disabled={signalBusy || !signalFile}>{signalBusy ? "찾는 중" : "신호 찾기"}</button>
+            </div>
+            <PageAlert kind="danger">{signalError}</PageAlert>
+          </div>
+        </form>
+        {signalBusy && <ResultHead status={<Spinner label="원고를 읽는 중" />} />}
+        {signals && (
+          <section aria-live="polite">
+            <ResultHead
+              status={<span className={`krds-badge large ${signals.신호.length ? "bg-light-warning" : "bg-light-gray"}`}>{signals.신호.length ? `신호 ${signals.신호.length}종` : "찾은 신호 없음"}</span>}
+              meta={[signals.파일, signals["모듈 코드"]].filter(Boolean).join(", ")}
+            />
+            <PageAlert kind="info">{signals.안내}</PageAlert>
+            {signals["확인 못 한 것"].map((text) => <PageAlert kind="warning" key={text}>{text}</PageAlert>)}
+            {signals.신호.length > 0 && (
+              <div className="krds-table-wrap">
+                <table className="tbl col data plan-signal-table">
+                  <caption>기존 학습모듈 원고에서 찾은 내용 수정 신호</caption>
+                  <thead><tr><th scope="col">신호</th><th scope="col">건수</th><th scope="col">지침이 말하는 유형</th><th scope="col">찾은 것</th><th scope="col">근거</th></tr></thead>
+                  <tbody>
+                    {signals.신호.map((item) => (
+                      <tr key={item.신호}>
+                        <td><strong>{item.신호}</strong></td>
+                        <td>{item.건수}</td>
+                        <td>{item.유형}</td>
+                        <td>{item.예.length ? <ul className="plan-signal-list">{item.예.map((text) => <li key={text}>{text}</li>)}{item.건수 > item.예.length && <li>외 {item.건수 - item.예.length}건</li>}</ul> : "-"}</td>
+                        <td className="meta">{item.근거}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+      </section>
+
+      {/* ── 계획서 비교 ── 사람 작업의 '결과 비교': 최종결과 예시나 앞 판본과 칸별로 견준다. 판정은 하지 않는다 */}
+      <section id="plan-compare" className="nav-anchor plan-review">
+        <h2 className="section-title">계획서 비교</h2>
+        <p className="meta section-desc">개발계획서 둘을 칸별로 견줍니다. 기준에는 최종결과 예시나 앞 판본을, 대상에는 지금 계획서를 올립니다. 같은 칸은 세기만 하고 다른 칸만 보여 줍니다. 판정은 하지 않습니다.</p>
+        <form className="fieldset review-form is-sectioned" onSubmit={runCompare}>
+          <div className="form-section-grid">
+            <FileSlot id="plan-base" label="기준 계획서" required accept=".hwp,.hwpx" file={baseFile} disabled={comparing} onChange={(picked) => { setBaseFile(picked); setCompareError(null); }} />
+            <FileSlot id="plan-target" label="대상 계획서" required accept=".hwp,.hwpx" file={targetFile} disabled={comparing} onChange={(picked) => { setTargetFile(picked); setCompareError(null); }} />
+          </div>
+          <div className="form-actions">
+            <div className="run-buttons">
+              <button className="krds-btn primary large" type="submit" disabled={comparing || !baseFile || !targetFile}>{comparing ? "비교하는 중" : "비교 실행"}</button>
+            </div>
+            <PageAlert kind="danger">{compareError}</PageAlert>
+          </div>
+        </form>
+
+        <div id="plan-compare-result" className="results-anchor nav-anchor" />
+        {comparing && <ResultHead status={<Spinner label="계획서를 비교하는 중" />} />}
+        {compared && (
+          <section aria-live="polite">
+            <ResultHead
+              status={<span className={`krds-badge large ${compared.차이.length ? "bg-light-warning" : "bg-light-success"}`}>{compared.차이.length ? `다른 칸 ${compared.차이.length}개` : "다른 칸 없음"}</span>}
+              meta={`기준 ${compared["기준 파일"]} (능력단위 ${compared.요약.능력단위.기준}개), 대상 ${compared["대상 파일"]} (능력단위 ${compared.요약.능력단위.대상}개), 견준 칸 ${compared.요약["견준 칸"]}개 중 같음 ${compared.요약.같음}개`}
+            />
+            {compared.요약["수정 금지 칸 변경"] > 0 && (
+              <PageAlert kind="danger">NCS 쪽 칸(능력단위명, 정의, 요소명, 수행준거, 분류)이 {compared.요약["수정 금지 칸 변경"]}개 다릅니다. 이 칸들은 고치는 칸이 아니므로 어느 쪽이 NCS와 같은지 확인하세요.</PageAlert>
+            )}
+            {compared["개선 유형 변경"].length > 0 && (
+              <>
+                <h3 className="section-title">개선 유형이 달라진 능력단위 ({compared["개선 유형 변경"].length})</h3>
+                <p className="meta section-desc">개선 유형이 바뀌면 최종 개발계획서와 결과물 목록에 똑같이 반영해야 합니다(최소개선 유형 세부 지침).</p>
+                <div className="krds-table-wrap">
+                  <table className="tbl col data">
+                    <caption>개선 유형이 달라진 능력단위</caption>
+                    <thead><tr><th scope="col">능력단위</th><th scope="col">기준</th><th scope="col">대상</th></tr></thead>
+                    <tbody>
+                      {compared["개선 유형 변경"].map((row) => (
+                        <tr key={row.코드}><td><strong>{row.명칭}</strong><br /><span className="code">{row.코드}</span></td><td>{row.기준 || "(없음)"}</td><td>{row.대상 || "(없음)"}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            {compared.차이.length > 0 && (
+              <>
+                <h3 className="section-title">다른 칸</h3>
+                <div className="plan-bulk" role="group" aria-label="고른 칸 반영">
+                  <span className="plan-bulk-label">반영할 칸 {picks.length}개</span>
+                  <span className="meta">체크한 칸을 대상 계획서의 사본에 기준 글로 바꿔 넣습니다. 처음에는 NCS 쪽 칸 가운데 글자가 다른 것만 체크되어 있습니다. 띄어쓰기만 다른 칸은 NCS 원문을 확인한 뒤 고르세요. 한쪽이 빈 칸은 한글에서 직접 적습니다.</span>
+                  <button type="button" className="krds-btn small secondary plan-bulk-fill" disabled={applying || !picks.length || !targetIsHwpx} onClick={runApply}>{applying ? "반영하는 중" : "고른 칸을 반영한 사본 내려받기"}</button>
+                </div>
+                {!targetIsHwpx && <PageAlert kind="warning">반영은 hwpx 대상 계획서에만 할 수 있습니다. hwp 파일은 한글에서 hwpx로 저장해 다시 비교해 주세요.</PageAlert>}
+                <PageAlert kind="danger">{applyNote?.error}</PageAlert>
+                {applyNote?.report && (
+                  <PageAlert kind={applyNote.report["반영 못 함"].length ? "warning" : "success"}>
+                    <p>{applyNote.report.반영}개 칸을 반영한 사본을 내려받았습니다. 원본은 그대로입니다. 한글에서 열어 확인하세요.</p>
+                    {applyNote.report["반영 못 함"].length > 0 && (
+                      <ul className="plan-signal-list">{applyNote.report["반영 못 함"].map((row, i) => <li key={i}>{row.자리 || row.구역} {row.칸}: {row.사유}</li>)}</ul>
+                    )}
+                  </PageAlert>
+                )}
+                <div className="plan-compare-filter" role="group" aria-label="차이 종류로 거르기">
+                  {["", ...Object.keys(DIFF_BADGE)].map((name) => {
+                    const count = name ? compared.요약[name] : compared.차이.length;
+                    return (name === "" || count > 0) && (
+                      <button type="button" key={name || "all"} className={`krds-btn small ${onlyKind === name ? "secondary" : "tertiary"}`} aria-pressed={onlyKind === name} onClick={() => setOnlyKind(name)}>{name || "전체"} {count}</button>
+                    );
+                  })}
+                </div>
+                {AREAS.map((area) => {
+                  const rows = compared.차이.map((row, index) => ({ ...row, index })).filter((row) => row.구역 === area && (!onlyKind || row.차이 === onlyKind));
+                  return rows.length > 0 && (
+                    <details className="plan-compare-area" key={area} open={rows.length <= 40}>
+                      <summary>{area} ({rows.length})</summary>
+                      <div className="krds-table-wrap">
+                        <table className="tbl col data plan-compare-table">
+                          <caption>{area}에서 다른 칸</caption>
+                          <thead><tr><th scope="col">반영</th><th scope="col">자리</th><th scope="col">칸</th><th scope="col">차이</th><th scope="col">기준</th><th scope="col">대상</th></tr></thead>
+                          <tbody>
+                            {rows.map((row) => (
+                              <tr key={row.index}>
+                                <td>
+                                  {canApply(row) ? (
+                                    <div className="krds-form-check">
+                                      <input type="checkbox" id={`apply-${row.index}`} checked={!!applyPick[row.index]} onChange={(e) => setApplyPick((prev) => ({ ...prev, [row.index]: e.target.checked }))} />
+                                      <label htmlFor={`apply-${row.index}`}><span className="sr-only">{row.자리} {row.칸} 반영</span></label>
+                                    </div>
+                                  ) : <span className="meta" title="한쪽이 빈 칸은 한글에서 직접 적습니다">-</span>}
+                                </td>
+                                <td><span className="code">{row.자리 || "-"}</span></td>
+                                <td>{row.칸}{row["수정 금지 칸"] && <><br /><span className="krds-badge small bg-light-danger">NCS 쪽</span></>}</td>
+                                <td><span className={`krds-badge small ${DIFF_BADGE[row.차이]}`}>{row.차이}</span></td>
+                                <td>{row.기준 || <span className="meta">(없음)</span>}</td>
+                                <td>{row.대상 || <span className="meta">(없음)</span>}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  );
+                })}
+              </>
+            )}
+            <RawJson data={compared} title="원본 데이터 보기(개발자용)" />
           </section>
         )}
       </section>

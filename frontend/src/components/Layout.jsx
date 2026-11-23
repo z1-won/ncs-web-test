@@ -34,7 +34,7 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
 ];
 
 /* 페이지 메뉴 — 라우트 단위, 작업 순서. 1Depth는 링크형이 기본이고, children이 있는 항목(이미지)은 눌러서 펼치는 2Depth 묶음이다
-   (이미지 저작권 DB·이미지 추천 — 같은 DB의 등록·확정과 조회라 한 묶음). 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
+   (이미지 저작권 DB·이미지 추천·이미지 AI 보완 — 그림의 권리 정보를 쌓고, 찾고, AI를 쓴 그림에 표기를 남기는 일이라 한 묶음). 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
 export const PAGES = [
   { path: "/plan", label: "개발계획서 작성" },
   { path: "/review", label: "원고 검수" },
@@ -43,6 +43,7 @@ export const PAGES = [
   { id: "image", label: "이미지", children: [
     { path: "/images", label: "이미지 저작권 DB" },
     { path: "/recommend", label: "이미지 추천" },
+    { path: "/ai-image", label: "이미지 AI 보완" },
   ] },
   { path: "/rights", label: "권리 증빙 점검" },
   { path: "/volume", label: "원고 분량" },

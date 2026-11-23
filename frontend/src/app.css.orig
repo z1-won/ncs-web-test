@@ -1,0 +1,609 @@
+/* 이 페이지에만 필요한 배치. 색·간격·글자 크기는 모두 KRDS 토큰(--krds-*)을 쓴다. */
+/* 세로 스크롤바 자리를 항상 확보 — 이력 '더 보기/최근 5건만 보기'로 페이지 길이가 바뀌며 스크롤바가 생기고 사라질 때 화면 폭(≈15px)이 변해 표 칸이 들썩이던 것 */
+/* ── 색조: 한국직업능력연구원 누리집(krivet.re.kr) 기준 ─────────────────────────────────────────────
+   KRDS는 모든 색을 두 색 단계표(primary 파랑, secondary 남색)에서 끌어 쓴다. 단계표만 바꾸면 버튼·메뉴·표·초점 테두리가 함께 바뀐다.
+   - primary  → 연구원 CI 주황. 50 = 누리집 강조색 #ea7110(심볼 색 Pantone 1645C 계열), 60 이상은 글자용으로 어둡게(흰 바탕 대비 4.5:1 이상)
+   - secondary → 누리집 메뉴 띠·글자의 따뜻한 갈회색. 50 #786f62, 70 #4a443c, 80 #3c3730, 90 #27241f는 누리집에서 잰 값
+   판정 색(적합 초록·부적합 빨강·판단불가 노랑·안내 파랑)은 뜻이 있는 색이라 KRDS 그대로 둔다. */
+:root {
+  --krds-color-light-primary-5: #fff4ea;
+  --krds-color-light-primary-10: #ffe3c9;
+  --krds-color-light-primary-20: #ffc892;
+  --krds-color-light-primary-30: #fba75c;
+  --krds-color-light-primary-40: #f28a2e;
+  --krds-color-light-primary-50: #ea7110;
+  --krds-color-light-primary-60: #b84f00;
+  --krds-color-light-primary-70: #8f3d00;
+  --krds-color-light-primary-80: #6b2e00;
+  --krds-color-light-primary-90: #472000;
+  --krds-color-light-primary-95: #2e1500;
+  --krds-color-light-secondary-5: #f6f5f3;
+  --krds-color-light-secondary-10: #e7e4df;
+  --krds-color-light-secondary-20: #d0cbc3;
+  --krds-color-light-secondary-30: #b4aea4;
+  --krds-color-light-secondary-40: #968f84;
+  --krds-color-light-secondary-50: #786f62;
+  --krds-color-light-secondary-60: #5f584e;
+  --krds-color-light-secondary-70: #4a443c;
+  --krds-color-light-secondary-80: #3c3730;
+  --krds-color-light-secondary-90: #27241f;
+  --krds-color-light-secondary-95: #1a1814;
+  /* 주 버튼은 주황이 아니라 갈회색 — 주황 바탕의 흰 글자는 대비가 2.9:1이라 KRDS 기준(4.5:1)에 못 미친다. 주황은 강조선·선택 표시에만 쓴다 */
+  --krds-light-color-button-primary-fill: var(--krds-color-light-secondary-70);
+  --krds-light-color-button-primary-fill-hover: var(--krds-color-light-secondary-80);
+  --krds-light-color-button-primary-fill-pressed: var(--krds-color-light-secondary-90);
+}
+html { scrollbar-gutter: stable; }
+/* 내용이 짧은 페이지에서도 푸터가 화면 맨 아래에 붙게 — 머리·본문·푸터를 세로로 쌓고 본문이 남는 높이를 채운다 */
+#root { display: flex; flex-direction: column; min-height: 100vh; }
+#root > #container { flex: 1 0 auto; width: 100%; }
+.page {
+  padding-top: var(--krds-padding-10);
+  padding-bottom: var(--krds-padding-10);
+}
+.page-title {
+  margin-bottom: var(--krds-gap-3);
+  font-size: var(--krds-pc-font-size-heading-large);
+  font-weight: var(--krds-font-weight-bold);
+}
+.page-desc {
+  margin-bottom: var(--krds-gap-8);
+  color: var(--krds-light-color-text-subtle);
+  font-size: var(--krds-pc-font-size-body-medium);
+}
+.section-title {
+  margin: var(--krds-gap-9) 0 var(--krds-gap-5);
+  font-size: var(--krds-pc-font-size-heading-small);
+  font-weight: var(--krds-font-weight-bold);
+}
+.review-form.fieldset {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(28rem, 1fr));
+  gap: var(--krds-gap-7);
+  padding: var(--krds-padding-8);
+  border: 1px solid var(--krds-light-color-border-gray-light);
+  border-radius: var(--krds-radius-medium2);
+  background: var(--krds-light-color-background-white);
+}
+.review-form .form-actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--krds-form-group--gap); }
+.review-form .form-tit-spacer { user-select: none; }
+/* 실행 버튼은 입력칸·셀렉트(large = size-height-8)와 같은 높이 */
+.review-form .run-buttons .krds-btn.large { height: var(--krds-size-height-8); }
+.review-form .krds-btn { width: 100%; }
+/* 업로드 칸(FileSlot, #13): KRDS 파일 업로드(.krds-file-upload)의 파일 목록을 폼 한 칸 폭에 맞춘다 — 간격·안쪽 여백만 한 단계 작은 KRDS 토큰으로 */
+.review-form .file-slot { --krds-file-upload--gap: var(--krds-gap-3); --krds-file-upload--list-padding: var(--krds-padding-4) var(--krds-padding-5); }
+.review-form .file-slot .file-upload-btn-wrap { width: 100%; }
+.review-form .file-slot .upload-list .krds-btn { width: auto; white-space: nowrap; }
+.review-form .file-slot .file-info { gap: var(--krds-gap-3); }
+.review-form .file-slot .file-name { min-width: 0; font-size: var(--krds-pc-font-size-body-small); word-break: break-all; }   /* 파일명은 띄어쓰기가 없어 낱말 단위로는 한 줄 말줄임이 첫 토막에서 끊긴다 */
+.review-form .file-slot .file-hint-invalid { font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+.selected-files { margin-top: var(--krds-gap-7); }
+/* 결과 머리글(ResultHead): 1줄 판정·설명, 2줄 액션 바. 어떤 검수든 버튼 자리가 같다 */
+.result-head { display: flex; flex-direction: column; gap: var(--krds-gap-4); margin-top: var(--krds-gap-9); }
+.result-head .summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--krds-gap-5); }
+.result-head .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.result-head .actions {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--krds-gap-3) var(--krds-gap-5);
+  min-height: var(--krds-size-height-6);   /* 버튼(small) 높이 — 액션이 아직 없어도 자리를 지킨다 */
+  padding-top: var(--krds-gap-4);
+  border-top: var(--krds-light-border-width-static-regular) solid var(--krds-light-color-divider-gray-light);
+}
+.result-head .downloads { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--krds-gap-2); }
+.result-head .downloads .sep { padding: 0 var(--krds-gap-1); }
+.krds-table-wrap { width: 100%; }
+/* 구성요소 머리칸(rowSpan)은 위 정렬 — 가운데 정렬이면 행에서 지적사항을 펼쳐 묶음이 길어질 때마다 이름이 아래로 움직인다 */
+.tbl.sheet th.component { background: var(--krds-light-color-element-success-lighter); text-align: center; vertical-align: top; padding-top: var(--krds-table--data-tbody-padding); }
+.tbl.sheet td.mark { text-align: center; font-weight: var(--krds-font-weight-bold); }
+.tbl.sheet td.mark.pass { color: var(--krds-light-color-text-success); }
+.tbl.sheet td.mark.fail { color: var(--krds-light-color-text-danger); }
+.tbl.sheet td.mark.undecided { color: var(--krds-light-color-text-warning); }
+.tbl td.mono {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: var(--krds-pc-font-size-body-xsmall);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;   /* 긴 토큰은 필요할 때만 자르고, 보통 글은 단어 단위로 줄바꿈 */
+  word-break: keep-all;
+}
+.tbl td.num { text-align: right; white-space: nowrap; }
+.empty { color: var(--krds-light-color-text-subtle); padding: var(--krds-padding-5) 0; }
+details.raw { margin-top: var(--krds-gap-7); }
+details.raw summary { cursor: pointer; font-weight: var(--krds-font-weight-bold); }
+/* 코드 상자 오른쪽 위에 복사 아이콘 버튼. 상자 여백(padding-6) 안쪽에 앉힌다 */
+details.raw .raw-body { position: relative; margin-top: var(--krds-gap-5); }
+details.raw .btn-copy { position: absolute; top: var(--krds-padding-6); right: var(--krds-padding-6); z-index: 1; background: var(--krds-light-color-background-white); border-radius: var(--krds-radius-medium1); }
+details.raw .btn-copy:hover { background: var(--krds-light-color-button-tertiary-fill-hover); }
+details.raw .btn-copy .svg-icon {
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M16 1H4a2 2 0 0 0-2 2v14h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11z'/></svg>") no-repeat center / contain;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M16 1H4a2 2 0 0 0-2 2v14h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11z'/></svg>") no-repeat center / contain;
+}
+details.raw .btn-copy.is-copied .svg-icon {
+  background-color: var(--krds-light-color-text-success);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/></svg>") no-repeat center / contain;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/></svg>") no-repeat center / contain;
+}
+details.raw .copy-toast { position: absolute; top: calc(var(--krds-padding-6) + 0.4rem); right: calc(var(--krds-padding-6) + var(--krds-size-height-3) + var(--krds-gap-2)); font-size: var(--krds-pc-font-size-label-small); color: var(--krds-light-color-text-success); pointer-events: none; }
+details.raw pre {
+  margin: 0;
+  padding: var(--krds-padding-6);
+  border: 1px solid var(--krds-light-color-border-gray-light);
+  border-radius: var(--krds-radius-medium2);
+  background: var(--krds-light-color-background-white);
+  max-height: 48rem;
+  overflow: auto;
+  font-size: var(--krds-pc-font-size-body-xsmall);
+}
+
+/* 네모 번호: 한컴 기호 글꼴의 󰊱 — 유니코드에 없어 상자로 그린다. 결과 JSON에는 [1]로 적혀 있다 */
+.box-number {
+  display: inline-block; min-width: 1.15em; height: 1.15em; line-height: 1.05em; padding: 0 0.1em;
+  margin: 0 0.1em; border: 1px solid currentColor; border-radius: 2px; text-align: center;
+  font-size: 0.9em; font-weight: var(--krds-font-weight-bold); vertical-align: 0.05em;
+}
+
+/* 이력 삭제 버튼: KRDS 아이콘(ico-del)은 기본이 primary 글자색(흰색)이라 tertiary 버튼 위에서 보이도록 글자색을 따른다 */
+.btn-delete-history { gap: var(--krds-gap-1); }
+.btn-delete-history .svg-icon { background-color: currentColor; }
+
+/* 검수 항목 셀렉트: 닫힌 모양은 KRDS 셀렉트, 펼친 목록은 KRDS 드롭다운 메뉴를 셀렉트 폭에 맞춰 아래로 연다 */
+.check-select { position: relative; display: block; width: 100%; }
+.check-select > .krds-form-select { display: block; width: 100%; text-align: left; cursor: pointer; }
+.check-select > .krds-form-select.is-active { border-color: var(--krds-form-select--color-border-active); border-width: 2px; }
+.check-select .drop-menu { left: 0; right: 0; width: 100%; min-width: 0; transform: none; }
+.check-select .drop-menu[hidden] { display: none; }
+.check-select.is-open .drop-menu { display: block; }
+.check-select .drop-menu::before { left: 2.4rem; margin-left: 0; }
+.check-select .drop-list { display: flex; flex-direction: column; gap: var(--krds-gap-1); max-height: 32rem; overflow: auto; }
+.check-select .drop-list .item-link { height: var(--krds-dropdown--list-item-height); border: 0; background: none; text-align: left; cursor: pointer; }
+/* 키보드로 이동 중인 항목은 테두리 대신 KRDS 드롭다운의 hover 배경으로 표시한다 */
+.check-select .drop-list .item-link:focus { outline: 0; box-shadow: none; }
+/* "전체" 아래 구분선 — 실행 모드(전체)와 개별 구성요소를 시각적으로 나눈다 */
+.check-select .drop-list li.has-divider { padding-bottom: var(--krds-gap-2); margin-bottom: var(--krds-gap-1); border-bottom: var(--krds-light-border-width-static-regular) solid var(--krds-light-color-divider-gray-light); }
+.check-select .drop-list .item-link:focus:not(.active) { background-color: var(--krds-dropdown--list-item-color-action-hover); }
+
+/* 확인서 행 아래 펼쳐지는 지적사항 */
+.sheet-more { margin-top: var(--krds-gap-2); }
+/* 확인서 행에 딸린 지적사항 상세: 체크 항목 열 시작선에 맞춰 들여쓰고, 왼쪽 보조색 강조선 + 옅은 배경으로 "하위"임을 드러낸다 */
+.tbl tr.sheet-detail > td { padding: var(--krds-padding-5) var(--krds-padding-6) var(--krds-padding-6); background: var(--krds-light-color-surface-secondary-subtler); }
+.findings-list { display: flex; flex-direction: column; gap: var(--krds-gap-5); margin: 0; padding: 0; list-style: none; }
+.findings-list .finding {
+  padding: var(--krds-padding-4) var(--krds-padding-6);
+  border-left: 0.3rem solid var(--krds-light-color-border-secondary);
+  background: var(--krds-light-color-surface-white);
+  border-radius: 0 var(--krds-radius-medium1) var(--krds-radius-medium1) 0;
+}
+.findings-list .finding-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--krds-gap-3); }
+.findings-list .finding-check { font-size: var(--krds-pc-font-size-label-medium); font-weight: var(--krds-font-weight-bold); color: var(--krds-light-color-text-basic); }
+.findings-list .finding-body {
+  display: grid; grid-template-columns: max-content 1fr; column-gap: var(--krds-gap-5); row-gap: var(--krds-gap-2);
+  margin: var(--krds-gap-3) 0 0; font-size: var(--krds-pc-font-size-label-medium);
+}
+.findings-list .finding-body dt { color: var(--krds-light-color-text-subtle); white-space: nowrap; }
+.findings-list .finding-body dd { margin: 0; color: var(--krds-light-color-text-basic); overflow-wrap: anywhere; }
+.findings-list .finding-body dd.path { color: var(--krds-light-color-text-subtle); }
+@media (max-width: 767px) { .findings-list .finding-body { grid-template-columns: 1fr; row-gap: var(--krds-gap-1); } .findings-list .finding-body dd { margin-bottom: var(--krds-gap-2); } }
+
+/* 지적사항 표: 열 너비 고정. 위치 경로는 '>' 단위로, 긴 사유·수정 제안은 단어 단위로 줄바꿈하고 너무 길면 칸 안에서 스크롤 */
+.tbl.findings { table-layout: fixed; }
+.tbl.findings td.path { font-size: var(--krds-pc-font-size-body-xsmall); color: var(--krds-light-color-text-subtle); word-break: keep-all; overflow-wrap: anywhere; }
+.tbl.findings td.long { white-space: pre-line; word-break: keep-all; overflow-wrap: anywhere; }
+.tbl.findings td.long .clamp { max-height: 16em; overflow: auto; }   /* 긴 목록(수정 제안 데이터 등)은 칸 안에서 스크롤 */
+
+/* ───── 전체 실행: 구성요소별 KRDS 아코디언 ───── */
+.result-head .toolbar { margin-left: auto; display: flex; gap: var(--krds-gap-2); }   /* 보기 도구는 항상 오른쪽 */
+/* 아코디언 머리: 왼쪽 구성요소 이름, 오른쪽 상태(판정 배지 + 항목 수). KRDS 화살표(::after)는 버튼 오른쪽 여백에 그대로 둔다 */
+.all-results .acc-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--krds-gap-3); width: 100%; text-align: left; }
+.all-results .acc-name { font-weight: var(--krds-font-weight-bold); }
+.all-results .item-status { display: inline-flex; align-items: center; gap: var(--krds-gap-3); }
+.all-results .counts { display: inline-flex; gap: var(--krds-gap-3); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-subtle); }
+.all-results .count.pass { color: var(--krds-light-color-text-success); }
+.all-results .count.fail { color: var(--krds-light-color-text-danger); }
+.all-results .count.undecided { color: var(--krds-light-color-text-warning); }
+/* 대기·검사 중 칸은 아직 펼칠 내용이 없다 — 눌리지 않는 모양 */
+.all-results .btn-accordion:disabled { cursor: default; opacity: .75; }
+.all-results .btn-accordion:disabled::after { opacity: .3; }
+/* KRDS 기본은 펼친 높이를 100vh로 제한한다 — 확인서 표가 길어도 잘리지 않게 푼다 */
+.all-results .accordion-item.active .accordion-collapse { max-height: none; }
+.all-results .accordion-body > .component-result { padding-top: var(--krds-padding-3); }
+.component-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-5); }
+.component-foot details { flex: 1 1 100%; }
+/* 확인서 표와 접힌 목록(지적사항·체크리스트) 사이 — 단독 결과·전체 실행 아코디언 모두 */
+.component-foot { margin-top: var(--krds-gap-7); }
+.component-foot summary { cursor: pointer; font-weight: var(--krds-font-weight-bold); }   /* "원본 JSON" 접기 제목(details.raw summary)과 같은 글꼴·크기 */
+.component-foot details .krds-table-wrap { margin-top: var(--krds-gap-5); }   /* 펼친 제목과 표 사이 */
+.component-foot details .krds-table-wrap + .krds-table-wrap { margin-top: var(--krds-gap-7); }   /* 지적사항 표와 전체 체크리스트 표 사이 */
+/* 접기/펼치기 제목(summary)은 어디에 있든(단독 결과·전체 실행·원본 JSON) 클릭으로 열 때 KRDS 전역 :focus 테두리가 제목 줄 전체를 감싼다 — 키보드 포커스(focus-visible)만 남긴다 */
+summary:focus { outline: none; box-shadow: none; }
+summary:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-primary); outline-offset: 0.2rem; }
+/* KRDS 스피너는 기본이 가로·세로 100% 블록 — 머리글 안에서 글과 나란히 놓이게 크기를 글에 맞춘다 */
+.all-results .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); z-index: auto; }
+
+/* 결과 영역 스크롤 기준점: 내려왔을 때 제목이 화면 맨 위에 붙지 않게 여백을 둔다 */
+/* KRDS 헤더(브랜딩 약 8.8rem + 메인 메뉴 5.6rem)가 sticky라 앵커 이동 시 그 높이만큼 더 띄운다 */
+/* 헤더 높이는 Header가 측정해 --header-height로 내려준다(lib/hooks.js useCssHeightVar). 측정 전 기본값 14.4rem */
+.results-anchor, .nav-anchor { scroll-margin-top: calc(var(--header-height, 14.4rem) + var(--krds-gap-7)); }
+/* 메뉴로 이동할 때 영역에 포커스를 두는데, KRDS 전역 *:focus(box-shadow)가 영역 전체를 감싸지 않게 */
+.nav-anchor:focus { outline: none; box-shadow: none; }
+
+/* ── 맨 위로(TOP) 버튼 ── KRDS 아이콘 버튼(.krds-btn.icon.border) 규격을 따른다: medium 높이, 원형, 흰 배경 + gray 테두리, tertiary hover/pressed 색 */
+.krds-btn-top {
+  --krds-btn-top--size: var(--krds-size-height-7);          /* 4.8rem */
+  --krds-btn-top--icon-size: var(--krds-icon--size-large, 2.4rem);
+  --krds-btn-top--offset: var(--krds-padding-7);            /* 화면 모서리 여백 2.4rem */
+  position: fixed;
+  right: var(--krds-btn-top--offset);
+  bottom: var(--krds-btn-top--offset);
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--krds-btn-top--size);
+  height: var(--krds-btn-top--size);
+  padding: 0;
+  color: var(--krds-light-color-text-basic);
+  background-color: var(--krds-light-color-background-white);
+  border: 0.1rem solid var(--krds-light-color-border-gray);
+  border-radius: var(--krds-radius-max);
+  box-shadow: 0 0.2rem 0.8rem var(--krds-light-color-alpha-shadow2);
+  cursor: pointer;
+  transition: opacity .2s ease, transform .2s ease, background-color .2s ease, border-color .2s ease;
+  opacity: 0;                 /* 스크롤 전에는 숨김 — .active 로 표시 */
+  visibility: hidden;
+  transform: translateY(1.2rem);
+}
+.krds-btn-top.active { opacity: 1; visibility: visible; transform: translateY(0); }
+.krds-btn-top .svg-icon {
+  display: block;
+  width: var(--krds-btn-top--icon-size);
+  height: var(--krds-btn-top--icon-size);
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 5.5 4.5 13l1.4 1.4L11 9.3V19h2V9.3l5.1 5.1 1.4-1.4z' fill='black'/></svg>") no-repeat center / contain;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 5.5 4.5 13l1.4 1.4L11 9.3V19h2V9.3l5.1 5.1 1.4-1.4z' fill='black'/></svg>") no-repeat center / contain;
+}
+.krds-btn-top:hover { background-color: var(--krds-light-color-button-tertiary-fill-hover); border-color: var(--krds-light-color-border-gray-dark); }
+.krds-btn-top:active { background-color: var(--krds-light-color-button-tertiary-fill-pressed); }
+.krds-btn-top:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-primary); outline-offset: 0.2rem; }
+@media (max-width: 1023px) { .krds-btn-top { --krds-btn-top--offset: var(--krds-padding-5); } }  /* KRDS medium 브레이크포인트 */
+@media (prefers-reduced-motion: reduce) { .krds-btn-top { transition: none; } }
+/* TOP 버튼이 포커스를 본문(#container)으로 옮길 때 KRDS 전역 *:focus 테두리가 본문 전체를 감싸지 않게 — 포커스 자체는 유지(스크린리더용) */
+#container:focus { outline: none; box-shadow: none; }
+
+
+/* ── 헤더·푸터 로고 ── KRDS 표준 치수(.logo/.f-logo 13.7×4.8rem, 모바일 9.4×3.2rem)는 그대로 두고 배경 이미지만 KRDS 로고 → 동국대 로고로 교체 */
+#krds-footer .f-logo { background-image: url("/img/logo_dongguk.png"); }
+/* 헤더 로고는 한국직업능력연구원(검수 기준 기관). 가로로 긴 로고(약 8:1)라 KRDS 로고 칸(.logo)의 높이는 그대로 두고 너비만 넓힌다 — 로고는 칸 안에서 비율대로 왼쪽에 붙는다 */
+#krds-header .header-container .logo { width: 26rem; }
+#krds-header .header-container .logo a { background-image: url("/img/logo_krivet.png"); background-position: left center; }
+@media (max-width: 1023px) { #krds-header .header-container .logo { width: 17rem; } }
+/* 운영기관 식별자 로고: 표준 높이(size-height-4, 모바일 size-height-3)는 유지, 직능연 가로형 로고(약 8:1)에 맞춰 너비만 넓힘 */
+#krds-footer .krds-identifier .logo { width: 19rem; background-image: url("/img/logo_krivet.png"); }
+@media (max-width: 1023px) { #krds-footer .krds-identifier .logo { width: 16rem; } }
+
+/* 개인정보처리방침 — 연결할 페이지가 아직 없어 링크 없이 표시(가이드: 빈 링크 금지) */
+#krds-footer .f-menu span.point { cursor: default; }
+
+/* ── 메인 메뉴 ── KRDS는 1023px 이하에서 PC 메뉴를 숨기고 전체메뉴 레이어(#mobile-nav)를 쓴다. 이 서비스는 메뉴가 2개뿐이라 레이어 대신 같은 메뉴를 가로 스크롤로 유지한다 */
+@media (max-width: 1023px) {
+  #krds-header .krds-main-menu { display: block; }
+  #krds-header .krds-main-menu .gnb-menu { overflow-x: auto; flex-wrap: nowrap; }
+  #krds-header .krds-main-menu .gnb-menu .gnb-main-trigger { height: var(--krds-size-height-7); white-space: nowrap; }
+}
+
+/* ── 하위 메뉴(.page-subnav) ── 메인 메뉴 아래 한 단. 현재 페이지 안 영역(앵커) 이동. 메인 메뉴와 같은 .inner 폭, 항목 간격·높이는 메인 메뉴보다 한 단계 작게(#10) */
+#krds-header .page-subnav { border-top: 1px solid var(--krds-light-color-border-gray-light); background: var(--krds-light-color-surface-secondary-subtler); }
+#krds-header .page-subnav .subnav-menu { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: var(--krds-gap-2); margin: 0; padding: 0; list-style: none; }
+#krds-header .page-subnav .subnav-trigger {
+  display: flex; align-items: center; position: relative; height: var(--krds-size-height-7); padding: 0 var(--krds-padding-3); white-space: nowrap;
+  font-size: var(--krds-pc-font-size-body-medium); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-basic); text-decoration: none; transition: var(--krds-transition-base);
+}
+#krds-header .page-subnav .subnav-trigger:hover { color: var(--krds-light-color-text-primary); }
+#krds-header .page-subnav .subnav-trigger.active { font-weight: var(--krds-font-weight-bold); color: var(--krds-light-color-text-primary); }
+#krds-header .page-subnav .subnav-trigger.active::after { content: ""; position: absolute; left: var(--krds-padding-3); right: var(--krds-padding-3); bottom: 0; height: 2px; background: var(--krds-light-color-border-primary); }
+
+/* 결과를 이력보다 위에 둔다(주 동선). 이력은 기본 최근 5건, 제목 줄 오른쪽의 '더 보기'로 전체 */
+.result-placeholder { margin-top: var(--krds-gap-9); }
+.history { margin-top: var(--krds-gap-9); }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--krds-gap-5); }
+.section-head .section-title { margin-bottom: 0; }
+.section-head .section-title .meta { font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-subtle); }
+.history .krds-table-wrap { margin-top: var(--krds-gap-5); }
+/* 지금 화면에 열려 있는 이력 행 */
+.history tr.is-open > td { background: var(--krds-light-color-surface-secondary-subtler); }
+/* KRDS는 table { width: auto; min-width: 100% }인데, width가 auto면 table-layout: fixed가 무시되고 내용 폭대로 칸이 잡힌다(행이 바뀔 때마다 '검수'·'판정' 폭이 달라지던 원인). width를 명시해 고정 배치를 실제로 켠다 */
+.history-table { table-layout: fixed; width: 100%; }
+.history-table td { overflow-wrap: anywhere; word-break: keep-all; }
+/* 실행 시각: 날짜 / 오전·오후 시각을 항상 두 줄로(칸이 넓어도 같은 모양) */
+.history-table td.when span { display: block; white-space: nowrap; }
+.history-table td.when span:first-child { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }   /* 날짜는 흐리게, 시각이 먼저 읽히게 */
+.history-table td.when span:last-child { color: var(--krds-light-color-text-basic); }
+.history-table .col-when { width: 13rem; }      /* 날짜·시각 두 줄('2026. 11. 15.' / '오후 12:34:56')이 들어가는 폭 */
+.history-table .col-check { width: 24rem; }     /* 가장 긴 글 '전체 실행 — 구성요소 10/10'이 한 줄에 들어가는 폭. 남는 폭은 모듈 칸이 갖는다 */
+.history-table td.module { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* 한 줄로. 칸보다 긴 이름만 말줄임 — 전체는 title로 */
+.history-table .col-verdict { width: 9.6rem; }
+.history-table .col-action { width: 11rem; }
+/* 배지·버튼은 한 덩어리 — 칸이 좁아져도 글자가 줄바꿈되지 않게 */
+.history-table .krds-badge, .history-table .krds-btn { white-space: nowrap; }
+
+/* 전체 실행 보기 전환 탭(KRDS 탭 line형). 탭 아래 영역 제목과의 간격만 조정 */
+.view-switch { margin-top: var(--krds-gap-7); }
+.view-switch + .tab-conts > .section-title { margin-top: var(--krds-gap-7); }
+.full-sheet-missing { margin: calc(-1 * var(--krds-gap-3)) 0 var(--krds-gap-5); }
+
+.run-buttons { display: flex; gap: var(--krds-gap-3); width: 100%; }
+.run-buttons .krds-btn.primary { flex: 1; }
+.review-form .run-buttons .krds-btn { width: auto; }
+
+/* 도움말·오류 문구가 두 줄로 접힐 때 KRDS 아이콘(::before)이 세로 가운데로 가는 것을 첫 줄에 맞춘다 */
+.form-group [class^="form-hint"] { align-items: flex-start; }
+.form-group [class^="form-hint"]::before { flex: none; margin-top: calc((1em * 1.5 - var(--krds-icon--size-small)) / 2); }
+
+/* 확인서 내려받기 버튼 묶음(결과 머리 오른쪽) */
+.export-buttons { display: inline-flex; align-items: center; gap: var(--krds-gap-2); }
+.export-buttons > .meta:first-child { margin-right: var(--krds-gap-3); }   /* "확인서 내려받기" 글자와 첫 버튼 사이 */
+.export-buttons .sep { padding: 0 var(--krds-gap-1); }
+
+/* 개발계획서 작성 페이지 — 능력단위 표(KRDS .tbl.col.data). 열 너비는 colgroup으로 고정해 담당자 입력칸이 좁아지지 않게 */
+.form-group-wide { grid-column: 1 / -1; }
+.plan-units { table-layout: fixed; width: 100%; }
+.plan-units .col-check { width: 6.4rem; }
+.plan-units .col-level { width: 7.2rem; }
+.plan-units .col-count { width: 12rem; }
+.plan-units .col-person { width: 16rem; }
+.plan-units td, .plan-units th { vertical-align: middle; }
+.plan-units .code { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
+.plan-units .krds-check-area { padding-top: 0; }
+.plan-units .krds-input.small { width: 100%; }
+.section-desc { margin: calc(-1 * var(--krds-gap-3)) 0 var(--krds-gap-5); }   /* 섹션 제목 바로 아래 설명 */
+
+/* ── 페이지 수준 알림(PageAlert) ── 왼쪽 상태색 선 + 옅은 상태색 바탕 + 상태 아이콘. 폼 칸 밖의 오류·안내용 */
+.page-alert {
+  display: flex; align-items: flex-start; gap: var(--krds-gap-3);
+  margin-top: var(--krds-gap-5); padding: var(--krds-padding-5) var(--krds-padding-6);
+  border: var(--krds-light-border-width-static-regular) solid; border-radius: var(--krds-radius-medium2);   /* KRDS 상자 규격: 사방 1px 테두리 + 같은 모서리(업로드 칸·요약 칸과 같음). 왼쪽 굵은 선은 KRDS에 없는 모양이라 쓰지 않는다 */
+  font-size: var(--krds-pc-font-size-body-small); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.page-alert .svg-icon { flex: none; width: var(--krds-icon--size-medium); height: var(--krds-icon--size-medium); margin-top: 0.1em; background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-5h2v2h-2zm0-8h2v6h-2z'/></svg>") no-repeat center / contain;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-5h2v2h-2zm0-8h2v6h-2z'/></svg>") no-repeat center / contain; }
+.page-alert.danger  { background: var(--krds-light-color-surface-danger-subtler); border-color: var(--krds-light-color-border-danger); color: var(--krds-light-color-text-danger); }
+.page-alert.success { background: var(--krds-light-color-surface-success-subtler); border-color: var(--krds-light-color-border-success); color: var(--krds-light-color-text-success); }
+.page-alert.info    { background: var(--krds-light-color-surface-information-subtler); border-color: var(--krds-light-color-border-information); color: var(--krds-light-color-text-information); }
+.page-alert.success .svg-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.5 14.5-3.8-3.8 1.4-1.4 2.4 2.4 5.9-5.9 1.4 1.4z'/></svg>");
+                                        mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.5 14.5-3.8-3.8 1.4-1.4 2.4 2.4 5.9-5.9 1.4 1.4z'/></svg>"); }
+.page-alert-body { flex: 1; color: var(--krds-light-color-text-basic); }
+.form-actions .page-alert { width: 100%; margin-top: 0; }
+
+/* ── 필수 표시 ── 레이블 뒤 빨간 별표(KRDS danger 텍스트색), 스크린리더에는 '필수' */
+.required > i { font-style: normal; color: var(--krds-light-color-text-danger); font-weight: var(--krds-font-weight-bold); }
+
+/* ── 정책 페이지(개인정보처리방침) ── */
+.policy .section-title { margin-top: var(--krds-gap-8); }
+.policy .krds-info-list li { line-height: 1.6; }
+.policy code { padding: 0 0.4rem; border-radius: var(--krds-radius-small2); background: var(--krds-light-color-surface-gray-subtler); font-size: 0.95em; }
+
+/* 이력 페이지네이션: 표 아래 가운데. KRDS 마크업은 a 기준이라 button으로 쓸 때 기본 버튼 모양만 지운다 */
+.history .krds-pagination { margin-top: var(--krds-gap-6); justify-content: center; }
+.history .krds-pagination button { border: 0; background: none; font: inherit; cursor: pointer; }
+.history .krds-pagination button:disabled { cursor: default; }
+.findings-list .finding-head .meta { font-size: var(--krds-pc-font-size-label-small); }
+
+/* 개발계획서 점검 단계 라디오 — 입력칸과 같은 줄 높이 */
+.plan-stage { display: flex; gap: 1.5rem; align-items: center; min-height: var(--krds-size-height-7, 3.5rem); }
+
+/* 그림 해상도·업스케일 (UpscalePanel) — 원본·결과를 나란히, 좁은 화면에서는 위아래로 */
+.upscale-panel > .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); margin-top: var(--krds-gap-7); z-index: auto; }
+/* 요약 — 숫자 칸 셋(원고 그림 / 기준 미달 / 업스케일 완료). 업로드 칸(.review-form.fieldset)과 같은 테두리·모서리 */
+.upscale-summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: var(--krds-gap-5); margin: 0;
+}
+.upscale-summary > div {
+  padding: var(--krds-padding-6);
+  border: 1px solid var(--krds-light-color-border-gray-light);
+  border-radius: var(--krds-radius-medium2);
+  background: var(--krds-light-color-background-white);
+}
+.upscale-summary dt { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.upscale-summary dd { margin: var(--krds-gap-1) 0 0; font-size: var(--krds-pc-font-size-body-medium); }
+.upscale-summary dd strong { font-size: var(--krds-pc-font-size-heading-medium); font-weight: var(--krds-font-weight-bold); }
+.upscale-summary dd.meta { margin-top: var(--krds-gap-2); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.upscale-notes { margin-top: var(--krds-gap-5); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.upscale-note { margin: var(--krds-gap-3) 0 0; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.upscale-note.failed { color: var(--krds-light-color-text-danger); }
+/* 그림 목록 — 한 줄 = 체크박스 + KRDS 아코디언 한 칸(작은 그림 · 이름 · 상태 · DPI). 펼치면 원본·결과 비교 */
+.upscale-panel .view-switch { margin-top: var(--krds-gap-7); }
+.upscale-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--krds-gap-4); margin-top: var(--krds-gap-5); }
+.upscale-tools .krds-check-area { padding: 0; }
+.upscale-list { margin-top: var(--krds-gap-3); }
+.upscale-row { display: flex; align-items: flex-start; gap: var(--krds-gap-3); }
+.upscale-row > .krds-check-area { flex: none; padding: 3.8rem 0 0; }   /* 접힌 줄(작은 그림 5.4rem + 버튼 안쪽 여백)의 세로 가운데 */
+.upscale-row > .accordion-item { flex: 1; min-width: 0; }
+.upscale-list .accordion-header { margin: 0; }
+.upscale-list .acc-title { display: flex; align-items: center; gap: var(--krds-gap-4); width: 100%; text-align: left; }
+.upscale-list .thumb { flex: none; width: 9.6rem; height: 5.4rem; object-fit: contain; border: 1px solid var(--krds-light-color-divider-gray-light); background: #fff; }
+.upscale-list .acc-name { flex: 1; min-width: 0; font-weight: var(--krds-font-weight-bold); overflow-wrap: anywhere; }
+.upscale-list .item-status { flex: none; display: inline-flex; align-items: center; gap: var(--krds-gap-3); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); }
+.upscale-list .state.done { color: var(--krds-light-color-text-success); }
+.upscale-list .state.failed { color: var(--krds-light-color-text-danger); }
+.upscale-list .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); z-index: auto; }
+.upscale-list .accordion-item.active .accordion-collapse { max-height: none; }   /* KRDS 기본 100vh 제한을 푼다(큰 그림) */
+.upscale-list .accordion-body .meta { margin: var(--krds-gap-5) 0 var(--krds-gap-4); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+@media (max-width: 767px) { .upscale-list .acc-title { flex-wrap: wrap; } .upscale-list .thumb { width: 7.2rem; height: 4rem; } }
+.upscale-pair { display: flex; flex-wrap: wrap; gap: var(--krds-gap-5); }
+.upscale-pair figure { flex: 1 1 28rem; min-width: 0; margin: 0; }
+@media (min-width: 768px) { .upscale-pair figure { max-width: calc(50% - var(--krds-gap-5) / 2); } }   /* 원본만 있을 때도 반 폭 — 결과가 옆에 붙어도 크기가 안 바뀐다 */
+@media (min-width: 768px) { .upscale-pair.three figure { flex-basis: 16rem; max-width: calc((100% - var(--krds-gap-5) * 2) / 3); } }   /* 원본 + 모델 2개 */
+.upscale-pair img { display: block; width: 100%; height: auto; border: 1px solid var(--krds-light-color-divider-gray-light); background: #fff; }
+.upscale-pair figcaption { margin-top: var(--krds-gap-1); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-xsmall); }
+.upscale-actions { display: flex; flex-wrap: wrap; gap: var(--krds-gap-2); margin-top: var(--krds-gap-4); }
+/* 실행 바 — 패널 안에서 화면 아래에 붙는다(sticky). 왼쪽 진행 수, 오른쪽 주 버튼 */
+.upscale-bar {
+  position: sticky; bottom: 0; z-index: 5;
+  margin-top: var(--krds-gap-7); padding: var(--krds-padding-5) 0;
+  border-top: 1px solid var(--krds-light-color-border-gray-light);
+  background: var(--krds-light-color-background-white);
+}
+.upscale-bar .bar-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-4); }
+.upscale-bar .page-alert { margin: 0 0 var(--krds-gap-4); }
+.upscale-bar .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-medium); }
+/* 맨 위로 버튼이 실행 바의 버튼을 가리지 않게 바 위로 올린다 */
+.upscale-page .krds-btn-top { bottom: calc(var(--krds-btn-top--offset) + 16rem); }   /* 바 안에 알림이 한 줄 더 떠도 가리지 않는 높이 */
+/* 버튼 묶음은 줄어들지 않는다 — 폭이 모자라면 바가 줄바꿈해 버튼 묶음이 통째로 아랫줄로 간다(버튼끼리 겹치지 않게) */
+.upscale-bar .bar-actions { flex: none; display: flex; flex-wrap: nowrap; gap: var(--krds-gap-3); max-width: 100%; }
+.upscale-bar .bar-actions .krds-btn { flex: none; min-width: max-content; white-space: nowrap; }
+@media (max-width: 599px) {
+  .upscale-bar .bar-actions { flex: 1 1 100%; flex-wrap: wrap; }
+  .upscale-bar .bar-actions .krds-btn { flex: 1 1 100%; min-width: 0; white-space: normal; }
+}
+
+/* ── 이미지 저작권 DB(ImageDbPage · ImageDetail) ── 요약 칸은 업스케일링의 .upscale-summary, 입력칸은 .review-form.fieldset을 그대로 쓴다 */
+.image-db-page .image-summary { margin-top: var(--krds-gap-7); }
+.image-db-page .image-by { margin-top: var(--krds-gap-5); }
+.image-section { margin-top: var(--krds-gap-9); }
+.image-section > .krds-spinner, .image-detail > .krds-spinner, .image-db-page > .krds-spinner { display: inline-flex; width: auto; height: auto; gap: var(--krds-gap-2); margin-top: var(--krds-gap-5); z-index: auto; }
+.image-section .section-desc { margin: var(--krds-gap-3) 0 var(--krds-gap-5); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.image-section code { padding: 0 0.4rem; border-radius: var(--krds-radius-small2); background: var(--krds-light-color-surface-gray-subtler); font-size: 0.95em; }
+.image-actions { justify-content: flex-end; }
+.review-form .image-actions .krds-btn { flex: none; min-width: 16rem; }
+.image-report { margin-top: var(--krds-gap-5); }
+.image-rejected { margin: var(--krds-gap-5) 0 0; padding: var(--krds-padding-5) var(--krds-padding-6); list-style: none; border: 1px solid var(--krds-light-color-border-danger); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-danger-subtler); font-size: var(--krds-pc-font-size-body-small); }
+.image-rejected.is-note { border-color: var(--krds-light-color-border-gray-light); background: var(--krds-light-color-surface-gray-subtler); }
+.image-rejected > li + li { margin-top: var(--krds-gap-3); }
+.image-rejected .krds-info-list { margin-top: var(--krds-gap-1); overflow-wrap: anywhere; }
+.image-rejected .krds-info-list > li { font-size: inherit; }
+/* 거르기 줄 — 선택 칸 둘 + 검색칸(남는 폭) + 버튼. 좁으면 줄바꿈 */
+.image-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--krds-gap-4); margin-top: var(--krds-gap-5); }
+.image-filters .filter { display: flex; flex-direction: column; gap: var(--krds-gap-1); width: 20rem; }
+.image-filters .filter.grow { flex: 1 1 24rem; width: auto; }
+.image-filters label { font-size: var(--krds-pc-font-size-label-small); color: var(--krds-light-color-text-subtle); }
+.image-filters .krds-input { width: 100%; }
+.image-filters .krds-btn { flex: none; height: var(--krds-size-height-7); }
+/* 목록 표 — 열 너비 고정(쪽을 넘겨도 칸이 흔들리지 않게). 남는 폭은 이름 칸 */
+.image-section .krds-table-wrap { margin-top: var(--krds-gap-5); }
+.image-table { table-layout: fixed; width: 100%; }
+.image-table td, .image-table th { vertical-align: middle; overflow-wrap: anywhere; word-break: keep-all; }
+.image-table .col-thumb { width: 12.4rem; }
+.image-table .col-category { width: 15rem; }
+.image-table .col-license { width: 17rem; }
+.image-table .col-source { width: 16rem; }
+.image-table .col-scope { width: 14rem; }
+.image-table .col-status { width: 12rem; }
+.image-table .col-open { width: 9rem; }
+.image-table .sub { display: block; margin-top: var(--krds-gap-1); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
+.image-table .krds-badge, .image-table .krds-btn { white-space: nowrap; }
+.image-table .scope-badge { display: block; width: max-content; margin-top: var(--krds-gap-1); }
+.image-table tr.is-open > td { background: var(--krds-light-color-surface-secondary-subtler); }
+.image-thumb { display: flex; align-items: center; justify-content: center; width: 9.6rem; height: 5.4rem; object-fit: contain; border: 1px solid var(--krds-light-color-divider-gray-light); background: var(--krds-light-color-surface-white); }
+.image-thumb.none { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); background: var(--krds-light-color-surface-gray-subtler); }
+.image-section .krds-pagination { margin-top: var(--krds-gap-6); justify-content: center; }
+.image-section .krds-pagination button { border: 0; background: none; font: inherit; cursor: pointer; }
+.image-section .krds-pagination button:disabled { cursor: default; }
+/* 그림 상세 */
+.image-detail { margin-top: var(--krds-gap-7); padding: var(--krds-padding-7); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-background-white); }
+.image-detail .section-title .krds-badge { margin-left: var(--krds-gap-2); vertical-align: middle; }
+.image-detail .sub-title { margin: var(--krds-gap-8) 0 var(--krds-gap-4); font-size: var(--krds-pc-font-size-heading-small); font-weight: var(--krds-font-weight-bold); }
+.image-detail .sub-title .meta { font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); color: var(--krds-light-color-text-subtle); }
+.image-detail-top { display: flex; flex-wrap: wrap; gap: var(--krds-gap-7); margin-top: var(--krds-gap-5); }
+.image-view { flex: 1 1 32rem; min-width: 0; max-width: 56rem; margin: 0; }
+.image-view img { display: block; max-width: 100%; max-height: 42rem; border: 1px solid var(--krds-light-color-divider-gray-light); background: var(--krds-light-color-surface-white); }
+.image-view figcaption { margin-top: var(--krds-gap-2); }
+.image-facts { flex: 1 1 32rem; min-width: 0; margin: 0; display: flex; flex-direction: column; gap: var(--krds-gap-3); font-size: var(--krds-pc-font-size-body-small); }
+.image-facts > div { display: grid; grid-template-columns: 10rem 1fr; gap: var(--krds-gap-4); }
+.image-facts dt { color: var(--krds-light-color-text-subtle); }
+.image-facts dd { margin: 0; overflow-wrap: anywhere; }
+.image-facts dd.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--krds-pc-font-size-label-small); }
+.image-placements .code { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
+.image-placements td { overflow-wrap: anywhere; word-break: keep-all; }
+.image-links { margin-top: var(--krds-gap-4); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+.image-rights-form .derived { display: flex; align-items: center; min-height: var(--krds-size-height-7); margin: 0; }
+.image-rights-form .krds-form-check { margin-top: var(--krds-gap-2); }
+.image-rights-form .krds-input:disabled { color: var(--krds-light-color-text-basic); -webkit-text-fill-color: var(--krds-light-color-text-basic); opacity: 1; }
+.image-detail .page-alert + .image-rights-form { margin-top: var(--krds-gap-5); }
+.image-history { margin: 0; padding: 0; list-style: none; font-size: var(--krds-pc-font-size-body-small); }
+.image-history li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--krds-gap-2) var(--krds-gap-4); padding: var(--krds-padding-4) 0; border-bottom: 1px solid var(--krds-light-color-divider-gray-light); }
+.image-history .when, .image-history .meta { color: var(--krds-light-color-text-subtle); }
+.image-history .what { flex: 1 1 100%; color: var(--krds-light-color-text-subtle); overflow-wrap: anywhere; }
+@media (max-width: 767px) { .image-filters .filter { width: 100%; } .image-facts > div { grid-template-columns: 1fr; gap: 0; } }
+.image-placements { table-layout: fixed; width: 100%; }
+.image-placements th:nth-child(1) { width: 21rem; }
+.image-placements th:nth-child(2) { width: 10rem; }
+.image-placements th:nth-child(3) { width: 6.4rem; }
+.image-placements th:nth-child(4) { width: 18rem; }
+
+/* ── 권리 증빙 점검(RightsPage) ── 요약 칸·입력칸·버튼 줄은 이미지 저작권 DB와 같은 모양을 쓴다 */
+.rights-page .rights-checks { display: flex; gap: var(--krds-gap-2); padding-top: 0; }
+.rights-page .check-text, .recommend-page .check-text { display: block; }
+.rights-page .check-hint, .recommend-page .check-hint { display: block; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
+.rights-result .image-summary { margin-top: var(--krds-gap-5); }
+.rights-result { margin-top: var(--krds-gap-9); }
+.rights-result .section-title .krds-badge { margin-left: var(--krds-gap-2); vertical-align: middle; }
+.rights-result .sub-title { margin: var(--krds-gap-8) 0 var(--krds-gap-4); font-size: var(--krds-pc-font-size-heading-small); font-weight: var(--krds-font-weight-bold); }
+.rights-result .page-alert strong { display: inline-block; margin-bottom: var(--krds-gap-1); }
+.rights-forms-seen { margin: var(--krds-gap-4) 0 0; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+.image-evidence-form { margin-top: var(--krds-gap-5); }
+.image-evidence-table td, .image-evidence-table th { vertical-align: middle; overflow-wrap: anywhere; }
+.rights-notices { display: grid; gap: var(--krds-gap-4); margin-top: var(--krds-gap-4); }
+.rights-notice { padding: var(--krds-padding-5); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); }
+.rights-notice-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); }
+.rights-notice-head .krds-btn { margin-left: auto; }
+.rights-notice-text { margin: var(--krds-gap-3) 0 0; padding: var(--krds-padding-4); border-radius: var(--krds-radius-small2); background: var(--krds-light-color-surface-gray-subtler); font: inherit; font-size: var(--krds-pc-font-size-body-small); white-space: pre-wrap; overflow-wrap: anywhere; }
+.rights-table { table-layout: fixed; width: 100%; }
+.rights-table td, .rights-table th { vertical-align: top; overflow-wrap: anywhere; word-break: keep-all; }
+.rights-table .col-figure { width: 19rem; }
+.rights-table .col-mark { width: 6rem; }
+.rights-table .col-method { width: 16rem; }
+.rights-table .col-evidence { width: 24rem; }
+.rights-table .col-ai { width: 18rem; }
+.rights-table .col-verdict { width: 9.6rem; }
+.rights-table td.center { text-align: center; }
+.rights-table .sub { display: block; margin-top: var(--krds-gap-1); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-label-small); }
+.rights-table .line { display: block; }
+.rights-table .line + .line { margin-top: var(--krds-gap-2); }
+.rights-table .krds-badge { white-space: nowrap; }
+/* 열이 많아 좁은 화면에서는 표만 가로로 민다(쪽 전체가 밀리지 않게) */
+.rights-result .krds-table-wrap { overflow-x: auto; }
+.rights-table { min-width: 112rem; }
+.rights-page .fieldset, .rights-page .form-conts { min-width: 0; max-width: 100%; }
+.rights-page .form-hint, .image-db-page .form-hint { overflow-wrap: anywhere; min-width: 0; }   /* 긴 파일 이름(띄어쓰기 없는 이름)이 칸 밖으로 나가지 않게 */
+
+/* 이미지 추천(REQ-02-011) */
+.recommend-text { width: 100%; height: auto; min-height: 14rem; padding: var(--krds-padding-5); line-height: 1.6; resize: vertical; }
+.recommend-context { margin-top: var(--krds-gap-5); padding: var(--krds-padding-6); border: 1px solid var(--krds-light-color-divider-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-gray-subtler); }
+.recommend-context p { margin: 0; overflow-wrap: anywhere; }
+.recommend-context p + p { margin-top: var(--krds-gap-3); }
+.recommend-keywords { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); margin-top: var(--krds-gap-3); }
+.recommend-list { margin: var(--krds-gap-6) 0 0; padding: 0; list-style: none; }
+.recommend-card { display: grid; grid-template-columns: 24rem minmax(0, 1fr); gap: var(--krds-gap-6); padding: var(--krds-padding-6) 0; border-top: 1px solid var(--krds-light-color-divider-gray-light); }
+.recommend-card:last-child { border-bottom: 1px solid var(--krds-light-color-divider-gray-light); }
+.recommend-thumb { display: flex; align-items: center; justify-content: center; height: 16rem; border: 1px solid var(--krds-light-color-divider-gray-light); background: var(--krds-light-color-surface-white); }
+.recommend-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.recommend-body h3 { margin: 0; font-size: var(--krds-pc-font-size-heading-xsmall); overflow-wrap: anywhere; }
+.recommend-rank { display: inline-flex; align-items: center; justify-content: center; min-width: 2.8rem; height: 2.8rem; margin-right: var(--krds-gap-3); border-radius: 50%; background: var(--krds-light-color-surface-primary-subtler); font-size: var(--krds-pc-font-size-body-small); }
+.recommend-badges { flex-wrap: wrap; margin: var(--krds-gap-3) 0 0; }
+.recommend-badges:empty { display: none; }
+.recommend-facts { margin: var(--krds-gap-4) 0 0; font-size: var(--krds-pc-font-size-body-small); }
+.recommend-facts > div { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: var(--krds-gap-3); padding: var(--krds-padding-1) 0; }
+.recommend-facts dt { color: var(--krds-light-color-text-subtle); }
+.recommend-facts dd { margin: 0; overflow-wrap: anywhere; }
+.recommend-notes { margin-top: var(--krds-gap-4); }
+.recommend-notes > li { font-size: var(--krds-pc-font-size-body-small); }
+.recommend-credit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); margin-top: var(--krds-gap-4); }
+.recommend-credit code { flex: 1 1 30rem; padding: var(--krds-padding-3) var(--krds-padding-4); border-radius: var(--krds-radius-small2); background: var(--krds-light-color-surface-gray-subtler); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .recommend-card { grid-template-columns: minmax(0, 1fr); }
+  .recommend-facts > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+
+/* 파일 여러 개를 고르는 칸(MultiFileSlot) — KRDS 파일 목록 규격. 파일이 많으면 목록만 민다 */
+.review-form .file-slot.multi .file-list .total { display: flex; align-items: center; justify-content: space-between; gap: var(--krds-gap-3); }
+.review-form .file-slot.multi .file-list .total .krds-btn { width: auto; }
+.review-form .file-slot.multi .upload-list { max-height: 28rem; overflow-y: auto; }
+
+/* KRDS 날짜 입력 + 달력(KrdsDateField) — 달력은 입력칸 바로 아래(자리가 없으면 위)에 뜬다. 칸이 좁아도 달력 폭은 KRDS 규격(38.4rem)을 지키되 화면 밖으로는 나가지 않는다 */
+.krds-date-field { position: relative; }
+.krds-date-field .krds-calendar-area { position: absolute; top: 100%; left: 0; }
+.krds-date-field .krds-calendar-area .calendar-wrap { max-width: calc(100vw - var(--krds-contents-padding-x, 1.6rem) * 2); }
+.krds-date-field .calendar-tbl abbr { text-decoration: none; }
+/* KRDS 달력은 표 제목(caption)을 요일 줄 아래에 다시 보여 주는데, 머리의 연·월과 겹쳐 화면에서는 숨긴다(화면낭독기는 그대로 읽는다) */
+.krds-date-field .krds-calendar-area .calendar-wrap .calendar-body .calendar-table-wrap .calendar-tbl caption {
+  position: absolute !important; width: 1px !important; height: 1px !important; margin: -1px !important; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0) !important; white-space: nowrap; border: 0;
+}
+.krds-date-field .krds-calendar-area .calendar-wrap .calendar-body .calendar-table-wrap .calendar-tbl th { padding-bottom: var(--krds-padding-4); }   /* 제목이 있던 자리(4.6rem)를 비워 두지 않는다 */

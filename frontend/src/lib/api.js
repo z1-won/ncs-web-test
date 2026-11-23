@@ -50,6 +50,15 @@ function caseLink(form) {
   return form;
 }
 
+// AI 활용 표기(REQ-02-006)의 요청 본문: 원고 + (출력본 PDF) + 넣을 표기 목록
+function aiImageForm(manuscript, printCopy, marks) {
+  const form = new FormData();
+  form.append("manuscript", manuscript, manuscript.name);
+  if (printCopy) form.append("print_copy", printCopy, printCopy.name);
+  if (marks) form.append("marks", JSON.stringify(marks));
+  return form;
+}
+
 function queryString(params) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== "") query.set(key, value); });
@@ -78,7 +87,7 @@ export async function download(path, body, filename) {
     return { ok: false, error: data?.error || `${response.status} ${response.statusText}` };
   }
   saveBlob(await response.blob(), filename);
-  const summary = response.headers.get("x-memo-summary") || response.headers.get("x-upscale-summary");
+  const summary = response.headers.get("x-memo-summary") || response.headers.get("x-upscale-summary") || response.headers.get("x-ai-summary");
   return { ok: true, summary: summary ? JSON.parse(summary) : null };
 }
 
@@ -146,6 +155,18 @@ export const api = {
     // NCS에서 요소·수행준거 받아 오기. 이미 받아 둔 세분류는 refresh일 때만 다시 받는다. 응답: 상세 + 변화 + 처음
     fetchSubclass: (duty, refresh = false) => request(`/api/plan/subclasses/${duty}/fetch${refresh ? "?refresh=true" : ""}`, { method: "POST" }),
     draft: planDraft,
+    // 개발계획서 둘 비교 — base: 기준(최종결과 예시나 앞 판본), target: 대상(지금 계획서). 다른 칸만 돌아온다
+    // 비교에서 고른 칸을 대상 계획서(hwpx) 사본에 반영해 내려받는다. rows: compare '차이' 행 중 고른 것 → { ok, report: {반영, '반영 못 함'} }
+    apply: async (base, target, rows) => {
+      const form = new FormData(); form.append("base", base); form.append("target", target); form.append("rows", JSON.stringify(rows));
+      const { ok, data, error } = await request("/api/plan/apply", { method: "POST", body: form });
+      if (!ok) return { ok, error };
+      saveBlob(new Blob([Uint8Array.from(atob(data.content), (c) => c.charCodeAt(0))], { type: "application/octet-stream" }), data.filename);
+      return { ok: true, report: data.report };
+    },
+    // 개선 유형 판단 자료 — 기존 학습모듈 원고에서 내용 수정 신호(법령, URL, 안전·유의 사항, 학습 목표–수행준거)를 찾는다. 유형을 정하지 않는다
+    typeSignals: (file, moduleCode = "") => { const form = new FormData(); form.append("file", file); if (moduleCode) form.append("module_code", moduleCode); return request("/api/plan/type-signals", { method: "POST", body: form }); },
+    compare: (base, target) => { const form = new FormData(); form.append("base", base); form.append("target", target); return request("/api/plan/compare", { method: "POST", body: form }); },
   },
   // 그림 업스케일: 업로드 토큰의 원고 그림 목록 → 원본 보기 → 한 장씩 업스케일(20~40초) → 업스케일한 그림으로 제안본 hwpx
   pictures: {
@@ -167,8 +188,29 @@ export const api = {
     downloadUrl: (token, binId, name, engine) =>
       `/api/uploads/${token}/pictures/${encodeURIComponent(binId)}/upscaled?download=${encodeURIComponent(name)}${engine ? `&engine=${encodeURIComponent(engine)}` : ""}`,
     // targetDpi: 이 기준으로 키운 그림만 제안본에 넣는다(화면의 '완료'와 같게)
-    proposal: (token, moduleCode, filename, targetDpi) =>
-      download(`/api/uploads/${token}/proposal`, multipart({ module_code: moduleCode || "", target_dpi: targetDpi ? String(targetDpi) : undefined }), filename),
+    // aiMark: 보정한 그림의 캡션 위에 AI 활용 줄('OO를 활용하여 수정 보완함. 일자')을 함께 넣는다(REQ-02-006 ③). 요약의 'AI 표기'에 넣은 수가 온다
+    proposal: (token, moduleCode, filename, targetDpi, aiMark) =>
+      download(`/api/uploads/${token}/proposal`, multipart({ module_code: moduleCode || "", target_dpi: targetDpi ? String(targetDpi) : undefined,
+                                                              ai_mark: aiMark ? "true" : undefined }), filename),
+    // 보정한 그림(원본과 업스케일본)을 이미지 저작권 DB에 AI 활용 정보와 함께 올린다. 에디터와 직능연만, PostgreSQL일 때만
+    register: (token, moduleCode, targetDpi) =>
+      request(`/api/uploads/${token}/pictures/register`, { method: "POST", body: multipart({ module_code: moduleCode || "", target_dpi: targetDpi ? String(targetDpi) : undefined }) }),
+  },
+  // 이미지 AI 보완(REQ-02-006 ③④⑤): 유의 안내, 원고의 그림과 AI 활용 표기, 표기 넣은 원고 사본, 생성형 AI 결과물 현황
+  // marks: [{ key(그림 목록의 key), tool, mode("generated"|"modified"), date("YYYY-MM-DD") }]
+  aiImage: {
+    notice: () => request("/api/ai-image/notice"),
+    figures: (manuscript, printCopy) => request("/api/ai-image/figures", { method: "POST", body: aiImageForm(manuscript, printCopy) }),
+    preview: (manuscript, printCopy, marks) => request("/api/ai-image/preview", { method: "POST", body: aiImageForm(manuscript, printCopy, marks) }),
+    marked: (manuscript, marks, filename) => download("/api/ai-image/marked", aiImageForm(manuscript, null, marks), filename),
+    results: (manuscript, printCopy, marks, filename) => download("/api/ai-image/results", aiImageForm(manuscript, printCopy, marks), filename),
+    // 출처 줄이 없는 그림 하나(key)의 캡션 위에 출처 줄(credit)을 넣은 원고 사본 — 이미지 추천의 출처 문구를 원고에 넣는다(REQ-02-011)
+    source: (manuscript, key, credit, filename) => {
+      const form = aiImageForm(manuscript);
+      form.append("key", key);
+      form.append("credit", credit);
+      return download("/api/ai-image/source", form, filename);
+    },
   },
   // 이미지 저작권 DB(REQ-02-010). 서버가 PostgreSQL일 때만 있다(/api/health의 image_db)
   images: {

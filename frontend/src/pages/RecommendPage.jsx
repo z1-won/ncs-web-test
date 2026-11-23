@@ -1,9 +1,11 @@
 // 이미지 추천(REQ-02-011) — 집필 중인 문단·수행준거를 넣으면 이미지 저작권 DB에서 실을 수 있는 그림을 권한다.
 // 추천되는 것은 기관이 확정했고 재사용 범위가 확인된 그림뿐이다(서버의 v_image_recommendable). 서버가 PostgreSQL일 때만 쓸 수 있다.
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { api } from "../lib/api.js";
 import { Spinner } from "../components/Badge.jsx";
+import { FileSlot } from "../components/FileSlot.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { usePageTitle } from "../lib/hooks.js";
@@ -13,8 +15,22 @@ import { licenseLabel } from "../lib/imageTerms.js";
 const ANCHORS = [{ id: "recommend-input", label: "문단과 수행준거" }, { id: "recommend-result", label: "추천 결과" }];
 const LINK_LABEL = { criterion: "같은 수행준거", element: "같은 능력단위요소", unit: "같은 능력단위" };
 
-function Card({ item, rank, terms }) {
+// manuscript: 함께 올린 원고(없으면 null). targets: 그 원고에서 출처 줄이 없는 그림 [{ key, 그림 번호, 그림명 }] — 이 그림의 출처 문구를 그 자리에 넣는다
+function Card({ item, rank, terms, manuscript, targets }) {
   const [copied, setCopied] = useState(false);
+  const [target, setTarget] = useState("");
+  const [placing, setPlacing] = useState(false);
+  const [placed, setPlaced] = useState(null);      // { kind, text }
+
+  async function place() {
+    setPlacing(true);
+    setPlaced(null);
+    const { ok, error: message, summary } = await api.aiImage.source(manuscript, target, item.credit, `${manuscript.name.replace(/\.[^.]+$/, "")}_출처표기.hwpx`);
+    setPlacing(false);
+    setPlaced(ok ? { kind: "success", text: `[${summary?.넣음 || "그림"}] 위에 출처 줄을 넣은 원고 사본을 내려받았습니다. 올린 원고는 바뀌지 않았습니다.` }
+                 : { kind: "danger", text: message });
+  }
+
   const name = item.title || item.captions?.[0] || item.filename || "이름 없는 그림";
   return (
     <li className="recommend-card">
@@ -50,6 +66,20 @@ function Card({ item, rank, terms }) {
             </button>
           </div>
         ) : <p className="form-hint">{item.credit_note}</p>}
+        {item.credit && manuscript && targets.length > 0 && (
+          <div className="recommend-place">
+            <label htmlFor={`recommend-target-${item.id}`}>이 출처 문구를 넣을 그림</label>
+            <select id={`recommend-target-${item.id}`} className="krds-form-select" value={target} onChange={(e) => { setTarget(e.target.value); setPlaced(null); }}>
+              <option value="">그림 고르기</option>
+              {targets.map((row) => <option key={row.key} value={row.key}>[{row["그림 번호"]}] {row.그림명}</option>)}
+            </select>
+            <button type="button" className="krds-btn small secondary" disabled={!target || placing} onClick={place}>
+              {placing ? "넣는 중" : "출처 줄 넣은 원고 내려받기"}
+            </button>
+          </div>
+        )}
+        {placed && <PageAlert kind={placed.kind}>{placed.text}</PageAlert>}
+        {item.low_quality && <p className="form-hint">화질이 낮습니다. 원고에 실은 뒤 <Link to="/upscale">업스케일링</Link>에서 화질을 높일 수 있습니다.</p>}
       </div>
     </li>
   );
@@ -63,7 +93,21 @@ export default function RecommendPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [manuscript, setManuscript] = useState(null);       // 선택: 추천 그림의 출처 문구를 넣을 원고(hwpx)
+  const [figures, setFigures] = useState({ status: "idle", targets: [] });   // 그 원고에서 출처 줄이 없는 그림
   const set = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  useEffect(() => {
+    if (!manuscript) { setFigures({ status: "idle", targets: [] }); return undefined; }
+    let alive = true;
+    setFigures({ status: "reading", targets: [] });
+    api.aiImage.figures(manuscript, null).then(({ ok, data, error: message }) => {
+      if (!alive) return;
+      if (!ok) { setFigures({ status: "error", targets: [], error: message }); return; }
+      setFigures({ status: "ready", total: data.그림.length, targets: data["표기 넣기"] ? data.그림.filter((row) => !row["출처 줄"]) : [] });
+    });
+    return () => { alive = false; };
+  }, [manuscript]);
 
   useEffect(() => {
     api.health().then(({ ok, data }) => {
@@ -152,6 +196,11 @@ export default function RecommendPage() {
               </div>
               </div>
             </div>
+            <FileSlot id="recommend-manuscript" label="원고 (선택)" accept=".hwpx" file={manuscript} onChange={setManuscript} disabled={busy}
+                      uploading={figures.status === "reading"} invalid={figures.status === "error" ? figures.error : null}
+                      hint={figures.status === "ready"
+                        ? `그림 ${figures.total}개 가운데 출처 줄이 없는 그림 ${figures.targets.length}개. 추천 그림의 출처 문구를 그 그림 위에 넣을 수 있습니다.`
+                        : "hwpx. 올리면 추천 그림의 출처 문구를 원고의 그림 위에 넣은 사본을 받을 수 있습니다. 올린 원고는 바뀌지 않습니다."} />
             <div className="form-group form-group-wide form-actions">
               {error && <PageAlert kind="danger">{error}</PageAlert>}
               <div className="run-buttons image-actions">
@@ -187,15 +236,23 @@ export default function RecommendPage() {
                 ? <p><strong>수행준거 {result.criterion.criterion_no}</strong> {result.criterion.text}<span className="meta"> ({result.criterion.unit_name})</span></p>
                 : <p className="form-hint">수행준거 {result.criterion.criterion_no}의 글을 NCS 목록에서 찾지 못했습니다. 번호가 같은 연결만 봅니다.</p>)}
             </div>
-            {result.guidance.length > 0 && <PageAlert kind="info">{result.guidance.join("\n")}</PageAlert>}
+            {result.guidance.length > 0 && (
+              <PageAlert kind="info">
+                {result.guidance.join("\n")}
+                <span className="recommend-next">
+                  <Link className="krds-btn small secondary" to="/upscale">업스케일링으로 화질 높이기</Link>
+                  <Link className="krds-btn small secondary" to="/ai-image">이미지 AI 보완에서 표기와 현황 만들기</Link>
+                </span>
+              </PageAlert>
+            )}
             {result.truncated && <p className="form-hint">후보가 많아 최근 확정된 {result.total_candidates}건만 보았습니다.</p>}
             {result.items.length > 0 && (
               <ol className="recommend-list">
-                {result.items.map((item, index) => <Card key={item.id} item={item} rank={index + 1} terms={terms} />)}
+                {result.items.map((item, index) => <Card key={item.id} item={item} rank={index + 1} terms={terms} manuscript={manuscript} targets={figures.targets} />)}
               </ol>
             )}
             {result.items.length > 0 && (
-              <p className="form-hint">출처 문구는 ‘복사’해서 원고의 그림 아래 출처 줄에 붙여 넣습니다. 그림을 실은 뒤에는 사진·삽화 수록 현황 목록에도 올려야 합니다.</p>
+              <p className="form-hint">출처 문구는 ‘복사’해서 원고의 출처 줄에 붙여 넣거나, 위에 원고(hwpx)를 올려 출처 줄이 없는 그림 위에 넣은 사본을 받습니다. 그림을 실은 뒤에는 사진·삽화 수록 현황 목록에도 올려야 합니다.</p>
             )}
           </>
         </section>
