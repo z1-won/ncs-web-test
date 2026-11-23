@@ -1,5 +1,6 @@
 """패키지 계층 규약 검사: 검수 패키지는 서로를 import하지 않고, ncs_core는 검수 패키지를 모른다.
-검수 엔진이 아닌 기능 패키지(개발계획서 ncs_plan, 그림 업스케일 ncs_upscale, 원고 분량 ncs_volume, 검토의견서 반영 ncs_opinion, 문장 추천 ncs_suggest)도 검수 패키지를 import하지 않는다 — 함께 쓰는 코드는 ncs_core에 둔다."""
+검수 엔진이 아닌 기능 패키지(개발계획서 ncs_plan, 그림 업스케일 ncs_upscale, 원고 분량 ncs_volume)도 검수 패키지를 import하지 않는다 — 함께 쓰는 코드는 ncs_core에 둔다.
+Claude를 부르는 기능(LLM 검토 ncs_llmreview, 출처 검토 ncs_sources, 검토의견서 반영 ncs_opinion, 문장 추천 ncs_suggest)은 ncs_service와 같은 층이다."""
 
 import re
 import unittest
@@ -7,8 +8,9 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 ENGINES = ("ncs_position", "ncs_toc", "ncs_overview", "ncs_knowledge", "ncs_perform", "ncs_teaching", "ncs_evaluation", "ncs_references", "ncs_colophon", "ncs_misc")
-FEATURES = ("ncs_plan", "ncs_upscale", "ncs_figures", "ncs_volume", "ncs_opinion", "ncs_suggest")   # 검수 엔진은 아니지만 같은 층(ncs_core 위)에 서는 기능 패키지
+FEATURES = ("ncs_plan", "ncs_upscale", "ncs_figures", "ncs_volume")   # 검수 엔진은 아니지만 같은 층(ncs_core 위)에 서는 기능 패키지
 # ncs_llmreview는 ncs_service와 같은 층 — 엔진의 추출기(ncs_perform·ncs_evaluation)를 쓰지만 ncs_web은 모른다
+# ncs_opinion·ncs_suggest도 같은 층 — Claude 호출(ncs_llmreview.claude)을 쓰고 ncs_web은 모른다
 IMPORT = re.compile(r"^\s*(?:from|import)\s+(ncs_\w+)", re.MULTILINE)
 
 
@@ -55,6 +57,18 @@ class LayeringTest(unittest.TestCase):
         for package in ("ncs_core", *ENGINES, *FEATURES):
             for file, names in imported_packages(package).items():
                 self.assertNotIn("ncs_sources", names, f"{file}이(가) 상위 계층 ncs_sources를 import합니다")
+
+    def test_opinion_and_suggest_sit_at_service_level(self):
+        """ncs_opinion(REQ-02-003)·ncs_suggest(REQ-02-004): 코어와 Claude 호출(ncs_llmreview)은 써도 되고 ncs_web은 모른다.
+        코어·엔진·기능 패키지는 이 두 패키지를 모른다."""
+        for package in ("ncs_opinion", "ncs_suggest"):
+            for file, names in imported_packages(package).items():
+                self.assertNotIn("ncs_web", names, f"{file}이(가) ncs_web을 import합니다")
+                others = set(ENGINES) | ({"ncs_opinion", "ncs_suggest"} - {package})
+                self.assertFalse(names & others, f"{file}이(가) 검수 엔진이나 다른 기능을 import합니다: {sorted(names & others)}")
+            for lower in ("ncs_core", *ENGINES, *FEATURES):
+                for file, names in imported_packages(lower).items():
+                    self.assertNotIn(package, names, f"{file}이(가) 상위 계층 {package}를 import합니다")
 
     def test_engine_cli_is_the_only_service_user(self):
         for engine in ENGINES:
