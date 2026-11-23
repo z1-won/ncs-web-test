@@ -459,6 +459,16 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue(row["비고"][-1].startswith("LLM 미설정"))
         self.assertEqual(row["LLM"]["상태"], result["LLM"])
 
+    def test_rows_carry_review_criteria(self):
+        """의견마다 내용 검수 기준(F04 2장 변경 허용 범위, F07 제3조 2항 표절 범위)을 붙인다 — LLM 없이도 붙는다(정의서 V0.17·V0.23)."""
+        with tempfile.TemporaryDirectory() as folder:
+            final, sheet = self.write(folder)
+            result = review([sheet], final)
+        by_text = {row["의견"]: row["검수 기준"] for row in result["의견"]}
+        renamed = next(notes for text, notes in by_text.items() if "명칭 변경" in text)
+        self.assertTrue(any("F04 2-1" in note and "윤문" in note for note in renamed), renamed)
+        self.assertEqual(next(notes for text, notes in by_text.items() if "의견없음" in text or "적절하게" in text), [])
+
     def test_no_opinions_is_error(self):
         with self.assertRaises(ValueError):
             review([], "원고.hwpx")
@@ -466,3 +476,64 @@ class PipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CriteriaTests(unittest.TestCase):
+    """의견 글에서 어느 검수 기준이 걸리는지 고르기(ncs_opinion.criteria) — 낱말로 고르는 안내일 뿐 판정을 바꾸지 않는다."""
+
+    def test_change_scope_f04(self):
+        from ncs_opinion.criteria import criteria_notes
+
+        self.assertTrue(any("2-1" in n for n in criteria_notes("'빠데'라는 용어를 '퍼티'로 통일할 것", "내용")))
+        self.assertTrue(any("2-2" in n for n in criteria_notes("「화학물질관리법」 개정 내용을 반영할 것", "내용")))
+        notes = criteria_notes("학습 2와 학습 3을 통합하여 구성하는 것이 좋겠음", "내용")
+        self.assertTrue(any("2-3" in n and "타 능력단위" in n for n in notes), notes)
+        self.assertTrue(any("2-4" in n for n in criteria_notes("학습명의 띄어쓰기 수정 필요", "형식")))
+        self.assertTrue(any("2-1" in n for n in criteria_notes("명칭이 바뀌었음", "용어 변경")))      # 유형이 용어 변경이면 낱말이 없어도
+        self.assertEqual(criteria_notes("그림이 흐릿함. 방법을 설명하는 문단을 보강할 것", "내용"), [])   # '방법'의 '법'은 법령이 아니다
+
+    def test_plagiarism_scope_f07(self):
+        from ncs_opinion.criteria import criteria_notes
+
+        [note] = criteria_notes("<표 1-3>의 출처가 누락됨", "내용")
+        self.assertIn("F07 제3조 2항", note)
+        self.assertIn("①", note)
+        self.assertIn("③", criteria_notes("재인용인데 원문을 직접 본 것처럼 출처를 적음", "내용")[0])
+        self.assertIn("②", criteria_notes("외국 자료를 번역한 내용의 출처 표기 필요", "내용")[0])
+        self.assertIn("⑥", criteria_notes("타 교재의 내용을 그대로 옮긴 것으로 보임, 출처 표기", "내용")[0])
+
+
+class ReportTests(unittest.TestCase):
+    """결과표 xlsx(ncs_opinion.report) — 판정 후보와 담당자 확정을 함께 적어 보관한다(사람 작업 4 '최종 판단·보관')."""
+
+    ROWS = [{"번호": 1, "차수": "1차", "구분": "학습 1", "구성": "필요 지식", "쪽": "4", "의견": "=SUM(1) 보안기능 확인서도 추가", "유형": "내용",
+             "판정": REFLECTED, "근거": [{"문단": "보안기능 확인서를 받는다.", "위치": "학습 1 필요 지식"}], "비고": ["LLM: 반영"], "집필자 확인": "",
+             "수정 제안": "", "검수 기준": []},
+            {"번호": 2, "차수": "2차", "구분": "학습 1", "구성": "수행 내용", "쪽": "17", "의견": "협회 명칭 변경됨", "유형": "용어 변경",
+             "판정": CHECK, "근거": [], "비고": [], "집필자 확인": "용어 변경을 적용할지 확인해 주세요.", "수정 제안": "", "검수 기준": ["변경 허용 범위(F04 2-1): …"]}]
+
+    def test_decisions_summary(self):
+        from ncs_opinion.report import decision_summary
+
+        summary = decision_summary(self.ROWS, {"1": "미반영", "2": "반영", "9": "반영", "3": "아무 말"})
+        self.assertEqual(summary["의견별"], {"1": "미반영", "2": "반영"})          # 없는 번호·모르는 값은 버린다
+        self.assertEqual((summary["확정"], summary["반영"], summary["미반영"], summary["후보와 다름"], summary["보류였던 것"]), (2, 1, 1, 1, 1))
+        self.assertEqual(summary["오차율"]["오차율"], "100.0%")
+
+    def test_xlsx_has_candidates_and_decisions(self):
+        import io
+
+        from openpyxl import load_workbook
+        from ncs_opinion.report import build_xlsx
+
+        book = load_workbook(io.BytesIO(build_xlsx("LM1203020201_24v3_원고.hwpx", self.ROWS, {"1": "미반영"}, llm="사용(가짜)")))
+        sheet = book.active
+        cells = [[cell.value for cell in row] for row in sheet.iter_rows()]
+        head = next(row for row in cells if row and row[0] == "번호")
+        self.assertEqual(head[:7], ["번호", "차수", "위치", "의견", "유형", "판정 후보", "담당자 확정"])
+        first = cells[cells.index(head) + 1]
+        self.assertEqual((first[5], first[6]), (REFLECTED, "미반영"))
+        self.assertEqual(first[3], "=SUM(1) 보안기능 확인서도 추가")
+        self.assertEqual(sheet.cell(cells.index(head) + 2, 4).data_type, "s")        # 의견 글은 수식이 아니라 문자열로
+        self.assertEqual(cells[cells.index(head) + 2][6], None)                      # 확정하지 않은 의견은 빈 칸
+        self.assertTrue(any("용어 변경을 적용할지" in str(v) for v in cells[cells.index(head) + 2]))

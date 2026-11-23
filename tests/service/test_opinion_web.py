@@ -53,6 +53,15 @@ class OpinionWebTests(unittest.TestCase):
         row = body["의견"][0]
         self.assertEqual((row["판정"], row["유형"], row["LLM"]["상태"]), ("확인 필요", "미분류", body["LLM"]))
         self.assertIn("사람이 대조", row["비고"][-1])
+        self.assertIn("검수 기준", row)
+        # 결과표: 판정 후보와 담당자 확정을 함께 적은 xlsx. 확정 저장은 이력 DB가 있을 때만 — 없으면 저장하지 않았다고 알린다
+        exported = self.client.post("/api/opinion/export", json={"manuscript": body["원고"], "rows": body["의견"], "decisions": {"1": "반영"}, "llm": body["LLM"]})
+        self.assertEqual(exported.status_code, 200, exported.text)
+        self.assertTrue(exported.content.startswith(b"PK"))
+        saved = self.client.post("/api/opinion/decisions", json={"record_id": "", "rows": body["의견"], "decisions": {"1": "반영", "2": "미반영"}})
+        self.assertEqual(saved.status_code, 200, saved.text)
+        self.assertEqual((saved.json()["저장"], saved.json()["확정"]["확정"]), (False, 2))
+        self.assertEqual(self.client.post("/api/opinion/export", json={"manuscript": "x", "rows": [], "decisions": {}}).status_code, 400)
 
     def test_deliberation_sheet(self):
         """심의의견서: 표 머리가 '심의의견'이어도 읽고, 차수 '심의'와 요약의 심의 의견 수가 온다."""

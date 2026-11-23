@@ -1153,3 +1153,7 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 .batch-table td { vertical-align: middle; }
 .batch-table th:nth-child(n+2) { width: 9rem; }
 .batch-table th:nth-child(2) { width: 16rem; }
+
+/* 의견 반영 검토 — 확정 보관, 검수 기준 */
+.opinion-keep { display: flex; flex-wrap: wrap; gap: 0.8rem; margin: 0 0 1.2rem; }
+.opinion-criteria { font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); border-left: 3px solid var(--krds-light-color-border-gray-light); padding-left: 0.8rem; }

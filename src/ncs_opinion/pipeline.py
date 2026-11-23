@@ -15,6 +15,7 @@ from pathlib import Path
 from ncs_core.documents import detect_format, load_document
 from ncs_core.pdf import PdfUnavailable, load_pdf
 
+from .criteria import criteria_notes
 from .config import CHECK, DEFAULT_CONFIG, KIND_TERM, NO_ACTION, NOT_REFLECTED, REFLECTED, VERDICTS, OpinionConfig
 from .judge import judge
 from .keys import compact, refs_of
@@ -115,6 +116,7 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
             "참조": [ref.label for ref in refs_of(opinion.text)],
             "의견서 읽기 추정": opinion.notes,
             **row,
+            "검수 기준": criteria_notes(opinion.text, row["유형"]),      # F04 2장 변경 허용 범위, F07 제3조 2항 표절 범위 — 판단에 볼 기준
         })
     return {
         "원고": final.name,

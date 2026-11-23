@@ -55,6 +55,10 @@ class FileStore:
         """진행 현황용 개수 기록은 DB 모드에서만 남긴다. 남기지 않았다는 뜻으로 None."""
         return None
 
+    def set_work_record_note(self, record_id: str, kind: str, key: str, value: dict) -> bool:
+        """개수 기록이 없으므로 덧붙일 곳도 없다. 저장하지 않았다는 뜻으로 False."""
+        return False
+
     def tag_review_stage(self, run_id: str, stage: int) -> None:
         """검수 단계 표시는 DB 모드에서만 남긴다."""
 
@@ -147,6 +151,11 @@ class PostgresStore:
         from . import postgres
 
         return postgres.save_work_record(self.dsn, kind, manuscript, counts, files, module_code=module_code)
+
+    def set_work_record_note(self, record_id: str, kind: str, key: str, value: dict) -> bool:
+        from . import postgres
+
+        return postgres.set_work_record_note(self.dsn, record_id, kind, key, value)
 
     def list_manuscripts(self, **filters) -> list[dict]:
         from . import postgres

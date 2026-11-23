@@ -28,6 +28,8 @@ def _save(folder: Path, upload: UploadFile, fallback: str) -> Path:
 
 
 def register(app: FastAPI, services: Services) -> None:
+    register_decisions(app, services)
+
     @app.post("/api/opinion", responses={400: {"model": ErrorResponse}})
     def opinion(
         request: Request,
@@ -59,6 +61,52 @@ def register(app: FastAPI, services: Services) -> None:
         record = _record(services, final.name, result, files)
         linked = own_and_link(request, services.store, "opinion", record["id"] if record else None, case_volume, case_stage, case_version)
         return {**result, "진행 현황 기록": record, **({"건에 붙임": linked} if case_volume else {})}
+
+
+def register_decisions(app: FastAPI, services: Services) -> None:
+    from urllib.parse import quote
+
+    from fastapi import Response
+
+    from ..schemas import OpinionDecisionRequest
+
+    @app.post("/api/opinion/export", responses={400: {"model": ErrorResponse}})
+    def opinion_export(body: OpinionDecisionRequest) -> Response:
+        """결과표 xlsx — 의견별 판정 후보와 담당자 확정(반영/미반영), 근거 문단, 수정 제안, 집필자 확인, 검수 기준. 보관·전달용."""
+        from ncs_opinion.report import build_xlsx
+
+        try:
+            content = build_xlsx(body.manuscript or "원고", body.rows, body.decisions, llm=body.llm)
+        except (ValueError, KeyError) as error:
+            return error_response(400, f"결과표를 만들지 못했습니다: {error}")
+        filename = f"의견반영검토_{Path(body.manuscript or '원고').stem}.xlsx"
+        return Response(content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
+            "Content-Disposition": f"attachment; filename=opinion_review.xlsx; filename*=UTF-8''{quote(filename)}"})
+
+    @app.post("/api/opinion/decisions", responses={400: {"model": ErrorResponse}})
+    def opinion_decisions(body: OpinionDecisionRequest) -> Any:
+        """담당자 확정을 그 검토의 진행 현황 기록에 적는다(DB 모드). 적는 것은 의견 번호별 확정값과 개수·오차율뿐이다(의견 글은 넣지 않는다).
+        돌려주는 값: {'저장': 적었는가, '확정': 요약, '안내'}. 이력 DB가 없거나 기록이 없으면 저장하지 않고 그렇게 알린다 — 결과표를 내려받아 보관."""
+        from datetime import datetime, timezone
+
+        from ncs_opinion.report import decision_summary
+        from ncs_service.progress import OPINION
+
+        try:
+            summary = decision_summary(body.rows, body.decisions)
+        except (ValueError, KeyError, TypeError) as error:
+            return error_response(400, f"확정값을 읽지 못했습니다: {error}")
+        saved = False
+        if body.record_id and services.store.supports_history:
+            note = {**{key: summary[key] for key in ("의견별", "확정", "반영", "미반영", "후보와 다름", "보류였던 것")},
+                    "오차율": summary["오차율"]["오차율"], "결과": summary["오차율"]["결과"], "확정 시각": datetime.now(timezone.utc).isoformat()}
+            try:
+                saved = services.store.set_work_record_note(body.record_id, OPINION, "확정", note)
+            except Exception as error:
+                logger.exception("의견 반영 검토 확정 저장 실패: %s", error)
+        guide = ("담당자 확정을 진행 현황 기록에 저장했습니다." if saved
+                 else "확정을 저장하지 못했습니다(이력 DB가 없거나 이 검토의 기록이 없음). 결과표를 내려받아 보관해 주세요.")
+        return {"저장": saved, "확정": summary, "안내": guide}
 
 
 def _record(services: Services, manuscript: str, result: dict, files: list[dict]) -> dict | None:

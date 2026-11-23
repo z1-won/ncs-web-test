@@ -365,6 +365,11 @@ export const api = {
     get: (id) => request(`/api/groups/${id}`),
     remove: (id) => request(`/api/groups/${id}`, { method: "DELETE" }),
   },
+  // 의견 반영 검토의 결과표(xlsx)와 담당자 확정 저장. decisions: { 의견 번호: "반영" | "미반영" }
+  opinionExport: ({ manuscript, rows, decisions, llm }) =>
+    download("/api/opinion/export", { manuscript, rows, decisions, llm }, `의견반영검토_${(manuscript || "원고").replace(/\.[^.]+$/, "")}.xlsx`),
+  opinionDecisions: ({ recordId, rows, decisions }) =>
+    request("/api/opinion/decisions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ record_id: recordId || "", rows, decisions }) }),
   // 검토의견서 반영 여부 검토(REQ-02-003): opinions = [{ file, round: "1차"|"2차"|"심의" }], 최종 원고 file(+ 출력본·반영 전 원고)
   opinion: ({ file, opinions, printCopy, previous, signal }) => {
     const form = new FormData();

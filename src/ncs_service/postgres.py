@@ -358,6 +358,15 @@ def delete_volume(dsn: str, run_id: str) -> bool:
 
 # --- 원고 진행 현황(REQ-02-007) -------------------------------------------------------
 
+def set_work_record_note(dsn: str, record_id: str, kind: str, key: str, value: dict) -> bool:
+    """개수 기록(work_records.counts)의 한 열쇠에 값을 적는다 — 의견 반영 검토의 담당자 확정처럼 나중에 정해지는 것. 그 기록이 있었으면 True.
+    counts의 다른 열쇠는 그대로 둔다(진행 현황이 세는 개수는 바뀌지 않는다)."""
+    with psycopg.connect(dsn) as connection:
+        cursor = connection.execute("UPDATE work_records SET counts = counts || %s WHERE id = %s AND kind = %s",
+                                    (Jsonb({key: value}), record_id, kind))
+        return cursor.rowcount > 0
+
+
 def save_work_record(dsn: str, kind: str, manuscript: str, counts: dict, files: list[dict], *, module_code: str = "",
                      source: str = "web") -> dict:
     """의견 반영 검토·권리 증빙 점검의 개수 기록 한 건을 남긴다. 모듈 코드는 준 값, 없으면 원고 파일 이름에서 읽고 그것도 없으면 빈 값

@@ -90,3 +90,14 @@ class RecommendRequest(BaseModel):
 class ImageRightsRequest(ImageActionRequest):
     """권리 정보 수정. rights의 모양은 이미지 레코드의 rights와 같다(docs/IMAGE_RECORD.md). null은 그 칸을 비운다."""
     rights: dict[str, Any]
+
+
+class OpinionDecisionRequest(BaseModel):
+    """의견 반영 검토의 담당자 확정(REQ-02-003 사람 작업 4) — 결과표 내려받기와 확정 저장이 함께 쓴다."""
+
+    manuscript: str = ""
+    rows: list[dict[str, Any]]                  # /api/opinion 응답의 '의견' 행
+    decisions: dict[str, str] = {}              # 의견 번호 → "반영" | "미반영"
+    record_id: str = ""                         # /api/opinion 응답의 '진행 현황 기록'.id — 있으면 그 기록에 확정을 적는다(DB 모드)
+    llm: str = ""
+

@@ -118,6 +118,21 @@ function errorRate(rows, decisions) {
 function OpinionResult({ result }) {
   const [filter, setFilter] = useState("전체");
   const [decisions, setDecisions] = useState({});
+  const [working, setWorking] = useState(null);     // "export" | "save"
+  const [note, setNote] = useState(null);           // { kind, text } — 결과표·확정 저장 안내
+  const picked = Object.fromEntries(Object.entries(decisions).filter(([, value]) => value));
+  async function exportSheet() {
+    setWorking("export"); setNote(null);
+    const { ok, error } = await api.opinionExport({ manuscript: result.원고, rows: result.의견, decisions: picked, llm: result.LLM });
+    setWorking(null);
+    if (!ok) setNote({ kind: "danger", text: error });
+  }
+  async function saveDecisions() {
+    setWorking("save"); setNote(null);
+    const { ok, data, error } = await api.opinionDecisions({ recordId: result["진행 현황 기록"]?.id, rows: result.의견, decisions: picked });
+    setWorking(null);
+    setNote(ok ? { kind: data.저장 ? "success" : "warning", text: data.안내 } : { kind: "danger", text: error });
+  }
   const summary = result.요약;
   const rows = useMemo(() => result.의견.filter((row) => filter === "전체" || row.판정 === filter), [result, filter]);
   const rate = errorRate(result.의견, decisions);
@@ -143,7 +158,12 @@ function OpinionResult({ result }) {
       {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
 
       <h2 className="section-title">의견별 반영 여부</h2>
-      <p className="meta section-desc">{result["판정 원칙"]} 표의 '담당자 확정'에서 반영/미반영을 고르면 위 오차율이 바뀝니다(화면에만 남습니다).</p>
+      <p className="meta section-desc">{result["판정 원칙"]} 표의 '담당자 확정'에서 반영/미반영을 고르면 위 오차율이 바뀝니다. 확정은 [확정 저장]으로 진행 현황 기록에 남기고, [결과표 내려받기]로 후보와 확정을 함께 적은 표를 보관합니다.</p>
+      <div className="opinion-keep" role="group" aria-label="확정 보관">
+        <button type="button" className="krds-btn small secondary" disabled={!!working} onClick={exportSheet}>{working === "export" ? "만드는 중" : "결과표 내려받기(xlsx)"}</button>
+        <button type="button" className="krds-btn small tertiary" disabled={!!working || !decided} onClick={saveDecisions}>{working === "save" ? "저장하는 중" : `확정 저장 (${decided}개)`}</button>
+      </div>
+      <PageAlert kind={note?.kind || "info"}>{note?.text}</PageAlert>
       <div className="opinion-filter" role="group" aria-label="판정으로 거르기">
         {FILTERS.map((name) => (
           <button key={name} type="button" className={`krds-btn small ${filter === name ? "primary" : "tertiary"}`} aria-pressed={filter === name}
@@ -172,6 +192,7 @@ function OpinionResult({ result }) {
                   ))}
                   {row["집필자 확인"] && <p className="opinion-ask">집필자 확인: {row["집필자 확인"]}</p>}
                   {row["수정 제안"] && <p className="opinion-suggest">수정 제안: {row["수정 제안"]}</p>}
+                  {(row["검수 기준"] || []).map((text) => <p key={text} className="opinion-criteria">{text}</p>)}
                   {row.비고.length > 0 && (
                     <details><summary>비고 {row.비고.length}개{row["찾은 범위"] && `, ${row["찾은 범위"]}`}</summary>
                       <ul className="krds-info-list dash">{[...row.비고, ...row["의견서 읽기 추정"]].map((note, i) => <li key={i}>{note}</li>)}</ul>
