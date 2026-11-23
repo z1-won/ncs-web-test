@@ -1,26 +1,31 @@
 """원고 문장 추천(ncs_suggest, REQ-02-004): 종류별 규정 꼴(출력 검증용), 참고 예문, AI 판정·후보 검증(가짜 응답 주입 — 순위 재부여·
-버림·종결형 오지적의 사유 바꿈·번호 검증), AI 미설정(판단불가), 원고 전체(합성 hwpx), CLI.
+버림·종결형 오지적의 사유 바꿈·번호 검증), AI 미설정(판단불가), 원고 전체(합성 hwpx), CLI,
+문맥(자리·앞뒤 문장)과 참고 문장을 붙인 질문, 참고 문장 묶음(만들기·읽기·찾기)과 후보의 근거 문장·순위, 후보문장표.
 
 실제 원고(samples/, git 제외)를 실제 LLM으로 돌린 결과는 README의 문장 추천 단락에 적는다. 테스트는 실제 호출을 하지 않는다.
 """
 
 import contextlib
+import csv
 import io
 import json
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 from xml.sax.saxutils import escape
 
 from ncs_core.llm import LlmError
-from ncs_suggest import KINDS, suggest_manuscript, suggest_sentence
+from ncs_suggest import KINDS, Corpus, Reference, candidate_table, suggest_manuscript, suggest_sentence
+from ncs_suggest import corpus as corpus_module
 from ncs_suggest.__main__ import main
 from ncs_suggest.config import DEFAULT_CONFIG, NO_FINDING, SOURCE_AI, UNDECIDED
 from ncs_suggest.examples import similar
 from ncs_suggest.extract import split_prefix
 from ncs_suggest.kinds import check
 from ncs_suggest.llm_suggest import ask_lines, prompt, validate
+from ncs_suggest.pipeline import table_columns
 
 HP = "http://www.hancom.co.kr/hwpml/2011/paragraph"
 BOX1, BOX2 = "\U000F02B1", "\U000F02B2"   # 네모 번호 [1] [2] 글자
@@ -288,6 +293,190 @@ class ManuscriptTests(unittest.TestCase):
         self.assertIn("판단불가", out.getvalue())
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(main([str(Path(self.folder.name) / "없는.hwpx")]), 1)
+
+
+REFS = Corpus([
+    Reference("교수 방법", "사례를 중심으로 절차를 설명한다.", "기존모듈A.hwpx", "학습 1 교수 방법 1"),
+    Reference("교수 방법", "실습 장비의 사용법을 시연한다.", "기존모듈A.hwpx", "학습 2 교수 방법 3"),
+    Reference(corpus_module.ACTION_COMMON, "점검표를 작성하여 결과를 기록한다.", "우수사례집.hwp", "구역 1"),
+    Reference("학습 목표", "요구사항을 수집할 수 있다.", "기존모듈B.hwpx", "1-1 학습 목표 1"),
+], name="테스트 묶음")
+
+
+class ContextPromptTests(unittest.TestCase):
+    """문맥(자리·앞뒤 문장)과 참고 문장이 질문에 붙는가 — 요구사항 '문맥의 흐름을 고려하여'."""
+
+    def test_prompt_adds_context_and_reference_lines(self):
+        text = prompt("교수 방법", ["절차를 설명함.", "사례를 든다."],
+                      contexts=[{"자리": "학습 1 교수 방법 1", "앞": "", "뒤": "사례를 든다."}, {"자리": "", "앞": "", "뒤": ""}],
+                      references=[[{"문장": "사례를 중심으로 절차를 설명한다."}], []])
+        self.assertIn("1. 절차를 설명함.\n   문맥 — 자리: 학습 1 교수 방법 1 | 뒤 문장: 사례를 든다.\n   참고 문장 — 「사례를 중심으로 절차를 설명한다.」\n2. 사례를 든다.", text)
+        self.assertTrue(text.endswith("2. 사례를 든다."))                         # 빈 문맥·참고 문장은 줄을 만들지 않는다
+
+    def test_context_is_cut_and_can_be_turned_off(self):
+        from ncs_suggest.config import SuggestConfig
+
+        contexts = [{"자리": "학습 1", "앞": "가" * 300, "뒤": ""}]
+        self.assertIn("앞 문장: " + "가" * 120 + "…", prompt("교수 방법", ["절차를 설명함."], contexts=contexts))
+        self.assertNotIn("문맥", prompt("교수 방법", ["절차를 설명함."], contexts=contexts, config=SuggestConfig(context_chars=0)))
+
+    def test_pipeline_sends_neighbours_and_references(self):
+        seen = []
+
+        def spy(kind, bodies, **kwargs):
+            seen.append((kind, bodies, kwargs["contexts"], kwargs["references"]))
+            return {}, [], "spy"
+
+        with tempfile.TemporaryDirectory() as folder, mock.patch("ncs_suggest.pipeline.ask_lines", spy):
+            suggest_manuscript(write_manuscript(Path(folder) / "원고_LM1203020201_24v3.hwpx"), asker=lambda *a: None, corpus=REFS)
+        kind, bodies, contexts, references = next(item for item in seen if item[0] == "교수 방법")
+        self.assertEqual(bodies, ["사례를 중심으로 설명함.", "절차를 단계별로 설명한다."])
+        self.assertEqual(contexts, [{"자리": "학습 1 교수 방법 1", "앞": "", "뒤": ""}, {"자리": "학습 1 교수 방법 2", "앞": "", "뒤": ""}])   # 이웃이 같은 질문에 있으면 자리만
+        self.assertEqual(references[0][0]["출처"], "기존모듈A.hwpx")
+
+    def test_neighbours_are_written_when_the_batch_splits_them(self):
+        from ncs_suggest.config import SuggestConfig
+
+        seen = []
+
+        def spy(kind, bodies, **kwargs):
+            seen.append((kind, bodies, kwargs["contexts"]))
+            return {}, [], "spy"
+
+        with tempfile.TemporaryDirectory() as folder, mock.patch("ncs_suggest.pipeline.ask_lines", spy):
+            suggest_manuscript(write_manuscript(Path(folder) / "원고_LM1203020201_24v3.hwpx"), asker=lambda *a: None, corpus=REFS,
+                               config=SuggestConfig(llm_batch=1))
+        teach = [contexts[0] for kind, _, contexts in seen if kind == "교수 방법"]
+        self.assertEqual(teach[0], {"자리": "학습 1 교수 방법 1", "앞": "", "뒤": "절차를 단계별로 설명한다."})   # 글머리는 뗀다
+        self.assertEqual(teach[1]["앞"], "사례를 중심으로 설명함.")
+        steps = [contexts[0] for kind, _, contexts in seen if kind == "수행 순서"]
+        self.assertEqual(steps[0]["뒤"], "이해관계자를 식별한다.")                 # 하위 번호 줄이 아니라 다음 네모 번호 줄(번호 글자는 뗀다)
+
+    def test_direct_input_has_no_place_context(self):
+        seen = []
+
+        def spy(kind, bodies, **kwargs):
+            seen.append(kwargs["contexts"])
+            return {}, [], "spy"
+
+        with mock.patch("ncs_suggest.pipeline.ask_lines", spy):
+            suggest_sentence("절차를 설명함.", "교수 방법", asker=lambda *a: None, corpus=REFS)
+        self.assertEqual(seen, [[{"자리": "", "앞": "", "뒤": ""}]])
+
+
+class CorpusTests(unittest.TestCase):
+    """참고 문장 묶음 — 요구사항 수행예시 (1-3) '근거 있는 문장(기존 학습모듈·공공저작물) 기반 정정 후보'."""
+
+    def test_find_same_kind_and_common_action_sentences(self):
+        found = REFS.find("교수 방법", "사례 중심으로 절차를 설명한다.", limit=2, minimum=0.35)
+        self.assertEqual((found[0]["문장"], found[0]["출처"], found[0]["자리"]), ("사례를 중심으로 절차를 설명한다.", "기존모듈A.hwpx", "학습 1 교수 방법 1"))
+        self.assertGreater(found[0]["유사도"], 0.9)
+        self.assertEqual(REFS.find("학습 방법", "점검표를 작성하여 결과를 기록한다.", limit=1, minimum=0.5)[0]["출처"], "우수사례집.hwp")   # 종류 모르는 '~한다.' 문장
+        self.assertEqual(REFS.find("학습 목표", "점검표를 작성하여 결과를 기록한다.", limit=1, minimum=0.5), [])                       # 다른 종류에는 쓰지 않는다
+        self.assertEqual(REFS.find("평가 항목", "요구사항 수집 능력", limit=1, minimum=0.1), [])
+        self.assertEqual(len(REFS), 4)
+
+    def test_candidates_get_basis_and_grounded_ones_rank_first(self):
+        from ncs_suggest.config import SuggestConfig
+
+        asker, _ = fake([finding(1, suggestions=["사례 중심으로 절차를 안내한다.", "사례 중심으로 절차를 설명한다."])])
+        result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", asker=asker, corpus=REFS, config=SuggestConfig(ground_min=0.9))
+        first, second = result["후보"]
+        self.assertEqual((first["순위"], first["문장"]), (1, "사례 중심으로 절차를 설명한다."))      # AI는 2순위로 냈지만 근거 문장이 있어 앞으로
+        self.assertEqual(first["근거 문장"]["출처"], "기존모듈A.hwpx")
+        self.assertEqual((second["순위"], second["근거 문장"]), (2, None))                         # 비슷한 참고 문장이 없으면 근거 없음
+        self.assertEqual(first["출처"], SOURCE_AI)                                                # 후보를 쓴 것은 여전히 AI
+        self.assertTrue(result["참고 문장"].startswith("참고 문장 4개(테스트 묶음)"))
+
+    def test_without_corpus_order_is_unchanged_and_noted(self):
+        asker, _ = fake([finding(1, suggestions=["사례 중심으로 절차를 안내한다.", "사례 중심으로 절차를 설명한다."])])
+        result = suggest_sentence("사례 중심으로 절차를 설명함.", "교수 방법", asker=asker)
+        self.assertEqual([c["문장"] for c in result["후보"]], ["사례 중심으로 절차를 안내한다.", "사례 중심으로 절차를 설명한다."])
+        self.assertEqual([c["근거 문장"] for c in result["후보"]], [None, None])
+        self.assertTrue(result["참고 문장"].startswith("참고 문장 묶음 없음"))
+
+    def test_build_from_manuscript_keeps_only_compliant_sentences(self):
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()) as out:
+            source = write_manuscript(Path(folder) / "원고_LM1203020201_24v3.hwpx")
+            target = Path(folder) / "기준정보" / corpus_module.REFS_FILE
+            self.assertEqual(corpus_module.main([str(source), "--out", str(target)]), 0)
+            built = corpus_module.load(target)
+            texts = {ref.text for pool in built.by_kind.values() for ref, _ in pool}
+            self.assertIn("절차를 단계별로 설명한다.", texts)                 # 규정 꼴을 지킨 교수 방법
+            self.assertIn("요구사항을 수집할 수 있다.", texts)
+            self.assertNotIn("사례를 중심으로 설명함.", texts)                # 어긴 문장은 싣지 않는다
+            self.assertNotIn("학습자는 이해관계자를 식별할 수 있다.", texts)
+            self.assertNotIn(corpus_module.ACTION_COMMON, built.by_kind)     # --loose 없이는 구조로 읽은 문장만
+            count = len(built)
+            self.assertEqual(corpus_module.main([str(source), "--out", str(target), "--loose"]), 0)   # 다시 넣어도 같은 문장은 한 번만
+            again = corpus_module.load(target)
+            self.assertEqual(sum(n for kind, n in again.counts().items() if kind != corpus_module.ACTION_COMMON), count)
+            self.assertIn("요구사항을 분류한다.", {ref.text for ref, _ in again.by_kind[corpus_module.ACTION_COMMON]})   # 구조 밖 '~한다.' 문단
+            self.assertEqual(again.name, corpus_module.REFS_FILE)
+        self.assertIn("저장:", out.getvalue())
+
+    def test_load_reads_env_file_and_missing_file_is_empty(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / "refs.tsv"
+            target.write_text("# 주석\n교수 방법\t절차를 설명한다.\t모듈.hwpx\t학습 1\n없는 종류\t문장\t\t\n", encoding="utf-8")
+            with mock.patch.dict("os.environ", {"NCS_SUGGEST_REFS": str(target)}):
+                self.assertEqual(corpus_module.load().counts(), {"교수 방법": 1})
+            with mock.patch.dict("os.environ", {"NCS_SUGGEST_REFS": str(Path(folder) / "없음.tsv")}):
+                self.assertEqual(len(corpus_module.load()), 0)
+        self.assertEqual(len(corpus_module.load()), 0)                       # 테스트 환경에는 기준정보 폴더가 없다
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(corpus_module.main(["없는.hwpx"]), 1)            # 쓸 곳이 없음
+
+
+class CandidateTableTests(unittest.TestCase):
+    """산출물 '문장 정정 필요 후보문장표' — (변경 필요 원본 문장) ⇄ (문장 정정 후보군) 5순위까지."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.folder = tempfile.TemporaryDirectory()
+        cls.path = write_manuscript(Path(cls.folder.name) / "원고_LM1203020201_24v3.hwpx")
+        cls.result = suggest_manuscript(cls.path, asker=fake(fixing)[0], corpus=REFS)
+        cls.rows = candidate_table(cls.result)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.folder.cleanup()
+
+    def test_one_row_per_card_with_five_ranked_columns(self):
+        self.assertEqual(len(self.rows), self.result["요약"]["고칠 문장"])
+        row = next(r for r in self.rows if r["자리"] == "1-1 수행 내용 수행 순서 1")
+        self.assertEqual((row["변경 필요 원본 문장"], row["정정 후보 1순위"]), ("[1] 요구사항을 확인", "[1] 요구사항을 확인한다."))   # 앞 번호를 다시 붙인다
+        self.assertEqual([row[f"정정 후보 {n}순위"] for n in range(2, 6)], ["", "", "", ""])
+        self.assertEqual((row["원고"], row["사유 유형"], row["규정 꼴"]), (self.path.name, "종결형 위반", KINDS["수행 순서"]))
+        teach = next(r for r in self.rows if r["자리"] == "학습 1 교수 방법 1")
+        self.assertIn("기존모듈A.hwpx", teach["근거 문장 1순위"])                # '사례를 중심으로 절차를 설명한다.'와 비슷
+        goal = next(r for r in self.rows if r["자리"] == "1-1 학습 목표 2")
+        self.assertEqual(goal["근거 문장 1순위"], "")                            # 비슷한 참고 문장이 없으면 빈칸
+        self.assertEqual(self.result["요약"]["후보"], len(self.rows))
+        self.assertGreaterEqual(self.result["요약"]["근거 문장 있는 후보"], 1)
+        self.assertEqual(self.result["참고 문장"]["문장 수"], 4)
+
+    def test_single_card_and_cli_csv(self):
+        card = suggest_sentence("• 사례 중심으로 절차를 설명함.", "교수 방법", corpus=REFS,
+                                asker=fake([finding(1, suggestions=["사례 중심으로 절차를 설명한다."])])[0])
+        (row,) = candidate_table(card)
+        self.assertEqual((row["원고"], row["정정 후보 1순위"]), ("", "• 사례 중심으로 절차를 설명한다."))
+        self.assertIn("「사례를 중심으로 절차를 설명한다.」 (기존모듈A.hwpx, 학습 1 교수 방법 1, 유사도", row["근거 문장 1순위"])
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()) as out:
+            target = Path(folder) / "표" / "후보문장표.csv"
+            self.assertEqual(main([str(self.path), "--csv", str(target)]), 0)   # AI 미설정 — 행 없이 머리글만
+            self.assertEqual(target.read_text(encoding="utf-8-sig").strip().split(","), table_columns())
+        self.assertIn("후보문장표 0행", out.getvalue())
+
+    def test_csv_columns_open_in_spreadsheet(self):
+        self.assertEqual(list(self.rows[0]), table_columns())
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=table_columns())
+        writer.writeheader()
+        writer.writerows(self.rows)
+        head = buffer.getvalue().splitlines()[0].split(",")
+        self.assertEqual(head[:9], ["번호", "원고", "구성", "자리", "종류", "규정 꼴", "변경 필요 원본 문장", "사유 유형", "사유"])
+        self.assertEqual(head[9:], [f"{name} {n}순위" for n in range(1, 6) for name in ("정정 후보", "근거 문장")] + ["비고"])
 
 
 if __name__ == "__main__":

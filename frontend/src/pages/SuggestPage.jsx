@@ -1,5 +1,7 @@
 // 원고 문장 추천(REQ-02-004) — 원고를 올리면 AI가 작성 규칙(종결형·표현)에 어긋난 문장을 구성별로 찾아 정정 후보를 순위와 함께 최대 5개 보여 준다.
 // 집필자가 후보 하나를 '채택'하거나 '기각'하고, 채택률과 채택 결과(JSON·CSV)를 내려받는다. 원고 본문은 고치지 않는다. 계산은 서버(ncs_suggest)가 한다.
+// AI에는 문장의 자리와 앞뒤 문장(문맥)을 함께 보내고, 서버에 참고 문장 묶음(기존 학습모듈, 공공저작물)이 있으면 후보마다 근거 문장이 붙는다.
+// '정정 후보 문장표(CSV)'는 요구사항 산출물인 원본 문장과 정정 후보 1~5순위(근거 문장 포함)의 표다.
 // AI는 서버에 LLM 설정이 있으면 자동으로 부른다(체크박스 없음). 없으면 'AI 미설정 — 이유'만 보인다. 후보 출처는 모두 'AI 생성'이다 — 집필자 서약서 고지 대상일 수 있다.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
@@ -39,6 +41,39 @@ function decisionRows(cards, decisions) {
       결정: decision?.choice || "미정", "채택 순위": chosen?.순위 ?? "", "채택 출처": chosen?.출처 ?? "", "채택 문장": chosen?.문장 ?? "",
       "후보 수": card.후보.length,
     };
+  });
+}
+
+const MAX_CANDIDATES = 5; // 서버 ncs_suggest.config.max_candidates
+
+// 근거 문장 한 칸 글(서버 ncs_suggest.pipeline.basis_text와 같은 꼴)
+function basisText(basis) {
+  if (!basis) return "";
+  const place = [basis.출처, basis.자리].filter(Boolean).join(", ");
+  return `「${basis.문장}」 (${place ? `${place}, ` : ""}유사도 ${basis.유사도})`;
+}
+
+// 문장 정정 필요 후보문장표: 카드마다 한 행. 원본 문장 옆에 정정 후보 1~5순위와 후보별 근거 문장, 집필자의 결정을 둔다.
+// 앞쪽 열은 서버 ncs_suggest.pipeline.table_columns와 같고, 화면에서 고른 결정 열을 뒤에 더한다.
+function candidateRows(cards, decisions) {
+  return cards.map((card) => {
+    const decision = decisions[card.key];
+    const prefix = card["앞 번호"] ? `${card["앞 번호"]} ` : "";
+    const row = {
+      번호: card.key, 원고: card.원고명 || "", 구성: card.구성, 자리: card.자리, 종류: card.종류, "규정 꼴": card["규정 꼴"],
+      "변경 필요 원본 문장": card.원문, "사유 유형": card.상태, 사유: card.사유.join(" / "),
+    };
+    for (let rank = 1; rank <= MAX_CANDIDATES; rank += 1) {
+      const item = card.후보.find((c) => c.순위 === rank);
+      row[`정정 후보 ${rank}순위`] = item ? prefix + item.문장 : "";
+      row[`근거 문장 ${rank}순위`] = item ? basisText(item["근거 문장"]) : "";
+    }
+    const chosen = decision?.rank ? card.후보.find((c) => c.순위 === decision.rank) : null;
+    row.비고 = card["추천 없음"] || "";
+    row.결정 = decision?.choice || "미정";
+    row["채택 순위"] = chosen?.순위 ?? "";
+    row["채택 문장"] = chosen ? prefix + chosen.문장 : "";
+    return row;
   });
 }
 
@@ -98,6 +133,7 @@ export default function SuggestPage() {
     [result],
   );
   const allCards = [...manuscriptCards, ...typed.filter((card) => card.후보.length)];
+  const grounded = allCards.reduce((sum, card) => sum + card.후보.filter((item) => item["근거 문장"]).length, 0);
   const decided = allCards.filter((card) => decisions[card.key]);
   const adopted = decided.filter((card) => decisions[card.key].choice === "채택");
   const rate = decided.length ? Math.round((adopted.length / decided.length) * 1000) / 10 : null;
@@ -115,7 +151,8 @@ export default function SuggestPage() {
     const rows = decisionRows(allCards, decisions);
     const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "");
     const base = `문장추천_채택기록_${stamp}`;
-    if (kindOfFile === "csv") saveFile(toCsv(rows), `${base}.csv`, "text/csv;charset=utf-8");
+    if (kindOfFile === "table") saveFile(toCsv(candidateRows(allCards, decisions)), `문장추천_정정후보문장표_${stamp}.csv`, "text/csv;charset=utf-8");
+    else if (kindOfFile === "csv") saveFile(toCsv(rows), `${base}.csv`, "text/csv;charset=utf-8");
     else saveFile(JSON.stringify({ 원고: result?.원고 ?? null, 채택률: rate, 채택: adopted.length, 결정: decided.length, 카드: allCards.length, 기록: rows }, null, 2),
       `${base}.json`, "application/json");
   }
@@ -128,7 +165,9 @@ export default function SuggestPage() {
       <p className="page-desc">
         원고(hwp, hwpx)를 올리면 생성형 AI가 학습모듈 작성 규칙(학습 목표 '~할 수 있다.', 수행 순서와 교수·학습 방법 '~한다.', 학습명과 수행 내용 제목 '~하기',
         학습 내용명 행동명사, 평가 항목 명사형)과 표현(주어 군더더기, 어색한 낱말, 중복 표현, 문장부호)에 어긋난 문장을 찾아 정정 후보를 순위와 함께 최대 5개 보여 줍니다.
+        생성형 AI에는 문장의 자리와 같은 묶음의 앞뒤 문장을 함께 보내 흐름에 맞게 고치도록 합니다.
         생성형 AI가 낸 후보는 규정 꼴, 원문에 없던 수치와 영문과 상호, 원문과의 유사도로 다시 걸러 통과한 것만 보여 주고, 버린 후보는 이유와 함께 접어 둡니다.
+        참고 문장 묶음(기존 학습모듈과 공공저작물에서 규정을 지킨 문장)이 서버에 있으면 후보마다 가장 비슷한 문장을 근거 문장으로 붙이고, 근거 문장이 있는 후보를 앞 순위에 둡니다.
         후보 중 하나를 채택하거나 기각하세요. 직무 내용을 새로 쓰거나 교육 내용이 적절한지 판단하지 않으며, 원고는 고치지 않습니다.
         생성형 AI를 쓸 수 없을 때는 고칠 문장을 찾지 않고 그 이유만 보여 줍니다. 올린 파일은 계산 뒤 바로 지웁니다.
       </p>
@@ -186,8 +225,10 @@ export default function SuggestPage() {
             <div><dt>후보가 있는 문장</dt><dd>{allCards.length}개</dd></div>
             <div><dt>결정</dt><dd>{decided.length}개 (채택 {adopted.length}, 기각 {decided.length - adopted.length})</dd></div>
             <div><dt>채택률</dt><dd><strong>{rate == null ? "-" : `${rate}%`}</strong></dd></div>
+            <div><dt>근거 문장이 있는 후보</dt><dd>{grounded}개</dd></div>
           </dl>
           <div className="run-buttons">
+            <button className="krds-btn secondary medium" type="button" onClick={() => download("table")}>정정 후보 문장표(CSV)</button>
             <button className="krds-btn tertiary medium" type="button" onClick={() => download("json")}>채택 기록 내려받기(JSON)</button>
             <button className="krds-btn tertiary medium" type="button" onClick={() => download("csv")}>채택 기록 표(CSV)</button>
           </div>
@@ -207,7 +248,14 @@ function SuggestResult({ result, cards, decisions, onDecide }) {
       <ResultHead
         status={<span className={`krds-badge large ${cards.length ? "bg-light-warning" : "bg-light-success"}`}>{cards.length ? `고칠 문장 ${cards.length}개` : "고칠 문장 없음"}</span>}
         meta={`${result.원고}, 확인한 문장 ${summary["검사한 문장"]}개, 생성형 AI에 보낸 문장 ${summary["AI에 보낸 문장"]}개, ${Object.entries(summary["사유별"]).map(([name, n]) => `${name} ${n}`).join(", ") || "지적 없음"}, 추천 없음 ${summary["추천 없음"]}, 제외한 생성형 AI 후보 ${summary["버린 AI 후보"]}`}
-        badges={<span id="suggest-ai-state" className="krds-badge bg-light-gray">{result.AI.상태}</span>}
+        badges={<>
+          <span id="suggest-ai-state" className="krds-badge bg-light-gray">{result.AI.상태}</span>{" "}
+          {result["참고 문장"] && (
+            <span id="suggest-refs-state" className={`krds-badge ${result["참고 문장"]["문장 수"] ? "bg-light-success" : "bg-light-gray"}`}>
+              {result["참고 문장"]["문장 수"] ? `참고 문장 ${result["참고 문장"]["문장 수"]}개` : "참고 문장 묶음 없음"}
+            </span>
+          )}
+        </>}
       />
       {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
       {result.구성.map((part) => (
@@ -253,6 +301,12 @@ function SuggestCard({ card, decision, onDecide }) {
                       <span className={`krds-badge ${SOURCE_BADGE[item.출처] || "bg-light-gray"}`}>{item.출처}</span>{" "}
                       {item.근거.join(" / ")}
                     </p>
+                    {item["근거 문장"] && (
+                      <p className="meta candidate-basis">
+                        근거 문장: {item["근거 문장"].문장}{" "}
+                        ({[item["근거 문장"].출처, item["근거 문장"].자리].filter(Boolean).join(", ")}{item["근거 문장"].출처 || item["근거 문장"].자리 ? ", " : ""}유사도 {item["근거 문장"].유사도})
+                      </p>
+                    )}
                   </div>
                   <button type="button" className={`krds-btn small ${chosen ? "primary" : "secondary"}`} aria-pressed={chosen}
                           onClick={() => onDecide(card, "채택", item.순위)}>{chosen ? "채택함" : "채택"}</button>

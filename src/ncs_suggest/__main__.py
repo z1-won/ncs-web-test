@@ -1,18 +1,21 @@
-"""python -m ncs_suggest 원고.hwp [--json 결과.json]  |  python -m ncs_suggest --sentence "문장" --kind "교수 방법"
+"""python -m ncs_suggest 원고.hwp [--json 결과.json] [--csv 후보문장표.csv]  |  python -m ncs_suggest --sentence "문장" --kind "교수 방법"
 
 원고를 주면 구성별로 AI가 고칠 문장이라고 본 문장과 순위 붙인 정정 후보(최대 5개)·참고 예문을 출력한다. 원고는 고치지 않는다.
+--csv는 '문장 정정 필요 후보문장표'(원본 문장 ⇄ 정정 후보 1~5순위와 근거 문장)를 엑셀에서 열리는 CSV로 쓴다.
+참고 문장 묶음(기존 학습모듈·공공저작물)은 python -m ncs_suggest.corpus 로 만든다 — 있으면 후보마다 근거 문장이 붙는다.
 AI는 .env의 LLM 설정·반출 승인(LLM_ALLOW_UPLOAD=1)이 있으면 자동으로 부르고, 없으면 이유만 출력한다(규칙으로 대신 판정하지 않음).
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from pathlib import Path
 
 from .config import KINDS
-from .pipeline import suggest_manuscript, suggest_sentence
+from .pipeline import basis_text, candidate_table, suggest_manuscript, suggest_sentence, table_columns
 
 
 def render_card(card: dict) -> list[str]:
@@ -20,6 +23,8 @@ def render_card(card: dict) -> list[str]:
     out += [f"    사유: {reason}" for reason in card["사유"]]
     for item in card["후보"]:
         out.append(f"    {item['순위']}. {item['문장']}  [{item['출처']}] {' / '.join(item['근거'])}")
+        if item.get("근거 문장"):
+            out.append(f"       근거 문장: {basis_text(item['근거 문장'])}")
     if card["추천 없음"]:
         out.append(f"    {card['추천 없음']}")
     out += [f"    참고 예문({example['유사도']}): {example['문장']}  — {example['자리']}" for example in card["참고 예문"]]
@@ -32,7 +37,7 @@ def render(result: dict) -> str:
     reasons = " · ".join(f"{name} {count}" for name, count in summary["사유별"].items())
     out = [f"[{result['원고']}] 검사 {summary['검사한 문장']}문장 · 고칠 문장 {summary['고칠 문장']}" + (f"({reasons})" if reasons else "")
            + f" · 추천 있음 {summary['추천 있음']} · 추천 없음 {summary['추천 없음']} · 버린 AI 후보 {summary['버린 AI 후보']}"
-           + f" · {result['AI']['상태']}"]
+           + f" · {result['AI']['상태']} · {result['참고 문장']['상태']}"]
     for part in result["구성"]:
         out.append(f"\n== {part['구성']} ({len(part['문장'])})")
         for card in part["문장"]:
@@ -47,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sentence", help="원고 대신 문장 하나를 추천받는다")
     parser.add_argument("--kind", choices=list(KINDS), help="--sentence의 문장 종류")
     parser.add_argument("--json", type=Path, help="결과를 이 JSON 파일로도 저장")
+    parser.add_argument("--csv", type=Path, help="문장 정정 필요 후보문장표(원본 문장 ⇄ 후보 1~5순위·근거 문장)를 이 CSV 파일로 저장")
     args = parser.parse_args(argv)
     if bool(args.manuscript) == bool(args.sentence):
         parser.error("원고 경로 또는 --sentence 가운데 하나만 주세요")
@@ -67,6 +73,14 @@ def main(argv: list[str] | None = None) -> int:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"저장: {args.json}")
+    if args.csv:
+        rows = candidate_table(result)
+        args.csv.parent.mkdir(parents=True, exist_ok=True)
+        with args.csv.open("w", encoding="utf-8-sig", newline="") as handle:     # BOM — 엑셀이 한글을 바로 읽게
+            writer = csv.DictWriter(handle, fieldnames=table_columns())
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"저장: {args.csv} (후보문장표 {len(rows)}행)")
     return 0
 
 
