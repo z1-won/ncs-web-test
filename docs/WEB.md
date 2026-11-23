@@ -48,6 +48,8 @@ npm run dev
 
 원고 검수의 전체 실행 결과 아래에는 **판정 확정**과 **앞 검수와 비교**가 있습니다(REQ-02-002 사람 작업 4번, 5번, `frontend/src/components/ReviewDecisions.jsx`, `lib/decisions.js`). 판정 확정은 자동 판정이 부적합이거나 판단불가인 항목에 담당자가 적합 또는 부적합과 사유를 적는 표입니다. 내려받는 확인서(hwpx, 엑셀, F03 표)의 판정과 비고에 반영되고 자동 판정도 비고에 남습니다. 확정 내용은 서버가 아니라 브라우저(localStorage)에 검수 묶음별로 저장합니다. 앞 검수와 비교는 검수 이력에서 같은 학습모듈의 앞 전체 검수를 골라 해결, 새 부적합, 그대로 부적합, 판정 바뀜을 보입니다. 검수 이력을 저장하는 서버(DB)에서만 됩니다.
 
+표 출처 검토의 [메모 단 원고(hwpx)]는 `GET /api/uploads/{token}/sources/memo`가 만듭니다(REQ-02-008 사람 작업 3번). 출처 검토에서 적합이 아닌 줄마다 사유와 고칠 꼴을 한글 메모로 단 원고 사본이며 본문은 바꾸지 않습니다. hwpx 원고만 됩니다.
+
 메인 메뉴의 **업스케일링**(`/upscale`)은 원고 검수와 따로 쓰는 페이지입니다. 원고(hwpx)를 이 페이지에서 올리면 고른 해상도 기준(300 또는 150 DPI, 기본 300 — `?target_dpi=`) 미만 그림을 원고에 나오는 순서로 보여 주고, 고른 그림만 한 장씩 키웁니다. 화면은 `frontend/src/pages/UpscalePage.jsx`, 그림 목록·결과는 `components/UpscalePanel.jsx`, 서버는 `/api/uploads/{token}/pictures…` 경로와 `src/ncs_upscale/`입니다.
 
 업스케일은 외부 실행 파일(기본 `waifu2x-ncnn-vulkan`)을 부릅니다. 실행 파일은 저장소에 없으므로 따로 내려받아 도구 폴더에 둡니다. 도구 폴더는 환경 변수 `NCS_UPSCALE_TOOLS`로 지정하고, 없으면 저장소 안 `tools/`(git 제외)를, 그다음 예전 위치인 저장소 바로 위 폴더의 `tools/`를 봅니다. 엔진을 찾지 못하면 그림 목록과 원본 보기는 되고 업스케일 버튼만 꺼집니다. 실행 파일 이름은 운영체제에 맞춰 찾습니다 — Windows는 `waifu2x-ncnn-vulkan.exe`, macOS·Linux는 `waifu2x-ncnn-vulkan`(`src/ncs_upscale/engine.py`). 2배로 기준에 닿지 않는 그림은 4배로 키우며 약 4배 오래 걸립니다. 해상도 기준을 바꾸면 이전 기준으로 키운 결과는 완료로 세지 않습니다.

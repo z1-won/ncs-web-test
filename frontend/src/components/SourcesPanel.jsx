@@ -81,6 +81,8 @@ export function SourcesPanel({ uploadToken, moduleCode }) {
             </div>
             <div className="fig-downloads">
               <a className="krds-btn small tertiary" href={api.sources.csvUrl(uploadToken)}>출처 목록(CSV)</a>
+              {/* 사람 작업 3번: 출처 표기를 견준 결과를 한글 파일에 적어 전달 — 고칠 줄마다 사유와 고칠 꼴을 메모로 단 사본 */}
+              {data.rows.some(issue) && <a className="krds-btn small tertiary" href={api.sources.memoUrl(uploadToken)}>메모 단 원고(hwpx)</a>}
             </div>
           </div>
 

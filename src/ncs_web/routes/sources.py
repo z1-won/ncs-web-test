@@ -89,3 +89,23 @@ def register(app: FastAPI, services: Services) -> None:
             return Response(path.read_bytes(), media_type="text/csv; charset=utf-8", headers={
                 "Content-Disposition": f"attachment; filename=sources.csv; filename*=UTF-8''{quote(name)}"})
         return _call(action)
+
+    @app.get("/api/uploads/{token}/sources/memo")
+    def sources_memo(token: str) -> Response:
+        """출처 검토의 부적합·판단불가 줄마다 사유와 고칠 꼴을 메모로 단 원고 사본(hwpx만) — 사람 작업 3번 '한글에 교정하여 저장하고 전달'.
+        원고 본문은 바꾸지 않는다: 출처의 저자·연도·쪽은 사람이 확인해 고쳐야 한다."""
+        def action():
+            from ncs_service.annotate import annotate_hwpx
+            manuscript, work = _upload(token)
+            if manuscript.suffix.lower() != ".hwpx":
+                raise ValueError("메모 원고는 hwpx만 만들 수 있습니다. 한글에서 hwpx로 저장해 다시 올려 주세요")
+            result = _result(manuscript, work)
+            rows = [row for row in result.get("rows", []) if row.get("판정") != "적합"]
+            if not rows:
+                raise ValueError("메모로 남길 출처 지적이 없습니다")
+            content, summary = annotate_hwpx(manuscript.read_bytes(), rows, author="출처 검토")
+            name = f"{manuscript.stem}_출처검토메모.hwpx"
+            return Response(content, media_type="application/hwp+zip", headers={
+                "Content-Disposition": f"attachment; filename=sources_memo.hwpx; filename*=UTF-8''{quote(name)}",
+                "X-Memo-Summary": json.dumps(summary)})
+        return _call(action)

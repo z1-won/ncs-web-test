@@ -275,6 +275,7 @@ export const api = {
     review: (token, { moduleCode, signal } = {}) =>
       request(`/api/uploads/${token}/sources${moduleCode ? `?module_code=${encodeURIComponent(moduleCode)}` : ""}`, { signal }),
     csvUrl: (token) => `/api/uploads/${token}/sources/list.csv`,
+    memoUrl: (token) => `/api/uploads/${token}/sources/memo`,
   },
   // 그림 검수(005)·태깅(009): rules는 형식 검수 뒤 바로(규칙만), read는 누를 때만(Claude)
   figures: {
