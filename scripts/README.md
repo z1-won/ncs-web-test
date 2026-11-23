@@ -17,6 +17,7 @@
 | `build_action_nouns.py` | 행동명사 목록(차례 ②)을 미리 채웁니다 | `STDICT_API_KEY` |
 | `action_noun_candidates.txt` | 위 스크립트에 `--from-file`로 주는 후보 단어 목록 | — |
 | `build_ncs_catalog.py` | NCS 포털 '학습모듈 분류보기' 파일로 분류·능력단위 목록(`ncs_units.tsv`)을 만듭니다 | 내려받은 .xls |
+| `fetch_all_ncs.py` | 요소·수행준거를 세분류 전체에 대해 미리 받아 기준정보 폴더(`기준정보/ncs_elements.tsv`)에 둡니다. 이미 있는 세분류는 건너뛰고 하루 한도에서 멈추므로 며칠에 나눠 다시 돌립니다(전체 약 27,000번 호출, 하루 한도 10,000번). `--only 20 1203`으로 분야를 골라 먼저, `--dry-run`으로 남은 양만 | `NCS_API_KEY` |
 | `build_ncs_levels.py` | 능력단위 수준 표(`ncs_levels.tsv`)를 만듭니다 | CSV 또는 `NCS_API_KEY` |
 
 ## probe/ — 외부 API가 동작하는지 확인
