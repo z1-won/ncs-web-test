@@ -21,14 +21,13 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
+from . import ai_mark
+from .ai_mark import AI_MARK  # noqa: F401 — 예전 이름으로 가져다 쓰는 곳이 있다
+
 LOOKBACK = 4
 _DASH = r"[-–—－‐]"
 LABEL = re.compile(rf"[\[〔]\s*그림\s*(\d+)\s*{_DASH}\s*(\d*)\s*[\]〕]")
 SOURCE = re.compile(r"^출\s*처\s*[:：]")
-AI_MARK = re.compile(
-    # 도구 이름 안의 마침표는 숫자 사이(판 번호 'ChatGPT 6.0')일 때만 이름의 일부로 본다 — 그 밖의 마침표는 앞 문장의 끝이다
-    r"(?P<tool>[^\s.。,](?:[^.。]|(?<=\d)\.(?=\d)){0,40}?)\s*[을를]\s*활용하여\s*(?P<mode>생성함|수정\s*보완함)"
-    r"(?:\s*\.?\s*(?P<y>\d{4})\s*\.\s*(?P<m>\d{1,2})\s*\.\s*(?P<d>\d{1,2})\s*\.?)?")
 # 본문에서 그림을 가리키는 문장('[그림 1-1]과 같이 …', '… 나타낸다.')은 캡션이 아니다
 REFERENCE_AFTER = re.compile(r"^(은|는|이|가|을|를|과|와|의|에|로|처럼|같이|에서|부터|까지|도|만|참조)(\s|$)")
 SENTENCE_END = re.compile(r"(다|요|오|죠|까)\s*[.。?]\s*$")
@@ -69,18 +68,9 @@ def parse_label(text: str) -> tuple[int, int | None, str] | None:
 
 
 def parse_ai_mark(text: str) -> AiMark | None:
-    """'ChatGPT를 활용하여 수정 보완함. 2026. 7. 20.' → AiMark. 그런 표기가 없으면 None."""
-    found = AI_MARK.search(text or "")
-    if not found:
-        return None
-    on = None
-    if found.group("y"):
-        try:
-            on = date(int(found.group("y")), int(found.group("m")), int(found.group("d")))
-        except ValueError:
-            on = None
-    mode = "generated" if found.group("mode") == "생성함" else "modified"
-    return AiMark(found.group("tool").strip(), mode, on, found.group(0).strip())
+    """'ChatGPT를 활용하여 수정 보완함. 2026. 7. 20.' → AiMark. 그런 표기가 없으면 None. 읽는 규칙은 ncs_core.ai_mark 한 곳에 있다."""
+    found = ai_mark.read(text)
+    return None if found is None else AiMark(found.tool, found.mode, found.on, found.text)
 
 
 MODE_WORDS = {"generated": "생성함", "modified": "수정 보완함"}

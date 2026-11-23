@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from . import ai_mark
 from .text import O, TRI, X
 
 SRC_HEAD = re.compile(r"^출\s*처\s*[:：]\s*")
@@ -36,9 +37,6 @@ URL = re.compile(r"https?://[^\s)]+|www\.[^\s)]+")
 CHECKED_DATE = re.compile(rf"({DATE})\s*(검색|스크린\s*숏|스크린샷)")
 KOGL = re.compile(r"공공누리\s*(?:제\s*(\d)\s*유형|(AI)\s*유형)")
 AUTHOR_YEAR = re.compile(rf"^(?P<author>[^()]{{1,80}}?)\s*\((?P<year>{YEAR}|{DATE[:-2]}\.?)\)")
-AI_LINE = re.compile(r"^(?P<tool>.+?)\s*(?:을|를)\s*활용하여\s*(?P<action>생성|수정\s*보완)\s*함\s*\.?\s*"
-                     r"(?P<date>\d{4}\s*\.\s*\d{1,2}\s*\.\s*\d{1,2}\s*\.?)?")
-
 AI_LINE_EXAMPLE = "‘ChatGPT를 활용하여 수정 보완함. 2026. 7. 20.’"      # 표기 예(F08)의 AI 활용 줄 — 안내 문구에 쓴다
 
 SOURCE_KINDS = ("집필진 제작", "기존 학습모듈", "공공누리", "웹·검색", "스크린숏", "문헌", "법령", "AI 표기", "알 수 없음")
@@ -151,13 +149,10 @@ def parse_source(text: str) -> SourceInfo:
 
 
 def parse_ai_marker(text: str) -> AiMarker | None:
-    """'{도구}를 활용하여 생성함/수정 보완함. 날짜' 줄 → AiMarker. 아니면 None. 날짜 뒤에 캡션이 붙어 있어도 읽는다."""
-    match = AI_LINE.match((text or "").strip())
-    if not match:
-        return None
-    action = re.sub(r"\s+", " ", match.group("action"))
-    date = re.sub(r"\s+", "", match.group("date")) if match.group("date") else None
-    return AiMarker(raw=text.strip(), tool=match.group("tool").strip() or None, action=action, date=date)
+    """'{도구}를 활용하여 생성함/수정 보완함. 날짜' 줄 → AiMarker. 아니면 None. 날짜 뒤에 캡션이 붙어 있어도 읽는다.
+    읽는 규칙은 ncs_core.ai_mark 한 곳에 있다(필요 지식 ⑧·권리 증빙 점검·AI 표기 넣기와 같은 규칙)."""
+    found = ai_mark.read(text)
+    return None if found is None else AiMarker(raw=found.raw, tool=found.tool or None, action=found.action, date=found.date_text)
 
 
 def find_ai_marker(paragraphs: list[str], caption_para: int, source_para: int | None, *, window: int = 3) -> int | None:
