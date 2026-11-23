@@ -24,6 +24,12 @@ export function ExportButtons({ moduleCode, rows, createdAt, disabled, onError, 
     if (!ok) onError?.(error);
     setBusy(null);
   }
+  async function runF03(kind) {
+    setBusy(`f03-${kind}`);
+    const { ok, error } = await api.exportF03({ moduleCode, rows, kind });
+    if (!ok) onError?.(error);
+    setBusy(null);
+  }
   async function runAnnotate() {
     setBusy("memo");
     const { ok, error, summary } = await api.exportAnnotated({ moduleCode, upload: annotate.upload, runId: annotate.runId, rows: annotate.rows, createdAt });
@@ -38,6 +44,10 @@ export function ExportButtons({ moduleCode, rows, createdAt, disabled, onError, 
               title="원본 F02 양식(hwpx)에 ✓와 비고를 채운 제출본">{busy === "hwpx" ? "만드는 중" : "hwpx (제출 양식)"}</button>
       <button type="button" className="krds-btn small tertiary" disabled={disabled || busy} onClick={() => run("xlsx")}
               title="열람과 편집용 엑셀">{busy === "xlsx" ? "만드는 중" : "xlsx"}</button>
+      <button type="button" className="krds-btn small tertiary" disabled={disabled || busy} onClick={() => runF03("기존개선")}
+              title="직능연 검수 체크리스트(F03) 문항으로 묶은 표 — 신규 개발·기존 개선 원고용">{busy === "f03-기존개선" ? "만드는 중" : "F03 표"}</button>
+      <button type="button" className="krds-btn small tertiary" disabled={disabled || busy} onClick={() => runF03("기존양식편집")}
+              title="직능연 검수 체크리스트(F03) 문항으로 묶은 표 — 양식 편집 원고용(‘양식 편집에 적용’ 문항만)">{busy === "f03-기존양식편집" ? "만드는 중" : "F03 표(양식 편집)"}</button>
       {(annotate?.upload || annotate?.runId) && (
         <>
           <span className="meta sep" aria-hidden="true">|</span>

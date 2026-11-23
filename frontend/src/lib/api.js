@@ -142,6 +142,9 @@ export const api = {
   exportSheet: ({ moduleCode, rows, createdAt, format }) =>
     download(`/api/export/sheet?format=${format}`, { module_code: moduleCode, rows, created_at: createdAt || null },
              `F02_검수확인서_${moduleCode || "모듈"}.${format}`),
+  // 직능연 검수 체크리스트(F03)로 옮겨 적을 표. kind: 원고 유형(신규개발/기존개선/기존양식편집)
+  exportF03: ({ moduleCode, rows, kind }) =>
+    download(`/api/export/f03?kind=${encodeURIComponent(kind)}`, { module_code: moduleCode, rows }, `F03_체크리스트_${moduleCode || "모듈"}.xlsx`),
   // 원고 hwpx에 지적사항을 한글 메모로 단 파일. upload = 원고가 들어 있는 업로드 토큰, rows = 체크리스트 행(적합 제외)
   // upload(방금 올린 원고 토큰) 또는 runId(이력 실행 id — 실행과 함께 보관된 원고) 중 하나
   exportAnnotated: ({ moduleCode, upload, runId, rows, createdAt }) =>

@@ -35,6 +35,23 @@ def register(app: FastAPI, services: Services) -> None:
             "Content-Disposition": f"attachment; filename=F02_sheet_{quote(code)}.{format}; filename*=UTF-8''{quote(filename)}",
         })
 
+    @app.post("/api/export/f03", responses={400: {"model": ErrorResponse}})
+    def export_f03(body: SheetExportRequest, kind: str = Query("기존개선")) -> Response:
+        """직능연 검수 체크리스트(F03)로 옮겨 적을 표(xlsx). F02 확인서 행을 F03 문항(01 검수 완료 파일, 03 PDF)에 묶는다.
+        kind: 원고 유형(신규개발/기존개선/기존양식편집) — 기존양식편집이면 ‘양식 편집에 적용’ 문항만 본다. 대응 항목이 없는 문항과 판단불가는 ‘확인 필요’."""
+        from ncs_service import export
+        from ncs_service.f03 import build_f03_xlsx, f03_rows
+
+        code = body.module_code.strip() or "모듈"
+        try:
+            content = build_f03_xlsx(code, f03_rows(export.full_sheet(body.rows), kind), kind=kind)
+        except ValueError as error:
+            return error_response(400, str(error))
+        filename = f"F03_체크리스트_{code}.xlsx"
+        return Response(content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
+            "Content-Disposition": f"attachment; filename=F03_checklist_{quote(code)}.xlsx; filename*=UTF-8''{quote(filename)}",
+        })
+
     @app.post("/api/export/annotated", responses={400: {"model": ErrorResponse}})
     def export_annotated(
         request: Request,
