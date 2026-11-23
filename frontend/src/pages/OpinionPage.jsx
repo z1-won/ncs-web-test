@@ -60,7 +60,7 @@ export default function OpinionPage() {
         <FileSlot id="opinion-first" label="1차 검토의견서" accept=".pdf,.hwp,.hwpx" file={first} onChange={setFirst} disabled={busy}
                   hint="개발계획서 및 초고본 검토의견서(PDF·hwp·hwpx). 1차·2차 중 하나 이상 필요합니다." />
         <FileSlot id="opinion-second" label="2차 검토의견서" accept=".pdf,.hwp,.hwpx" file={second} onChange={setSecond} disabled={busy}
-                  hint="완성본 검토의견서(PDF·hwp·hwpx)." />
+                  hint="완성본 검토의견서(PDF·hwp·hwpx). 소위원회 심의의견서(hwp·hwpx)도 두 칸 중 어디에나 넣을 수 있습니다(차수는 '심의'로 표시)." />
         <FileSlot id="opinion-final" label="최종 원고" required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={busy}
                   hint="의견을 반영한 원고(hwp/hwpx)." />
         <FileSlot id="opinion-print" label="출력본 PDF" accept=".pdf" file={printCopy} onChange={setPrintCopy} disabled={busy}

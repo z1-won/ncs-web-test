@@ -71,6 +71,22 @@ MANUSCRIPT = [
 ]
 
 
+def deliberation_tables(filled):
+    """심의의견서(F25 양식) 표 모양 — 머리 표(심의 위원·검토 자료) + `심의 항목 | 세분류 | 심의 의견` 표. ④⑤는 의견 칸이 세분류 칸까지 합쳐져 열 1에 있다."""
+    def text(value):
+        return value if filled else ""
+
+    head = {(0, 0): "심의 위원", (0, 1): "성명", (0, 3): "소속기관", (1, 1): text("홍길동"), (1, 3): "",
+            (2, 0): "심의 분야", (2, 1): "소위원회", (2, 2): "소분류", (2, 3): "검토 자료", (3, 3): "세분류", (3, 4): "학습모듈 원고명",
+            (4, 1): "", (4, 2): "", (4, 3): text("SW제품기획"), (4, 4): text("SW제품 판매 계획 수립")}
+    body = {(0, 0): "심의 항목", (0, 1): "세분류", (0, 2): "심의 의견",
+            (1, 0): "① 학습모듈과\nNCS 능력단위와의 정합성", (1, 1): "", (1, 2): text("※ 작성 요령: 항목별로 적는다\n- 수행준거와 학습 목표가 맞음"),
+            (2, 0): "② 학습모듈의 적정성", (2, 1): text("SW제품기획"), (2, 2): text("- <표 1-3> 인증 종류 최신화 필요\n- 수행 내용 사례 보강 필요"),
+            (3, 0): "③ 교육현장 활용의 용이성", (3, 1): "", (3, 2): text("- 의견 없음"),
+            (4, 0): "④ 기타 소위원회 상정 안건", (4, 1): text("-"), (5, 0): "⑤ 총 평", (5, 1): text("전반적으로 잘 구성됨")}
+    return [{"cells": head}, {"cells": body}]
+
+
 def opinion(text, group="학습 1", lesson=1, part="필요 지식", page="4"):
     return Opinion("2차", "의견서.pdf", group, lesson, part, page, text)
 
@@ -158,6 +174,20 @@ class SheetTests(unittest.TestCase):
         self.assertEqual([o.round for o in parse_tables([unmarked], "x.hwp", "2차").opinions], ["2차"])   # 표기가 없으면 지정 차수
         self.assertEqual(parse_lines(PDF_LINES, "의견서.pdf", "1차").round, "2차")                         # PDF도 제목 표기가 앞선다
         self.assertEqual(parse_lines(PDF_LINES[4:], "의견서.pdf", "1차").round, "1차")
+
+    def test_deliberation_sheet_items_and_empty_form(self):
+        sheet = parse_tables(deliberation_tables(filled=True), "심의의견서.hwp", "2차")
+        rows = [(o.round, o.group, o.lesson, o.part, o.page, o.text) for o in sheet.opinions]
+        self.assertEqual(rows, [
+            ("심의", "학습모듈과 NCS 능력단위와의 정합성", None, None, None, "수행준거와 학습 목표가 맞음"),
+            ("심의", "학습모듈의 적정성", None, None, None, "<표 1-3> 인증 종류 최신화 필요"),
+            ("심의", "학습모듈의 적정성", None, None, None, "수행 내용 사례 보강 필요"),
+            ("심의", "총 평", None, None, None, "전반적으로 잘 구성됨"),
+        ])
+        self.assertEqual(sheet.opinions[1].notes, ["세분류: SW제품기획"])
+        self.assertEqual((sheet.round, sheet.module_name), ("심의", "SW제품 판매 계획 수립"))
+        empty = parse_tables(deliberation_tables(filled=False), "F25.hwp")
+        self.assertEqual((empty.round, empty.opinions), ("심의", []))       # 빈 양식은 오류 없이 0개
 
     def test_split_bullets_keeps_hyphen_words(self):
         self.assertEqual(split_bullets("- 교수-학습 방법이 적합함. - 표 1-3 수정 필요 -> 반영"),
@@ -478,6 +508,33 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(given["요약"]["총 의견"], 2)
         self.assertEqual([(r["차수"], r["의견서"]) for r in given["의견"]], [("1차", "1차.hwpx"), ("2차", "2차.hwpx")])
         self.assertEqual(given["요약"], auto["요약"])
+
+    def test_deliberation_sheet_runs_through_review(self):
+        import make_fixtures as mf
+
+        rows = [["심의 항목", "세분류", "심의 의견"], ["① 학습모듈과 NCS 능력단위와의 정합성", "", "- 수행준거와 학습 목표가 맞음"],
+                ["② 학습모듈의 적정성", "SW제품기획", "- <표 1-3> 보안기능 확인서 추가 필요"], ["⑤ 총 평", "전반적으로 잘 구성됨"]]
+        calls = []
+
+        def reply(call):
+            return [answer(1, "조치 불필요", "확인 필요"), answer(2, evidence=[number_of(call, "보안기능 확인서")]),
+                    answer(3, "조치 불필요", "확인 필요")]
+
+        with tempfile.TemporaryDirectory() as folder:
+            final, _ = self.write(folder)
+            sheet = Path(folder) / "심의의견서.hwpx"
+            mf.write_hwpx(sheet, [[mf.table(rows)]])
+            result = review([sheet], final, rounds=["2차"], generate=fake(reply, calls=calls))
+            empty = Path(folder) / "빈양식.hwpx"
+            mf.write_hwpx(empty, [[mf.table(rows[:1] + [r[:1] + [""] * (len(r) - 1) for r in rows[1:]])]])
+            blank = review([empty], final, generate=fake(calls=calls))
+        self.assertEqual(result["의견서"][0]["차수"], "심의")
+        self.assertEqual([(r["차수"], r["구분"], r["판정"]) for r in result["의견"]],
+                         [("심의", "학습모듈과 NCS 능력단위와의 정합성", NO_ACTION), ("심의", "학습모듈의 적정성", REFLECTED),
+                          ("심의", "총 평", NO_ACTION)])
+        self.assertEqual(result["의견"][1]["찾은 범위"], "<표 1-3> 캡션 주변")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual((blank["요약"]["총 의견"], blank["의견"]), (0, []))
 
     def test_no_opinions_is_error(self):
         with self.assertRaises(ValueError):
