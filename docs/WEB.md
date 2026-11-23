@@ -89,6 +89,16 @@ npm run dev
 메인 메뉴의 **원고 분량**(`/volume`)은 집필료 산정용 분량 산정 페이지입니다(REQ-02-013). 최종 원고(필수)와 기존 원고·출력본 PDF(선택)를 올리고, 수작업으로 센 쪽수·원고료 단가·계약 분량(선택)과 부록 포함 여부(기본 포함 — 계약서 제13조 4항 ①, 정산지침 F16 인쇄 19쪽 검수 대상 표, 매뉴얼 F11 인쇄 20~21쪽)를 고릅니다. 시각 자료는 계약서 제2조 5항대로 모두 빼며, F16 검수 기준과 다른 점(인용 그림 포함·같은 세분류 재인용 제외)은 결과 알림으로만 알립니다. 활용 서식·부록은 필수가 아니라 차례에도 없으면 '원고에 없음'으로, 차례에 있는데 본문에서 못 찾으면 경고로 나눠 알립니다. 서버는 `POST /api/volume`(multipart: `manuscript`, `previous`, `print_copy`, `manual_pages`, `unit_price`, `contract_pages`, `include_appendix`)으로 `src/ncs_volume`의 산정표 JSON을 돌려주며 파일은 저장하지 않습니다. 결과의 `출력본`(PDF 측정: 전체 쪽 수, 구성별 쪽 범위, 쪽별 채움, 측정/계산 구분, 한글 계산과의 차이)·`채택 분량`(산정에 쓴 매수와 근거)·`집필료`(산식, 단가와 근거, 계약 분량 인정, 개선 기준, 근거 조항)는 새 키이고 기존 키는 그대로입니다. PDF 칸에 PDF가 아닌 파일, 0 이하 단가·계약 분량은 400입니다. pypdf가 없거나 다른 원고의 출력본이면 400이 아니라 `출력본.사유`에 판단불가로 적고 한글 값으로 산정합니다. `경고`와 `집필료.경고`는 `알림` 가운데 화면이 경고색으로 보일 문장들입니다(추정·판단불가, 단가 상한 초과, 계약 분량 초과·미달). 화면은 `frontend/src/pages/VolumePage.jsx`입니다.
 
 DB 모드(`DATABASE_URL`)에서는 산정할 때마다 `volume_runs` 표에 산정 이력을 남기고 응답에 `id`를 싣습니다(마이그레이션 `009_volume_runs`, 서버 시작 때 자동 적용). 남기는 것은 산정표 전체(`result`), 넣은 값(`params`: 단가·계약 분량·수작업 쪽수·부록 포함), 입력 파일의 역할·이름·sha256·크기(`inputs`), 목록용 열(모듈 코드·기입 분량·단가·집필료·추정 여부)이며 **원고 파일은 보관하지 않습니다**. 이력에 쓰지 못해도 산정 결과는 200으로 돌려주고 `id: null`과 `저장 오류`로 알립니다. `GET /api/volumes`(최신순 50건, 최대 100건; `module_code`·`limit`·`offset`), `GET /api/volumes/{id}`(산정표 + `created_at`·`입력`), `DELETE /api/volumes/{id}`가 붙고, 화면 아래 **산정 이력** 표에서 다시 열거나 지웁니다. 파일 저장 모드에서는 이력을 남기지 않으며 이 경로들도 없습니다(`/api/health`의 `history`로 구분).
+## 보안 설정과 보관 기한
+
+KISA 「홈페이지 SW(웹) 개발보안 가이드」 대조 점검에서 남았던 항목의 조치입니다(`tests/service/test_security.py`).
+
+- **API 문서는 닫혀 있습니다.** `/docs`, `/redoc`, `/openapi.json`은 `NCS_WEB_DEBUG=1`일 때만 열립니다. 로그인 검사가 `/api/` 아래만 보기 때문에 열어 두면 로그인 없이 보입니다.
+- **모든 응답에 보안 머리글이 붙습니다**(`server.SECURITY_HEADERS`): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Content-Security-Policy`(같은 출처만, 그림은 `data:`와 `blob:` 허용, style 속성 허용, 다른 사이트의 틀 안에 넣기 금지). 화면에 외부 CDN이나 인라인 스크립트를 더하면 이 정책에 막히므로 함께 고쳐야 합니다.
+- **결과 폴더는 1년 보관합니다.** DB 없이 돌린 결과(`결과/`)에서 `NCS_RESULT_TTL_DAYS`(기본 365)를 넘긴 실행 폴더를 서버를 띄울 때 지웁니다(`FileStore.prune`). 이 서비스가 만든 이름의 폴더만 지우고, 0이면 지우지 않습니다.
+- **생성형 AI 응답 캐시는 30일 보관합니다.** 코어 캐시는 호출 때마다, Claude 쪽 캐시(LLM 검토, 의견 반영 검토, 문장 추천, 그림 판독)는 서버를 띄울 때 `LLM_CACHE_TTL_DAYS`를 넘긴 파일을 지웁니다(`ncs_llmreview.claude.prune_cache`). 토큰 수만 든 `usage.jsonl`은 남깁니다.
+- 화면의 개인정보처리방침(`frontend/src/pages/PrivacyPage.jsx`)은 위 내용과 같아야 합니다. 보관 기한이나 외부로 보내는 내용을 바꾸면 방침도 함께 고칩니다.
+
 ## 로그인
 
 데이터베이스가 있는 서버(`DATABASE_URL`)는 로그인한 사람만 씁니다. `/api/` 아래 모든 경로가 로그인을 요구하고, 열려 있는 것은 `/api/login`, `/api/login/demo`(시연 계정 안내), `/api/logout`, `/api/me`, `/api/health`뿐입니다(`src/ncs_web/auth.py`). 처음 화면(`/`)만은 로그인 전에도 보이고(최근 원고 미리 보기는 숨김), 그 밖의 주소는 `/api/me`가 401이면 로그인 화면을 먼저 보인 뒤 로그인하면 가려던 화면을 엽니다. DB 없이 띄운 서버는 로그인이 없고 이 컴퓨터(127.0.0.1)에서만 열립니다.

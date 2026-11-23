@@ -216,9 +216,10 @@ pip install openpyxl               # scripts/batch/batch_review.py xlsx 출력�
 | `DATABASE_URL`, `NCS_DB_*` | PostgreSQL 검수 이력(선택). `DATABASE_URL`이 있으면 웹 서버와 검수 CLI가 결과를 DB에 남기고, 없으면 파일로만 저장 |
 | `NCS_EMBED_MODEL`, `NCS_EMBED_DEVICE` | 이미지 추천의 그림 임베딩(선택, `pip install -e ".[embed]"`). 모델을 이 컴퓨터에서 돌려 그림 자체를 문맥과 견준다 — 외부 전송 없음. 비우면 꺼짐(`docs/RECOMMEND.md`) |
 | `LLM_MODEL_RECOMMEND` | 이미지 추천(REQ-02-011)의 문단 요약에만 쓸 모델. 없으면 `LLM_MODEL` |
-| `LLM_CACHE_TTL_DAYS` | LLM 응답 캐시(`.llm_cache/`, 원고 문장이 평문으로 들어 있음) 보관 일수. 기본 30, 지난 파일은 호출 때마다 삭제. `0`이면 캐시 안 씀 |
+| `LLM_CACHE_TTL_DAYS` | LLM 응답 캐시(`.llm_cache/`, 원고 문장이 평문으로 들어 있음) 보관 일수. 기본 30, 지난 파일은 호출 때마다 삭제. `0`이면 캐시 안 씀. Claude 쪽 캐시(`.llm_cache/llmreview/`, `.llm_cache/figures/`)는 같은 일수를 넘긴 파일을 서버를 띄울 때 지움(`0`이면 지우지 않음) |
 | `NCS_WEB_ORIGINS` | 웹 API에 교차 출처 접근을 허용할 출처(쉼표 구분). 기본은 Vite dev 서버(`http://localhost:5173`, `http://127.0.0.1:5173`)뿐. 화면은 같은 출처(빌드본은 서버가 함께 냄, dev 서버는 `/api` 프록시)로 부르므로 보통 비워 둠 |
-| `NCS_WEB_DEBUG=1` | 검수 실행이 500으로 끝났을 때 응답에 traceback을 실음(개발용). 기본은 서버 로그에만 남김 |
+| `NCS_WEB_DEBUG=1` | 검수 실행이 500으로 끝났을 때 응답에 traceback을 실고, API 문서(`/docs`, `/redoc`, `/openapi.json`)를 엶(개발용). 기본은 traceback을 서버 로그에만 남기고 API 문서는 닫음 |
+| `NCS_RESULT_TTL_DAYS` | DB 없이 돌린 결과 폴더(`결과/`)의 보관 일수. 기본 365, 지난 실행 폴더는 서버를 띄울 때 지움. 0이면 지우지 않음 |
 
 키 값은 저장소·문서·채팅에 적지 않습니다.
 

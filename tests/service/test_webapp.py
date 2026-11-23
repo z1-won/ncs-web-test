@@ -299,8 +299,14 @@ class WebappTests(unittest.TestCase):
         self.assertEqual(body["engines"][0]["component"], "NCS-학습모듈의 위치")
         self.assertTrue(all(e["items"] and all(n in "①②③④⑤⑥⑦⑧⑨⑩" for n in e["items"]) and e["total"] >= len(e["items"]) for e in body["engines"]))
         self.assertNotIn("access-control-allow-origin", health.headers, "출처 없는 요청에는 CORS 헤더를 내지 않는다")
-        self.assertEqual(self.client.get("/docs").status_code, 200)
-        schema = self.client.get("/openapi.json").json()
+        # API 문서는 기본으로 닫혀 있다(KISA 3장 4.). 개발용 설정(NCS_WEB_DEBUG=1)으로 띄운 서버에서만 열린다
+        self.assertEqual(self.client.get("/docs").status_code, 404)
+        self.assertEqual(self.client.get("/openapi.json").status_code, 404)
+        with patch.dict(os.environ, {"NCS_WEB_DEBUG": "1"}):
+            debug = TestClient(create_app(out_dir=self.output, dist_dir=Path(self.temp.name) / "no_build"))
+        self.addCleanup(debug.close)
+        self.assertEqual(debug.get("/docs").status_code, 200)
+        schema = debug.get("/openapi.json").json()
         responses = schema["paths"]["/api/review"]["post"]["responses"]
         self.assertIn("400", responses)
         self.assertNotIn("422", responses)

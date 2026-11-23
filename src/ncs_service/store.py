@@ -8,7 +8,11 @@ supports_history가 True인 저장소만 제공한다. HTTP·업로드 객체는
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +22,10 @@ from .service import persist_review
 UploadedInput = tuple[str, Path]  # (사용자가 올린 파일 이름, 임시 저장 경로)
 VolumeInput = tuple[str, str, Path]  # (역할 manuscript/previous/print, 사용자가 올린 파일 이름, 임시 저장 경로)
 DEFAULT_OUT = "결과"
+
+
+# 결과 폴더 안에서 이 서비스가 만든 폴더 이름: 실행별 폴더(LM…_YYYYMMDD-HHMMSS_이름_꼬리)와 전체 실행 묶음(uuid)
+RUN_FOLDER = re.compile(r"^(?:LM\d{8,10}_\d+v\d+_\d{8}-\d{6}_.+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
 
 
 @dataclass(frozen=True)
@@ -42,7 +50,31 @@ class FileStore:
         self.out_dir = Path(out_dir).expanduser().resolve()
 
     def prepare(self) -> None:
-        """시작 시 준비 작업. 폴더는 저장 시점에 만들므로 할 일이 없다."""
+        """시작 시 준비 작업. 폴더는 저장 시점에 만든다. 보관 일수를 넘긴 결과 폴더를 지운다."""
+        self.prune()
+
+    def prune(self, days: float | None = None, *, now: float | None = None) -> int:
+        """보관 일수를 넘긴 실행 폴더를 지우고 지운 수를 돌려준다(KISA 3장 5. 백업 및 임시파일 노출 — 원고 문구가 든 결과를 무기한 두지 않는다).
+
+        days: 보관 일수. 없으면 NCS_RESULT_TTL_DAYS(기본 365, 0이면 지우지 않음).
+        이 서비스가 만든 이름(모듈 코드_시각_이름_꼬리, 전체 실행 묶음 id)의 폴더만 보고, 그 안에서 가장 최근에 바뀐 파일의 시각으로 판단한다.
+        결과 폴더에 사람이 둔 다른 폴더와 파일은 건드리지 않는다."""
+        days = float(os.getenv("NCS_RESULT_TTL_DAYS", "365")) if days is None else days
+        if days <= 0 or not self.out_dir.is_dir():
+            return 0
+        cutoff = (now if now is not None else time.time()) - days * 86400
+        removed = 0
+        for folder in self.out_dir.iterdir():
+            if not folder.is_dir() or not RUN_FOLDER.match(folder.name):
+                continue
+            try:
+                latest = max((item.stat().st_mtime for item in folder.rglob("*")), default=folder.stat().st_mtime)
+                if latest < cutoff:
+                    shutil.rmtree(folder)
+                    removed += 1
+            except OSError:
+                continue
+        return removed
 
     def save(self, review: ExecutedReview, uploads: list[UploadedInput] = (), group_id: str | None = None,
              *, source: str = "web") -> StoredReview:

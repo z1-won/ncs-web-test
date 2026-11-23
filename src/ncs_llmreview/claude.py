@@ -99,6 +99,28 @@ def _parse(text: str):
         return json.loads(m.group(0))
 
 
+def prune_cache(*, now: float | None = None) -> int:
+    """보관 일수(LLM_CACHE_TTL_DAYS, 기본 30, 0이면 지우지 않음)를 넘긴 Claude 응답 캐시를 지우고 지운 수를 돌려준다.
+
+    캐시 파일에는 보냈던 원고 문장·의견서 문장·그림 판독 결과가 평문으로 들어 있다. LLM 검토·의견 반영 검토·문장 추천
+    (llmreview/<작업>/)과 그림 판독(figures/<작업>/)을 함께 본다. usage.jsonl(토큰 수만)은 남긴다. 코어 캐시는 ncs_core.llm.prune_cache가 맡는다."""
+    days = float(os.getenv("LLM_CACHE_TTL_DAYS", "30"))
+    root = Path(os.getenv("LLM_CACHE_DIR") or ROOT / ".llm_cache")
+    if days <= 0:
+        return 0
+    cutoff = (now if now is not None else time.time()) - days * 86400
+    removed = 0
+    for part in ("llmreview", "figures"):
+        for file in (root / part).glob("*/*.json"):
+            try:
+                if file.stat().st_mtime < cutoff:
+                    file.unlink()
+                    removed += 1
+            except OSError:
+                continue
+    return removed
+
+
 def generate_json(system: str, document: str, request: str, *, task: str, tasks: list[str] | None = None,
                   out_schema: dict | None = None) -> dict:
     """→ {'data', 'usage', 'cached', 'model'}. document = [원고](캐시), request = [검토 항목]. 키·승인이 없으면 ClaudeError.

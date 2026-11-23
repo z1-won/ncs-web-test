@@ -14,10 +14,21 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
 from . import auth
-from .common import Services, allowed_origins, error_response
+from .common import Services, allowed_origins, error_response, logger
 from .routes import (aiimage, cases, export, figures, history, images, llm_review, opinion, plan, progress, recommend, review, rights, sources,
                      suggest, upscale, volume)
 from .uploads import UploadStore
+
+
+# 화면은 이 서버가 내는 파일만 쓴다(외부 CDN 없음). 그림 미리 보기는 data:·blob: 주소를 쓰고, KRDS와 React가 style 속성을 쓴다.
+# 다른 사이트의 틀 안에 넣지 못하게 하고(클릭재킹), 파일 형식을 내용으로 추측하지 않게 하며, 나가는 링크에 주소를 싣지 않는다.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; "
+                                "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"),
+}
 
 
 def create_app(
@@ -40,7 +51,20 @@ def create_app(
 
     refdata.set_data_dir(data_dir)
 
-    app = FastAPI(title="F02 검수 API")
+    # API 문서(/docs, /redoc, /openapi.json)는 경로와 인자를 모두 보여 주므로 기본으로 닫는다(KISA 3장 4. 관리자페이지 노출).
+    # 로그인 검사는 /api/ 아래만 보므로 열어 두면 로그인 없이 보인다. 개발할 때만 NCS_WEB_DEBUG=1로 연다.
+    debug = os.getenv("NCS_WEB_DEBUG") == "1"
+    app = FastAPI(title="F02 검수 API", docs_url="/docs" if debug else None, redoc_url="/redoc" if debug else None,
+                  openapi_url="/openapi.json" if debug else None)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        """모든 응답에 보안 머리글(KISA 3장 제2절). 이미 정한 값(그림 파일의 Cache-Control 등)은 덮어쓰지 않는다."""
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        return response
+
     app.add_middleware(
         CORSMiddleware, allow_origins=allowed_origins(), allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["Content-Type"],
@@ -49,6 +73,12 @@ def create_app(
     dist = Path(dist_dir).expanduser().resolve() if dist_dir is not None else None
     store = open_store(out_dir=out_dir, database_url=database_url)
     store.prepare()
+    try:        # 보관 일수를 넘긴 생성형 AI 응답 캐시(원고 문장이 평문으로 들어 있음)를 서버를 띄울 때 지운다
+        from ncs_llmreview import claude
+
+        claude.prune_cache()
+    except Exception as error:      # noqa: BLE001 — 정리에 실패해도 서버는 뜬다
+        logger.warning("생성형 AI 응답 캐시 정리 실패: %s", error)
     uploads_store = UploadStore()
     app.state.uploads = uploads_store
     if require_login and not store.supports_history:
