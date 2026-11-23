@@ -23,6 +23,29 @@ class FindSourceLineTests(unittest.TestCase):
         self.assertEqual(find_source_line(paras, 2), 0)
         self.assertEqual(find_ai_marker(paras, 2, 0), 1)
 
+    def test_ai_line_above_the_source_line_is_found_too(self):
+        """AI 활용 줄을 출처 줄 위에 적은 원고도 찾는다 — 찾아야 '순서가 양식과 다름'을 알릴 수 있다. 앞 그림의 캡션을 넘어가지는 않는다."""
+        paras = ["ChatGPT를 활용하여 생성함. 2026. 7. 20.", "출처: 집필진 제작(2026)", "[그림 1-1] 생산 설비"]
+        self.assertEqual(find_ai_marker(paras, 2, 1), 0)
+        paras = ["출처: 집필진 제작(2026)", "ChatGPT를 활용하여 생성함. 2026. 7. 20.", "[그림 1-1] 가", "출처: 집필진 제작(2026)", "[그림 1-2] 나"]
+        self.assertIsNone(find_ai_marker(paras, 4, 3))          # 위의 AI 활용 줄은 [그림 1-1]의 것
+
+    def test_ai_date_and_ai_words_in_source_line(self):
+        from ncs_core.source_line import ai_date_is_real, ai_in_source_line
+
+        self.assertTrue(ai_date_is_real(parse_ai_marker("ChatGPT를 활용하여 생성함. 2026. 7. 20.")))
+        self.assertTrue(ai_date_is_real(parse_ai_marker("ChatGPT를 활용하여 수정 보완함. 2026 .6. 23.")))
+        self.assertFalse(ai_date_is_real(parse_ai_marker("ChatGPT를 활용하여 생성함. 2026. 2. 30.")))
+        self.assertIsNone(ai_date_is_real(parse_ai_marker("ChatGPT를 활용하여 생성함.")))       # 일자가 없음
+        self.assertEqual(ai_in_source_line("집필진 제작 Google AI 활용 도식화 (2026)"), "strong")
+        self.assertEqual(ai_in_source_line("ChatGPT로 생성(2025)"), "strong")
+        for body in ("집필진 제작 Chat gpt활용 도식화(2026)", "집필진 제작 NotebookLM 활용 도식화(2026)", "집필진 제작 Notebook LM 활용 도식화 (2026)",
+                     "집필진 제작(2026). 제미나이 생성 이미지."):
+            self.assertEqual(ai_in_source_line(body), "strong", body)
+        self.assertEqual(ai_in_source_line("김철수(2020). 보고서 생성 기법. 백산출판사. p.3."), "weak")
+        self.assertIsNone(ai_in_source_line("집필진 제작(2026)"))
+        self.assertIsNone(ai_in_source_line("김철수(2020). 호텔 경영론. 백산출판사. p.3."))
+
 
 class ParseSourceTests(unittest.TestCase):
     def test_old_module_citation(self):

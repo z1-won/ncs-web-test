@@ -3,8 +3,9 @@
 그림의 생성형 AI 활용 표기(REQ-02-008, F08 AI 도구 사용 표기 예)도 여기서 본다. 그림 한 개의 순서는
     출처: 집필진 제작(2026)  →  ChatGPT를 활용하여 수정 보완함. 2026. 7. 20.  →  [그림 1-1] 그림명
 이고, AI 활용 줄이 있는 그림에만 체크 둘이 더 붙는다(없는 그림의 행은 그대로다 — AI를 썼는지는 원고만으로 알 수 없다).
-  AI 활용 줄 형식     꼴과 순서가 맞으면 O. 일자가 없거나 달력에 없는 날, 출처 줄보다 위에 있으면 X(글자로 확정되는 형식 오류).
-                      띄어쓰기·마침표가 표기 예와 다르거나 뒤에 다른 글이 붙으면 △, AI를 쓴 듯한 줄인데 활용 줄로 읽히지 않아도 △.
+  AI 활용 줄 형식     꼴과 순서가 맞으면 O. 일자가 없거나 달력에 없는 날, 출처 줄보다 위에 있음, 출처 줄 안에 AI 활용을 섞어 씀 → X.
+                      띄어쓰기·마침표 차이와 뒤에 붙은 글은 오류로 보지 않는다(표기 예 원문에도 있다). AI를 쓴 듯한 줄인데 활용 줄로 읽히지 않으면 △.
+                      출처 검토(ncs_sources)의 AI 표기 판정과 같은 기준이다.
   AI 활용 방식 구분   '생성함'인데 출처 줄이 '집필진 제작(연도)'가 아니면 △(다른 자료를 고친 것이면 '수정 보완함' — 후보일 뿐 확정하지 않는다).
 AI 활용 줄 읽기는 ncs_core.figures.parse_ai_mark(권리 증빙 점검, AI 활용 표기 넣기와 같은 읽기)를 쓴다.
 """
@@ -14,14 +15,11 @@ import re
 from ncs_core import NA, O, TRI, X, visible
 from ncs_core.figures import parse_ai_mark
 from ncs_core.source_line import (  # noqa: F401 — source_check는 공개 이름 유지
-    AI_LINE_EXAMPLE, CAPTION_START, OLD_AGENCY, SRC_HEAD, TEMPLATES, find_source_line, source_check)
+    AI_LINE_EXAMPLE, CAPTION_START, OLD_AGENCY, SRC_HEAD, TEMPLATES, ai_in_source_line, find_source_line, source_check)
 
 from .common import row
 
 # 출처 줄 읽기(SRC_HEAD·TEMPLATES·source_check·find_source_line)는 ncs_core.source_line이 유일한 원본이다. 여기에는 AI 활용 줄의 판정만 둔다.
-# AI 도구 사용 표기 예(F08)의 AI 활용 줄 꼴 — 'ChatGPT를 활용하여 생성함. 2026. 7. 20.' 도구 이름의 마침표는 숫자 사이(판 번호)만.
-# 코어의 AI_LINE은 느슨하게 읽는 정규식이고, 이것은 띄어쓰기·마침표까지 표기 예와 같은지 보는 꼴이다
-AI_LINE_FORM = re.compile(r"^[^\s.。,](?:[^.。]|(?<=\d)\.(?=\d)){0,40}?[을를] 활용하여 (생성함|수정 보완함)\. \d{4}\. \d{1,2}\. \d{1,2}\.$")
 AI_EXTRA = 12        # AI 활용 줄 뒤에 붙을 수 있는 글자 수 — 이보다 길면 본문 문장으로 본다(ncs_core.figures와 같은 값)
 AI_HINT = re.compile(r"생성형\s*AI|AI\s*(?:로|으로|를)?\s*(?:생성|제작|수정|보정|활용)|GPT|Gemini|제미나이|미드저니|Midjourney|DALL")
 AI_HINT_MAX = 60     # AI를 쓴 듯한 줄로 볼 길이 — 본문 문장은 빼기 위해
@@ -43,6 +41,11 @@ def ai_checks(lines: list[tuple[int, str]], source_at: int | None, source_value:
     """
     found = next(((i, text.strip(), mark) for i, text in lines if (mark := _ai_mark(text)) is not None), None)
     if found is None:
+        source_text = next((text for i, text in lines if i == source_at), "") if source_at is not None else ""
+        if ai_in_source_line(SRC_HEAD.sub("", source_text).strip()) == "strong":
+            # AI 활용 줄은 출처 줄과 따로 적는다(REQ-02-008: ① 출처 줄 ② AI 활용 줄 ③ 그림 번호·제목) — 출처 줄에 섞어 쓴 것은 형식 오류
+            return ({"AI 활용 줄 형식": X},
+                    {"AI 활용 줄 형식": f"원고 「{source_text.strip()}」 — 출처 줄 안에 AI 활용이 섞여 있음. 출처 줄 다음 줄에 {AI_LINE_EXAMPLE} 꼴로 따로 적음"})
         hint = next((text.strip() for i, text in lines if i != source_at and len(text.strip()) <= AI_HINT_MAX
                      and AI_HINT.search(text) and not SENTENCE.search(text)), None)
         if hint is None:
@@ -57,10 +60,7 @@ def ai_checks(lines: list[tuple[int, str]], source_at: int | None, source_value:
     elif source_at is not None and at < source_at:
         checks["AI 활용 줄 형식"] = X
         notes["AI 활용 줄 형식"] = f"원고 「{text}」 — AI 활용 줄이 출처 줄 위에 있음(출처 줄 아래, 그림 번호 위에 적음)"
-    elif not AI_LINE_FORM.match(text):
-        checks["AI 활용 줄 형식"] = TRI
-        notes["AI 활용 줄 형식"] = f"원고 「{text}」 — 띄어쓰기·마침표가 표기 예 {AI_LINE_EXAMPLE}와 다르거나 뒤에 다른 글이 있음. 확인 필요"
-    else:
+    else:     # 띄어쓰기·마침표 차이와 뒤에 붙은 글은 형식 오류로 보지 않는다 — 요건은 도구·'생성함/수정 보완함'·일자와 순서다(출처 검토와 같은 기준)
         checks["AI 활용 줄 형식"] = O
     if source_value == O:      # 출처 줄을 읽었을 때만 견준다
         if mark.mode == "generated" and template != TEMPLATES[0][0]:

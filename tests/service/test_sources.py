@@ -45,6 +45,21 @@ class RuleTests(unittest.TestCase):
         orphan = check_entry(entry(ai="Gemini를 활용하여 수정 보완함. 2025. 3. 2."))[0]
         self.assertEqual(orphan["AI 표기 순서"], "X")                     # 출처 줄 없이 AI 줄만
 
+    def test_ai_date_must_be_a_real_day_and_spacing_is_not_an_error(self):
+        """달력에 없는 날은 형식 오류(X) — 일자는 요건이다(REQ-02-008 ②). 띄어쓰기·뒤에 붙은 글은 오류가 아니다. 필요 지식 ⑧과 같은 기준."""
+        bad = check_entry(entry(source="출처: 집필진 제작(2025)", ai="ChatGPT를 활용하여 생성함. 2025. 13. 40."))
+        self.assertEqual(bad[0]["AI 표기 형식"], "X")
+        self.assertIn("달력에 없는", bad[1]["AI 표기 형식"])
+        for line in ("ChatGPT를 활용하여 생성함.2025.3.2.", "ChatGPT를 활용하여 수정 보완함. 2026 .6. 23.", "ChatGPT를 활용하여 생성함. 2025. 3. 2. (초안)"):
+            self.assertEqual(check_entry(entry(source="출처: 집필진 제작(2025)", ai=line))[0]["AI 표기 형식"], "O", line)
+
+    def test_weak_ai_words_in_source_line_are_candidates(self):
+        """출처 줄의 '생성'·'도식화' 같은 낱말만으로는 AI 활용이라 단정하지 않는다(문헌 제목일 수 있다) — 후보(△). 도구 이름·'AI 활용'은 X."""
+        weak = check_entry(entry(source="출처: 김철수(2020). 보고서 생성 기법. 백산출판사. p.3."))[0]
+        self.assertEqual(weak.get("AI 표기 위치"), "△")
+        strong = check_entry(entry(source="출처: 집필진 제작 Google AI 활용 도식화 (2026)"))[0]
+        self.assertEqual(strong["AI 표기 위치"], "X")
+
     def test_ai_mixed_into_source_line(self):
         mixed = check_entry(entry(source="출처: ChatGPT로 생성(2025)"))[0]
         self.assertEqual(mixed["AI 표기 위치"], "X")

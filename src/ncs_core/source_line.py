@@ -161,12 +161,52 @@ def parse_ai_marker(text: str) -> AiMarker | None:
 
 
 def find_ai_marker(paragraphs: list[str], caption_para: int, source_para: int | None, *, window: int = 3) -> int | None:
-    """AI 활용 줄 인덱스. 양식대로면 출처 줄과 캡션 사이, 아니면 캡션 위 window 문단 안. 캡션 문단 자체에 붙은 경우도 본다."""
+    """AI 활용 줄 인덱스. 양식대로면 출처 줄과 캡션 사이, 아니면 캡션 위 window 문단 안. 캡션 문단 자체에 붙은 경우도 본다.
+    출처 줄 위에 적은 것도 찾는다(순서가 양식과 다르다고 알리려면 찾아야 한다) — 앞 그림·표의 캡션을 넘어가지는 않는다."""
     start = source_para + 1 if source_para is not None else max(0, caption_para - window)
     for i in range(start, min(caption_para + 1, len(paragraphs))):
         if parse_ai_marker(paragraphs[i] or ""):
             return i
+    if source_para is not None:
+        for i in range(source_para - 1, max(source_para - window, 0) - 1, -1):
+            text = paragraphs[i] or ""
+            if CAPTION_START.match(text):
+                break
+            if parse_ai_marker(text):
+                return i
     return None
+
+
+def ai_date_is_real(marker: AiMarker | None) -> bool | None:
+    """AI 활용 줄의 일자가 달력에 있는 날인가. 일자가 없으면 None. (parse_ai_marker는 숫자 꼴만 읽고 날짜인지는 보지 않는다.)"""
+    if marker is None or not marker.date:
+        return None
+    from datetime import date
+
+    numbers = [int(n) for n in re.findall(r"\d+", marker.date)]
+    if len(numbers) != 3:
+        return False
+    try:
+        date(*numbers)
+    except ValueError:
+        return False
+    return True
+
+
+# 출처 줄 안에 AI 활용을 섞어 쓴 표기 — 도구 이름이나 'AI 활용/생성'처럼 분명한 것(strong)과, '생성'·'도식화'처럼 문헌 제목일 수도 있는 낱말뿐인 것(weak)
+AI_IN_SOURCE = re.compile(r"활용하여\s*(?:생성|수정\s*보완)|활용(?:한|하여)?\s*도식화|GPT|Gemini|제미나이|Notebook\s*LM|Copilot|코파일럿|Claude|클로드|"
+                          r"Midjourney|미드저니|DALL|Banana|바나나|생성형\s*AI|AI\s*(?:로|으로|를|을)?\s*(?:생성|제작|수정|보정|활용)|"
+                          r"인공\s*지능\s*(?:으로|을)?\s*(?:생성|제작|활용)", re.IGNORECASE)
+
+
+def ai_in_source_line(body: str) -> str | None:
+    """'출처:' 뒤의 글에 AI 활용 표기가 섞였는가 → 'strong'(분명함) / 'weak'(낱말만 — 확인 후보) / None. '집필진 제작(연도)' 꼴은 None."""
+    body = (body or "").strip()
+    if TEMPLATES[0][1].match(body):
+        return None
+    if AI_IN_SOURCE.search(body):
+        return "strong"
+    return "weak" if AI_MARK.search(body) else None
 
 
 def ai_type_candidates(source: SourceInfo | None, marker: AiMarker | None) -> tuple[int, ...]:

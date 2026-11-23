@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import re
 
-from ncs_core.source_line import (AI_MARK, DATE, ELEMENT_NAMES, OLD_AGENCY, REQUIRED_ELEMENTS, ai_type_candidates,
-                                  has_element, source_check)
+from ncs_core.source_line import (DATE, ELEMENT_NAMES, OLD_AGENCY, REQUIRED_ELEMENTS, ai_date_is_real, ai_in_source_line,
+                                  ai_type_candidates, has_element, source_check)
 from ncs_core.text import NA, O, TRI, X
 
 REQUIRED = REQUIRED_ELEMENTS     # 제4조 요건 — ncs_core.source_line 한 곳(그림 검수와 같음)
@@ -82,10 +82,14 @@ def _ai_checks(entry: dict, checks: dict, notes: dict, fixes: list[str]) -> None
     source, marker, line = entry.get("source"), entry.get("ai"), entry.get("source_line") or ""
     body = re.sub(r"^출\s*처\s*[:：]\s*", "", line)
     if marker is None:
-        if line and AI_MARK.search(body) and not re.match(r"^집필진\s*제작", body):
+        mixed = ai_in_source_line(body) if line else None
+        if mixed == "strong":
             checks["AI 표기 위치"] = X
             notes["AI 표기 위치"] = "출처 줄 안에 AI 활용이 섞여 있음 — 출처 줄 다음에 AI 활용 줄을 따로 적어야 함"
             fixes.append("출처 줄 다음 줄에 '○○를 활용하여 생성함(또는 수정 보완함). YYYY. M. D.'")
+        elif mixed == "weak":     # '생성'·'도식화' 같은 낱말뿐 — 문헌 제목일 수 있어 확정하지 않는다(필요 지식 ⑧과 같은 기준)
+            checks["AI 표기 위치"] = TRI
+            notes["AI 표기 위치"] = "출처 줄에 AI 활용으로 읽힐 수 있는 낱말이 있음 — AI를 활용한 것이면 출처 줄 다음에 AI 활용 줄을 따로 적어야 함. 확인"
         return
     # 형식
     missing = [name for name, value in (("도구 이름", marker.tool), ("'생성함/수정 보완함'", marker.action), ("일자", marker.date)) if not value]
@@ -95,6 +99,10 @@ def _ai_checks(entry: dict, checks: dict, notes: dict, fixes: list[str]) -> None
         checks["AI 표기 형식"] = X
         notes["AI 표기 형식"] = f"「{marker.raw[:60]}」에 {', '.join(missing)}이(가) 없거나 틀림"
         fixes.append("'○○를 활용하여 생성함(또는 수정 보완함). YYYY. M. D.' 꼴로")
+    elif ai_date_is_real(marker) is False:      # 일자는 요건이다(REQ-02-008 ②) — 달력에 없는 날은 일자가 아니다. 필요 지식 ⑧과 같은 기준
+        checks["AI 표기 형식"] = X
+        notes["AI 표기 형식"] = f"「{marker.raw[:60]}」의 일자 {marker.date}는 달력에 없는 날짜임"
+        fixes.append("AI를 활용한 실제 일자로 고침(YYYY. M. D.)")
     else:
         checks["AI 표기 형식"] = O
         notes["AI 표기 형식"] = f"{marker.tool}를 활용하여 {marker.action}함. {marker.date}"

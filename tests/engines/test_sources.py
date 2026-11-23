@@ -96,10 +96,13 @@ class AiMarkTests(unittest.TestCase):
         self.assertIn("출처 줄 아래", above["비고"]["AI 활용 줄 형식"])
         self.assertIsNotNone(above["수정 제안"])
 
-    def test_spacing_or_extra_words_are_left_to_a_person(self):
-        for line in ("ChatGPT를 활용하여 수정보완함. 2026. 7. 20.", "ChatGPT를 활용하여 생성함 2026.7.20", "ChatGPT를 활용하여 생성함. 2026. 7. 20. (초안)"):
+    def test_spacing_or_extra_words_are_not_form_errors(self):
+        """띄어쓰기·마침표 차이, 뒤에 붙은 글은 형식 오류로 보지 않는다 — 요구사항(REQ-02-008)은 도구·'생성함/수정 보완함'·일자와 순서만 정하고,
+        직능연 표기 예(F08) 원문도 날짜 띄어쓰기가 어긋나거나 캡션이 붙은 예가 있다. 출처 검토(ncs_sources)와 같은 기준."""
+        for line in ("ChatGPT를 활용하여 수정보완함. 2026. 7. 20.", "ChatGPT를 활용하여 생성함 2026.7.20", "ChatGPT를 활용하여 생성함. 2026. 7. 20. (초안)",
+                     "ChatGPT를 활용하여 수정 보완함. 2026 .6. 23."):
             row = self.figure("출처: 집필진 제작(2026)", line)
-            self.assertEqual((row["판정"], row["체크"]["AI 활용 줄 형식"]), ("판단불가", "△"), line)
+            self.assertEqual((row["판정"], row["체크"]["AI 활용 줄 형식"]), ("적합", "O"), line)
 
     def test_generated_with_someone_elses_source_is_a_candidate(self):
         row = self.figure("출처: 김철수(2020). 『호텔 경영론』. 백산출판사. p.12.", "ChatGPT를 활용하여 생성함. 2026. 7. 20.")
@@ -111,9 +114,13 @@ class AiMarkTests(unittest.TestCase):
         self.assertEqual((alone["체크"]["출처 줄 존재"], alone["체크"]["AI 활용 줄 형식"], alone["판정"]), ("X", "O", "부적합"))
         hint = self.figure("출처: 집필진 제작(2026)", "생성형 AI로 그린 그림")
         self.assertEqual((hint["판정"], hint["체크"]["AI 활용 줄 형식"]), ("판단불가", "△"))
+        # 출처 줄 안에 AI 활용을 섞어 쓴 것: 도구 이름·'AI 활용'처럼 분명하면 형식 오류(X) — AI 활용 줄은 출처 줄과 따로 적는다(REQ-02-008 ①②).
         old = self.figure("출처: 집필진 제작 Google AI 활용 도식화 (2026)")
-        self.assertEqual((old["판정"], old["체크"]["출처 형식 골격"]), ("판단불가", "△"))
-        self.assertIn("활용하여", old["비고"]["출처 형식 골격"])
+        self.assertEqual((old["판정"], old["체크"]["AI 활용 줄 형식"]), ("부적합", "X"))
+        self.assertIn("출처 줄 안에", old["비고"]["AI 활용 줄 형식"])
+        # '생성'·'도식화' 같은 낱말뿐이면 제목일 수 있다 — 후보(△)로만
+        weak = self.figure("출처: 김철수(2020) 보고서 생성 기법, 백산출판사")
+        self.assertNotIn("AI 활용 줄 형식", weak["체크"])
 
     def test_figures_without_ai_are_untouched(self):
         row = self.figure("출처: 집필진 제작(2026)")
