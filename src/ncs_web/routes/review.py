@@ -143,7 +143,7 @@ def register(app: FastAPI, services: Services) -> None:
         return payload
 
     def _work_stage(value: str) -> int | None:
-        from ncs_service.progress import REVIEW_STAGES
+        from ncs_service.workflow.progress import REVIEW_STAGES
 
         if not value.strip():
             return None
@@ -175,12 +175,12 @@ def register(app: FastAPI, services: Services) -> None:
             except Exception as error:      # 단계 표시는 부가 정보라 검수 결과를 막지 않는다
                 logger.exception("검수 단계 표시 실패: %s", error)
         if version_id and stored.run_id is not None:     # 세분류 건의 판본으로 돌린 검수 — 그 판본에 붙인다. 붙이지 못하면 근거가 끊기므로 실패로 알린다
-            from ncs_service import cases
+            from ncs_service.workflow import cases
 
             if check != "plan":
                 cases.tag_review_version(store.dsn, stored.run_id, version_id)
         if case_file_id and check == "plan" and stored.run_id is not None:     # 건의 개발계획서로 돌린 점검 — 그 문서에 붙인다
-            from ncs_service import cases
+            from ncs_service.workflow import cases
 
             cases.tag_review_case_file(store.dsn, stored.run_id, case_file_id)
         saved_paths = (

@@ -159,7 +159,7 @@ class PostgresStore:
 
     def list_manuscripts(self, **filters) -> list[dict]:
         from . import postgres
-        from .progress import stages_done, stages_recorded
+        from .workflow.progress import stages_done, stages_recorded
 
         rows = postgres.list_manuscripts(self.dsn, **filters)
         return [{**row, "stages_recorded": stages_recorded(set(row["kinds"])), "stages_done": stages_done(set(row["kinds"]))} for row in rows]
@@ -167,7 +167,7 @@ class PostgresStore:
     def get_progress(self, module_code: str, *, name: str = "") -> dict:
         """기록이 하나도 없는 원고도 빈 현황을 돌려준다 — 일을 시작하기 전에 원고를 열어 단계를 표시할 수 있어야 한다."""
         from . import postgres
-        from .progress import build
+        from .workflow.progress import build
 
         return build(module_code, postgres.progress_sources(self.dsn, module_code) or {}, name=name)
 

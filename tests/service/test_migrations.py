@@ -6,7 +6,7 @@
 import re
 import unittest
 
-from ncs_service import image_terms
+from ncs_service.images import image_terms
 from ncs_service.migrations import IMAGE_DB, MIGRATIONS, SCHEMA
 
 
@@ -53,7 +53,7 @@ def allowed_values(sql: str, table: str, column: str) -> set[str]:
 
 
 class ImageDbSchemaTests(unittest.TestCase):
-    """006_image_db(REQ-02-010): 허용값이 ncs_service.image_terms와 같고, 필요한 표·뷰가 모두 있다."""
+    """006_image_db(REQ-02-010): 허용값이 ncs_service.images.image_terms와 같고, 필요한 표·뷰가 모두 있다."""
 
     def test_migration_is_registered(self):
         self.assertIn(("006_image_db", IMAGE_DB), MIGRATIONS)

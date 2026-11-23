@@ -1,10 +1,10 @@
-"""원고 진행 현황(REQ-02-007, ncs_service.progress) — 개수만 남기는 요약, 기록 → 단계 7개와 진행도, 목록의 단계 수, DB 없는 서버."""
+"""원고 진행 현황(REQ-02-007, ncs_service.workflow.progress) — 개수만 남기는 요약, 기록 → 단계 7개와 진행도, 목록의 단계 수, DB 없는 서버."""
 
 import json
 import tempfile
 import unittest
 
-from ncs_service.progress import (EMPTY, FIGURES, OPINION, RECORDED, RIGHTS, SOURCES, STAGES, build, content_progress, editing_progress,
+from ncs_service.workflow.progress import (EMPTY, FIGURES, OPINION, RECORDED, RIGHTS, SOURCES, STAGES, build, content_progress, editing_progress,
                                   stages_recorded, summarize_figures, summarize_opinion, summarize_rights, summarize_sources)
 
 CODE = "LM2001021701_25v1"
@@ -165,7 +165,7 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(stages_recorded({"review"}), 1)
         self.assertEqual(stages_recorded({"opinion", "opinion:1차 심의", "rights"}), 2)      # '1차 심의'는 심의 단계
         self.assertEqual(stages_recorded(set()), 0)
-        from ncs_service.progress import stages_done
+        from ncs_service.workflow.progress import stages_done
         self.assertEqual(stages_done({"review", "done:1", "done:6"}), 2)
         self.assertEqual(stages_recorded({"done:1", "done:6"}), 0)      # 완료 표시는 기록이 아니다
 

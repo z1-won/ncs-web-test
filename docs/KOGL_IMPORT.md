@@ -3,8 +3,8 @@
 공공누리에서 모은 그림을 과업 안내의 입력 형식(`schema_version: "0.1-PoC"`) 그대로 이미지 저작권 DB(REQ-02-010)에 넣는다.
 수집표를 따로 만들지 않는다. 이 JSON 1개와 그림 파일들이 입력의 전부다.
 
-구현은 `ncs_service/kogl_import.py`. 수집 JSON의 항목을 이미지 레코드([IMAGE_RECORD.md](IMAGE_RECORD.md))로 바꾼 뒤
-레코드 적재(`ncs_service/image_db.py`)에 넘기므로, 중복 처리·확정 보호·이력은 레코드 적재와 같다.
+구현은 `ncs_service/images/kogl_import.py`. 수집 JSON의 항목을 이미지 레코드([IMAGE_RECORD.md](IMAGE_RECORD.md))로 바꾼 뒤
+레코드 적재(`ncs_service/images/image_db.py`)에 넘기므로, 중복 처리·확정 보호·이력은 레코드 적재와 같다.
 
 ## 쓰는 법
 
@@ -14,8 +14,8 @@
 명령줄(그림은 JSON과 같은 폴더에 둔다):
 
 ```
-python -m ncs_service.image_db 수집.json --check
-python -m ncs_service.image_db 수집.json --by 이름
+python -m ncs_service.images.image_db 수집.json --check
+python -m ncs_service.images.image_db 수집.json --by 이름
 ```
 
 예시: `docs/examples/kogl_samples/`(JSON 1개 + 그림 1장. 그림과 기관명은 형식 확인용으로 만든 것이며 실제 공공누리 자료가 아니다).

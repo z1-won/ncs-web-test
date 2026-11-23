@@ -13,7 +13,7 @@ from uuid import uuid4
 import psycopg
 from fastapi.testclient import TestClient
 
-from ncs_service.image_db import load_records
+from ncs_service.images.image_db import load_records
 from ncs_service.postgres import migrate
 from ncs_web.server import create_app
 

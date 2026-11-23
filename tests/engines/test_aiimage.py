@@ -278,8 +278,8 @@ class WebTests(unittest.TestCase):
 
 class RegisterTests(unittest.TestCase):
     def test_upscaled_pictures_become_image_records_with_ai_fields(self):
-        from ncs_service import ai_register
-        from ncs_service.image_db import LoadReport
+        from ncs_service.images import ai_register
+        from ncs_service.images.image_db import LoadReport
 
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
@@ -290,7 +290,7 @@ class RegisterTests(unittest.TestCase):
                 (work / f"{bin_id}.bin").write_bytes(S.png(99, 80, 60))
                 (work / f"{bin_id}.json").write_text(json.dumps({"bin_id": bin_id, "status": "완료", "engine": engine, "target_dpi": 300,
                                                                 "new_href": f"BinData/{bin_id}.png", "media_type": "image/png"}), encoding="utf-8")
-            with mock.patch("ncs_service.image_db.load_records", return_value=LoadReport(total=1, created=1)) as load:
+            with mock.patch("ncs_service.images.image_db.load_records", return_value=LoadReport(total=1, created=1)) as load:
                 result = ai_register.register_upscaled("dsn", manuscript, work, "LM1203020201_24v3", by="김에디터", on=date(2026, 11, 23), target_dpi=300)
             records = load.call_args.args[1]
         self.assertEqual(result, {"그림": 1, "새 그림": 1, "확정 유지": 0, "캡션 없음": ["image9"], "거부": []})
@@ -301,7 +301,7 @@ class RegisterTests(unittest.TestCase):
         self.assertEqual((record["placements"][0]["label"], record["placements"][0]["module_code"], record["upscaled"]["engine"]),
                          ("그림 1-2", "LM1203020201_24v3", "esrgan-best"))
         self.assertEqual(record["content"], S.png(2))
-        from ncs_service.image_records import normalize
+        from ncs_service.images.image_records import normalize
         self.assertEqual(normalize(record).rights["ai_usage"], 3)             # 이미지 레코드 형식 검사를 통과한다
 
 

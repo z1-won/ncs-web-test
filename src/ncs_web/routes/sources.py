@@ -60,7 +60,7 @@ def register(app: FastAPI, services: Services) -> None:
 
     def _record(manuscript: str, result: dict, module_code: str) -> None:
         """원고 진행 현황(REQ-02-007)의 저작권 검수 진행도에 쓸 개수만 남긴다(DB 모드). 출처 원문은 남기지 않는다. 실패해도 검토 결과는 그대로 준다."""
-        from ncs_service.progress import SOURCES, summarize_sources
+        from ncs_service.workflow.progress import SOURCES, summarize_sources
 
         try:
             services.store.save_work_record(SOURCES, manuscript, summarize_sources(result), [{"role": "manuscript", "filename": manuscript}],

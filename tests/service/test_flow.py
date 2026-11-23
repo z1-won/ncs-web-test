@@ -1,12 +1,12 @@
-"""세분류 건의 단계 정의표와 상태 전이(ncs_service.flow) — DB 없이 표와 규칙만 본다."""
+"""세분류 건의 단계 정의표와 상태 전이(ncs_service.workflow.flow) — DB 없이 표와 규칙만 본다."""
 
 import re
 import unittest
 
-from ncs_service import flow
-from ncs_service.accounts import ROLES
+from ncs_service.workflow import flow
+from ncs_service.auth.accounts import ROLES
 from ncs_service.migrations import MIGRATIONS
-from ncs_service.progress import STAGE_NUMBERS
+from ncs_service.workflow.progress import STAGE_NUMBERS
 
 
 def event(stage, action, volume="v1", note="", actor="김에디터(kim)", at="2026-11-21T10:00:00"):

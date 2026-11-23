@@ -62,7 +62,7 @@ def register(app: FastAPI, services: Services) -> None:
         if len(named) > MAX_FORMS:
             raise HTTPException(400, f"서류는 한 번에 {MAX_FORMS}개까지 올릴 수 있습니다")
         if save:
-            from ncs_service.flow import MANAGER_ROLES
+            from ncs_service.workflow.flow import MANAGER_ROLES
 
             account = getattr(request.state, "account", None)
             if account is not None and account.get("role") not in MANAGER_ROLES:
@@ -100,7 +100,7 @@ def register(app: FastAPI, services: Services) -> None:
                 raise HTTPException(400, str(error)) from None
             report["저장"] = None
             if save:
-                from ncs_service.rights_link import save_to_image_db
+                from ncs_service.images.rights_link import save_to_image_db
 
                 try:
                     code = resolve_module_code(manuscript_path, module_code)
@@ -111,7 +111,7 @@ def register(app: FastAPI, services: Services) -> None:
             # 원고 진행 현황(REQ-02-007)에 쓸 개수만 남긴다(판정·그림 수·누락 수와 파일 이름). 현황표·지적사항은 남기지 않는다
             report["진행 현황 기록"] = None
             try:
-                from ncs_service.progress import RIGHTS, summarize_rights
+                from ncs_service.workflow.progress import RIGHTS, summarize_rights
 
                 files = [{"role": "manuscript", "filename": manuscript_path.name}] + [{"role": "form", "filename": p.name} for p in form_paths]
                 report["진행 현황 기록"] = store.save_work_record(RIGHTS, manuscript_path.name, summarize_rights(report), files,

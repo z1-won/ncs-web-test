@@ -1,6 +1,6 @@
 """이미지 저작권 DB 점검(REQ-02-010 검증 기준) — 지금 DB에 든 것으로 두 가지를 센다.
 
-    python -m ncs_service.image_audit [--json]        # DATABASE_URL 필요. 노출이 1건이라도 있으면 종료 코드 1
+    python -m ncs_service.images.image_audit [--json]        # DATABASE_URL 필요. 노출이 1건이라도 있으면 종료 코드 1
 
   필수 항목   '권리 정보 필수 항목 충족(구조·형식 정확성 99.5%)'. 그림마다 그 그림에 해당하는 항목만 따져
               채워진 항목 ÷ 따진 항목으로 낸다. 전체와 기관 확정분을 따로 낸다(자동 태깅 상태는 덜 채워진 것이 정상이다)

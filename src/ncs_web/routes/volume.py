@@ -91,7 +91,7 @@ def register(app: FastAPI, services: Services) -> None:
 
         @app.get("/api/volumes/{run_id}")
         def volume_detail(request: Request, run_id: str) -> dict:
-            from ncs_service import access
+            from ncs_service.auth import access
 
             if not access.allowed(store.dsn, scope_of(request, store), "volume", run_id):
                 raise HTTPException(404, "산정 이력을 찾을 수 없습니다")
@@ -102,7 +102,7 @@ def register(app: FastAPI, services: Services) -> None:
 
         @app.delete("/api/volumes/{run_id}", status_code=204)
         def volume_delete(request: Request, run_id: str) -> Response:
-            from ncs_service import access
+            from ncs_service.auth import access
 
             if not access.allowed(store.dsn, scope_of(request, store), "volume", run_id):
                 raise HTTPException(404, "산정 이력을 찾을 수 없습니다")

@@ -71,5 +71,13 @@
 ## 알아 둘 예외
 
 - `ncs_plan/__main__.py`와 `ncs_figures/__main__.py`는 명령줄 실행 때만 `ncs_service`를 씁니다(공용 CLI, 메모 원고). 패키지 본체는 `ncs_core`만 씁니다.
-- `ncs_service`는 파일이 27개로 커졌습니다. 이미지 저작권 DB(`image_*`, `kogl_import`, `ai_register`, `rights_link`), 세분류 건(`cases`, `flow`, `progress`), 계정(`accounts`, `access`)이 한 폴더에 있습니다. 하위 폴더로 나누는 것은 남은 일입니다.
-- AI 활용 줄을 읽는 함수가 `ncs_figures`와 `ncs_core/source_line.py`에 따로 있습니다. 판정 기준은 맞춰 두었지만 한쪽으로 모으는 것은 남은 일입니다.
+- `ncs_service` 맨 위에는 검수 실행과 저장(`service`, `registry`, `store`, `postgres`, `migrations`, `cli`)과 내보내기(`export`, `annotate`, `f03`)만 있고, 나머지는 하위 폴더 셋입니다.
+
+  | 폴더 | 든 것 |
+  |---|---|
+  | `ncs_service/images/` | 이미지 저작권 DB: `image_records`, `image_store`, `image_db`, `image_audit`, `image_recommend`, `image_terms`, `image_embed`, `kogl_import`, `ai_register`, `rights_link` |
+  | `ncs_service/workflow/` | 세분류 건과 진행 현황: `cases`, `flow`, `progress` |
+  | `ncs_service/auth/` | 계정과 볼 수 있는 범위: `accounts`, `access` |
+
+  명령도 경로가 바뀌었습니다: `python -m ncs_service.images.image_db`, `python -m ncs_service.images.image_embed`, `python -m ncs_service.auth.accounts`(설치했다면 `ncs-accounts`. 경로가 바뀌었으니 `pip install -e ".[web]"`을 한 번 다시 해야 합니다).
+- AI 활용 줄('○○를 활용하여 생성함. 2026. 7. 20.')을 읽는 규칙은 `ncs_core/ai_mark.py` 한 곳에 있습니다. `figures.parse_ai_mark`(필요 지식 ⑧, 권리 증빙 점검, AI 표기 넣기)와 `source_line.parse_ai_marker`(그림 검수, 출처 검토)는 그 결과를 각자의 자료형으로 바꾸기만 합니다.

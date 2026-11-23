@@ -1,10 +1,10 @@
-"""계정과 로그인(ncs_service.accounts, ncs_web.auth) — 비밀번호 해시, 로그인 실패 제한, DB 없는 서버(로그인 없음), 역할 허용값."""
+"""계정과 로그인(ncs_service.auth.accounts, ncs_web.auth) — 비밀번호 해시, 로그인 실패 제한, DB 없는 서버(로그인 없음), 역할 허용값."""
 
 import re
 import tempfile
 import unittest
 
-from ncs_service.accounts import MIN_PASSWORD, ROLES, hash_password, token_hash, verify_password
+from ncs_service.auth.accounts import MIN_PASSWORD, ROLES, hash_password, token_hash, verify_password
 from ncs_service.migrations import MIGRATIONS
 from ncs_web.auth import OPEN_PATHS, Throttle
 

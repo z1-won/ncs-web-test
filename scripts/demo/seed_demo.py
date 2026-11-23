@@ -54,7 +54,8 @@ def main() -> int:
         return 2
 
     from ncs_core.ncs_catalog import catalog
-    from ncs_service import accounts, cases
+    from ncs_service.auth import accounts
+    from ncs_service.workflow import cases
     from ncs_service.postgres import migrate
 
     migrate(dsn)

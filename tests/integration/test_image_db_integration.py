@@ -8,7 +8,7 @@ from uuid import uuid4
 import psycopg
 from psycopg.types.json import Jsonb
 
-from ncs_service import image_terms
+from ncs_service.images import image_terms
 from ncs_service.postgres import migrate
 
 DSN = os.getenv("NCS_TEST_DATABASE_URL")

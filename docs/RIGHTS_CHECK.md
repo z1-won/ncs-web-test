@@ -2,7 +2,7 @@
 
 원고의 그림과 제출 서류를 대조해 빠진 권리 증빙을 찾습니다. 기준은 「NCS PoC 과업 안내」(요구사항정의서 V0.23) REQ-02-014,
 원고 집필 계약서(F07), 사진·삽화 제작 계약서(F06), AI 도구 사용 표기 예(F08), 생성형 AI 결과물 집필자 서약서(F09)입니다.
-코드는 `ncs_rights`(서류 읽기·대조, `pages.py`는 출력본의 쪽), `ncs_core/figures.py`(원고의 그림 읽기), `ncs_service/rights_link.py`(이미지 저작권 DB 연결),
+코드는 `ncs_rights`(서류 읽기·대조, `pages.py`는 출력본의 쪽), `ncs_core/figures.py`(원고의 그림 읽기), `ncs_service/images/rights_link.py`(이미지 저작권 DB 연결),
 평가는 `tests/eval_rights.py`.
 
 ## 쓰는 법

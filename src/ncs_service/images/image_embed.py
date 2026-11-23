@@ -3,8 +3,8 @@
 벡터는 ncs_recommend.embed가 이 컴퓨터에서 직접 계산한다(외부 전송 없음). 그림마다 모델별로 한 벌(image_embeddings).
 그림을 적재하면 자동으로 계산하고, 모델을 바꿨거나 나중에 켰으면 이 명령으로 한꺼번에 채운다.
 
-  python -m ncs_service.image_embed            아직 벡터가 없는 그림 모두
-  python -m ncs_service.image_embed --status   모델과 채워진 개수만 보기
+  python -m ncs_service.images.image_embed            아직 벡터가 없는 그림 모두
+  python -m ncs_service.images.image_embed --status   모델과 채워진 개수만 보기
 업스케일본이 있으면 그것으로, 없으면 원본으로 계산한다(사람이 보게 될 그림과 같은 것).
 """
 

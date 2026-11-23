@@ -6,7 +6,9 @@ import unittest
 import psycopg
 from fastapi.testclient import TestClient
 
-from ncs_service import accounts, cases, flow
+from ncs_service.auth import accounts
+
+from ncs_service.workflow import cases, flow
 from ncs_service.postgres import migrate, set_stage
 from ncs_web.server import create_app
 
@@ -304,7 +306,7 @@ class CaseIntegrationTests(unittest.TestCase):
 
     def test_tool_records_attach_to_the_stage_and_become_evidence(self):
         """권의 단계에서 연 도구의 기록은 그 권과 단계에 붙고, 완료의 근거로 남는다."""
-        from ncs_service import access
+        from ncs_service.auth import access
         from ncs_service.postgres import save_work_record
 
         editor, author, other, url, first, second = self.flow_setup()

@@ -37,12 +37,12 @@ class LoginDemoTests(unittest.TestCase):
 
     def test_nothing_without_the_environment_variable(self):
         env = {key: value for key, value in os.environ.items() if key != "NCS_DEMO_PASSWORD"}
-        with mock.patch.dict(os.environ, env, clear=True), mock.patch("ncs_service.accounts.list_accounts", return_value=ROWS) as listing:
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch("ncs_service.auth.accounts.list_accounts", return_value=ROWS) as listing:
             self.assertEqual(_client(True).get("/api/login/demo").json(), {"password": None, "accounts": []})
             listing.assert_not_called()
 
     def test_only_active_demo_accounts_are_listed_before_login(self):
-        with mock.patch.dict(os.environ, {"NCS_DEMO_PASSWORD": "시연용 값"}), mock.patch("ncs_service.accounts.list_accounts", return_value=ROWS):
+        with mock.patch.dict(os.environ, {"NCS_DEMO_PASSWORD": "시연용 값"}), mock.patch("ncs_service.auth.accounts.list_accounts", return_value=ROWS):
             body = _client(True).get("/api/login/demo").json()      # 로그인하지 않은 요청에도 열려 있다
         self.assertEqual(body["password"], "시연용 값")
         self.assertEqual(body["accounts"], [{"login": "demo-editor", "name": "김에디터", "role": "editor", "role_name": "에디터", "org": "에디팅기관"}])

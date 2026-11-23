@@ -165,7 +165,7 @@ def register(app: FastAPI, services: Services) -> None:
     def _record(manuscript: str, result: dict, module_code: str) -> None:
         """원고 진행 현황(REQ-02-007)의 저작권 검수 진행도에 쓸 개수만 남긴다(DB 모드). 그림·출처 문구는 남기지 않는다. 실패해도 검수 결과는 그대로 준다.
         그림 판독 뒤 규칙을 다시 돌리면 기록이 하나 더 남고, 진행도는 가장 최근 것을 쓴다."""
-        from ncs_service.progress import FIGURES, summarize_figures
+        from ncs_service.workflow.progress import FIGURES, summarize_figures
 
         try:
             services.store.save_work_record(FIGURES, manuscript, summarize_figures(result), [{"role": "manuscript", "filename": manuscript}],

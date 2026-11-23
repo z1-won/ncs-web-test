@@ -1,4 +1,4 @@
-"""이미지 레코드 형식 검사(ncs_service.image_records) — DB 없이 돈다. 문서의 예시 파일과 '거부되는 예'가 실제와 같은지도 본다."""
+"""이미지 레코드 형식 검사(ncs_service.images.image_records) — DB 없이 돈다. 문서의 예시 파일과 '거부되는 예'가 실제와 같은지도 본다."""
 
 import hashlib
 import json
@@ -8,9 +8,9 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from ncs_service import image_terms
-from ncs_service.image_db import main
-from ncs_service.image_records import SCHEMA, RecordError, normalize, read_records, rights_changes
+from ncs_service.images import image_terms
+from ncs_service.images.image_db import main
+from ncs_service.images.image_records import SCHEMA, RecordError, normalize, read_records, rights_changes
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "docs" / "examples" / "image_records" / "records.example.json"

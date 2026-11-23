@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS review_inputs (
 #   image_ncs_links   1:N. 능력단위·요소·수행준거 연결(이미지 하나가 여러 수행준거에 쓰일 수 있다)
 #   image_history     변경 이력(누가·언제·무엇을)
 #   v_image_recommendable  기관 확정 + 재사용 범위가 정해진 것만 — 추천(REQ-02-011)은 이 뷰만 본다('미확인 추천 노출 0건')
-# 허용값은 코드(ASCII)로 저장하고 이름은 ncs_service.image_terms에 둔다. 값 목록이 서로 같은지는 test_migrations가 검사한다.
+# 허용값은 코드(ASCII)로 저장하고 이름은 ncs_service.images.image_terms에 둔다. 값 목록이 서로 같은지는 test_migrations가 검사한다.
 # 필수 항목(정의서 '구조·형식 정확성 99.5%')은 제약으로 보장한다: 확정하려면 분류·귀속·확정자·확정 시각이 있어야 하고,
 # 이용조건은 라이선스 유형에서 정해지는 값과 달라질 수 없으며, AI를 쓰지 않은 이미지에 AI 필드를 채울 수 없다.
 IMAGE_DB = """
@@ -268,7 +268,7 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "CREATE INDEX IF NOT EXISTS volume_runs_module_idx ON volume_runs (module_code, created_at DESC)"),
     # 010: 원고 진행 현황(REQ-02-007)에 쓰는 개수 기록 — 의견 반영 검토(opinion)와 권리 증빙 점검(rights)은 결과를 보관하지 않으므로
     # 원고별 진행도(총 의견·반영·미반영, 판정·누락 수)를 보여 줄 숫자만 남긴다. 의견 문장·원고 문단·지적 내용은 넣지 않는다
-    # (counts의 모양은 ncs_service.progress.summarize_opinion·summarize_rights). files는 올린 파일의 역할과 이름뿐이다.
+    # (counts의 모양은 ncs_service.workflow.progress.summarize_opinion·summarize_rights). files는 올린 파일의 역할과 이름뿐이다.
     ("010_work_records",
      "CREATE TABLE IF NOT EXISTS work_records (\n"
      "    id uuid PRIMARY KEY,\n"
@@ -305,8 +305,8 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      ");\n"
      "CREATE INDEX IF NOT EXISTS manuscript_stage_history_idx ON manuscript_stage_history (module_code, changed_at DESC);\n"
      "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS work_stage smallint"),
-    # 012: 계정과 로그인 세션(ncs_service.accounts) — 회원가입 없이 관리자가 계정을 만든다. 비밀번호는 scrypt 값만, 세션은 토큰의 sha256만 둔다.
-    # 역할 허용값은 ncs_service.accounts.ROLES와 같아야 한다(test_accounts가 검사한다).
+    # 012: 계정과 로그인 세션(ncs_service.auth.accounts) — 회원가입 없이 관리자가 계정을 만든다. 비밀번호는 scrypt 값만, 세션은 토큰의 sha256만 둔다.
+    # 역할 허용값은 ncs_service.auth.accounts.ROLES와 같아야 한다(test_accounts가 검사한다).
     ("012_accounts",
      "CREATE TABLE IF NOT EXISTS accounts (\n"
      "    id uuid PRIMARY KEY,\n"
@@ -325,8 +325,8 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "    expires_at timestamptz NOT NULL\n"
      ");\n"
      "CREATE INDEX IF NOT EXISTS account_sessions_account_idx ON account_sessions (account_id)"),
-    # 013: 세분류 건(ncs_service.cases) — 건(세분류 + 사업 연도) → 권(학습모듈, 담당 집필자) → 판본(제출한 원고 파일) → 사건(누가·언제·무엇을).
-    # 단계의 상태는 저장하지 않고 사건을 접어서 얻는다(ncs_service.flow.states). 단계 key와 행동은 flow가 검증한다 — SQL에 적으면 단계가 바뀔 때마다 DB를 바꿔야 한다.
+    # 013: 세분류 건(ncs_service.workflow.cases) — 건(세분류 + 사업 연도) → 권(학습모듈, 담당 집필자) → 판본(제출한 원고 파일) → 사건(누가·언제·무엇을).
+    # 단계의 상태는 저장하지 않고 사건을 접어서 얻는다(ncs_service.workflow.flow.states). 단계 key와 행동은 flow가 검증한다 — SQL에 적으면 단계가 바뀔 때마다 DB를 바꿔야 한다.
     # 사건은 건에도 권에도 붙는다(volume_id가 비면 건 단위). 심의의 단위가 정해져도 표는 그대로다. seq는 같은 시각의 사건 순서를 가른다.
     # 판본의 원고 파일은 지우는 기한 없이 보관한다(2026-11-21 결정). 개선 유형 허용값은 flow.IMPROVEMENTS와 같아야 한다(test_flow가 검사한다).
     ("013_cases",
@@ -386,7 +386,7 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("014_review_version",
      "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS version_id uuid REFERENCES volume_versions(id) ON DELETE SET NULL;\n"
      "CREATE INDEX IF NOT EXISTS review_runs_version_idx ON review_runs (version_id)"),
-    # 015: 기록마다 돌린 계정(account_id)과, 세분류 건의 어느 권·어느 단계 것인지(case_volume_id, case_stage)를 적는다(ncs_service.access).
+    # 015: 기록마다 돌린 계정(account_id)과, 세분류 건의 어느 권·어느 단계 것인지(case_volume_id, case_stage)를 적는다(ncs_service.auth.access).
     # 돌린 계정은 볼 수 있는 범위를 거르는 데 쓴다(집필진은 담당 권의 기록과 자기가 돌린 기록만). 원고 검수는 판본(version_id)으로 권에 붙으므로 권·단계 열이 없다.
     ("015_record_owner_and_stage",
      "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS account_id uuid REFERENCES accounts(id) ON DELETE SET NULL;\n"

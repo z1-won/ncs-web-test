@@ -85,7 +85,7 @@ def register(app: FastAPI, services: Services) -> None:
             if source is None:
                 return error_response(400, "메모는 hwpx 원고에만 달 수 있습니다(hwp는 한글에서 hwpx로 저장 후 다시 올리세요)")
         elif run_id:
-            from ncs_service import access
+            from ncs_service.auth import access
 
             from ..common import scope_of
 

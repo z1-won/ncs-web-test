@@ -1,6 +1,6 @@
 """이미지 저작권 DB(REQ-02-010) 적재 — 이미지 레코드를 006_image_db의 표에 넣는다.
 
-    python -m ncs_service.image_db 레코드.json --by 담당자이름        # DATABASE_URL 필요
+    python -m ncs_service.images.image_db 레코드.json --by 담당자이름        # DATABASE_URL 필요
 
 레코드 형식과 검사는 image_records(docs/IMAGE_RECORD.md). 여기서는 검사를 통과한 레코드를 표에 넣는 규칙만 정한다.
 
@@ -32,7 +32,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from .image_records import NormalRecord, RecordError, normalize, read_records
-from .postgres import migrate
+from ..postgres import migrate
 
 ASSET_FILL = ("source_id", "filename", "title", "format", "width_px", "height_px", "byte_size", "content", "kind")
 UPSCALED = ("upscaled_content", "upscaled_format", "upscaled_width_px", "upscaled_height_px", "upscale_engine")

@@ -1,6 +1,6 @@
 """이미지 저작권 DB(REQ-02-010) — 확정 화면용 조회·수정·확정(/api/images)과 추천용 조회(/api/images/recommendable).
 
-PostgreSQL 저장소일 때만 붙는다(/api/health의 image_db가 그 여부). 실제 일은 ncs_service.image_store가 한다.
+PostgreSQL 저장소일 때만 붙는다(/api/health의 image_db가 그 여부). 실제 일은 ncs_service.images.image_store가 한다.
 
   GET  /api/images/terms                      허용값 코드 → 이름(화면의 선택 목록)
   GET  /api/images                            관리용 목록 — 모든 그림. status=none은 권리 정보가 없는 그림
@@ -39,7 +39,7 @@ def register(app: FastAPI, services: Services) -> None:
     store = services.store
     if not store.supports_history:
         return
-    from ncs_service import image_store   # psycopg는 PostgreSQL 저장소일 때만 필요하다
+    from ncs_service.images import image_store   # psycopg는 PostgreSQL 저장소일 때만 필요하다
 
     dsn = store.dsn
 
@@ -58,9 +58,9 @@ def register(app: FastAPI, services: Services) -> None:
 
     def embed_after_load() -> dict | None:
         """그림 임베딩이 켜져 있으면 방금 넣은 그림의 벡터를 계산한다(이 컴퓨터에서, 외부 전송 없음). 꺼져 있으면 None.
-        실패해도 적재는 이미 끝났으므로 오류로 만들지 않고 까닭만 돌려준다 — 나중에 python -m ncs_service.image_embed로 채울 수 있다."""
+        실패해도 적재는 이미 끝났으므로 오류로 만들지 않고 까닭만 돌려준다 — 나중에 python -m ncs_service.images.image_embed로 채울 수 있다."""
         from ncs_recommend import embed
-        from ncs_service import image_embed
+        from ncs_service.images import image_embed
 
         if not embed.model_name():
             return None
@@ -84,8 +84,8 @@ def register(app: FastAPI, services: Services) -> None:
 
         check_only면 DB에 넣지 않고 형식만 검사한다. 응답은 적재 보고서(전체·적재·거부 사유·필수 항목 충족률) 또는 검사 결과.
         """
-        from ncs_service import image_db, kogl_import
-        from ncs_service.image_records import read_records
+        from ncs_service.images import image_db, kogl_import
+        from ncs_service.images.image_records import read_records
 
         named = [item for item in files if item.filename]
         if len(named) > LOAD_MAX_FILES:
@@ -163,7 +163,7 @@ def register(app: FastAPI, services: Services) -> None:
 
     def editor_only(request: Request) -> None:
         """이미지 저작권 DB를 바꾸는 일(적재, 권리 정보 수정, 확정, 증빙)은 에디터와 직능연 계정만 한다. 보는 것은 로그인한 누구나."""
-        from ncs_service.flow import MANAGER_ROLES
+        from ncs_service.workflow.flow import MANAGER_ROLES
 
         account = getattr(request.state, "account", None)
         if account is not None and account.get("role") not in MANAGER_ROLES:

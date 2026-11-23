@@ -371,7 +371,7 @@ def save_work_record(dsn: str, kind: str, manuscript: str, counts: dict, files: 
                      source: str = "web") -> dict:
     """의견 반영 검토·권리 증빙 점검의 개수 기록 한 건을 남긴다. 모듈 코드는 준 값, 없으면 원고 파일 이름에서 읽고 그것도 없으면 빈 값
     (빈 값이면 어느 원고의 진행 현황에도 붙지 않는다). 돌려주는 값: {'id', 'module_code'}."""
-    from .progress import KINDS
+    from .workflow.progress import KINDS
 
     if kind not in KINDS:
         raise ValueError(f"모르는 기록 종류: {kind}")
@@ -412,7 +412,7 @@ def list_manuscripts(dsn: str, *, limit: int = 50, offset: int = 0, codes: list[
 
 
 def progress_sources(dsn: str, module_code: str) -> dict | None:
-    """한 원고(모듈 코드)의 기록을 진행 현황(ncs_service.progress.build)의 재료로 모은다. 기록이 하나도 없으면 None."""
+    """한 원고(모듈 코드)의 기록을 진행 현황(ncs_service.workflow.progress.build)의 재료로 모은다. 기록이 하나도 없으면 None."""
     def iso(value):
         return value.isoformat() if value is not None else None
 

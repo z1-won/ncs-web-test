@@ -17,7 +17,7 @@ def register(app: FastAPI, services: Services) -> None:
     store = services.store
     if not store.supports_history:
         return
-    from ncs_service import image_recommend
+    from ncs_service.images import image_recommend
 
     @app.post("/api/recommend/images")
     def recommend_images(body: RecommendRequest) -> dict:

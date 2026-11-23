@@ -409,7 +409,7 @@ def list_cases(dsn: str, account: dict) -> list[dict]:
 
 def _versions(connection, volume_ids: list[str]) -> dict[str, list[dict]]:
     """권 id → 판본 목록(최근 것부터). 판본마다 가장 최근 검수 묶음의 판정을 붙인다."""
-    from .postgres import group_verdict
+    from ..postgres import group_verdict
 
     rows = connection.execute(
         "SELECT id, volume_id, stage, number, filename, byte_size, submitted_name, submitted_at FROM volume_versions "

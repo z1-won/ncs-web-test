@@ -1,6 +1,6 @@
 """세분류 건(REQ-02-007) — 건(세분류 + 사업 연도)을 만들고, 권마다 담당 집필자를 붙이고, 단계의 변화를 사건으로 남긴다.
 
-저장과 권한은 ncs_service.cases, 단계 정의표와 전이는 ncs_service.flow가 맡는다. 여기는 요청을 받아 넘기고 오류를 화면 문구로 바꾼다.
+저장과 권한은 ncs_service.workflow.cases, 단계 정의표와 전이는 ncs_service.workflow.flow가 맡는다. 여기는 요청을 받아 넘기고 오류를 화면 문구로 바꾼다.
 건을 만들고 권·집필자를 바꾸는 일은 에디터와 직능연만 한다. 집필진은 자기가 담당인 권이 든 건만, 그 권만 본다.
 누가 했는지는 로그인한 계정에서 읽는다. 저장소가 이력을 지원할 때(PostgreSQL)만 붙는다.
 """
@@ -58,7 +58,8 @@ def register(app: FastAPI, services: Services) -> None:
     store = services.store
     if not store.supports_history:
         return
-    from ncs_service import accounts, cases, flow
+    from ncs_service.auth import accounts
+    from ncs_service.workflow import cases, flow
 
     dsn = store.dsn
 

@@ -64,8 +64,8 @@ def viewer(request) -> dict | None:
 
 
 def scope_of(request, store):
-    """이 요청이 볼 수 있는 기록의 범위(ncs_service.access.Scope). None이면 전부 — 에디터, 직능연, 로그인을 쓰지 않는 서버."""
-    from ncs_service import access
+    """이 요청이 볼 수 있는 기록의 범위(ncs_service.auth.access.Scope). None이면 전부 — 에디터, 직능연, 로그인을 쓰지 않는 서버."""
+    from ncs_service.auth import access
 
     return access.scope(store.dsn, viewer(request))
 
@@ -73,7 +73,7 @@ def scope_of(request, store):
 def own_and_link(request, store, tool: str, record_id: str | None, case_volume: str = "", case_stage: str = "", case_version: str = "") -> bool:
     """방금 남긴 기록에 돌린 계정을 적고, 세분류 건의 권·단계에서 열어 돌린 것이면 거기에 붙인다. 붙였으면 True.
     tool = review / volume / opinion / rights. 기록이 없으면(저장 실패, DB 없음) 아무것도 하지 않는다."""
-    from ncs_service import access
+    from ncs_service.auth import access
 
     if not record_id or not store.supports_history:
         return False

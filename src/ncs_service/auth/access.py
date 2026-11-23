@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import flow
+from ..workflow import flow
 
 TABLES = {"review": "review_runs", "volume": "volume_runs", "record": "work_records"}
 LINKABLE = {"volume": "volume", "opinion": "record", "rights": "record"}     # 단계의 도구(flow.Stage.tools) → 기록 종류

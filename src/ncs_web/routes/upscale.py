@@ -1,7 +1,7 @@
 """그림 업스케일 — 업로드 토큰의 원고 그림 목록·원본·업스케일·결과·제안본 hwpx. 실행은 ncs_upscale.service가 맡는다.
 
 화질 보정은 AI 수정 보완(REQ-02-006 ②)이므로 제안본을 만들 때 보정한 그림의 캡션 위에 AI 활용 줄을 함께 넣을 수 있고(ai_mark — ncs_aiimage),
-보정한 그림을 이미지 저작권 DB에 AI 활용 정보와 함께 올릴 수 있다(/pictures/register — ncs_service.ai_register, PostgreSQL일 때만).
+보정한 그림을 이미지 저작권 DB에 AI 활용 정보와 함께 올릴 수 있다(/pictures/register — ncs_service.images.ai_register, PostgreSQL일 때만).
 """
 
 import json
@@ -153,8 +153,8 @@ def register(app: FastAPI, services: Services) -> None:
         에디터와 직능연만 한다. 기관이 확정한 그림의 권리 정보는 바꾸지 않는다. 모듈 코드는 원고 파일 이름에서 읽거나 module_code로 준다."""
         def action():
             from ncs_core.module_code import resolve_module_code
-            from ncs_service.ai_register import register_upscaled
-            from ncs_service.flow import MANAGER_ROLES
+            from ncs_service.images.ai_register import register_upscaled
+            from ncs_service.workflow.flow import MANAGER_ROLES
 
             account = getattr(request.state, "account", None)
             if account is not None and account.get("role") not in MANAGER_ROLES:

@@ -1,4 +1,4 @@
-"""공공누리 수집 JSON(0.1-PoC) → 이미지 레코드(ncs_service.kogl_import, REQ-02-012). DB 없이 돈다."""
+"""공공누리 수집 JSON(0.1-PoC) → 이미지 레코드(ncs_service.images.kogl_import, REQ-02-012). DB 없이 돈다."""
 
 import copy
 import json
@@ -10,9 +10,9 @@ from datetime import date
 from pathlib import Path
 
 from ncs_knowledge.rules.sources import source_check
-from ncs_service import image_terms, kogl_import
-from ncs_service.image_db import main
-from ncs_service.image_records import normalize
+from ncs_service.images import image_terms, kogl_import
+from ncs_service.images.image_db import main
+from ncs_service.images.image_records import normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "docs" / "examples" / "kogl_samples" / "kogl_samples.example.json"

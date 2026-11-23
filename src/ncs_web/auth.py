@@ -57,7 +57,7 @@ class Throttle:
 
 def install(app: FastAPI, store, *, require_login: bool) -> None:
     """로그인 경로를 붙이고, require_login이면 /api/ 요청을 막는 미들웨어를 건다. 통과한 요청에는 request.state.account가 있다."""
-    from ncs_service import accounts
+    from ncs_service.auth import accounts
 
     throttle = Throttle()
     app.state.require_login = require_login

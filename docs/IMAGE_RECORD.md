@@ -2,17 +2,17 @@
 
 이미지 저작권 DB(REQ-02-010)에 넣는 자료의 형식입니다. 이미지 추출(REQ-02-009)과 공공누리 수집(REQ-02-012)이 이 형식으로 내보내면 그대로 적재됩니다.
 기준은 「NCS PoC 과업 안내」(요구사항정의서 V0.23) REQ-02-010의 데이터셋 예시 `학습모듈명 > [그림 N] > {그림명, 출처, 페이지, 그림 크기, jpeg, 공공누리 유형, 그림 사용 문장, 주요 키워드}`입니다.
-코드는 `ncs_service/image_records.py`(검사), `ncs_service/image_db.py`(적재), 표는 `migrations.py`의 `006_image_db`, 예시는 `docs/examples/image_records/`.
+코드는 `ncs_service/images/image_records.py`(검사), `ncs_service/images/image_db.py`(적재), 표는 `migrations.py`의 `006_image_db`, 예시는 `docs/examples/image_records/`.
 
 ## 쓰는 법
 
 ```bash
-python -m ncs_service.image_db docs/examples/image_records/records.example.json --check     # DB 없이 형식만 검사
+python -m ncs_service.images.image_db docs/examples/image_records/records.example.json --check     # DB 없이 형식만 검사
 set -a; source .env; set +a
-python -m ncs_service.image_db 레코드.json --by 담당자이름                                    # 적재(DATABASE_URL 필요)
+python -m ncs_service.images.image_db 레코드.json --by 담당자이름                                    # 적재(DATABASE_URL 필요)
 ```
 
-파이썬에서는 `ncs_service.image_db.load_records(dsn, records, changed_by=…)`. 이때는 `file` 대신 `content`에 바이트를 바로 줄 수 있습니다.
+파이썬에서는 `ncs_service.images.image_db.load_records(dsn, records, changed_by=…)`. 이때는 `file` 대신 `content`에 바이트를 바로 줄 수 있습니다.
 결과는 전체·적재·거부 건수와 거부 사유, 필수 항목 충족률(적재 ÷ 전체)입니다. 거부가 있으면 종료 코드가 1입니다.
 
 ## 파일 모양
@@ -177,7 +177,7 @@ python -m ncs_service.image_db 레코드.json --by 담당자이름              
 
 ```bash
 set -a; source .env; set +a
-python -m ncs_service.image_audit            # 글로. --json은 JSON으로. 추천 노출이 1건이라도 있으면 종료 코드 1
+python -m ncs_service.images.image_audit            # 글로. --json은 JSON으로. 추천 노출이 1건이라도 있으면 종료 코드 1
 ```
 
 | 기준 | 세는 법 |

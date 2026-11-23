@@ -6,7 +6,7 @@ import unittest
 import psycopg
 from fastapi.testclient import TestClient
 
-from ncs_service import accounts
+from ncs_service.auth import accounts
 from ncs_service.postgres import migrate
 from ncs_web.auth import COOKIE
 from ncs_web.server import create_app
@@ -120,7 +120,7 @@ class StageMarkByAccountTests(unittest.TestCase):
         import hashlib
         from uuid import uuid4
 
-        from ncs_service.image_db import load_records
+        from ncs_service.images.image_db import load_records
         content = (b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (64).to_bytes(4, "big") + (48).to_bytes(4, "big")
                    + b"\x08\x02\x00\x00\x00" + uuid4().bytes)
         sha256 = hashlib.sha256(content).hexdigest()

@@ -1,4 +1,4 @@
-"""NCS_TEST_DATABASE_URL을 지정하면 이미지 레코드 적재(ncs_service.image_db)를 실제 PostgreSQL에서 검사한다.
+"""NCS_TEST_DATABASE_URL을 지정하면 이미지 레코드 적재(ncs_service.images.image_db)를 실제 PostgreSQL에서 검사한다.
 
 적재는 스스로 커밋하므로 테스트가 넣은 그림은 끝날 때 sha256으로 찾아 지운다(딸린 행은 함께 지워진다).
 """
@@ -14,8 +14,8 @@ from uuid import uuid4
 
 import psycopg
 
-from ncs_service.image_db import load_file, load_records
-from ncs_service.image_records import read_records
+from ncs_service.images.image_db import load_file, load_records
+from ncs_service.images.image_records import read_records
 from ncs_service.postgres import migrate
 
 DSN = os.getenv("NCS_TEST_DATABASE_URL")
@@ -205,11 +205,11 @@ class ImageLoadIntegrationTests(unittest.TestCase):
         for record in records:
             self.used.add(record.get("sha256") or hashlib.sha256((base / record["file"]).read_bytes()).hexdigest())
         env = {**os.environ, "DATABASE_URL": DSN}
-        done = subprocess.run([sys.executable, "-m", "ncs_service.image_db", str(EXAMPLE), "--by", "테스트"],
+        done = subprocess.run([sys.executable, "-m", "ncs_service.images.image_db", str(EXAMPLE), "--by", "테스트"],
                               env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn('"필수 항목 충족률": 1.0', done.stdout)
-        missing = subprocess.run([sys.executable, "-m", "ncs_service.image_db", str(EXAMPLE)],
+        missing = subprocess.run([sys.executable, "-m", "ncs_service.images.image_db", str(EXAMPLE)],
                                  env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(missing.returncode, 2)
 

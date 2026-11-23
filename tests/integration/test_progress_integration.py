@@ -8,7 +8,7 @@ import psycopg
 from fastapi.testclient import TestClient
 
 from ncs_service.postgres import list_manuscripts, migrate, progress_sources, save_work_record, set_stage, tag_review_stage
-from ncs_service.progress import OPINION, RECORDED, RIGHTS, build
+from ncs_service.workflow.progress import OPINION, RECORDED, RIGHTS, build
 from ncs_web.server import create_app
 
 DSN = os.getenv("NCS_TEST_DATABASE_URL")

@@ -112,11 +112,11 @@ def recommend(dsn: str, *, text: str = "", unit_code: str = "", criterion_no: st
                                 reference_vectors=reference)
     used = query_vector is not None and len(reference) >= recommend_rank.VISUAL_MIN_REFS
     if used:
-        note = "" if covered == len(pool) else f"후보 {len(pool)}건 중 {covered}건만 그림 벡터가 있습니다(python -m ncs_service.image_embed로 채웁니다)"
+        note = "" if covered == len(pool) else f"후보 {len(pool)}건 중 {covered}건만 그림 벡터가 있습니다(python -m ncs_service.images.image_embed로 채웁니다)"
     elif embedder is None:
         note = recommend_embed.why_not()
     elif not covered:
-        note = "그림 벡터가 아직 없습니다 — python -m ncs_service.image_embed로 채웁니다"
+        note = "그림 벡터가 아직 없습니다 — python -m ncs_service.images.image_embed로 채웁니다"
     else:
         note = "그림과 견줄 글이 없거나 바탕 글의 벡터를 만들지 못해 그림 유사도를 쓰지 않았습니다"
     for item in items:           # 화면에 필요 없는 긴 글은 뺀다

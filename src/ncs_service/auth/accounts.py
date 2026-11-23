@@ -1,9 +1,9 @@
 """계정과 로그인 세션 — 회원가입은 없고 관리자가 명령으로 계정을 미리 만든다(설계: 세분류 건 흐름과 역할 v0.2).
 
-  python -m ncs_service.accounts add --login kim --name "김에디터" --role editor --org "에디팅기관"   # 비밀번호는 물어본다
-  python -m ncs_service.accounts list
-  python -m ncs_service.accounts password --login kim
-  python -m ncs_service.accounts disable --login kim        # 다시 쓰려면 enable
+  python -m ncs_service.auth.accounts add --login kim --name "김에디터" --role editor --org "에디팅기관"   # 비밀번호는 물어본다
+  python -m ncs_service.auth.accounts list
+  python -m ncs_service.auth.accounts password --login kim
+  python -m ncs_service.auth.accounts disable --login kim        # 다시 쓰려면 enable
 
 DATABASE_URL(또는 --database-url)이 가리키는 PostgreSQL에 쓴다. 계정을 둘 곳이 필요하므로 로그인은 DB가 있는 서버에서만 된다.
 
@@ -147,7 +147,7 @@ def log_out(dsn: str, token: str) -> None:
 
 def _ask_password() -> str:
     if not sys.stdin.isatty():
-        return sys.stdin.readline().rstrip("\n")       # 스크립트에서: echo 비밀번호 | python -m ncs_service.accounts add …
+        return sys.stdin.readline().rstrip("\n")       # 스크립트에서: echo 비밀번호 | python -m ncs_service.auth.accounts add …
     first = getpass.getpass("비밀번호: ")
     if first != getpass.getpass("비밀번호 확인: "):
         raise ValueError("두 번 적은 비밀번호가 다릅니다")
@@ -155,7 +155,7 @@ def _ask_password() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m ncs_service.accounts", description="계정을 만들고 관리한다(회원가입 없음).")
+    parser = argparse.ArgumentParser(prog="python -m ncs_service.auth.accounts", description="계정을 만들고 관리한다(회원가입 없음).")
     parser.add_argument("--database-url", default=os.getenv("DATABASE_URL"), help="PostgreSQL 주소(기본: DATABASE_URL)")
     commands = parser.add_subparsers(dest="command", required=True)
     add = commands.add_parser("add", help="계정 만들기(비밀번호는 물어본다)")
@@ -169,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.database_url:
         parser.exit(2, "DATABASE_URL이 필요합니다(계정은 데이터베이스에 둡니다)\n")
-    from .postgres import migrate
+    from ..postgres import migrate
 
     try:
         migrate(args.database_url)

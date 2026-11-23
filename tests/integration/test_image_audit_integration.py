@@ -1,4 +1,4 @@
-"""NCS_TEST_DATABASE_URL을 지정하면 이미지 저작권 DB 점검(ncs_service.image_audit, REQ-02-010 검증 기준)을 실제 PostgreSQL로 검사한다.
+"""NCS_TEST_DATABASE_URL을 지정하면 이미지 저작권 DB 점검(ncs_service.images.image_audit, REQ-02-010 검증 기준)을 실제 PostgreSQL로 검사한다.
 
 DB에 다른 자료가 섞여 있어도 되게, 점검 결과는 테스트가 그림을 넣기 전과 넣은 뒤의 차이로 본다.
 """
@@ -11,8 +11,8 @@ from uuid import uuid4
 import psycopg
 from psycopg.rows import dict_row
 
-from ncs_service import image_audit, image_store
-from ncs_service.image_db import load_records
+from ncs_service.images import image_audit, image_store
+from ncs_service.images.image_db import load_records
 from ncs_service.postgres import migrate
 
 DSN = os.getenv("NCS_TEST_DATABASE_URL")

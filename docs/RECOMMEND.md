@@ -10,7 +10,7 @@
    - AI가 낸 핵심어 가운데 **입력 글에 실제로 있는 낱말만** 쓴다. 글에 없는 말은 버리고 화면에 따로 보여 준다.
    - AI를 쓸 수 없거나 실패하면 규칙으로 핵심어만 뽑는다(조사를 떼고 자주 나온 낱말 순. 형태소 분석이 아니라 어림이다). 요약은 없다.
    - 어느 쪽으로 했는지는 결과의 `context.method`(`llm` / `rule`)와 화면의 배지로 보인다.
-2. **후보** (`ncs_service/image_recommend.py`) — `v_image_recommendable` 뷰에서 비공개를 뺀 것만 꺼낸다.
+2. **후보** (`ncs_service/images/image_recommend.py`) — `v_image_recommendable` 뷰에서 비공개를 뺀 것만 꺼낸다.
    기관이 확정하지 않았거나 재사용 범위가 미확인인 그림은 어떤 입력으로도 나오지 않는다.
 3. **그림 유사도** (`ncs_recommend/embed.py`, 켜져 있을 때) — 문맥(요약 또는 핵심어)과 그림 자체를 같은 임베딩 모델로 벡터로 바꿔 견준다.
    그림에 키워드를 달아 두지 않았어도, 낱말이 달라도 그림이 문맥과 닮았으면 찾는다. **이 컴퓨터에서 계산하며 외부로 보내지 않는다**(아래 ‘그림 임베딩’).
@@ -96,8 +96,8 @@ pip install -e ".[embed]"
 이미 들어 있는 그림이나 모델을 바꾼 뒤에는 한꺼번에 채운다.
 
 ```
-python -m ncs_service.image_embed            # 벡터가 없는 그림 모두
-python -m ncs_service.image_embed --status   # 채워진 개수만
+python -m ncs_service.images.image_embed            # 벡터가 없는 그림 모두
+python -m ncs_service.images.image_embed --status   # 채워진 개수만
 python scripts/probe/embed_probe.py          # 모델이 올라오는지, 한국어 글과 그림이 맞는지 간단히 보기
 ```
 

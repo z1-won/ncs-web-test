@@ -90,7 +90,7 @@ def register_decisions(app: FastAPI, services: Services) -> None:
         from datetime import datetime, timezone
 
         from ncs_opinion.report import decision_summary
-        from ncs_service.progress import OPINION
+        from ncs_service.workflow.progress import OPINION
 
         try:
             summary = decision_summary(body.rows, body.decisions)
@@ -111,7 +111,7 @@ def register_decisions(app: FastAPI, services: Services) -> None:
 
 def _record(services: Services, manuscript: str, result: dict, files: list[dict]) -> dict | None:
     """진행 현황용 개수 기록. 돌려주는 값: {'id', 'module_code'}(모듈 코드가 비면 어느 원고에도 붙지 않음) 또는 None(DB 없음·실패)."""
-    from ncs_service.progress import OPINION, summarize_opinion
+    from ncs_service.workflow.progress import OPINION, summarize_opinion
 
     try:
         return services.store.save_work_record(OPINION, manuscript, summarize_opinion(result), files)

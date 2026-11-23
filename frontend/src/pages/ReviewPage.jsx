@@ -31,7 +31,7 @@ const SLOTS = [
   { role: "print", label: "출력본 PDF", accept: ".pdf" },
 ];
 
-// 원고 단계 선택지 — 서버 ncs_service.progress.REVIEW_STAGES와 같아야 한다
+// 원고 단계 선택지 — 서버 ncs_service.workflow.progress.REVIEW_STAGES와 같아야 한다
 const WORK_STAGE_OPTIONS = [
   { value: "", label: "고르지 않음" }, { value: "2", label: "초고본" }, { value: "3", label: "수정본" }, { value: "6", label: "최종본" },
 ];

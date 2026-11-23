@@ -12,8 +12,8 @@ from uuid import uuid4
 import psycopg
 from fastapi.testclient import TestClient
 
-from ncs_service import image_recommend, image_store
-from ncs_service.image_db import load_records
+from ncs_service.images import image_recommend, image_store
+from ncs_service.images.image_db import load_records
 from ncs_service.postgres import migrate
 from ncs_web.server import create_app
 
@@ -169,7 +169,7 @@ class EmbeddingIntegrationTests(unittest.TestCase):
         return [item for item in result["items"] if item["id"] in ids]
 
     def test_vectors_are_stored_once_and_used_for_ranking(self):
-        from ncs_service import image_embed
+        from ncs_service.images import image_embed
         room, hall, kitchen, broken = (self.add("제목 없음 1", 0), self.add("제목 없음 2", 1), self.add("제목 없음 3", 2), self.add("깨진 그림", b"broken"))
         ids = [room, hall, kitchen, broken]
         fake = FakeEmbedder()
@@ -200,7 +200,7 @@ class EmbeddingIntegrationTests(unittest.TestCase):
         self.assertIn("꺼져", off["embedding"]["note"])
 
     def test_deleting_an_image_removes_its_vector(self):
-        from ncs_service import image_embed
+        from ncs_service.images import image_embed
         image_id = self.add("지울 그림", 0)
         image_embed.embed_missing(DSN, FakeEmbedder())
         self.cleanup()

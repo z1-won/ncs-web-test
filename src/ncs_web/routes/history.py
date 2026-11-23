@@ -12,7 +12,7 @@ from ..schemas import CheckName
 def register(app: FastAPI, services: Services) -> None:
     store = services.store
     if store.supports_history:
-        from ncs_service import access
+        from ncs_service.auth import access
 
         def guard(request: Request, kind: str, record_id: str, missing: str) -> None:
             """볼 수 없는 기록이면 '없음'으로 답한다(집필진은 담당 권의 기록과 자기가 돌린 기록만)."""

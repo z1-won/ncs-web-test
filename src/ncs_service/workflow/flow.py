@@ -52,7 +52,7 @@ class Stage:
     confirm: tuple[str, ...]      # 보완 요청·판정·완료를 적는 역할
     who: str                      # 화면에 보일 담당 설명
     evidence: str                 # 근거가 되는 기록(기능)
-    legacy: int | None = None     # 원고 진행 현황(모듈 코드별 7단계, ncs_service.progress)의 단계 번호
+    legacy: int | None = None     # 원고 진행 현황(모듈 코드별 7단계, ncs_service.workflow.progress)의 단계 번호
     manuscript: bool = False      # 제출할 때 원고 파일(판본)을 올리는 단계
     review: bool = False          # 그 판본으로 원고 검수를 돌리는 단계. 검수 기록 없이 보완 요청·완료를 하려면 사유를 적는다
     document: bool = False        # 건 단위 단계에서 제출할 때 문서 파일을 올리는 단계(개발계획서). 그 문서로 점검을 돌리고, 점검 기록 없이 완료하려면 사유를 적는다
