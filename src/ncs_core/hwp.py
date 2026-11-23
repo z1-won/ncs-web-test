@@ -1,4 +1,8 @@
-"""HWP(바이너리, OLE/CFB) 읽기. 문단 텍스트와 표 셀 텍스트만 읽고 서식은 읽지 않는다."""
+"""HWP(바이너리, OLE/CFB) 읽기. 문단 텍스트·표 셀 텍스트·그림 개체(자리·크기·그림 파일)를 읽고 서식은 읽지 않는다.
+
+그림(HWP 5.0 규격): 본문의 그리기 개체(CTRL_HEADER 'gso ')가 놓인 문단이 그림 자리이고, 그 안의 그림 레코드
+(SHAPE_COMPONENT_PICTURE)의 BinItem ID가 문서 정보(DocInfo)의 BIN_DATA 순번을 가리킨다. 그림 파일은 BinData/BINxxxx.확장자 스트림.
+"""
 
 import struct
 import zlib
@@ -9,6 +13,9 @@ HWP_SIGNATURE = b"HWP Document File"
 END_OF_CHAIN = (0xFFFFFFFE, 0xFFFFFFFF)
 
 TAG_PARA_TEXT, TAG_LIST_HEADER, TAG_TABLE = 0x43, 0x48, 0x4D
+TAG_CTRL_HEADER, TAG_PICTURE, TAG_BIN_DATA = 0x47, 0x55, 0x12
+GSO = b" osg"                     # 'gso '(그리기 개체) 컨트롤 ID — UINT32 리틀 엔디언
+PICTURE_BIN_ID = 71               # 그림 레코드에서 BinItem ID 위치(테두리 12 + 사각형 32 + 자르기 16 + 여백 8 + 밝기·명암·효과 3)
 # 문단 텍스트의 제어 문자 중 2바이트짜리. 나머지 제어 문자는 16바이트.
 SHORT_CONTROL_CHARS = (0, 10, 13, 24, 25, 26, 27, 28, 29, 30, 31)
 
@@ -143,7 +150,8 @@ def para_text(payload: bytes) -> str:
             continue
         out.append(chr(code))
         i += 2
-    return "".join(out)
+    # 한글 밖 글자(이모지·확장 한자 등)는 UTF-16 대리 쌍 두 개로 저장된다 — 하나의 글자로 합치고, 짝 없는 반쪽은 버린다
+    return "".join(out).encode("utf-16-le", "surrogatepass").decode("utf-16-le", "ignore")
 
 
 def is_hwp(data: bytes) -> bool:
@@ -164,6 +172,46 @@ def load_hwp(data: bytes) -> tuple[list[list[str]], list[dict]]:
     문단 목록은 모든 PARA_TEXT 레코드(표 셀 안 포함)를 순서대로 담는다.
     표의 `paragraph`는 그 표를 가진 문단의 인덱스(같은 기준)다.
     """
+    sections, tables, _pictures, _figures, _binaries = load_hwp_full(data)
+    return sections, tables
+
+
+def _bin_items(read_stream, compressed: bool) -> dict[str, dict]:
+    """DocInfo의 BIN_DATA → {BinItem 순번(문자열): {'href': 스트림 이름, 'bytes': 크기, 'data': 그림 파일}}. 링크 그림은 파일이 없다."""
+    info = read_stream("DocInfo")
+    if info is None:
+        return {}
+    if compressed:
+        info = zlib.decompress(info, -15)
+    items, n = {}, 0
+    for tag, _level, payload in records(info):
+        if tag != TAG_BIN_DATA or len(payload) < 2:
+            continue
+        n += 1
+        attr = struct.unpack_from("<H", payload, 0)[0]
+        if attr & 0xF not in (1, 2) or len(payload) < 6:          # 0 = 링크(파일 밖)
+            items[str(n)] = {"href": None, "bytes": 0, "data": b""}
+            continue
+        bin_id = struct.unpack_from("<H", payload, 2)[0]
+        length = struct.unpack_from("<H", payload, 4)[0]
+        ext = payload[6:6 + 2 * length].decode("utf-16le", "replace")
+        href = f"BinData/BIN{bin_id:04X}.{ext}"
+        raw = read_stream(href)
+        mode = (attr >> 4) & 3                                     # 0 = 문서 설정 따름, 1 = 압축, 2 = 압축 안 함
+        if raw and (mode == 1 or (mode == 0 and compressed)):
+            try:
+                raw = zlib.decompress(raw, -15)
+            except zlib.error:
+                pass                                               # 압축 표시와 달리 그대로 저장된 파일
+        items[str(n)] = {"href": href, "bytes": len(raw or b""), "data": raw or b""}
+    return items
+
+
+def load_hwp_full(data: bytes):
+    """(섹션별 문단, 표, 그림 [(섹션, 문단, BinItem id)], 그림 크기 [(섹션, 문단, "", 가로, 세로)], 그림 파일 {id: {...}}).
+
+    그림 문단은 그리기 개체를 가진 문단(load_hwp와 같은 인덱스)이고, 크기는 개체 공통 속성의 너비·높이(HWPUNIT)다.
+    """
     read_stream, names = read_cfb(data)
     file_header = read_stream("FileHeader")
     if file_header is None:
@@ -177,7 +225,8 @@ def load_hwp(data: bytes) -> tuple[list[list[str]], list[dict]]:
     )
     if not section_names:
         raise ValueError("HWP 본문(BodyText/Section) 스트림이 없음")
-    sections, tables = [], []
+    sections, tables, pictures, figures = [], [], [], []
+    binaries = _bin_items(read_stream, bool(flags & 1))
     for section_index, name in enumerate(section_names):
         raw = read_stream(name)
         if flags & 1:
@@ -185,7 +234,15 @@ def load_hwp(data: bytes) -> tuple[list[list[str]], list[dict]]:
         paragraphs: list[str] = []
         stack: list[tuple[int, dict]] = []  # (level, table)
         cell: tuple[int, dict, tuple[int, int]] | None = None
+        shape: tuple[int, int, int] | None = None        # 지금 읽는 그리기 개체 (문단, 가로, 세로)
         for tag, level, payload in records(raw):
+            if tag == TAG_CTRL_HEADER and payload[:4] == GSO and len(payload) >= 24:
+                width, height = struct.unpack_from("<II", payload, 16)
+                shape = (max(len(paragraphs) - 1, 0), width, height)
+            elif tag == TAG_PICTURE and shape is not None and len(payload) >= PICTURE_BIN_ID + 2:
+                bin_id = str(struct.unpack_from("<H", payload, PICTURE_BIN_ID)[0])
+                pictures.append((section_index, shape[0], bin_id))
+                figures.append((section_index, shape[0], "", shape[1], shape[2]))
             if tag == TAG_PARA_TEXT:
                 paragraphs.append(para_text(payload))
                 if cell and level == cell[0] + 1:
@@ -216,4 +273,4 @@ def load_hwp(data: bytes) -> tuple[list[list[str]], list[dict]]:
                 else:
                     cell = None
         sections.append(paragraphs)
-    return sections, tables
+    return sections, tables, pictures, figures, binaries

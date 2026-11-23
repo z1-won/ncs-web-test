@@ -66,8 +66,9 @@ def picture_records(manuscript, sections: list[int] | None = None) -> list[dict]
 
     hwpx 패키지를 한 번 열어 그림 파일(BinData)을 읽는다. 그림 파일이 없거나 형식을 모르면 format=None·dpi=None.
     Document.pictures와 Document.figures는 같은 <hp:pic> 순서이므로 구역별로 순서대로 짝짓는다.
+    hwp·pdf(ncs_core.pdf_figures)는 읽을 때 담아 둔 그림 파일(binaries[id]["data"])을 쓴다.
     """
-    if manuscript.format != "hwpx" or not manuscript.pictures:
+    if manuscript.format not in ("hwpx", "hwp", "pdf") or not manuscript.pictures:
         return []
     wanted = set(sections) if sections is not None else None
     sizes: dict[int, list[tuple[int, int, int]]] = {}
@@ -77,7 +78,7 @@ def picture_records(manuscript, sections: list[int] | None = None) -> list[dict]
     for s, p, bin_id in manuscript.pictures:
         by_section.setdefault(s, []).append((p, bin_id))
     out = []
-    with zipfile.ZipFile(Path(manuscript.path)) as archive:
+    with (zipfile.ZipFile(Path(manuscript.path)) if manuscript.format == "hwpx" else _NoArchive()) as archive:
         names = set(archive.namelist())
         for s, pics in sorted(by_section.items()):
             if wanted is not None and s not in wanted:
@@ -86,8 +87,9 @@ def picture_records(manuscript, sections: list[int] | None = None) -> list[dict]
             paired = figs if len(figs) == len(pics) else [next(((fp, w, h) for fp, w, h in figs if fp == p), (p, 0, 0)) for p, _ in pics]
             paragraphs = manuscript.sections[s]
             for (p, bin_id), (_fp, w, h) in zip(pics, paired):
-                href = (manuscript.binaries.get(bin_id) or {}).get("href") if bin_id else None
-                data = archive.read(href) if href and href in names else b""
+                item = (manuscript.binaries.get(bin_id) or {}) if bin_id else {}
+                href = item.get("href")
+                data = item.get("data") or b"" if manuscript.format != "hwpx" else archive.read(href) if href and href in names else b""
                 header = image_header(data) if data else None
                 fmt, pw, ph = header if header else (None, 0, 0)
                 dpi = None
@@ -99,6 +101,19 @@ def picture_records(manuscript, sections: list[int] | None = None) -> list[dict]
                     "caption": caption_near(paragraphs, p), "data": data,
                 })
     return out
+
+
+class _NoArchive:
+    """hwp: 그림 파일은 이미 Document에 있으므로 열 패키지가 없다."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def namelist(self):
+        return []
 
 
 def caption_near(paragraphs: list[str], para: int) -> str:

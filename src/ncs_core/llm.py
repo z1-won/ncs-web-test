@@ -62,6 +62,10 @@ ALLOWED_TASKS = frozenset({
 })
 
 
+# 검수 실행 때는 LLM을 부르지 않는다. 이 항목들은 화면의 'LLM 검토'(Claude, ncs_llmreview)가 보고 확인서 행에 합친다.
+PENDING = "LLM 검토 전 — 결과 아래 'LLM 검토' 버튼으로 확인"
+
+
 class LlmError(RuntimeError):
     pass
 
