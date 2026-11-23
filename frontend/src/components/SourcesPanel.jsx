@@ -66,7 +66,7 @@ export function SourcesPanel({ uploadToken, moduleCode }) {
   return (
     <section id="sources" className="figures-panel sources-panel nav-anchor">
       <div className="section-head">
-        <h2 className="section-title">표 출처 검토 <span className="fig-tag free">REQ-02-008 · 규칙만 · API 비용 없음</span></h2>
+        <h2 className="section-title">표 출처 검토 <span className="fig-tag free">규칙으로만 검토, 비용 없음</span></h2>
       </div>
 
       {loading && <Spinner label="표 출처 검토 중" />}

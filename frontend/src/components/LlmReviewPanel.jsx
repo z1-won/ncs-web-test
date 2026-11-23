@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api.js";
+import { plainReason } from "../lib/plain.js";
 import { Spinner } from "./Badge.jsx";
 import { PageAlert } from "./PageAlert.jsx";
 import { Badge } from "./Badge.jsx";
@@ -43,13 +44,13 @@ export function LlmReviewPanel({ uploadToken, moduleCode, result, onResult, comp
   const rows = useMemo(() => llmRows(result, components, labels), [result, components, labels]);
 
   const disabledWhy = !uploadToken ? "원고를 올리고 검수를 먼저 실행하세요"
-    : status && !status.available ? status.problem
+    : status && !status.available ? plainReason(status.problem)
     : !picked.length ? "검토할 항목을 하나 이상 고르세요" : null;
 
   return (
     <section id="llm-review" className="llm-review nav-anchor">
       <div className="section-head">
-        <h2 className="section-title">LLM 검토</h2>
+        <h2 className="section-title">LLM 검토 <span className="meta">생성형 AI가 문장을 읽고 판정합니다. 누를 때만 실행하며 비용이 듭니다.</span></h2>
       </div>
 
       {status && (
@@ -69,23 +70,23 @@ export function LlmReviewPanel({ uploadToken, moduleCode, result, onResult, comp
 
       <div className="llm-actions">
         <button type="button" className="krds-btn primary medium" onClick={run} disabled={running || Boolean(disabledWhy)}>
-          {running ? "LLM 검토 중…" : result ? "LLM 검토 다시 실행" : "LLM 검토"}
+          {running ? "LLM 검토하는 중" : result ? "LLM 검토 다시 실행" : "LLM 검토"}
         </button>
         {result && uploadToken && (
           <>
-            <a className="krds-btn small tertiary" href={api.llmReview.jsonUrl(uploadToken)}>JSON</a>
+            <a className="krds-btn small tertiary" href={api.llmReview.jsonUrl(uploadToken)}>원본 데이터 내려받기(JSON)</a>
             <a className="krds-btn small tertiary" href={api.llmReview.memoUrl(uploadToken)}>메모 단 원고(hwpx)</a>
           </>
         )}
         {result && (
           <span className="meta">
-            지적 {result.findings.length}건 · 호출 {result.usage.calls}번
-            {result.usage.new_calls ? ` · 입력 ${result.usage.input.toLocaleString()}(캐시 ${(result.usage.cache_read || 0).toLocaleString()}) · 출력 ${result.usage.output.toLocaleString()}토큰 · 약 $${result.usage.cost_usd}` : " · 새 비용 없음"}
+            지적 {result.findings.length}건, 호출 {result.usage.calls}번
+            {result.usage.new_calls ? `, 비용 약 $${result.usage.cost_usd}` : ", 새 비용 없음(앞 결과 다시 씀)"}
           </span>
         )}
       </div>
       {disabledWhy && !running && <p className="form-hint">{disabledWhy}</p>}
-      {running && <Spinner label="LLM 검토 중" />}
+      {running && <Spinner label="LLM 검토하는 중" />}
       {error && <PageAlert kind="danger">{error}</PageAlert>}
       {result?.errors?.length > 0 && (
         <PageAlert kind="danger">검토하지 못한 항목: {result.errors.slice(0, 3).map((e) => `${e.항목}${e.위치 ? ` ${e.위치}` : ""} — ${e.오류}`).join(" / ")}</PageAlert>
@@ -94,7 +95,7 @@ export function LlmReviewPanel({ uploadToken, moduleCode, result, onResult, comp
       {rows.length > 0 && (
         <div className="krds-table-wrap">
           <table className="tbl col data llm llm-compare">
-            <caption className="sr-only">LLM 검토 결과 — 항목별 LLM 검토 전·LLM 판정·판정 사유·수정 내용</caption>
+            <caption className="sr-only">LLM 검토 결과: 항목별 검토 전 판정, LLM 판정, 판정 사유, 수정 내용</caption>
             <colgroup><col style={{ width: "13%" }} /><col style={{ width: "22%" }} /><col style={{ width: "8%" }} /><col style={{ width: "33%" }} /><col /></colgroup>
             <thead>
               <tr><th scope="col">항목</th><th scope="col">LLM 검토 전</th><th scope="col">LLM 판정</th><th scope="col">판정 사유</th><th scope="col">수정 내용</th></tr>

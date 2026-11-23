@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
+import { plainReason } from "../lib/plain.js";
 import { Spinner } from "../components/Badge.jsx";
 import { FileSlot } from "../components/FileSlot.jsx";
 import { KrdsSelect } from "../components/KrdsSelect.jsx";
@@ -249,7 +250,7 @@ function SuggestResult({ result, cards, decisions, onDecide }) {
         status={<span className={`krds-badge large ${cards.length ? "bg-light-warning" : "bg-light-success"}`}>{cards.length ? `고칠 문장 ${cards.length}개` : "고칠 문장 없음"}</span>}
         meta={`${result.원고}, 확인한 문장 ${summary["검사한 문장"]}개, 생성형 AI에 보낸 문장 ${summary["AI에 보낸 문장"]}개, ${Object.entries(summary["사유별"]).map(([name, n]) => `${name} ${n}`).join(", ") || "지적 없음"}, 추천 없음 ${summary["추천 없음"]}, 제외한 생성형 AI 후보 ${summary["버린 AI 후보"]}`}
         badges={<>
-          <span id="suggest-ai-state" className="krds-badge bg-light-gray">{result.AI.상태}</span>{" "}
+          <span id="suggest-ai-state" className="krds-badge bg-light-gray">{plainReason(result.AI.상태)}</span>{" "}
           {result["참고 문장"] && (
             <span id="suggest-refs-state" className={`krds-badge ${result["참고 문장"]["문장 수"] ? "bg-light-success" : "bg-light-gray"}`}>
               {result["참고 문장"]["문장 수"] ? `참고 문장 ${result["참고 문장"]["문장 수"]}개` : "참고 문장 묶음 없음"}

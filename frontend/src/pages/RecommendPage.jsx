@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "../lib/api.js";
+import { plainReason } from "../lib/plain.js";
 import { Spinner } from "../components/Badge.jsx";
 import { FileSlot } from "../components/FileSlot.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
@@ -219,7 +220,7 @@ export default function RecommendPage() {
               <p className="recommend-method">
                 <span className={`krds-badge ${context.method === "llm" ? "bg-light-information" : "bg-light-gray"}`}>
                   {context.method === "llm" ? `생성형 AI 요약${context.model ? `(${context.model})` : ""}` : "규칙으로 뽑은 핵심어"}</span>
-                {context.note && <span className="meta"> {context.note}</span>}
+                {context.note && <span className="meta"> {plainReason(context.note)}</span>}
               </p>
               {context.summary && <p><strong>요약</strong> {context.summary}</p>}
               <div className="recommend-keywords"><strong>핵심어</strong>
@@ -228,8 +229,8 @@ export default function RecommendPage() {
                 <span className={`krds-badge ${result.embedding.used ? "bg-light-information" : "bg-light-gray"}`}>
                   {result.embedding.used ? `그림 유사도 사용(${result.embedding.model})` : "그림 유사도 사용 안 함"}</span>
                 <span className="meta"> {result.embedding.used
-                  ? `견준 글: “${result.embedding.query}”${result.embedding.note ? ` (${result.embedding.note})` : ""}`
-                  : `핵심어와 수행준거 연결로만 찾았습니다. ${result.embedding.note}`}</span>
+                  ? `견준 글: “${result.embedding.query}”${result.embedding.note ? ` (${plainReason(result.embedding.note)})` : ""}`
+                  : `핵심어와 수행준거 연결로만 찾았습니다. ${plainReason(result.embedding.note)}`}</span>
               </p>
               {context.dropped.length > 0 && <p className="form-hint">생성형 AI가 제시했지만 문단에 없어 쓰지 않은 낱말: {context.dropped.join(", ")}</p>}
               {result.criterion.criterion_no && (result.criterion.found

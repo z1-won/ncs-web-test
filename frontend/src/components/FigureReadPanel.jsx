@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
+import { plainReason } from "../lib/plain.js";
 import { Spinner } from "./Badge.jsx";
 import { PageAlert } from "./PageAlert.jsx";
 import { Thumb, placeText } from "./FiguresPanel.jsx";
@@ -41,19 +42,19 @@ export function FigureReadBar({ uploadToken, onResult, onDone }) {
     setRunning(false);
   }
 
-  const disabledWhy = !uploadToken ? "원고를 올리고 검수를 먼저 실행하세요" : status && !status.available ? status.problem : null;
+  const disabledWhy = !uploadToken ? "원고를 올리고 검수를 먼저 실행하세요" : status && !status.available ? plainReason(status.problem) : null;
   const blocked = status && status.transfer_others !== "허용";
 
   return (
     <div className="fig-read-bar">
-      <b>그림 판독(Claude · 비용 발생)</b>
+      <b>그림 판독(생성형 AI, 비용 발생)</b>
       <div className="fig-limit"><KrdsSelect id="fig-read-limit" value={limit} options={LIMITS} onChange={setLimit} title="판독할 그림 수" /></div>
       <button type="button" className="krds-btn primary small" onClick={run} disabled={running || Boolean(disabledWhy)}>
         {running ? "그림 판독 중…" : done ? "다시 판독" : "그림 판독"}
       </button>
       {running && <Spinner label="그림 1장에 5~10초" />}
       {disabledWhy && !running && <span className="form-hint">{disabledWhy}</span>}
-      {blocked && <span className="form-hint">서버 설정에서 그림 전송을 막아 둠</span>}
+      {blocked && <span className="form-hint">남이 만든 그림은 외부로 보내지 않도록 설정되어 있어 판독하지 않습니다</span>}
       {error && <PageAlert kind="danger">{error}</PageAlert>}
     </div>
   );
@@ -94,7 +95,7 @@ export function FigureReadResults({ uploadToken, result }) {
                         {r.problems?.length > 0 && <div className="sub">확인: {r.problems.join(", ")}</div>}
                       </>
                     ) : (
-                      <span className="sub">{r.status === "미실행" ? "보내지 않음" : r.status} — {r.reason || f.전송?.이유}</span>
+                      <span className="sub">{r.status === "미실행" ? "보내지 않음" : r.status} — {plainReason(r.reason || f.전송?.이유)}</span>
                     )}
                   </td>
                   <td>
@@ -104,7 +105,7 @@ export function FigureReadResults({ uploadToken, result }) {
                         <div>{c.근거}</div>
                         {c.검증 !== "통과" && <div className="sub">검증: {c.검증}</div>}
                       </>
-                    ) : <span className="sub">{c.reason || c.status}</span>}
+                    ) : <span className="sub">{plainReason(c.reason) || c.status}</span>}
                   </td>
                 </tr>
               );

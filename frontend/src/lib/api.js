@@ -1,6 +1,8 @@
 // 서버 호출을 한 곳에 모은다. 모든 함수는 { ok, status, data, error }를 돌려주고 예외를 던지지 않는다.
 // error는 사용자에게 바로 보여 줄 문장: 서버가 준 error 메시지(+ 개발용 traceback) 또는 연결 실패 안내.
 
+import { plainReason } from "./plain.js";
+
 const CONNECT_FAILED = "서버에 연결하지 못했습니다";
 const CONNECT_HINT = "잠시 후 다시 시도해 주세요. 계속되면 관리자에게 문의해 주세요.";
 
@@ -28,7 +30,7 @@ export async function request(path, options = {}) {
   // 로그인이 풀렸으면(세션 기한 등) 앱에 알려 로그인 화면으로 돌아가게 한다. 로그인 자체의 401(비밀번호 틀림)과 /api/me는 제외
   if (response.status === 401 && !AUTH_PATHS.includes(path)) window.dispatchEvent(new Event("ncs-auth-lost"));
   const message = data?.error || `${response.status} ${response.statusText}`.trim();
-  return { ok: false, status: response.status, data, error: message + (data?.traceback ? "\n\n" + data.traceback : "") };
+  return { ok: false, status: response.status, data, error: plainReason(message) + (data?.traceback ? "\n\n" + data.traceback : "") };
 }
 
 // roles: files와 같은 순서의 역할 배열(["manuscript", "plan", "print"]) — 업로드 칸이 정한 역할. 주면 서버가 내용 판별 대신 그대로 쓴다.

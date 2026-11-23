@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
+import { plainReason } from "../lib/plain.js";
 import { useCanManage } from "../lib/auth.jsx";
 import { Spinner } from "./Badge.jsx";
 import { PageAlert } from "./PageAlert.jsx";
@@ -213,10 +214,10 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
         <li>기준은 쪽에 출력되는 크기에서의 실효 해상도 {data.target_dpi} DPI입니다. 아래 목록은 원고에 그림이 나오는 순서입니다.</li>
         <li>2배로 기준에 닿지 않는 그림은 4배로 키웁니다. 4배는 한 장에 약 4배 오래 걸립니다{slow ? ` (이 원고는 ${slow}장)` : ""}.</li>
         {engines.length > 1 && <li>줄을 펼치면 모델을 골라 한 장씩 키울 수 있습니다. 모델별 결과는 원본 옆에 나란히 남고, 제안본에는 그림마다 마지막에 돌린 결과가 들어갑니다. 여러 장 한 번에 돌리기는 기본 모델({engines[0].label})을 씁니다. Real-ESRGAN (x4plus)은 항상 4배로 키운 뒤 필요한 크기로 줄이며 한 장에 몇 분이 걸릴 수 있습니다.</li>}
-        {engine.available && missing.map((e) => <li key={e.name}>{e.label} 모델은 실행 파일이 없어 지금은 고를 수 없습니다. {e.problem}</li>)}
+        {engine.available && missing.map((e) => <li key={e.name}>{e.label} 모델은 실행 파일이 없어 지금은 고를 수 없습니다. {plainReason(e.problem)}</li>)}
         <li>업스케일은 화질만 올립니다. 모델이 글자나 선을 바꿀 수 있으니 줄을 펼쳐 결과를 원본과 나란히 놓고 확인하세요.</li>
       </ul>
-      {!engine.available && <PageAlert kind="danger">업스케일 엔진을 쓸 수 없습니다. 그림 목록과 원본 보기만 됩니다.{"\n"}{engine.problem}</PageAlert>}
+      {!engine.available && <PageAlert kind="danger">업스케일 엔진을 쓸 수 없습니다. 그림 목록과 원본 보기만 됩니다.{"\n"}{plainReason(engine.problem)}</PageAlert>}
       {pictures.length === 0 && <p className="empty">{data.target_dpi} DPI 미만 그림이 없습니다.</p>}
 
       {pictures.length > 0 && (
@@ -329,7 +330,7 @@ export function UpscalePanel({ token, manuscriptName, moduleCode, targetDpi }) {
                             {engines.map((choice) => (
                               <button key={choice.name || "default"} type="button" className="krds-btn small secondary"
                                       disabled={!choice.available || working || !!p.locked} onClick={() => upscale(p, choice.name)}
-                                      title={choice.available ? choice.note : choice.problem}>
+                                      title={choice.available ? choice.note : plainReason(choice.problem)}>
                                 {running && (busyEngine || "") === choice.name ? "업스케일하는 중"
                                   : choice.label ? `${choice.label}로 업스케일링`
                                   : done ? "다시 업스케일링" : "이 그림만 업스케일링"}

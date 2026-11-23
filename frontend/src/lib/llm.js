@@ -20,7 +20,7 @@ export function llmTouches(llm, check) {
 // 확인서 비고에는 짧게만 — 자세한 판정·사유·수정은 'LLM 검토' 칸의 표에서 본다
 function llmNote(mine, chunks) {
   if (!mine.length) return chunks === 0 ? "[LLM 검토] 검토할 문단을 원고에서 찾지 못함" : "[LLM 검토] 지적 없음";
-  return `[LLM 검토] 부적합 ${mine.length}건 — 'LLM 검토'에서 사유·수정 보기`;
+  return `[LLM 검토] 부적합 ${mine.length}건. 아래 'LLM 검토' 표에서 사유와 수정 내용을 봅니다`;
 }
 
 // 'LLM 검토' 칸의 표 — 항목마다 LLM 검토 전(규칙 판정·비고)과 LLM 지적들.
@@ -67,7 +67,7 @@ export function applyLlm(check, data, llm) {
     if (llm.chunks?.[task] !== 0) findings = findings.filter((f) => !(f.item_id === itemId && f.verdict === "판단불가"));
     findings = findings.concat(mine.map((f) => ({
       item_id: itemId,
-      check: `LLM 검토 · ${f.근거_종류 || f.항목}`,
+      check: `LLM 검토: ${f.근거_종류 || f.항목}`,
       region_path: [f.위치, f.블록_제목].filter(Boolean).join(" · "),
       verdict: "부적합",
       reason: `「${f.인용 || f["수정해야 하는 부분"]}」 — ${f.근거}`,

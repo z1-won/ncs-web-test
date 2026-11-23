@@ -4,6 +4,7 @@
 import React, { useMemo, useRef, useState } from "react";
 
 import { api } from "../lib/api.js";
+import { plainReason } from "../lib/plain.js";
 import { Spinner } from "../components/Badge.jsx";
 import { FileSlot } from "../components/FileSlot.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
@@ -142,7 +143,7 @@ function OpinionResult({ result }) {
       <ResultHead
         status={<span className="krds-badge large bg-light-gray">의견 {summary["총 의견"]}개</span>}
         meta={`${result.원고} / ${result.의견서.map((s) => `${s.차수 || "차수 모름"} ${s.파일}`).join(", ")}${result.출력본 ? ` / 출력본 ${result.출력본}` : ""}`}
-        badges={<span id="opinion-llm-state" className="krds-badge bg-light-gray">생성형 AI: {result.LLM}</span>}
+        badges={<span id="opinion-llm-state" className="krds-badge bg-light-gray">생성형 AI: {plainReason(result.LLM)}</span>}
       />
       <dl className="upscale-summary">
         <div><dt>조치 요구 의견</dt><dd><strong>{summary["조치 요구"]}</strong>개</dd><dd className="meta">조치 불필요(적합 확인) {summary["조치 불필요"]}개 제외{summary["심의 의견"] > 0 && `, 심의 의견 ${summary["심의 의견"]}개 포함`}</dd></div>
@@ -198,7 +199,7 @@ function OpinionResult({ result }) {
                       <ul className="krds-info-list dash">{[...row.비고, ...row["의견서 읽기 추정"]].map((note, i) => <li key={i}>{note}</li>)}</ul>
                     </details>
                   )}
-                  {row.LLM && <p className="meta">생성형 AI: {row.LLM.상태 === "사용" ? `${row.LLM.모델}, ${row.LLM.판정}` : row.LLM.상태}</p>}
+                  {row.LLM && <p className="meta">생성형 AI: {row.LLM.상태 === "사용" ? `${row.LLM.모델}, ${row.LLM.판정}` : plainReason(row.LLM.상태)}</p>}
                 </td>
                 <td>
                   {row.판정 !== "조치 불필요" && (

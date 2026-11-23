@@ -86,7 +86,7 @@ export function FiguresPanel({ uploadToken, moduleCode, refresh = 0 }) {
               <a className="krds-btn small tertiary" href={api.figures.reportUrl(uploadToken)} target="_blank" rel="noreferrer">검수표(인쇄→PDF)</a>
               <a className="krds-btn small tertiary" href={api.figures.memoUrl(uploadToken)}>메모 단 원고(hwpx)</a>
               <a className="krds-btn small tertiary" href={api.figures.csvUrl(uploadToken)}>태깅 표(CSV)</a>
-              <a className="krds-btn small tertiary" href={api.figures.jsonUrl(uploadToken)}>JSON</a>
+              <a className="krds-btn small tertiary" href={api.figures.jsonUrl(uploadToken)}>원본 데이터(JSON)</a>
             </div>
           </div>
           {onlyListed.map(([name, items]) => (
@@ -267,7 +267,7 @@ function VerdictCell({ row }) {
 
 // 비슷한 그림 추천 — 저작권이 문제이거나 오래된 그림이면 바꿔 쓸 수 있는, 같은 주제(캡션·키워드)의 그림 DB 그림
 function ReplaceCell({ candidates, db, hasCaption }) {
-  if (!db) return <span className="sub">DB 미연결</span>;
+  if (!db) return <span className="sub">이미지 저작권 DB에 연결되지 않음</span>;
   if (!hasCaption && !candidates?.length) return <span className="sub">캡션이 없어 비슷한 그림을 찾지 못함</span>;
   if (!candidates?.length) return <span className="sub">비슷한 그림 없음</span>;
   return (
