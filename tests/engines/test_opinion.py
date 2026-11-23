@@ -163,6 +163,15 @@ class SheetTests(unittest.TestCase):
         self.assertEqual(split_bullets("- 교수-학습 방법이 적합함. - 표 1-3 수정 필요 -> 반영"),
                          ["교수-학습 방법이 적합함.", "표 1-3 수정 필요 -> 반영"])
 
+    def test_before_after_lines_stay_in_one_opinion(self):
+        cell = "목표 문장을 아래와 같이 고치면 좋겠음 - 수정전: 1.1 자료를 수집 할 수 있다. - 수정 후: 1.1 자료를 수집할 수 있다. - 표 2-1 출처 필요"
+        self.assertEqual(split_bullets(cell), ["목표 문장을 아래와 같이 고치면 좋겠음 - 수정전: 1.1 자료를 수집 할 수 있다. - 수정 후: 1.1 자료를 수집할 수 있다.",
+                                               "표 2-1 출처 필요"])
+        lines = ["1차 검토 초고본 검토의견서", "개발계획서", "검토 의견", "-목표 문장 띄어쓰기 수정 필요", "-수정전: 자료를 수집 할 수 있다.",
+                 "-수정후: 자료를 수집할 수 있다.", "※ 형식", "구분 쪽수 검토의견", "기타 - -", "※ 학습이 추가될 경우"]
+        plan = [o.text for o in parse_lines(lines, "x.pdf").opinions if o.group == "개발계획서"]
+        self.assertEqual(plan, ["목표 문장 띄어쓰기 수정 필요 -수정전: 자료를 수집 할 수 있다. -수정후: 자료를 수집할 수 있다."])
+
 
 def answer(no, type_="내용", verdict="반영", evidence=(), **more):
     item = {"no": no, "type": type_, "verdict": verdict, "evidence": list(evidence), "reason": more.pop("reason", "이유"),

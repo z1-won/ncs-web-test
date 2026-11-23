@@ -68,6 +68,7 @@ PAGE_ONLY = re.compile(r"^(\d{1,3}(?:\s*[-~]\s*\d{1,3})?)$")
 PAGE_HEAD = re.compile(r"^(\d{1,3}(?:\s*[-~]\s*\d{1,3})?)(?!\d)\s*")
 EMPTY_PAGE = re.compile(r"^-(?:\s+(?=-)|\s*$)")
 BULLET = re.compile(r"^-(?!>)\s*")
+SUB_ITEM = re.compile(r"^[(\[]?\s*(?:수정|변경)\s*[전후]\s*[)\]]?\s*[:：]")
 NOT_OPINION = re.compile(r"^[-\s]*((의견\s*)?없음)?[.\s]*$")
 PAGE_CELL = re.compile(r"^\d{1,3}(?:\s*(?:[-~,]|\s)\s*\d{1,3})*$")   # hwp 쪽수 칸: '3-6', '5 9', '51~56 60'
 
@@ -103,11 +104,24 @@ def norm_part(label: str) -> str | None:
     return None
 
 
+def sub_item(text: str) -> bool:
+    """앞 의견에 딸린 '-' 줄인가 — '수정전: …'·'수정 후: …'처럼 앞 문장이 든 고칠 문장의 전후 예시."""
+    return bool(SUB_ITEM.match(BULLET.sub("", text.strip(), count=1)))
+
+
 def split_bullets(text: str) -> list[str]:
-    """한 칸 글 → '-'로 시작하는 의견들. '-'가 없으면 통째로 한 의견. '교수-학습', '->'는 나누지 않는다."""
+    """한 칸 글 → '-'로 시작하는 의견들. '-'가 없으면 통째로 한 의견. '교수-학습', '->'는 나누지 않는다.
+    '- 수정전: …', '- 수정후: …' 줄은 따로 의견이 아니라 앞 의견에 붙인다(실물 1차 의견서의 개발계획서 칸 — 한 의견이 셋으로 읽혔다)."""
     text = " ".join(text.split())
     parts = re.split(r"(?:^|\s)-(?!>)\s*(?=\S)", text)
-    out = [p.strip() for p in parts if p.strip()]
+    out: list[str] = []
+    for part in (p.strip() for p in parts):
+        if not part:
+            continue
+        if out and sub_item(part):
+            out[-1] = f"{out[-1]} - {part}"
+        else:
+            out.append(part)
     return [p for p in out if is_opinion(p)]
 
 
@@ -225,7 +239,7 @@ def _table_items(lines: list[str], source: str, round_: str) -> list[Opinion]:
         if not rest:
             continue
         starts_ref = REF.match(rest) and current is not None and SENTENCE_END.search(current.lines[-1])
-        if BULLET.match(rest) or current is None or starts_ref:
+        if (BULLET.match(rest) and not (current is not None and sub_item(rest))) or current is None or starts_ref:
             current = _Item(index, [BULLET.sub("", rest, count=1)], index)
             items.append(current)
             continue
@@ -371,7 +385,9 @@ def _block_text(lines: list[str]) -> list[str]:
         return [t for t in [join_lines(body)] if is_opinion(t)]
     items: list[list[str]] = []
     for line in body:
-        if BULLET.match(line) or not items:
+        if items and sub_item(line):
+            items[-1].append(line)
+        elif BULLET.match(line) or not items:
             items.append([BULLET.sub("", line, count=1)])
         else:
             items[-1].append(line)
