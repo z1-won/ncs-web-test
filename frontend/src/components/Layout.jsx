@@ -36,21 +36,30 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
   { id: "review-history", label: "검수 이력" },
 ];
 
-/* 페이지 메뉴 — 라우트 단위, 작업 순서. 1Depth는 링크형이 기본이고, children이 있는 항목(이미지)은 눌러서 펼치는 2Depth 묶음이다
-   (이미지 저작권 DB·이미지 추천·이미지 AI 보완 — 그림의 권리 정보를 쌓고, 찾고, AI를 쓴 그림에 표기를 남기는 일이라 한 묶음). 페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
+/* 페이지 메뉴 — 처음 화면(HomePage)의 기능 묶음 넷(집필, 검수, 이미지, 마무리)과 같은 묶음, 같은 순서다.
+   메뉴와 처음 화면의 묶음이 다르면(예전: 업스케일링이 처음 화면에서는 이미지 묶음, 메뉴에서는 혼자) 같은 기능을 두 자리에서 찾게 된다.
+   묶음은 눌러서 펼치는 2Depth다. 묶음 안 순서는 일하는 순서: 검수는 한 원고 → 여러 원고 → 의견 반영, 이미지는 화질 → 권리 정보 쌓기 → 찾기 → AI 표기.
+   페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
 export const PAGES = [
-  { path: "/plan", label: "개발계획서 작성" },
-  { path: "/review", label: "원고 검수" },
-  { path: "/opinion", label: "의견 반영 검토" },
-  { path: "/upscale", label: "업스케일링" },
+  { id: "write", label: "집필", children: [
+    { path: "/plan", label: "개발계획서 작성" },
+    { path: "/suggest", label: "문장 추천" },
+  ] },
+  { id: "review", label: "검수", children: [
+    { path: "/review", label: "원고 검수" },
+    { path: "/review/batch", label: "원고 폴더 일괄 검수" },
+    { path: "/opinion", label: "의견 반영 검토" },
+  ] },
   { id: "image", label: "이미지", children: [
+    { path: "/upscale", label: "업스케일링" },
     { path: "/images", label: "이미지 저작권 DB" },
     { path: "/recommend", label: "이미지 추천" },
     { path: "/ai-image", label: "이미지 AI 보완" },
   ] },
-  { path: "/rights", label: "권리 증빙 점검" },
-  { path: "/volume", label: "원고 분량" },
-  { path: "/suggest", label: "문장 추천" },
+  { id: "finish", label: "마무리", children: [
+    { path: "/rights", label: "권리 증빙 점검" },
+    { path: "/volume", label: "원고 분량" },
+  ] },
 ];
 
 /* 2Depth 묶음 — KRDS 메인 메뉴 마크업(.gnb-main-trigger 버튼 + .gnb-toggle-wrap › .gnb-main-list › a.gnb-sub-trigger.is-link).

@@ -44,6 +44,8 @@ npm run dev
 
 ## 업스케일링 페이지
 
+메인 메뉴는 처음 화면의 기능 묶음과 같은 넷입니다(`frontend/src/components/Layout.jsx`의 `PAGES`): **집필**(개발계획서 작성, 문장 추천), **검수**(원고 검수, 원고 폴더 일괄 검수, 의견 반영 검토), **이미지**(업스케일링, 이미지 저작권 DB, 이미지 추천, 이미지 AI 보완), **마무리**(권리 증빙 점검, 원고 분량). 묶음은 눌러서 펼칩니다. 서버가 보낸 "쓸 수 없는 까닭"에 든 설치 명령과 설정 이름은 화면에서 `frontend/src/lib/plain.js`의 `plainReason`이 "관리자에게 문의"로 바꿔 보이고, 원문은 브라우저 개발자 도구에 남깁니다.
+
 메인 메뉴의 **업스케일링**(`/upscale`)은 원고 검수와 따로 쓰는 페이지입니다. 원고(hwpx)를 이 페이지에서 올리면 고른 해상도 기준(300 또는 150 DPI, 기본 300 — `?target_dpi=`) 미만 그림을 원고에 나오는 순서로 보여 주고, 고른 그림만 한 장씩 키웁니다. 화면은 `frontend/src/pages/UpscalePage.jsx`, 그림 목록·결과는 `components/UpscalePanel.jsx`, 서버는 `/api/uploads/{token}/pictures…` 경로와 `src/ncs_upscale/`입니다.
 
 업스케일은 외부 실행 파일(기본 `waifu2x-ncnn-vulkan`)을 부릅니다. 실행 파일은 저장소에 없으므로 따로 내려받아 도구 폴더에 둡니다. 도구 폴더는 환경 변수 `NCS_UPSCALE_TOOLS`로 지정하고, 없으면 저장소 안 `tools/`(git 제외)를, 그다음 예전 위치인 저장소 바로 위 폴더의 `tools/`를 봅니다. 엔진을 찾지 못하면 그림 목록과 원본 보기는 되고 업스케일 버튼만 꺼집니다. 실행 파일 이름은 운영체제에 맞춰 찾습니다 — Windows는 `waifu2x-ncnn-vulkan.exe`, macOS·Linux는 `waifu2x-ncnn-vulkan`(`src/ncs_upscale/engine.py`). 2배로 기준에 닿지 않는 그림은 4배로 키우며 약 4배 오래 걸립니다. 해상도 기준을 바꾸면 이전 기준으로 키운 결과는 완료로 세지 않습니다.
