@@ -509,6 +509,32 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual([(r["차수"], r["의견서"]) for r in given["의견"]], [("1차", "1차.hwpx"), ("2차", "2차.hwpx")])
         self.assertEqual(given["요약"], auto["요약"])
 
+    def test_same_text_in_rows_of_one_file_stays_separate_and_only_cross_file_copy_drops(self):
+        import make_fixtures as mf
+
+        same = "- 작성 지침에 맞게 작성되어 있음"
+        head1 = [["1차 검토", "초고본 검토의견서", "", ""], ["구분", "쪽수", "검토의견", ""]]
+        rows1 = head1 + [["학습 1-1", "필요지식", "4", same], ["", "수행 내용", "9", same], ["", "평가", "12", same],
+                         ["기타", "", "", "- 참고자료 최신화 필요"]]
+        rows2 = [["2차 검토", "완성본 검토의견서", "", ""], ["구분", "쪽수", "검토의견", ""], ["학습 1-1", "필요지식", "5", same]]
+        calls = []
+        with tempfile.TemporaryDirectory() as folder:
+            final, _ = self.write(folder)
+            first, second = Path(folder) / "1차.hwpx", Path(folder) / "2차.hwpx"
+            mf.write_hwpx(first, [[mf.table(rows1)]])
+            mf.write_hwpx(second, [[mf.table(rows1), mf.table(rows2)]])      # 2차 파일 안에 1차 표가 함께 든 실물 모양
+            alone = review([first], final)
+            both = review([first, second], final, rounds=["1차", "2차"],
+                          generate=fake(lambda call: [answer(n, "조치 불필요", "확인 필요") for n in range(1, 6)], calls=calls))
+        self.assertEqual(alone["요약"]["총 의견"], 4)                                 # 한 파일 안 같은 문구 3행 → 3개
+        self.assertEqual([(r["차수"], r["구성"], r["쪽"]) for r in alone["의견"][:3]],
+                         [("1차", "필요 지식", "4"), ("1차", "수행 내용", "9"), ("1차", "평가", "12")])
+        self.assertEqual(both["요약"]["총 의견"], 5)                                  # 2차 파일의 1차 표 4개는 겹침이라 빠지고 2차 1개만 더해진다
+        self.assertEqual([r["번호"] for r in both["의견"]], [1, 2, 3, 4, 5])
+        self.assertEqual([(r["차수"], r["의견서"]) for r in both["의견"]][-1], ("2차", "2차.hwpx"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(both["요약"]["조치 불필요"], 5)                              # LLM 답이 의견 번호마다 붙는다
+
     def test_deliberation_sheet_runs_through_review(self):
         import make_fixtures as mf
 

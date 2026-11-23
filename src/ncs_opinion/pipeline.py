@@ -86,9 +86,14 @@ def review(opinions: list[Path | str], manuscript: Path | str, *, rounds: list[s
 
     items, seen = [], set()
     for sheet in sheets:
+        nth: dict[tuple[str, str], int] = {}
         for opinion in sheet.opinions:
-            key = (opinion.round, compact(opinion.text))
-            if key in seen:       # 2차 의견서 파일에 1차 표가 함께 든 경우 — 같은 의견은 한 번만
+            # 같은 파일 안의 행은 글이 같아도 다른 의견이다(행마다 '지침에 따라 작성됨' 등). 파일 사이에서만 겹침을 뺀다 —
+            # 2차 의견서 파일에 1차 표가 함께 든 경우. 그래서 파일마다 같은 (차수, 글)이 몇 번째인지를 키에 넣는다.
+            text_key = (opinion.round, compact(opinion.text))
+            nth[text_key] = nth.get(text_key, 0) + 1
+            key = (*text_key, nth[text_key])
+            if key in seen:
                 continue
             seen.add(key)
             _, where, place_notes, _ = locate(opinion, final, config)
