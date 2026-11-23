@@ -47,7 +47,7 @@ export function FigureReadBar({ uploadToken, onResult, onDone }) {
 
   return (
     <div className="fig-read-bar">
-      <b>그림 판독(생성형 AI, 비용 발생)</b>
+      <b>그림 판독(Claude · 비용 발생)</b>
       <div className="fig-limit"><KrdsSelect id="fig-read-limit" value={limit} options={LIMITS} onChange={setLimit} title="판독할 그림 수" /></div>
       <button type="button" className="krds-btn primary small" onClick={run} disabled={running || Boolean(disabledWhy)}>
         {running ? "그림 판독 중…" : done ? "다시 판독" : "그림 판독"}
