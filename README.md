@@ -148,7 +148,7 @@ NCS 학습모듈 원고(한글 파일)를 올리면 정해진 검수 기준에 �
 ### 폴더 구조
 
 ```
-src/            검수 코드. ncs_core(공통) · 검수 엔진 10개 · ncs_service(실행·저장·CLI) · ncs_web(FastAPI 서버)
+src/            검수 코드. ncs_core(공통) · 검수 엔진 10개 · 기능 패키지 · ncs_service(실행·저장·CLI) · ncs_web(FastAPI 서버) → 층별 지도는 src/README.md
 frontend/       화면(React·Vite·KRDS). 서버 코드는 src/ncs_web, 웹·DB 실행 안내는 docs/WEB.md
 requirements/   고정 의존성 목록(web·test·dev). pyproject의 web·test extra가 읽습니다
 tests/          core·engines·service·contract·integration 묶음, 합성 원고(fixtures/), 골든 스냅샷(golden/)
