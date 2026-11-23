@@ -101,6 +101,33 @@ def picture_records(manuscript, sections: list[int] | None = None) -> list[dict]
     return out
 
 
+MAX_CAPTION_GAP = 8     # 그림과 캡션 사이에 올 수 있는 문단 수(출처 줄·AI 활용 줄·빈 줄). 이보다 멀면 그 캡션의 그림으로 보지 않는다
+
+
+def pictures_by_caption(records: list[dict], captions: list[tuple[int, int]]) -> dict[tuple[int, int], dict]:
+    """캡션 자리 (구역, 문단) → 그 캡션의 그림(picture_records의 한 건). 캡션 문단 바로 위, 앞 캡션보다 아래에 놓인 그림 파일.
+
+    캡션 하나에 그림이 여럿이면 캡션에 가장 가까운 것. 그림 번호로 짝짓지 않는 것은 실제 원고에 같은 번호가 두 번 쓰이거나
+    뒤 번호가 빈 캡션이 여럿 있어서다. 그림 파일을 읽지 못한 건(data가 빔)은 짝에서 뺀다.
+    """
+    by_section: dict[int, list[int]] = {}
+    for section, para in captions:
+        by_section.setdefault(section, []).append(para)
+    pictures: dict[int, list[dict]] = {}
+    for record in records:
+        if record["data"]:
+            pictures.setdefault(record["section"], []).append(record)
+    found = {}
+    for section, paras in by_section.items():
+        previous = -1
+        for para in sorted(set(paras)):
+            above = [record for record in pictures.get(section, []) if max(previous, para - MAX_CAPTION_GAP - 1) < record["para"] <= para]
+            if above:
+                found[(section, para)] = max(above, key=lambda record: record["para"])
+            previous = para
+    return found
+
+
 def caption_near(paragraphs: list[str], para: int) -> str:
     """그림 문단 근처의 '[그림 N-M] …' 캡션(없으면 '')."""
     order = list(range(para, min(len(paragraphs), para + CAPTION_AFTER + 1))) + list(range(para - 1, max(-1, para - CAPTION_BEFORE - 1), -1))

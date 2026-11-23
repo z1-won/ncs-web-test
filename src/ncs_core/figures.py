@@ -10,6 +10,9 @@ hwp·hwpx 모두 된다(문단 글만 본다). 그림 파일 자체는 ncs_core.
     [그림 1-1] 생산 설비 주요 구성 요소           ← 캡션
 캡션 위 LOOKBACK개 문단 안에서 출처 줄과 AI 줄을 찾고, 다른 그림의 캡션을 만나면 멈춘다.
 AI 줄과 캡션이 한 문단에 붙어 있는 경우(F08 예 4: '…생성함. 2026. 7. 20.[그림 1-] …')도 읽는다.
+
+쓰는 쪽(REQ-02-006 ③ 표기 문구 자동 삽입)도 여기 둔다: ai_line·marking_lines가 만든 줄은 parse_ai_mark가 같은 값으로 다시 읽는다.
+출력본 PDF에서 그림이 놓인 쪽(figure_pages)은 권리 증빙 점검과 생성형 AI 결과물 현황 작성이 함께 쓴다.
 """
 
 from __future__ import annotations
@@ -23,7 +26,8 @@ _DASH = r"[-–—－‐]"
 LABEL = re.compile(rf"[\[〔]\s*그림\s*(\d+)\s*{_DASH}\s*(\d*)\s*[\]〕]")
 SOURCE = re.compile(r"^출\s*처\s*[:：]")
 AI_MARK = re.compile(
-    r"(?P<tool>[^\s.。,][^.。]{0,40}?)\s*[을를]\s*활용하여\s*(?P<mode>생성함|수정\s*보완함)"
+    # 도구 이름 안의 마침표는 숫자 사이(판 번호 'ChatGPT 6.0')일 때만 이름의 일부로 본다 — 그 밖의 마침표는 앞 문장의 끝이다
+    r"(?P<tool>[^\s.。,](?:[^.。]|(?<=\d)\.(?=\d)){0,40}?)\s*[을를]\s*활용하여\s*(?P<mode>생성함|수정\s*보완함)"
     r"(?:\s*\.?\s*(?P<y>\d{4})\s*\.\s*(?P<m>\d{1,2})\s*\.\s*(?P<d>\d{1,2})\s*\.?)?")
 # 본문에서 그림을 가리키는 문장('[그림 1-1]과 같이 …', '… 나타낸다.')은 캡션이 아니다
 REFERENCE_AFTER = re.compile(r"^(은|는|이|가|을|를|과|와|의|에|로|처럼|같이|에서|부터|까지|도|만|참조)(\s|$)")
@@ -79,6 +83,53 @@ def parse_ai_mark(text: str) -> AiMark | None:
     return AiMark(found.group("tool").strip(), mode, on, found.group(0).strip())
 
 
+MODE_WORDS = {"generated": "생성함", "modified": "수정 보완함"}
+TOOL_MAX = 40
+# 받침으로 읽히는 끝 글자: 숫자 0(영)·1(일)·3(삼)·6(육)·7(칠)·8(팔), 영문 l(엘)·m(엠)·n(엔). 그 밖의 영문·숫자는 받침 없이 읽힌다
+_FINAL_DIGITS, _FINAL_LETTERS = set("013678"), set("lmn")
+
+
+def object_particle(word: str) -> str:
+    """낱말 뒤에 붙는 목적격 조사 '을' 또는 '를' — 끝 글자의 받침으로 정한다('ChatGPT' → '를', 'Real-ESRGAN' → '을').
+
+    괄호 같은 기호는 건너뛰고 마지막 글자·숫자를 본다. 읽는 쪽(AI_MARK)은 둘 다 받으므로 틀려도 다시 읽는 데는 지장이 없다.
+    """
+    for char in reversed(word or ""):
+        if "가" <= char <= "힣":
+            return "을" if (ord(char) - 0xAC00) % 28 else "를"
+        if char.isdigit():
+            return "을" if char in _FINAL_DIGITS else "를"
+        if char.isalpha():
+            return "을" if char.lower() in _FINAL_LETTERS else "를"
+    return "를"
+
+
+def clean_tool(tool: str) -> str:
+    """AI 활용 줄에 쓸 도구 이름 — 앞뒤 공백을 떼고, 다시 읽을 수 없는 꼴이면 ValueError(화면에 그대로 보일 말)."""
+    name = re.sub(r"\s+", " ", tool or "").strip()
+    if not name:
+        raise ValueError("활용한 AI 도구 이름을 적어 주세요")
+    if len(name) > TOOL_MAX:
+        raise ValueError(f"AI 도구 이름은 {TOOL_MAX}자까지 적을 수 있습니다")
+    if re.search(r"[。,]|(?<!\d)\.|\.(?!\d)", name) or name[0] in ".。,":
+        raise ValueError("AI 도구 이름에는 쉼표를 쓸 수 없고, 마침표는 판 번호(예: 6.0)의 숫자 사이에만 쓸 수 있습니다")
+    return name
+
+
+def ai_line(tool: str, mode: str, on: date) -> str:
+    """AI 활용 줄 — 'ChatGPT를 활용하여 수정 보완함. 2026. 7. 20.' (F08 AI 도구 사용 표기 예). mode: 'generated' | 'modified'."""
+    if mode not in MODE_WORDS:
+        raise ValueError("활용 방식은 생성함(generated) 또는 수정 보완함(modified)이어야 합니다")
+    name = clean_tool(tool)
+    return f"{name}{object_particle(name)} 활용하여 {MODE_WORDS[mode]}. {on.year}. {on.month}. {on.day}."
+
+
+def marking_lines(*, source_line: str, tool: str, mode: str, on: date, label: str, title: str) -> list[str]:
+    """그림 한 개의 표기 세 줄: ① 출처 줄 ② AI 활용 줄 ③ 그림 번호와 제목. 출처 줄이 비면 그 줄은 빠진다(지어내지 않는다)."""
+    caption = f"[{label}] {title}".strip()
+    return [line for line in ((source_line or "").strip(), ai_line(tool, mode, on), caption) if line]
+
+
 def _caption(text: str) -> tuple[int, int | None, str, AiMark | None] | None:
     """문단이 그림 캡션이면 (앞 번호, 뒤 번호, 그림명, 같은 문단에 붙은 AI 줄)."""
     text = (text or "").strip().translate(_FULLWIDTH)
@@ -131,3 +182,20 @@ def manuscript_figures(document) -> list[Figure]:
                     break
             figures.append(Figure(s, i, major, minor, title, source_line, ai))
     return figures
+
+
+def figure_pages(pdf) -> dict[str, list[dict]]:
+    """PdfDocument → {'그림 1-1': [{'쪽': '4' 또는 None, '추정': False, '물리 쪽': 7}, …]} (문서 순서, 같은 쪽은 한 번).
+
+    출력본의 줄 가운데 그림 캡션으로 시작하는 줄을 찾아 그 쪽의 인쇄된 쪽 번호를 모은다. 본문의 참조 문장은 원고 읽기와 같은 기준으로 뺀다.
+    """
+    found: dict[str, list[dict]] = {}
+    for page in pdf.pages:
+        for line in page.body:
+            label = caption_label(line)
+            if label is None:
+                continue
+            places = found.setdefault(label, [])
+            if not any(place["물리 쪽"] == page.number for place in places):
+                places.append({"쪽": page.folio, "추정": page.folio_source == "추정", "물리 쪽": page.number})
+    return found

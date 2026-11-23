@@ -18,6 +18,7 @@ from importlib.resources import files
 from xml.etree import ElementTree as ET
 
 from ncs_core.f02_items import F02_ITEMS
+from ncs_core.hwpx import register_namespaces
 from ncs_core.sheet import NOT_CHECKED
 from ncs_core.text import FAIL, PASS, UNDECIDED
 
@@ -34,15 +35,7 @@ def _text(ws, row: int, col: int, value) -> None:
     if isinstance(value, str):
         cell.data_type = "s"
 HP = "{http://www.hancom.co.kr/hwpml/2011/paragraph}"
-ET.register_namespace("hp", HP[1:-1])
-for prefix, uri in (("hs", "http://www.hancom.co.kr/hwpml/2011/section"), ("hc", "http://www.hancom.co.kr/hwpml/2011/core"),
-                    ("ha", "http://www.hancom.co.kr/hwpml/2011/app"), ("hh", "http://www.hancom.co.kr/hwpml/2011/head"),
-                    ("hhs", "http://www.hancom.co.kr/hwpml/2011/history"), ("hm", "http://www.hancom.co.kr/hwpml/2011/master-page"),
-                    ("hpf", "http://www.hancom.co.kr/schema/2011/hpf"), ("dc", "http://purl.org/dc/elements/1.1/"),
-                    ("opf", "http://www.idpf.org/2007/opf/"), ("ooxmlchart", "http://www.hancom.co.kr/hwpml/2016/ooxmlchart"),
-                    ("hwpunitchar", "http://www.hancom.co.kr/hwpml/2016/HwpUnitChar"), ("epub", "http://www.idpf.org/2007/ops"),
-                    ("config", "urn:oasis:names:tc:opendocument:xmlns:config:1.0")):
-    ET.register_namespace(prefix, uri)
+register_namespaces()     # 이름공간 표는 ncs_core.hwpx에 있다(수정 메모 원고, AI 활용 표기와 함께 쓴다)
 
 
 def _key(component: str) -> str:

@@ -7,7 +7,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / "src"
 ENGINES = ("ncs_position", "ncs_toc", "ncs_overview", "ncs_knowledge", "ncs_perform", "ncs_teaching", "ncs_evaluation", "ncs_references", "ncs_colophon", "ncs_misc")
-FEATURES = ("ncs_plan", "ncs_upscale", "ncs_rights", "ncs_recommend", "ncs_volume", "ncs_opinion", "ncs_suggest")   # 검수 엔진은 아니지만 같은 층(ncs_core 위)에 서는 기능 패키지
+FEATURES = ("ncs_plan", "ncs_upscale", "ncs_rights", "ncs_recommend", "ncs_volume", "ncs_opinion", "ncs_suggest", "ncs_aiimage")   # 검수 엔진은 아니지만 같은 층(ncs_core 위)에 서는 기능 패키지
 IMPORT = re.compile(r"^\s*(?:from|import)\s+(ncs_\w+)", re.MULTILINE)
 
 

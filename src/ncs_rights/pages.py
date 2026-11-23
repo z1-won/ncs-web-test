@@ -9,25 +9,11 @@ from __future__ import annotations
 
 import re
 
-from ncs_core.figures import caption_label
+from ncs_core.figures import figure_pages  # noqa: F401 — 코어로 옮겼다(생성형 AI 결과물 현황 작성과 함께 쓴다). 이 이름으로도 계속 쓴다
 
 _RANGE = re.compile(r"(\d{1,4})\s*[-–—~∼〜]\s*(\d{1,4})")
 _NUMBER = re.compile(r"\d{1,4}")
 MAX_RANGE = 30          # '12~300' 같은 오기를 쪽 범위로 펼치지 않는다
-
-
-def figure_pages(pdf) -> dict[str, list[dict]]:
-    """PdfDocument → {'그림 1-1': [{'쪽': '4' 또는 None, '추정': False, '물리 쪽': 7}, …]} (문서 순서, 같은 쪽은 한 번)."""
-    found: dict[str, list[dict]] = {}
-    for page in pdf.pages:
-        for line in page.body:
-            label = caption_label(line)
-            if label is None:
-                continue
-            places = found.setdefault(label, [])
-            if not any(place["물리 쪽"] == page.number for place in places):
-                places.append({"쪽": page.folio, "추정": page.folio_source == "추정", "물리 쪽": page.number})
-    return found
 
 
 def page_numbers(text: str) -> list[int]:

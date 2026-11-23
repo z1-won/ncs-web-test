@@ -28,6 +28,8 @@ MAX_SCALE = 4                 # x2로 기준에 닿으면 x2(한 장 20~40초), 
 # 화면의 '이 그림만 업스케일링'에서 고를 수 있는 모델(앞의 것이 기본). 여러 장 한 번에 돌리기는 기본 모델만 쓴다
 WEB_ENGINES = (DEFAULT_ENGINE, "esrgan-best")
 ENGINE_LABELS = {"waifu2x-photo": "waifu2x (upconv_7_photo)", "esrgan-best": "Real-ESRGAN (x4plus)"}
+# AI 활용 줄('OO를 활용하여 수정 보완함')에 적는 도구 이름 — 모델 파일 이름이 아니라 도구 이름만 적는다
+TOOL_NAMES = {"waifu2x-photo": "waifu2x", "esrgan-best": "Real-ESRGAN", "esrgan-fast": "Real-ESRGAN"}
 _GPU = threading.Lock()
 _CACHE: dict[tuple[str, float], tuple[list[dict], dict]] = {}
 _CACHE_LOCK = threading.Lock()
@@ -210,6 +212,17 @@ def _results(work: Path, target_dpi: int | None = None) -> list[dict]:
     if target_dpi is None:
         return results
     return [r for r in results if r.get("target_dpi", DEFAULT_TARGET_DPI) == target_dpi]
+
+
+def tool_name(engine: str | None) -> str:
+    """업스케일 모델 → AI 활용 줄과 이미지 저작권 DB에 적을 도구 이름."""
+    return TOOL_NAMES.get(engine or DEFAULT_ENGINE, engine or DEFAULT_ENGINE)
+
+
+def finished(work: Path, target_dpi: int | None = None) -> list[dict]:
+    """제안본에 들어가는 그림의 결과 정보 — 업스케일에 성공했고 결과 파일이 남아 있는 것(build_proposal과 같은 조건)."""
+    return [info for info in _results(work, target_dpi)
+            if info["status"] == "완료" and (work / f"{_safe(info['bin_id'])}.bin").exists()]
 
 
 def build_proposal(manuscript: Path, work: Path, *, target_dpi: int | None = None) -> tuple[bytes, dict]:

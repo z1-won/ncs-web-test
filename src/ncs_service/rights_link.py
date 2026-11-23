@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 
 from ncs_core.documents import load_document
-from ncs_core.pictures import picture_records
+from ncs_core.pictures import MAX_CAPTION_GAP, picture_records, pictures_by_caption
 
 from . import image_db, image_store
 
@@ -24,28 +24,12 @@ EVIDENCE_KINDS = {"양도 동의서(집필자)": "transfer_consent", "양도 동
 CATEGORIES = ("author_made", "commissioned", "public_license", "blanket_license", "prior_module")
 
 
-MAX_GAP = 8        # 그림과 캡션 사이에 올 수 있는 문단 수(출처 줄·AI 활용 줄·빈 줄). 이보다 멀면 그 캡션의 그림으로 보지 않는다
+MAX_GAP = MAX_CAPTION_GAP        # 그림과 캡션 사이에 올 수 있는 문단 수 — 짝짓기는 ncs_core.pictures.pictures_by_caption으로 옮겼다
 
 
 def _pictures_by_caption(document, rows: list[dict]) -> dict[tuple[int, int], dict]:
     """현황표 줄의 캡션 자리 (구역, 문단) → 그 캡션의 그림 파일. 캡션 하나에 그림이 여럿이면 캡션에 가장 가까운 것."""
-    captions: dict[int, list[int]] = {}
-    for row in rows:
-        if row.get("문단"):
-            captions.setdefault(row["문단"][0], []).append(row["문단"][1])
-    pictures: dict[int, list[dict]] = {}
-    for record in picture_records(document):
-        if record["data"]:
-            pictures.setdefault(record["section"], []).append(record)
-    found = {}
-    for section, paras in captions.items():
-        previous = -1
-        for para in sorted(set(paras)):
-            above = [record for record in pictures.get(section, []) if max(previous, para - MAX_GAP - 1) < record["para"] <= para]
-            if above:
-                found[(section, para)] = max(above, key=lambda record: record["para"])
-            previous = para
-    return found
+    return pictures_by_caption(picture_records(document), [tuple(row["문단"]) for row in rows if row.get("문단")])
 
 
 def _page(row: dict) -> int | None:

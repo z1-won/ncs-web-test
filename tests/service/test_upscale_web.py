@@ -208,5 +208,26 @@ class UpscaleWebTests(unittest.TestCase):
         self.assertGreater(kept.expires_at - time.monotonic(), store.ttl - 5)
 
 
+    def test_proposal_can_carry_the_ai_mark_for_adjusted_pictures(self):
+        """화질 보정은 AI 수정 보완(REQ-02-006 ②③) — 제안본을 만들 때 보정한 그림의 캡션 위에 AI 활용 줄을 넣는다."""
+        self.assertEqual(self.client.post(self.url("/image1/upscale")).json()["status"], "완료")
+        proposal = self.client.post(f"/api/uploads/{self.token}/proposal", data={"ai_mark": "true", "ai_date": "2026-11-23"})
+        self.assertEqual(proposal.status_code, 200, proposal.text)
+        self.assertEqual(json.loads(proposal.headers["x-upscale-summary"]),
+                         {"바꾼 그림": 1, "그림": ["image1"], "AI 표기": {"넣음": 1, "이미 있음": 0, "넣지 못함": 0}})
+        with zipfile.ZipFile(io.BytesIO(proposal.content)) as z:
+            section = z.read("Contents/section1.xml").decode("utf-8")
+        line = "waifu2x를 활용하여 수정 보완함. 2026. 11. 23."
+        self.assertEqual(section.count(line), 1)
+        self.assertLess(section.index(line), section.index("[그림 1-1] 시험 도표"))
+        self.assertLess(section.index('binaryItemIDRef="image1"'), section.index(line))          # 그림 → AI 줄 → 캡션
+        self.assertNotIn("활용하여", section[section.index("[그림 1-1] 시험 도표"):])               # 보정하지 않은 그림 1-2에는 넣지 않는다
+        self.assertEqual(self.client.post(f"/api/uploads/{self.token}/proposal", data={"ai_mark": "true", "ai_date": "11/23"}).status_code, 400)
+        # 이미지 저작권 DB 등록은 데이터베이스가 있을 때만
+        register = self.client.post(f"/api/uploads/{self.token}/pictures/register", data={"by": "김에디터"})
+        self.assertEqual(register.status_code, 400)
+        self.assertIn("데이터베이스", register.json()["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

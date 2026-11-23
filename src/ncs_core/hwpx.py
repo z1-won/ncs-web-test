@@ -13,6 +13,22 @@ HP = "{http://www.hancom.co.kr/hwpml/2011/paragraph}"
 HH = "{http://www.hancom.co.kr/hwpml/2011/head}"
 HC = "{http://www.hancom.co.kr/hwpml/2011/core}"
 
+# hwpx XML을 다시 쓸 때(ElementTree) 한글이 쓰는 머리말(hp:, hh: …)을 그대로 내기 위한 이름공간 표
+NAMESPACES = (("hp", HP[1:-1]), ("hs", "http://www.hancom.co.kr/hwpml/2011/section"), ("hc", HC[1:-1]),
+              ("ha", "http://www.hancom.co.kr/hwpml/2011/app"), ("hh", HH[1:-1]),
+              ("hhs", "http://www.hancom.co.kr/hwpml/2011/history"), ("hm", "http://www.hancom.co.kr/hwpml/2011/master-page"),
+              ("hpf", "http://www.hancom.co.kr/schema/2011/hpf"), ("dc", "http://purl.org/dc/elements/1.1/"),
+              ("opf", "http://www.idpf.org/2007/opf/"), ("ooxmlchart", "http://www.hancom.co.kr/hwpml/2016/ooxmlchart"),
+              ("hwpunitchar", "http://www.hancom.co.kr/hwpml/2016/HwpUnitChar"), ("epub", "http://www.idpf.org/2007/ops"),
+              ("config", "urn:oasis:names:tc:opendocument:xmlns:config:1.0"))
+
+
+def register_namespaces() -> None:
+    """hwpx를 고쳐 쓰는 모듈(확인서, 수정 메모 원고, AI 활용 표기)이 한 번 부른다. 여러 번 불러도 같다."""
+    for prefix, uri in NAMESPACES:
+        ET.register_namespace(prefix, uri)
+
+
 SECTION_NAME = re.compile(r"Contents/section(\d+)\.xml")
 IMAGE_NAME = re.compile(r"원본 그림의 이름:\s*([^\n]+)")
 NO_FILL = (None, "", "none", "#FFFFFF", "#ffffff")
