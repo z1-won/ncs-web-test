@@ -7,7 +7,7 @@
 - 계정 여섯: demo-editor(에디터), demo-author·demo-author2(집필진), demo-krivet(직능연), demo-reviewer(검토진), demo-committee(위원)
 - 세분류 건 하나(기본: 12030202 객실관리, 올해, 기존개선). 권은 NCS 목록의 학습모듈 전부, 앞의 두 권에 집필진을 한 명씩 붙인다.
 원고는 넣지 않는다 — 시연은 개발계획서와 초고본을 올리는 데서 시작한다(끝에 순서를 찍어 준다).
-비밀번호는 명령 줄에서 받는다. 저장소에 적어 두지 않는다. 이미 있는 계정의 비밀번호는 --reset-password를 줄 때만 바꾼다.
+비밀번호는 명령 줄에서 받는다. 저장소에 적어 두지 않는다. 로그인 화면에 시연 계정 표를 띄우려면 같은 값을 .env의 NCS_DEMO_PASSWORD에 둔다(시연 서버만). 이미 있는 계정의 비밀번호는 --reset-password를 줄 때만 바꾼다.
 """
 
 from __future__ import annotations

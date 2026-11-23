@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 
 from fastapi import FastAPI, Request, Response
@@ -19,7 +20,8 @@ from starlette.concurrency import run_in_threadpool
 from .common import error_response, logger
 
 COOKIE = "ncs_session"
-OPEN_PATHS = {"/api/login", "/api/logout", "/api/me", "/api/health"}
+OPEN_PATHS = {"/api/login", "/api/login/demo", "/api/logout", "/api/me", "/api/health"}
+DEMO_PREFIX = "demo-"            # 시연 계정 아이디의 머리(scripts/demo/seed_demo.py가 만든다)
 FAIL_LIMIT, LOCK_SECONDS = 5, 60
 
 
@@ -83,6 +85,20 @@ def install(app: FastAPI, store, *, require_login: bool) -> None:
         if account is None:
             return error_response(401, "로그인이 필요합니다")
         return {"auth": True, "account": account}
+
+    @app.get("/api/login/demo")
+    def demo_accounts() -> dict:
+        """시연 계정 안내 — 로그인 화면이 역할별 아이디와 비밀번호를 보여 줄 때 읽는다(로그인 전에 열린다).
+
+        환경 변수 NCS_DEMO_PASSWORD(시연 계정을 만들 때 준 비밀번호)가 있을 때만 demo-로 시작하는 켜진 계정과 그 값을 돌려준다.
+        없으면 빈 목록이다 — 운영 서버에는 이 값을 두지 않는다. 비밀번호는 저장소에 적지 않고 .env에만 둔다.
+        """
+        password = os.getenv("NCS_DEMO_PASSWORD", "")
+        if not require_login or not password:
+            return {"password": None, "accounts": []}
+        rows = [row for row in accounts.list_accounts(store.dsn) if row["login"].startswith(DEMO_PREFIX) and row.get("active", True)]
+        return {"password": password,
+                "accounts": [{key: row.get(key) for key in ("login", "name", "role", "role_name", "org")} for row in rows]}
 
     @app.post("/api/login", response_model=None)
     def login(body: Login, request: Request, response: Response) -> Response | dict:
