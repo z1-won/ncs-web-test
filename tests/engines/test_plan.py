@@ -143,20 +143,21 @@ class ModuleRuleTests(unittest.TestCase):
         self.assertEqual(first["체크"]["④ 요소명 준용"], "△")
         self.assertIn("능력단위요소명", first["비고"]["④ 요소명 준용"])
 
-    def test_lesson_name_spacing_must_follow_the_element_name(self):
-        """학습명은 능력단위요소명의 띄어쓰기를 따른다(F04 준용 집필 기준 2-4) — 띄어쓰기만 달라도 부적합(학습 목표 ⑥과 같은 기준, 2026-11-23 결정)."""
+    def test_lesson_name_spacing_differs_from_the_element_name_is_a_candidate(self):
+        """학습명은 '기본적으로' 능력단위요소명의 띄어쓰기를 준용하고, NCS의 띄어쓰기가 명백한 표기 오류면 고칠 수 있다(F04 2-4 원문).
+        지침의 변경 사례에도 '인체위해도결정하기 → 인체위해도 결정하기'가 있다 — 띄어쓰기만 다르면 X가 아니라 확인 후보(△)."""
         elements = ((f"{CODE}.1", "비즈니스전략분석하기", C1), (f"{CODE}.2", "예약 현황 확인하기", C2))
         m = read_module(module_table([([0], "1. 비즈니스 전략 분석하기", [("1-1. 구분", C1)]), ([1], "2. 예약 현황 확인하기", [("2-1. 조회", C2)])], elements=elements))
         first, second = check_lessons(m)
-        self.assertEqual((first["체크"]["④ 요소명 준용"], first["판정"]), ("X", "부적합"))
+        self.assertEqual((first["체크"]["④ 요소명 준용"], first["판정"]), ("△", "판단불가"))
         self.assertIn("띄어쓰기만 다름", first["비고"]["④ 요소명 준용"])
         self.assertIn("능력단위요소명 「비즈니스전략분석하기」", first["비고"]["④ 요소명 준용"])
-        self.assertIsNotNone(first["수정 제안"])
+        self.assertIn("명백한 표기 오류", first["비고"]["④ 요소명 준용"])
         self.assertEqual((second["체크"]["④ 요소명 준용"], second["판정"]), ("O", "적합"))
         # 반대 방향(요소명에 있는 띄어쓰기를 붙여 씀)도 같다
         m = read_module(module_table([([0], "1. 객실 · 부대시설 이용정보 파악하기", [("1-1. 구분", C1)]), ([1], "2. 예약현황 확인하기", [("2-1. 조회", C2)])]))
         first, second = check_lessons(m)
-        self.assertEqual((first["체크"]["④ 요소명 준용"], second["체크"]["④ 요소명 준용"]), ("O", "X"))
+        self.assertEqual((first["체크"]["④ 요소명 준용"], second["체크"]["④ 요소명 준용"]), ("O", "△"))
 
     def test_lesson_name_with_another_shape_of_middle_dot_is_the_same_name(self):
         """가운뎃점의 꼴(･ ・ ·)만 다른 것은 글꼴·입력 차이라 같은 이름으로 본다."""
@@ -187,16 +188,17 @@ class ModuleRuleTests(unittest.TestCase):
         self.assertIn("1203020299_24v3.2", row["비고"]["⑤ 요소 코드 연번"])
 
     def test_targets_missing_extra_space_and_changed(self):
-        spaced = C1[0].replace("구분 할 수", "구분할 수")                    # 띄어쓰기만 → X(원고 검수와 같은 기준)
+        spaced = C1[0].replace("구분 할 수", "구분할 수")                    # 띄어쓰기만 → O: 학습목표 문장 안의 띄어쓰기는 수정 가능(F04 2-4 원문)
         changed = C2[0].replace("파악할", "확인할")                        # 글자 다름 → △
         m = read_module(module_table([([0], "1. a하기", [("1-1. 구분", [spaced, "1.3 수행준거에 없는 문장을 쓸 수 있다."])]),
                                       ([1], "2. b하기", [("2-1. 조회", [changed])])]))
         first, second = check_targets(m)
-        self.assertEqual(first["체크"], {"⑥ 수행준거 누락 없음": "X", "⑥ 수행준거 외 문장 없음": "X", "⑥ 문장 수정 없음": "X"})
+        self.assertEqual(first["체크"], {"⑥ 수행준거 누락 없음": "X", "⑥ 수행준거 외 문장 없음": "X", "⑥ 문장 수정 없음": "O"})
         self.assertIn("마켓별 요금", first["비고"]["⑥ 수행준거 누락 없음"])
-        self.assertIn("띄어쓰기도 수행준거와 같아야 함", first["비고"]["⑥ 문장 수정 없음"])
+        self.assertNotIn("⑥ 문장 수정 없음", first["비고"])
         self.assertEqual(second["체크"]["⑥ 문장 수정 없음"], "△")
         self.assertIn("수행준거 「", second["비고"]["⑥ 문장 수정 없음"])
+        self.assertIn("2-1·2-2", second["비고"]["⑥ 문장 수정 없음"])
 
     def test_subs_numbering_and_action_noun(self):
         m = read_module(module_table([([0], "1. a하기", [("1.1 호텔 시장 동향에 대한 이해", [C1[0]]), ("1-2 요금 적용", [C1[1]])]),

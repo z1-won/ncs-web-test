@@ -117,9 +117,11 @@ def check_lessons(module: dict) -> list[dict]:
                 if name and element_words == name_words:
                     checks[label_name] = O
                 elif name and "".join(element_words) == "".join(name_words):
-                    # 학습명은 능력단위요소명의 띄어쓰기를 따른다(F04 준용 집필 기준 2-4) — 학습 목표 ⑥과 같은 기준으로 부적합(2026-11-23 결정)
-                    checks[label_name] = X
-                    notes[label_name] = pair(element_name, name, "학습명", "능력단위요소명") + " — 띄어쓰기도 능력단위요소명과 같아야 함"
+                    # F04 준용 집필 기준 2-4 원문: 학습명은 '기본적으로' 능력단위요소명을 준용해 띄어 쓰고, NCS의 띄어쓰기가 명백한 표기 오류면
+                    # 고칠 수 있다. 지침의 변경 사례에도 띄어쓰기를 고친 학습명이 실려 있다 — 확정하지 않고 확인 후보로 둔다(지침 우선)
+                    checks[label_name] = TRI
+                    notes[label_name] = (pair(element_name, name, "학습명", "능력단위요소명")
+                                         + " — 학습명은 능력단위요소명의 띄어쓰기를 준용하는 것이 원칙이고, NCS의 띄어쓰기가 명백한 표기 오류일 때만 고칠 수 있음(F04 2-4). 확인")
                 elif not name:
                     checks[label_name] = X
                     notes[label_name] = f"학습명이 비어 있음 — 능력단위요소명 「{element_name}」 준용"
@@ -216,13 +218,10 @@ def check_targets(module: dict) -> list[dict]:
         checks[label_extra] = X if remaining else O
         if remaining:
             notes[label_extra] = "수행준거에 없는 학습 목표: " + " / ".join(f"「{normalize(g)}」" for g in remaining[:3]) + (f" 외 {len(remaining) - 3}건" if len(remaining) > 3 else "")
-        checks[label_text] = X if spaced else TRI if changed else O
-        parts = []
-        if spaced:
-            parts.append("\n".join(spaced) + "\n— 띄어쓰기도 수행준거와 같아야 함")
+        # 띄어쓰기만 다른 것은 적합이다 — "학습목표는 기본적으로 수행준거를 준용하여 띄어쓰기 적용하나, 내용(문장)에서의 띄어쓰기는 수정 가능"(F04 2-4 원문)
+        checks[label_text] = TRI if changed else O
         if changed:
-            parts.append("\n".join(changed) + "\n— 명백한 오타 정정인지, 직능연과 협의한 변경인지 확인")
-        notes[label_text] = "\n".join(parts)
+            notes[label_text] = "\n".join(changed) + "\n— 용어·법령 사유의 허용 변경(F04 2-1·2-2)인지, 명백한 오타 정정인지 확인(단순 윤문 차원의 변경은 불가)"
         rows.append(row("⑥", _region(module, f"학습 {lesson['번호']}"), f"학습 {lesson['번호']}", f"수행준거 {len(criteria)}개 / 학습 목표 {len(goals)}개", checks, notes,
                         "수행준거 문장을 빠짐없이, 고치지 않고 학습 목표에 나누어 담을 것" if X in checks.values() else None))
     if not rows:
