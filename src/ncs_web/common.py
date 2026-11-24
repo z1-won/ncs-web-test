@@ -63,6 +63,18 @@ def viewer(request) -> dict | None:
     return getattr(request.state, "account", None)
 
 
+def manager_only(request, what: str) -> None:
+    """에디터와 직능연 계정만 하는 일을 막는다(403) — 판정을 정하는 일과 비용이 드는 검토. what은 '무엇은' 꼴(예: 'LLM 검토는').
+    로그인을 쓰지 않는 서버(계정 없음)는 누구나 한다. 집필진은 올리기·작성 도움·규칙 검수 결과 보기까지다(docs/WEB.md '역할별로 할 수 있는 일')."""
+    from starlette.exceptions import HTTPException
+
+    from ncs_service.workflow.flow import MANAGER_ROLES
+
+    account = viewer(request)
+    if account is not None and account.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, f"{what} 에디터와 직능연 계정만 할 수 있습니다")
+
+
 def scope_of(request, store):
     """이 요청이 볼 수 있는 기록의 범위(ncs_service.auth.access.Scope). None이면 전부 — 에디터, 직능연, 로그인을 쓰지 않는 서버."""
     from ncs_service.auth import access
