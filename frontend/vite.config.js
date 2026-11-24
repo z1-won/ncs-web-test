@@ -20,9 +20,23 @@ function cleanOutDir() {
   };
 }
 
+// KRDS 키트의 CSS는 아이콘(메뉴 화살표, 도움말·알림·업로드 아이콘 등 70여 개)을 https://www.krds.go.kr에서 불러온다.
+// 이 서버는 바깥 주소의 그림을 막으므로(보안 머리글 img-src 'self') 그대로 두면 아이콘이 모두 안 보이고 자리만 남는다.
+// 같은 파일이 npm 패키지 안에 있으니(krds-uiux/resources/img) 주소를 그 파일로 바꿔 함께 묶는다 — 바깥으로 나가는 요청도 없어진다.
+function localKrdsIcons() {
+  return {
+    name: "local-krds-icons",
+    enforce: "pre",
+    transform(code, id) {
+      if (!id.replace(/\\/g, "/").includes("krds-uiux/resources/cdn/") || !id.split("?")[0].endsWith(".css")) return null;
+      return { code: code.replaceAll("https://www.krds.go.kr/resources/img/", "../img/"), map: null };
+    },
+  };
+}
+
 // 개발 중에는 /api 요청을 로컬 Python 서버(8765)로 넘긴다.
 export default defineConfig({
-  plugins: [react(), cleanOutDir()],
+  plugins: [localKrdsIcons(), react(), cleanOutDir()],
   build: { emptyOutDir: false },
   server: { port: 5173, proxy: { "/api": "http://127.0.0.1:8765" } },
 });
