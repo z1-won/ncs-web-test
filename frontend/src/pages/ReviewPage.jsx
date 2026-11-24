@@ -306,7 +306,7 @@ export default function ReviewPage() {
                     }
                     hint={
                       slot.role === "plan" && !slots.plan && !needsPlan
-                        ? "hwp, hwpx. 없으면 대조 항목은 ‘판단불가’로 남습니다."
+                        ? "hwp, hwpx. 확정한 개발계획서(최종결과)를 올리면 원고를 그 계획서와 대조합니다. 없으면 대조 항목은 ‘판단불가’로 남습니다."
                       : slot.role === "print" && !slots.print
                         ? (usesPrint ? "pdf. 없으면 차례 ⑦(쪽수)은 ‘판단불가’로 남습니다." : "pdf. 이 구성요소는 출력본 PDF를 쓰지 않습니다.")
                       : null
