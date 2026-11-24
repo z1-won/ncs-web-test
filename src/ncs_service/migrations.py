@@ -420,4 +420,55 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "ALTER TABLE volume_runs ADD COLUMN IF NOT EXISTS version_id uuid REFERENCES volume_versions(id) ON DELETE SET NULL;\n"
      "ALTER TABLE work_records ADD COLUMN IF NOT EXISTS version_id uuid REFERENCES volume_versions(id) ON DELETE SET NULL;\n"
      "CREATE INDEX IF NOT EXISTS review_runs_case_file_idx ON review_runs (case_file_id)"),
+    # 017: 그림 설명(REQ-02-011 설명 색인 0단계) — 그림을 보는 모델이 그림을 글로 풀어 둔 것. 그림마다 엔진(제공자:모델)별 한 벌이라
+    # 두 엔진의 설명을 나란히 견줄 수 있다(image_embeddings가 모델마다 한 벌인 것과 같다). 사람이 단 image_assets.keywords는 건드리지 않고,
+    # 추천할 때 둘을 따로 읽어 점수도 따로 낸다. 사람이 읽고 고친 설명(checked_by)은 다시 채울 때 덮어쓰지 않는다.
+    ("017_image_descriptions",
+     "CREATE TABLE IF NOT EXISTS image_descriptions (\n"
+     "    image_id uuid NOT NULL REFERENCES image_assets(id) ON DELETE CASCADE,\n"
+     "    engine text NOT NULL,\n"
+     "    kind text CHECK (kind IN ('photo', 'illustration', 'diagram', 'flowchart', 'table', 'graph', 'screenshot', 'other')),\n"
+     "    scene text NOT NULL,\n"
+     "    objects jsonb NOT NULL DEFAULT '[]',\n"
+     "    visible_text text[] NOT NULL DEFAULT '{}',\n"
+     "    keywords text[] NOT NULL DEFAULT '{}',\n"
+     "    checked_by text,\n"
+     "    checked_at timestamptz,\n"
+     "    created_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    PRIMARY KEY (image_id, engine)\n"
+     ")"),
+    # 018: 추천 선택 기록(REQ-02-011) — 집필자가 추천된 그림을 '쓸 그림'으로 골랐는지 '맞지 않음'으로 보았는지. 추천을 재는 정답 세트의
+    # 재료다(ncs_recommend.evaluate). 문단 글(query_text)을 함께 남긴다 — 같은 문단으로 방식을 다시 견주려면 글이 있어야 한다.
+    # 그림이 지워지면 기록도 지워진다. 같은 사람이 같은 문단·같은 그림을 다시 고르면 앞의 기록을 바꾼다(한 줄만 남는다).
+    ("018_recommend_choices",
+     "CREATE TABLE IF NOT EXISTS recommend_choices (\n"
+     "    id uuid PRIMARY KEY,\n"
+     "    created_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    chosen_by text NOT NULL,\n"
+     "    query_key text NOT NULL,\n"
+     "    query_text text NOT NULL DEFAULT '',\n"
+     "    unit_code text NOT NULL DEFAULT '',\n"
+     "    criterion_no text NOT NULL DEFAULT '',\n"
+     "    image_id uuid NOT NULL REFERENCES image_assets(id) ON DELETE CASCADE,\n"
+     "    choice text NOT NULL CHECK (choice IN ('used', 'rejected')),\n"
+     "    rank integer CHECK (rank >= 1),\n"
+     "    score real,\n"
+     "    detail jsonb NOT NULL DEFAULT '{}',\n"
+     "    UNIQUE (chosen_by, query_key, image_id)\n"
+     ");\n"
+     "CREATE INDEX IF NOT EXISTS recommend_choices_query_idx ON recommend_choices (query_key);\n"
+     "CREATE INDEX IF NOT EXISTS recommend_choices_image_idx ON recommend_choices (image_id)"),
+    # 019: 원고 검수의 담당자 판정 확정(REQ-02-002 사람 작업 5번)을 서버에 둔다 — 전에는 확정한 브라우저에만 남아 다른 컴퓨터나 다른 담당자가 볼 수 없었다.
+    # 검수 묶음(전체 실행)마다 항목(구성요소-번호) 하나에 확정 하나. 누가 언제 정했는지 함께 남긴다. 판정 허용값은 화면의 선택지와 같다.
+    ("019_review_decisions",
+     "CREATE TABLE IF NOT EXISTS review_decisions (\n"
+     "    group_id uuid NOT NULL,\n"
+     "    item_key text NOT NULL,\n"
+     "    verdict text NOT NULL DEFAULT '' CHECK (verdict IN ('', '적합', '부적합')),\n"
+     "    reason text NOT NULL DEFAULT '',\n"
+     "    decided_by uuid REFERENCES accounts(id) ON DELETE SET NULL,\n"
+     "    decided_name text NOT NULL DEFAULT '',\n"
+     "    decided_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    PRIMARY KEY (group_id, item_key)\n"
+     ")"),
 )

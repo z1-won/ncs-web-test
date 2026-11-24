@@ -374,6 +374,9 @@ export const api = {
     list: () => request("/api/groups"),
     get: (id) => request(`/api/groups/${id}`),
     remove: (id) => request(`/api/groups/${id}`, { method: "DELETE" }),
+    // 담당자 판정 확정(REQ-02-002 사람 작업 5번) — 서버에 둔다. { decisions: { "구성요소-번호": { verdict, reason, by, at } } }
+    decisions: (id) => request(`/api/groups/${id}/decisions`),
+    saveDecisions: (id, decisions) => postJson(`/api/groups/${id}/decisions`, { decisions }),
   },
   // 의견 반영 검토의 결과표(xlsx)와 담당자 확정 저장. decisions: { 의견 번호: "반영" | "미반영" }
   opinionExport: ({ manuscript, rows, decisions, llm }) =>

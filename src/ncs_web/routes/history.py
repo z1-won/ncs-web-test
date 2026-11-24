@@ -3,10 +3,21 @@
 from urllib.parse import quote
 
 from fastapi import FastAPI, Query, Request, Response
+from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException
 
 from ..common import Services, scope_of
 from ..schemas import CheckName
+
+
+class Decision(BaseModel):
+    verdict: str = Field(default="", max_length=10)
+    reason: str = Field(default="", max_length=500)
+
+
+class GroupDecisions(BaseModel):
+    """검수 묶음의 담당자 판정 확정 — 항목 키(구성요소-번호) → 확정."""
+    decisions: dict[str, Decision] = Field(default_factory=dict, max_length=300)
 
 
 def register(app: FastAPI, services: Services) -> None:
@@ -46,6 +57,35 @@ def register(app: FastAPI, services: Services) -> None:
             if not store.delete_group(group_id):
                 raise HTTPException(404, "전체 실행 이력을 찾을 수 없습니다")
             return Response(status_code=204)
+
+        @app.get("/api/groups/{group_id}/decisions")
+        def group_decisions(request: Request, group_id: str) -> dict:
+            """검수 묶음의 담당자 판정 확정(REQ-02-002 사람 작업 5번). 볼 수 있는 묶음만."""
+            from ncs_service import postgres
+
+            guard(request, "group", group_id, "전체 실행 이력을 찾을 수 없습니다")
+            try:
+                return {"decisions": postgres.get_group_decisions(store.dsn, group_id)}
+            except ValueError:
+                raise HTTPException(404, "전체 실행 이력을 찾을 수 없습니다") from None
+
+        @app.post("/api/groups/{group_id}/decisions")
+        def group_decisions_save(request: Request, group_id: str, body: GroupDecisions) -> dict:
+            """확정을 보낸 것으로 맞춘다(보내지 않은 항목은 지운다). 확정은 검수하는 쪽(에디터, 직능연)의 일이다. 누가 정했는지는 로그인한 계정에서 읽는다."""
+            from ncs_service import postgres
+
+            from ..common import actor, manager_only, viewer
+
+            manager_only(request, "판정 확정은")
+            guard(request, "group", group_id, "전체 실행 이력을 찾을 수 없습니다")
+            account = viewer(request)
+            try:
+                saved = postgres.set_group_decisions(
+                    store.dsn, group_id, {key: item.model_dump() for key, item in body.decisions.items()},
+                    account_id=account.get("id") if account else None, name=actor(request, ""))
+            except ValueError as error:
+                raise HTTPException(400, str(error)) from None
+            return {"decisions": saved}
 
         @app.get("/api/reviews/{run_id}")
         def review_detail(request: Request, run_id: str) -> dict:

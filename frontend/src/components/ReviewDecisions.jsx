@@ -14,7 +14,7 @@ import { formatDate } from "../lib/format.jsx";
 const CHOICES = ["", "적합", "부적합"];
 const CHANGE_CLASS = { "해결": "bg-light-success", "새 부적합": "bg-light-danger", "그대로 부적합": "bg-light-warning", "판정 바뀜": "bg-light-gray" };
 
-export function ReviewDecisions({ rows, decisions, onChange, saved, moduleCode, groupId }) {
+export function ReviewDecisions({ rows, decisions, onChange, saved, onServer = false, moduleCode, groupId }) {
   const open = useMemo(() => (rows || []).filter((row) => row.검수결과 === "부적합" || row.검수결과 === "판단불가"), [rows]);
   const decided = open.filter((row) => decisions[decisionKey(row)]?.verdict).length;
   const canDecide = useCanManage();
@@ -58,7 +58,9 @@ export function ReviewDecisions({ rows, decisions, onChange, saved, moduleCode, 
         <>
           <p className="form-hint">
             담당자가 정한 판정과 사유는 내려받는 확인서(hwpx, 엑셀, F03 표)의 판정과 비고에 들어갑니다. 자동 판정도 비고에 함께 남습니다.
-            {saved ? " 확정한 내용은 이 브라우저에 저장됩니다." : " 이 브라우저에 저장하지 못했습니다. 창을 닫기 전에 확인서를 내려받아 주세요."}
+            {onServer
+              ? (saved ? " 확정한 내용은 서버에 저장되어 다른 담당자도 같은 확정을 봅니다. 누가 언제 정했는지 함께 남습니다." : " 서버에 저장하지 못했습니다. 잠시 후 다시 고쳐 보고, 계속되면 확인서를 내려받아 주세요.")
+              : (saved ? " 확정한 내용은 이 브라우저에 저장됩니다." : " 이 브라우저에 저장하지 못했습니다. 창을 닫기 전에 확인서를 내려받아 주세요.")}
           </p>
           <div className="krds-table-wrap">
             <table className="tbl col data decide-table">
@@ -83,6 +85,7 @@ export function ReviewDecisions({ rows, decisions, onChange, saved, moduleCode, 
                       <td>
                         <input type="text" className="krds-input small" maxLength={200} aria-label={`${row.구성요소} ${row.번호} 확정 사유`}
                                value={mine.reason || ""} onChange={(e) => set(row, { reason: e.target.value })} placeholder="확정한 까닭" />
+                        {mine.by && <span className="meta">{mine.by}, {formatDate(mine.at)}</span>}
                       </td>
                     </tr>
                   );

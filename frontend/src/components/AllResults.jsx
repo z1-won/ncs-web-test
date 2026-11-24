@@ -1,5 +1,5 @@
 // 전체 실행 결과 — 구성요소별 KRDS 아코디언. 실행 자체(업로드 토큰·순차 호출)는 ReviewPage.runAll이 하고 여기는 run 상태를 그린다.
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Badge, Spinner } from "./Badge.jsx";
 import { ExportButtons } from "./ExportButtons.jsx";
 import { ResultHead } from "./ResultHead.jsx";
@@ -47,12 +47,46 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken, llm })
     return { 적합: acc.적합 + c.적합, 부적합: acc.부적합 + c.부적합, 판단불가: acc.판단불가 + c.판단불가 };
   }, { 적합: 0, 부적합: 0, 판단불가: 0 });
   const moduleCode = finished[0]?.data?.module_code || run.module_code || "";
-  // 담당자 판정 확정 — 검수 묶음(없으면 학습모듈 코드)마다 이 브라우저에 기억한다. 내려받는 확인서에 반영한다
+  // 담당자 판정 확정 — 검수 이력을 두는 서버에서는 검수 묶음마다 서버에 저장한다(다른 컴퓨터, 다른 담당자도 같은 확정을 본다. 누가 언제 정했는지 남는다).
+  // 서버에 둘 수 없으면(검수 이력이 없는 서버, 묶음 없는 실행, 확정할 수 없는 계정) 이 브라우저에 기억한다. 내려받는 확인서에 반영한다
   const decisionId = run.group || moduleCode;
   const [decisions, setDecisions] = useState({});
   const [saved, setSaved] = useState(true);
-  useEffect(() => { setDecisions(loadDecisions(decisionId)); }, [decisionId]);
-  function changeDecisions(next) { setDecisions(next); setSaved(saveDecisions(decisionId, next)); }
+  const [onServer, setOnServer] = useState(false);
+  const saveTimer = useRef(null);
+  const changeNo = useRef(0);          // 마지막으로 고친 차례 — 저장 응답이 왔을 때 그 사이에 또 고쳤으면 화면 값을 덮지 않는다
+  const plain = (found) => Object.fromEntries(Object.entries(found || {}).map(([key, item]) => [key, { verdict: item.verdict || "", reason: item.reason || "" }]));
+  useEffect(() => {
+    let alive = true;
+    const local = loadDecisions(decisionId);
+    setDecisions(local);
+    setOnServer(false);
+    if (!run.group || run.running) return undefined;
+    api.groups.decisions(run.group).then(async ({ ok, data }) => {
+      if (!alive || !ok) return;                 // 404(이력 없는 서버)·오류 — 브라우저 저장으로 남는다
+      setOnServer(true);
+      if (Object.keys(data.decisions).length) { setDecisions(data.decisions); return; }
+      if (Object.keys(local).length) {           // 전에 이 브라우저에만 있던 확정을 서버로 올린다(한 번)
+        const moved = await api.groups.saveDecisions(run.group, plain(local));
+        if (alive && moved.ok) setDecisions(moved.data.decisions);
+      }
+    });
+    return () => { alive = false; };
+  }, [decisionId, run.group, run.running]);
+  useEffect(() => () => clearTimeout(saveTimer.current), []);
+  function changeDecisions(next) {
+    setDecisions(next);
+    const kept = saveDecisions(decisionId, next);          // 서버에 올리기 전에 닫혀도 이 브라우저에는 남는다
+    if (!onServer) { setSaved(kept); return; }
+    const mine = ++changeNo.current;
+    clearTimeout(saveTimer.current);                       // 사유를 적는 동안 글자마다 보내지 않게 잠깐 모아서 보낸다
+    saveTimer.current = setTimeout(async () => {
+      const { ok, status, data } = await api.groups.saveDecisions(run.group, plain(next));
+      if (status === 403) setOnServer(false);              // 확정할 수 없는 계정 — 브라우저 저장으로
+      setSaved(ok || kept);
+      if (ok && changeNo.current === mine) setDecisions(data.decisions);     // 누가 언제 정했는지가 붙어 온다
+    }, 600);
+  }
   const sheetRows = finished.flatMap((i) => i.data.검수확인서 || []);
   const openable = items.filter((i) => i.status !== "pending" && i.status !== "running").map((i) => i.check);
 
@@ -153,7 +187,7 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken, llm })
       </section>}
 
       {!run.running && finished.length > 0 && (
-        <ReviewDecisions rows={sheetRows} decisions={decisions} onChange={changeDecisions} saved={saved} moduleCode={moduleCode} groupId={run.group} />
+        <ReviewDecisions rows={sheetRows} decisions={decisions} onChange={changeDecisions} saved={saved} onServer={onServer} moduleCode={moduleCode} groupId={run.group} />
       )}
     </section>
   );

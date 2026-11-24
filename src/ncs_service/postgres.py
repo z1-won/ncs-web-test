@@ -188,6 +188,36 @@ def list_groups(dsn: str, *, module_code: str | None = None, limit: int = 50, of
             for row in rows]
 
 
+DECISION_VERDICTS = ("", "적합", "부적합")      # 담당자 판정 확정의 값(빈 값 = 사유만 적음). migrations 019의 CHECK와 같다
+
+
+def get_group_decisions(dsn: str, group_id: str) -> dict[str, dict]:
+    """검수 묶음의 담당자 판정 확정 — {항목 키(구성요소-번호): {'verdict', 'reason', 'by', 'at'}}."""
+    UUID(group_id)
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        rows = connection.execute("SELECT item_key, verdict, reason, decided_name, decided_at FROM review_decisions WHERE group_id = %s", (group_id,)).fetchall()
+    return {row["item_key"]: {"verdict": row["verdict"], "reason": row["reason"], "by": row["decided_name"], "at": row["decided_at"].isoformat()} for row in rows}
+
+
+def set_group_decisions(dsn: str, group_id: str, decisions: dict[str, dict], *, account_id: str | None = None, name: str = "") -> dict[str, dict]:
+    """검수 묶음의 확정을 보낸 것으로 맞춘다: 보낸 항목은 넣거나 고치고(값이 바뀐 것만 누가·언제를 새로 적는다), 보내지 않은 항목은 지운다.
+    바뀐 뒤의 확정을 돌려준다."""
+    UUID(group_id)
+    for key, item in decisions.items():
+        if item.get("verdict", "") not in DECISION_VERDICTS:
+            raise ValueError("확정 판정은 적합 또는 부적합입니다")
+    with psycopg.connect(dsn) as connection:
+        connection.execute("DELETE FROM review_decisions WHERE group_id = %s AND NOT (item_key = ANY(%s))", (group_id, list(decisions)))
+        for key, item in decisions.items():
+            connection.execute(
+                "INSERT INTO review_decisions (group_id, item_key, verdict, reason, decided_by, decided_name) VALUES (%s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (group_id, item_key) DO UPDATE SET verdict = EXCLUDED.verdict, reason = EXCLUDED.reason, "
+                "decided_by = EXCLUDED.decided_by, decided_name = EXCLUDED.decided_name, decided_at = now() "
+                "WHERE (review_decisions.verdict, review_decisions.reason) IS DISTINCT FROM (EXCLUDED.verdict, EXCLUDED.reason)",
+                (group_id, key, item.get("verdict", ""), item.get("reason", ""), account_id, name))
+    return get_group_decisions(dsn, group_id)
+
+
 def get_group(dsn: str, group_id: str) -> dict | None:
     """묶음 한 건: 실행 순서대로 각 검수의 전체 결과(get_review와 같은 모양) 목록."""
     try:

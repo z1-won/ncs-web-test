@@ -325,6 +325,29 @@ class CaseIntegrationTests(unittest.TestCase):
             evidence = connection.execute("SELECT evidence FROM case_events WHERE action = 'done' AND volume_id = %s", (first,)).fetchone()[0]
         self.assertEqual(evidence["records"], [record["id"]])
 
+    def test_review_decisions_are_kept_on_the_server(self):
+        """원고 검수의 담당자 판정 확정은 서버에 남는다(REQ-02-002 사람 작업 5번) — 다른 담당자도 같은 확정을 보고, 집필진은 정하지 못한다."""
+        from uuid import uuid4
+
+        editor, author, other, url, first, second = self.flow_setup()
+        group = str(uuid4())
+        self.run_row(A, group=group)
+        path = f"/api/groups/{group}/decisions"
+        self.assertEqual(editor.get(path).json(), {"decisions": {}})
+        body = {"decisions": {"차례-③": {"verdict": "적합", "reason": "쪽 번호는 인쇄본에서 확인"}, "개요-①": {"verdict": "", "reason": "다음 판본에서 다시 봄"}}}
+        self.assertEqual(author.post(path, json=body).status_code, 403)                             # 집필진은 확정하지 못한다
+        self.assertEqual(other.get(path).status_code, 404)                                          # 남의 권의 검수는 보이지 않는다
+        self.assertEqual(editor.post(path, json={"decisions": {"x": {"verdict": "보류"}}}).status_code, 400)
+        saved = editor.post(path, json=body).json()["decisions"]
+        self.assertEqual((saved["차례-③"]["verdict"], saved["차례-③"]["by"]), ("적합", f"김에디터({EDITOR})"))
+        seen = author.get(path).json()["decisions"]                                                 # 담당 권의 집필진은 확정을 본다
+        self.assertEqual(seen["차례-③"]["reason"], "쪽 번호는 인쇄본에서 확인")
+        again = editor.post(path, json={"decisions": {"차례-③": body["decisions"]["차례-③"]}}).json()["decisions"]
+        self.assertEqual(list(again), ["차례-③"])                                                    # 보내지 않은 항목은 지워진다
+        self.assertEqual(again["차례-③"]["at"], saved["차례-③"]["at"])                              # 값이 같으면 누가·언제를 새로 적지 않는다
+        with psycopg.connect(DSN) as connection:
+            connection.execute("DELETE FROM review_decisions WHERE group_id = %s", (group,))
+
     def test_image_db_changes_need_an_editor(self):
         from uuid import uuid4
 
