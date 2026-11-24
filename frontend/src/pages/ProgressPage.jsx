@@ -49,7 +49,7 @@ export function Remaining({ left, what, unit, extra }) {
 export function leftNotes(left) {
   const editing = left?.["편집 검수"], content = left?.["내용 검수"], rights = left?.["저작권 검수"];
   return {
-    editing: editing?.판단불가 ? `판단불가 ${editing.판단불가}` : "",
+    editing: [editing?.판단불가 ? `판단불가 ${editing.판단불가}` : "", editing?.쪽 ? `쪽 기준 완료 ${editing.쪽.완료}/${editing.쪽.전체}` : ""].filter(Boolean).join(", "),
     content: content ? (content.확정 ? "담당자 확정 기준" : `담당자 확정 전${content["확인 필요"] ? `, 확인 필요 ${content["확인 필요"]}` : ""}`) : "",
     rights: rights?.["증빙 누락"] != null ? `권리 증빙 누락 ${rights["증빙 누락"]}` : "",
   };
@@ -337,6 +337,12 @@ export function ProgressFigures({ detail }) {
           <dt>편집 검수</dt>
           <dd><Remaining left={left["편집 검수"]} what="부적합" unit="항목" /></dd>
           {editing.항목 && <dd className="meta">적합 {editing.항목.적합}, 부적합 {editing.항목.부적합}, 판단불가 {editing.항목.판단불가}. 판단불가는 담당자가 확인할 항목입니다.</dd>}
+          {editing.쪽 && (
+            <dd className="meta">
+              쪽 기준: 진행완료 {editing.쪽.완료}쪽 / 총 {editing.쪽.전체}쪽. 부적합이 놓인 쪽은 {editing.쪽.남음}쪽입니다.
+              {editing.쪽["못 찾은 항목"] > 0 && ` 자리를 찾지 못한 부적합 ${editing.쪽["못 찾은 항목"]}개는 쪽에 넣지 못했습니다.`}
+            </dd>
+          )}
         </div>
         <div>
           <dt>내용 검수(의견 반영)</dt>

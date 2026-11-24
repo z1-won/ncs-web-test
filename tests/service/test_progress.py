@@ -188,5 +188,38 @@ class WebWithoutDatabaseTests(unittest.TestCase):
             self.assertEqual(client.get("/api/manuscripts").status_code, 404)      # 이력이 없는 저장소에는 붙지 않는다
 
 
+class PageProgressTests(unittest.TestCase):
+    """편집 검수 진행도의 쪽 수(REQ-02-007 사람 작업 1번 '진행완료 페이지 / 총 페이지')."""
+
+    def test_pages_are_merged_across_checks(self):
+        from ncs_service.workflow.progress import editing_progress, page_progress, remaining
+
+        checks = [{"check": "toc", "created_at": "2026-11-24T00:00:00", "verdict": "부적합", "sheet": [{"검수결과": "부적합"}],
+                   "pages": {"총 쪽": 40, "지적 쪽": [3, 7], "못 찾은 항목": 1}},
+                  {"check": "overview", "created_at": "2026-11-24T00:00:00", "verdict": "부적합", "sheet": [{"검수결과": "적합"}],
+                   "pages": {"총 쪽": 40, "지적 쪽": [7, 12, 99], "못 찾은 항목": 0}},
+                  {"check": "misc", "created_at": "2026-11-24T00:00:00", "verdict": "적합", "sheet": [], "pages": None},      # hwp 원고, 옛 기록
+                  {"check": "plan", "created_at": "2026-11-24T00:00:00", "verdict": "적합", "sheet": [], "pages": {"총 쪽": 5, "지적 쪽": [1]}}]
+        pages = page_progress(checks)
+        self.assertEqual(pages, {"전체": 40, "남음": 3, "완료": 37, "못 찾은 항목": 1, "센 구성요소": 2})       # 같은 쪽은 한 번, 총 쪽을 넘는 값은 뺀다
+        editing = editing_progress(checks)
+        self.assertEqual(editing["쪽"], pages)
+        left = remaining({"편집 검수": editing, "내용 검수": {}, "저작권 검수": {}})
+        self.assertEqual(left["편집 검수"]["쪽"]["완료"], 37)
+
+    def test_no_pages_when_no_run_counted_them(self):
+        from ncs_service.workflow.progress import page_progress
+
+        self.assertIsNone(page_progress([{"check": "toc", "pages": None}, {"check": "misc"}]))
+
+    def test_manuscript_without_layout_has_no_pages(self):
+        from pathlib import Path
+
+        from ncs_service.annotate import page_progress
+
+        fixture = Path(__file__).resolve().parents[1] / "fixtures" / "원고_ok_LM1203020201_24v3.hwpx"
+        self.assertIsNone(page_progress(fixture.read_bytes(), []))      # 한글이 저장하지 않은 파일(배치 정보 없음)
+
+
 if __name__ == "__main__":
     unittest.main()

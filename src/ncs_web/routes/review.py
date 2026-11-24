@@ -146,6 +146,21 @@ def register(app: FastAPI, services: Services) -> None:
             return error_response(500, f"{type(error).__name__}: {error}", **debug)
         return payload
 
+    def _pages(run_id: str, result) -> None:
+        """편집 검수 진행도의 쪽 수(REQ-02-007 사람 작업 1번)를 실행에 적는다 — hwpx 원고만. 부가 정보라 실패해도 검수 결과를 막지 않는다."""
+        try:
+            path = Path(((result.diagnostics or {}).get("inputs") or {}).get("manuscript") or "")
+            if path.suffix.lower() != ".hwpx" or not path.is_file():
+                return
+            from ncs_service import postgres
+            from ncs_service.annotate import page_progress
+
+            pages = page_progress(path.read_bytes(), result.checklist or [])
+            if pages is not None:
+                postgres.set_review_pages(store.dsn, run_id, pages)
+        except Exception as error:
+            logger.exception("검수 쪽 수 기록 실패: %s", error)
+
     def _work_stage(value: str) -> int | None:
         from ncs_service.workflow.progress import REVIEW_STAGES
 
@@ -178,6 +193,8 @@ def register(app: FastAPI, services: Services) -> None:
                 store.tag_review_stage(stored.run_id, work_stage)
             except Exception as error:      # 단계 표시는 부가 정보라 검수 결과를 막지 않는다
                 logger.exception("검수 단계 표시 실패: %s", error)
+        if check != "plan" and stored.run_id is not None and store.supports_history:
+            _pages(stored.run_id, result)
         if version_id and stored.run_id is not None:     # 세분류 건의 판본으로 돌린 검수 — 그 판본에 붙인다. 붙이지 못하면 근거가 끊기므로 실패로 알린다
             from ncs_service.workflow import cases
 

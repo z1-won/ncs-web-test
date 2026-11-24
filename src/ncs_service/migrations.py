@@ -513,4 +513,8 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "    content bytea NOT NULL\n"
      ");\n"
      "CREATE INDEX IF NOT EXISTS opinion_archive_files_record_idx ON opinion_archive_files (record_id)"),
+    # 022: 편집 검수 진행도의 쪽 수(REQ-02-007 사람 작업 1번 '진행완료 페이지 / 총 페이지') — 검수 실행마다 원고의 총 쪽과 부적합이 놓인 쪽.
+    # {'총 쪽', '지적 쪽': [쪽 번호], '못 찾은 항목'}(ncs_service.annotate.page_progress). 쪽을 알 수 없는 원고(hwp, 배치 정보 없는 hwpx)는 비어 있다.
+    ("022_review_pages",
+     "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS pages jsonb"),
 )

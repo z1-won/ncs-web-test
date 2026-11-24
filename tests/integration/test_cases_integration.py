@@ -434,6 +434,19 @@ class CaseIntegrationTests(unittest.TestCase):
         self.assertEqual((again["decisions"], again["decided"]["by"]), ({"1": "반영", "2": "미반영"}, f"김에디터({EDITOR})"))
         self.assertIn('"kept":true', editor.get(url).text.replace(" ", ""))                         # 권 화면의 근거 기록에 '보관한 검토 열기'
 
+    def test_review_pages_feed_the_editing_progress(self):
+        """검수 실행에 적어 둔 쪽 수가 편집 검수 진행도의 '진행완료 쪽 / 총 쪽'이 된다(REQ-02-007 사람 작업 1번)."""
+        from ncs_service import postgres
+        from ncs_service.workflow import progress
+
+        first, second = self.run_row(A), self.run_row(A)
+        with psycopg.connect(DSN) as connection:
+            connection.execute("UPDATE review_runs SET check_name = 'overview' WHERE id = %s", (second,))
+        postgres.set_review_pages(DSN, first, {"총 쪽": 40, "지적 쪽": [3, 7], "못 찾은 항목": 1})
+        postgres.set_review_pages(DSN, second, {"총 쪽": 40, "지적 쪽": [7, 12], "못 찾은 항목": 0})
+        built = progress.build(A, postgres.progress_sources(DSN, A))
+        self.assertEqual(built["진행도"]["편집 검수"]["쪽"], {"전체": 40, "남음": 3, "완료": 37, "못 찾은 항목": 1, "센 구성요소": 2})
+
     def drop(self, table: str, record_id: str) -> None:
         with psycopg.connect(DSN) as connection:
             connection.execute(f"DELETE FROM {table} WHERE id = %s", (record_id,))

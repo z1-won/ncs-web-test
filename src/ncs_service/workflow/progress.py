@@ -125,8 +125,21 @@ def editing_progress(latest_checks: list[dict]) -> dict:
             items[key] += value
         checks.append({"검수": run["check"], "일시": run["created_at"], "판정": run["verdict"], **own})
     judged = items["적합"] + items["부적합"] + items["판단불가"]
-    return {"구성요소": checks, "항목": items if checks else None,
+    return {"구성요소": checks, "항목": items if checks else None, "쪽": page_progress(latest_checks),
             "적합 비율": round(items["적합"] / judged * 100, 1) if judged else None}
+
+
+def page_progress(latest_checks: list[dict]) -> dict | None:
+    """편집 검수 진행도의 쪽 수(REQ-02-007 사람 작업 1번 '진행완료 페이지 / 총 페이지'). 구성요소마다 가장 최근 실행이 적어 둔
+    쪽 수(review_runs.pages)를 모은다: 전체 = 총 쪽(실행마다 원고가 다를 수 있어 가장 큰 값), 남음 = 부적합이 놓인 쪽(구성요소끼리 합집합),
+    완료 = 전체 - 남음. 문단을 찾지 못해 쪽에 넣지 못한 부적합 항목 수를 함께 싣는다. 쪽을 적은 실행이 없으면 None(hwp 원고, 옛 기록)."""
+    counted = [run["pages"] for run in latest_checks if run["check"] != "plan" and isinstance(run.get("pages"), dict) and run["pages"].get("총 쪽")]
+    if not counted:
+        return None
+    total = max(item["총 쪽"] for item in counted)
+    marked = {page for item in counted for page in item.get("지적 쪽") or [] if page <= total}
+    return {"전체": total, "남음": len(marked), "완료": total - len(marked), "못 찾은 항목": sum(item.get("못 찾은 항목", 0) for item in counted),
+            "센 구성요소": len(counted)}
 
 
 def remaining(progress: dict) -> dict:
@@ -140,7 +153,8 @@ def remaining(progress: dict) -> dict:
     items = editing.get("항목")
     out = {"편집 검수": None, "내용 검수": None, "저작권 검수": None}
     if items:
-        out["편집 검수"] = {"남음": items["부적합"], "전체": items["적합"] + items["부적합"] + items["판단불가"], "판단불가": items["판단불가"]}
+        out["편집 검수"] = {"남음": items["부적합"], "전체": items["적합"] + items["부적합"] + items["판단불가"], "판단불가": items["판단불가"],
+                        **({"쪽": editing["쪽"]} if editing.get("쪽") else {})}      # 쪽 수는 센 실행이 있을 때만(REQ-02-007 사람 작업 1번)
     total, confirmed = content.get("합계"), content.get("확정")
     if confirmed:
         out["내용 검수"] = {"남음": confirmed.get("미반영", 0), "전체": confirmed.get("확정", 0), "확정": True,

@@ -481,6 +481,24 @@ class Annotator:
             self._attach(top, self.summary_lines(rows))
         return self.pack()
 
+    def page_numbers(self) -> list[int] | None:
+        """문단(self.paras 순서)마다 그 문단이 놓인 쪽(1부터, 문서 전체로 이어 센다). 구역마다 새 쪽에서 시작하고, 새 쪽 시작 문단은
+        ncs_core.hwpx와 같이 본다: '쪽 나누기' 표식이 있거나, 한글이 저장해 둔 배치 정보에서 첫 줄이 쪽 맨 위(vertpos=0)인 최상위 문단.
+        표·글상자 안 문단은 그것을 담은 최상위 문단의 쪽이다. 배치 정보가 하나도 없는 파일(한글이 저장하지 않은 것)은 쪽을 알 수 없어 None."""
+        pages, page, laid_out = [], 0, False
+        for section, (_, root) in enumerate(self.sections):
+            top = {id(p) for p in root if p.tag == HP + "p"}
+            first = True
+            for para in (p for p in self.paras if p.section == section):
+                segment = para.element.find(f"{HP}linesegarray/{HP}lineseg")
+                laid_out = laid_out or segment is not None
+                at_top = id(para.element) in top and segment is not None and segment.get("vertpos") == "0"
+                if first or para.element.get("pageBreak") == "1" or at_top:
+                    page += 1
+                first = False
+                pages.append(page)
+        return pages if laid_out and pages else None
+
     def top_paragraph(self) -> Para | None:
         """총괄 메모를 달 문단 — 본문 섹션의 첫 글 문단(없으면 문서 첫 글 문단)."""
         return next((p for p in self.paras if p.section == self.body_section and p.has_text), None) or next((p for p in self.paras if p.has_text), None)
@@ -496,6 +514,20 @@ class Annotator:
                 compress = zipfile.ZIP_STORED if item.filename == "mimetype" else zipfile.ZIP_DEFLATED
                 target.writestr(item, data, compress_type=compress)
         return out.getvalue()
+
+
+def page_progress(source: bytes, rows: list[dict]) -> dict | None:
+    """편집 검수 진행도의 쪽 수(REQ-02-007 사람 작업 1번 '진행완료 페이지 / 총 페이지')의 재료 — {'총 쪽', '지적 쪽': [쪽 번호], '못 찾은 항목'}.
+    부적합 행을 수정 메모 원고와 같은 방법으로 문단에 놓고, 그 문단이 놓인 쪽을 센다. 문단을 찾지 못한 행은 쪽에 넣지 못하고 개수만 싣는다.
+    쪽은 한글이 저장해 둔 배치 정보로 세므로 인쇄 쪽 번호와 다를 수 있고, 배치 정보가 없는 파일이면 None."""
+    worker = Annotator(source)
+    pages = worker.page_numbers()
+    if pages is None:
+        return None
+    for row in rows:
+        if row.get("판정") == "부적합":
+            worker.place(row)
+    return {"총 쪽": pages[-1], "지적 쪽": sorted({pages[order] for order in worker.placed}), "못 찾은 항목": len(worker.unplaced)}
 
 
 def annotate_hwpx(source: bytes, rows: list[dict], *, author: str = AUTHOR, created_at: str | datetime | None = None) -> tuple[bytes, dict]:

@@ -188,6 +188,12 @@ def list_groups(dsn: str, *, module_code: str | None = None, limit: int = 50, of
             for row in rows]
 
 
+def set_review_pages(dsn: str, run_id: str, pages: dict) -> None:
+    """검수 실행에 쪽 수(annotate.page_progress의 값)를 적는다 — 원고 진행 현황의 편집 검수 진행도가 쓴다."""
+    with psycopg.connect(dsn) as connection:
+        connection.execute("UPDATE review_runs SET pages = %s WHERE id = %s", (Jsonb(pages), run_id))
+
+
 DECISION_VERDICTS = ("", "적합", "부적합")      # 담당자 판정 확정의 값(빈 값 = 사유만 적음). migrations 019의 CHECK와 같다
 
 
@@ -498,7 +504,7 @@ def progress_sources(dsn: str, module_code: str) -> dict | None:
             "SELECT stage, action, changed_by, changed_at, note FROM manuscript_stage_history WHERE module_code = %s "
             "ORDER BY changed_at DESC, id DESC LIMIT 50", (module_code,)).fetchall()
         latest = connection.execute(
-            "SELECT DISTINCT ON (r.check_name) r.id, r.check_name, r.created_at, r.verdict, d.sheet "
+            "SELECT DISTINCT ON (r.check_name) r.id, r.check_name, r.created_at, r.verdict, r.pages, d.sheet "
             "FROM review_runs r LEFT JOIN review_results d ON d.run_id = r.id WHERE r.module_code = %s "
             "ORDER BY r.check_name, r.created_at DESC, r.id DESC", (module_code,)).fetchall()
         group = connection.execute(
@@ -524,7 +530,7 @@ def progress_sources(dsn: str, module_code: str) -> dict | None:
         "reviews": {"count": reviews["n"], "first": iso(reviews["first_at"]), "last": iso(reviews["last_at"])} if reviews else {},
         "plan": {"count": plans["n"], "last": iso(plans["last_at"]), "verdict": plan_latest["verdict"] if plan_latest else None} if plans else {},
         "latest_checks": [{"id": str(row["id"]), "check": row["check_name"], "created_at": iso(row["created_at"]),
-                           "verdict": row["verdict"], "sheet": row["sheet"] or []} for row in latest],
+                           "verdict": row["verdict"], "sheet": row["sheet"] or [], "pages": row["pages"]} for row in latest],
         "last_group": {"group_id": str(group["group_id"]), "created_at": iso(group["created_at"]), "checks": list(group["checks"]),
                        "verdict": group_verdict(list(group["verdicts"]))} if group else None,
         "volume": {"id": str(volume["id"]), "created_at": iso(volume["created_at"]), "manuscript": volume["manuscript"],
