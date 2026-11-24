@@ -308,6 +308,12 @@ def plan_file(dsn: str, case_id: str) -> tuple[str, bytes] | None:
     return (found["filename"], bytes(found["content"])) if found else None
 
 
+def tag_record_version(dsn: str, record_id: str, version_id: str) -> None:
+    """그림 검수·출처 검토의 개수 기록이 어느 판본의 것인지 적는다(work_records.version_id) — 권 화면이 판본 옆에 그 개수를 보인다."""
+    with _connect(dsn) as connection:
+        connection.execute("UPDATE work_records SET version_id = %s WHERE id = %s", (version_id, record_id))
+
+
 def tag_review_case_file(dsn: str, run_id: str, file_id: str) -> None:
     """개발계획서 점검 실행이 어느 문서의 것인지 적는다(review_runs.case_file_id)."""
     with _connect(dsn) as connection:
@@ -348,7 +354,8 @@ def _linked(connection, volume_ids: list[str]) -> dict[tuple[str, str], list[dic
     """권과 단계에 붙은 기록(의견 반영 검토, 권리 증빙 점검, 분량 산정) — {(권 id, 단계 key): [{'tool', 'id', 'at', 'text'}]} 최근 것부터."""
     out: dict[tuple[str, str], list[dict]] = {}
     records = connection.execute(
-        "SELECT id, kind, created_at, counts, case_volume_id, case_stage FROM work_records WHERE case_volume_id = ANY(%s::uuid[])", (volume_ids,)).fetchall()
+        "SELECT id, kind, created_at, counts, case_volume_id, case_stage FROM work_records "
+        "WHERE case_volume_id = ANY(%s::uuid[]) AND kind IN ('opinion', 'rights')", (volume_ids,)).fetchall()
     for row in records:
         counts = row["counts"] or {}
         if row["kind"] == "opinion":
@@ -417,6 +424,14 @@ def _versions(connection, volume_ids: list[str]) -> dict[str, list[dict]]:
     runs = connection.execute(
         "SELECT version_id, COALESCE(group_id, id) AS grp, check_name, verdict, created_at FROM review_runs "
         "WHERE version_id = ANY(%s::uuid[]) ORDER BY created_at", ([row["id"] for row in rows],)).fetchall() if rows else []
+    # 그 판본으로 돌린 그림 검수(REQ-02-005)와 출처 검토(REQ-02-008)의 가장 최근 개수 — {판본 id: {'figures': {...}, 'sources': {...}}}
+    counted = connection.execute(
+        "SELECT DISTINCT ON (version_id, kind) version_id, kind, counts, created_at FROM work_records "
+        "WHERE version_id = ANY(%s::uuid[]) AND kind IN ('figures', 'sources') ORDER BY version_id, kind, created_at DESC",
+        ([row["id"] for row in rows],)).fetchall() if rows else []
+    extra: dict[str, dict] = {}
+    for item in counted:
+        extra.setdefault(str(item["version_id"]), {})[item["kind"]] = {**(item["counts"] or {}), "at": item["created_at"]}
     by_version: dict[str, dict[str, list[dict]]] = {}
     for run in runs:
         by_version.setdefault(str(run["version_id"]), {}).setdefault(str(run["grp"]), []).append(run)
@@ -432,7 +447,7 @@ def _versions(connection, volume_ids: list[str]) -> dict[str, list[dict]]:
         out.setdefault(str(row["volume_id"]), []).append({
             "id": str(row["id"]), "stage": row["stage"], "stage_name": flow.BY_KEY[row["stage"]].name if row["stage"] in flow.BY_KEY else row["stage"],
             "number": row["number"], "filename": row["filename"], "byte_size": row["byte_size"], "by": row["submitted_name"],
-            "at": row["submitted_at"], "review": review})
+            "at": row["submitted_at"], "review": review, "checks": extra.get(str(row["id"]), {})})
     return out
 
 

@@ -348,6 +348,23 @@ class CaseIntegrationTests(unittest.TestCase):
         with psycopg.connect(DSN) as connection:
             connection.execute("DELETE FROM review_decisions WHERE group_id = %s", (group,))
 
+    def test_figure_and_source_counts_show_on_the_version(self):
+        """판본으로 돌린 그림 검수·출처 검토의 개수는 그 판본 옆에 보인다(REQ-02-005, 008)."""
+        from ncs_service.postgres import save_work_record
+
+        editor, author, other, url, first, second = self.flow_setup()
+        author.post(f"{url}/files", data={"stage": "plan"}, files={"file": ("계획서.hwpx", b"PK plan")})
+        editor.post(f"{url}/events", json={"stage": "plan", "action": "done", "note": "종이로 확인"})
+        sent = author.post(f"{url}/volumes/{first}/versions", data={"stage": "draft_edit"}, files={"file": ("초고본.hwpx", b"PK draft")})
+        version = sent.json()["volumes"][0]["versions"][0]
+        self.assertEqual(version["checks"], {})
+        record = save_work_record(DSN, "figures", "초고본.hwpx", {"그림": 12, "정정 필요": 3, "고위험": 1}, [], module_code=A)
+        self.addCleanup(lambda: self.drop("work_records", record["id"]))
+        cases.tag_record_version(DSN, record["id"], version["id"])
+        shown = editor.get(url).json()["volumes"][0]["versions"][0]["checks"]
+        self.assertEqual((shown["figures"]["그림"], shown["figures"]["정정 필요"]), (12, 3))
+        self.assertNotIn("sources", shown)
+
     def test_image_db_changes_need_an_editor(self):
         from uuid import uuid4
 

@@ -230,6 +230,8 @@ def register(app: FastAPI, services: Services) -> None:
         roles = ["manuscript", "plan"]
         upload.assigned = {str(path): roles[index] for index, (_, path) in enumerate(upload.files)}
         upload.version_id = version["id"]
+        names = [name for name, _ in upload.files]
+        upload.roles = {"manuscript": names[0], "plan": names[1] if len(names) > 1 else None, "print": None}     # 그림 검수·출처 검토가 이 이름으로 원고를 찾는다
         have = set(upload.assigned.values())
         return {"upload": upload.token, "group": upload.group_id, "module_code": version["module_code"], "plan": bool(plan),
                 "checks": [name for name, engine in ENGINES.items() if "manuscript" in engine.required and set(engine.required) <= have]}

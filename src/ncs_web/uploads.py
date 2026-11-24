@@ -84,6 +84,11 @@ class UploadStore:
             upload.expires_at = time.monotonic() + self.ttl
         return upload
 
+    def version_of(self, work: Path) -> str:
+        """작업 폴더(업로드 폴더 바로 아래)가 속한 업로드의 판본 id. 세분류 건의 판본으로 만든 업로드가 아니면 빈 값."""
+        with self._lock:
+            return next((item.version_id for item in self._items.values() if item.directory == work.parent), "")
+
     def release(self, token: str) -> bool:
         with self._lock:
             upload = self._items.pop(token, None)

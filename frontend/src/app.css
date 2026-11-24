@@ -1061,6 +1061,11 @@ main [hidden] { display: none !important; }
 .cases-review { margin-bottom: var(--krds-gap-5); padding-bottom: var(--krds-gap-5); border-bottom: 1px solid var(--krds-light-color-border-gray-light); }
 .cases-action-form { display: grid; gap: var(--krds-gap-5); }
 .cases-records { margin: 0 0 var(--krds-gap-3); padding-left: var(--krds-gap-6); }
+/* 권 화면 안에 펼치는 그림 검수·출처 검토 결과 — 원고 검수 화면의 넓은 표를 좁은 칸 안에서 본다. 표가 칸 밖으로 나가지 않게 그 안에서 가로로 민다 */
+.cases-detail-results { min-width: 0; max-width: 100%; }
+.cases-detail-results > summary { margin-bottom: var(--krds-gap-3); }
+.cases-detail-results .krds-table-wrap { max-width: 100%; margin-left: 0; margin-right: 0; overflow-x: auto; }
+.cases-detail-results .figures-panel { margin-top: var(--krds-gap-5); }
 .cases-review .krds-btn + .krds-btn { margin-left: var(--krds-gap-3); }
 .case-link-note { margin: var(--krds-gap-5) 0; }
 .cases-action-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--krds-gap-3); }

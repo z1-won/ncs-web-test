@@ -9,7 +9,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { formatDate } from "../lib/format.jsx";
 import { Badge, Spinner } from "../components/Badge.jsx";
+import { FiguresPanel } from "../components/FiguresPanel.jsx";
 import { FileSlot } from "../components/FileSlot.jsx";
+import { SourcesPanel } from "../components/SourcesPanel.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { usePageTitle } from "../lib/hooks.js";
@@ -285,6 +287,10 @@ function StageAction({ detail, volume, standing, onChange }) {
   const [busy, setBusy] = useState(null);             // 보내는 중인 행동, 또는 "review"
   const [error, setError] = useState(null);
   const [running, setRunning] = useState(null);       // 검수 진행: { done, total, name }
+  // 방금 돌린 검수의 업로드 토큰 — 살아 있는 동안(서버가 10분 보관) 그림 검수(REQ-02-005)와 출처 검토(REQ-02-008)의 자세한 결과를 이 자리에서 본다.
+  // 화면을 떠나거나 다시 돌리면 지운다. 개수는 판본에 남아 그 뒤에도 보인다
+  const [resultToken, setResultToken] = useState(null);
+  useEffect(() => () => { if (resultToken) api.uploads.remove(resultToken); }, [resultToken]);
   // 이미 제출된 것을 다른 역할이 대신 다시 내는 버튼은 보이지 않는다(확인할 차례에 제출 칸이 끼어들지 않게)
   const actions = standing.actions.filter((a) => !(a.action === "submit" && a.proxy && standing.state === "제출됨"));
   const needsFile = volume ? standing.manuscript : standing.document;      // 제출할 때 파일을 올리는 단계(원고 또는 개발계획서)
@@ -324,10 +330,15 @@ function StageAction({ detail, volume, standing, onChange }) {
       const result = await api.review({ check: checks[index], moduleCode, upload, group });
       if (!result.ok) failed.push(`${CHECK_NAMES[checks[index]] || checks[index]}: ${result.error}`);
     }
-    await api.uploads.remove(upload);
+    // 그림 검수와 출처 검토도 같은 판본으로 돌린다 — 개수가 이 판본에 남고, 자세한 결과는 아래 펼침에서 본다
+    setRunning({ done: checks.length - 1, total: checks.length, name: "그림 검수와 출처 검토" });
+    const [figureCheck, sourceCheck] = await Promise.all([api.figures.rules(upload, { moduleCode }), api.sources.review(upload, { moduleCode })]);
+    if (!figureCheck.ok) failed.push(`그림 검수: ${figureCheck.error}`);
+    if (!sourceCheck.ok) failed.push(`출처 검토: ${sourceCheck.error}`);
+    setResultToken(upload);
     setRunning(null);
     setBusy(null);
-    if (failed.length) setError(`검수 ${checks.length}개 중 ${failed.length}개를 마치지 못했습니다. ${failed[0]}`);
+    if (failed.length) setError(`검수 가운데 ${failed.length}개를 마치지 못했습니다. ${failed[0]}`);
     const fresh = await api.cases.get(detail.id);
     if (fresh.ok) onChange(fresh.data);
   }
@@ -373,6 +384,14 @@ function StageAction({ detail, volume, standing, onChange }) {
               <Link to={`/review?group=${latest.review.group}`} className="krds-btn small text">결과 자세히 보기</Link>
             </p>
           ) : <p className="meta">이 판본은 아직 검수하지 않았습니다.</p>}
+          <VersionChecks checks={latest.checks} />
+          {resultToken && (
+            <details className="progress-history cases-detail-results">
+              <summary>그림 검수와 출처 검토 결과 자세히 보기 <span className="meta">방금 돌린 결과입니다. 이 화면을 떠나면 닫힙니다</span></summary>
+              <FiguresPanel uploadToken={resultToken} moduleCode={volume.module_code} />
+              <SourcesPanel uploadToken={resultToken} moduleCode={volume.module_code} />
+            </details>
+          )}
           {canReview && (
             <button type="button" className="krds-btn medium secondary" disabled={!!busy} onClick={review}>
               {running ? `검수 중 ${running.done + 1} / ${running.total}: ${running.name}` : latest.review ? "검수 다시 실행" : "이 판본으로 검수 실행"}
@@ -453,6 +472,18 @@ function StageAction({ detail, volume, standing, onChange }) {
   );
 }
 
+// 판본으로 돌린 그림 검수(REQ-02-005)와 출처 검토(REQ-02-008)의 개수 — 정정이 필요한 것이 몇인지. 돌린 적이 없으면 아무것도 그리지 않는다
+function VersionChecks({ checks, compact = false }) {
+  const figures = checks?.figures;
+  const sources = checks?.sources;
+  if (!figures && !sources) return null;
+  const lines = [
+    figures && `그림 검수: 그림 ${figures.그림 ?? 0}개 중 정정 필요 ${figures["정정 필요"] ?? 0}개${figures.고위험 ? `(고위험 ${figures.고위험}개)` : ""}`,
+    sources && `출처 검토: 출처 ${sources["총 출처"] ?? 0}개 중 정정 필요 ${sources["정정 필요"] ?? 0}개`,
+  ].filter(Boolean);
+  return compact ? lines.map((line) => <span key={line} className="meta">{line}</span>) : lines.map((line) => <p key={line}>{line}</p>);
+}
+
 // 권 하나: 단계를 순서대로(건 단위 단계 포함) 보이고, 지금 서 있는 단계에 할 일을 둔다. 아래에 판본과 이 권의 기록
 function VolumePanel({ detail, volume, onChange, onClose }) {
   const [error, setError] = useState(null);
@@ -520,7 +551,7 @@ function VolumePanel({ detail, volume, onChange, onClose }) {
                   <td>{version.by}<span className="meta">{when(version.at)}</span></td>
                   <td>{version.review ? (
                     <><Badge value={version.review.verdict} /> <Link to={`/review?group=${version.review.group}`} className="krds-btn small text">결과 보기</Link></>
-                  ) : "검수 전"}</td>
+                  ) : "검수 전"}<VersionChecks checks={version.checks} compact /></td>
                 </tr>
               ))}
             </tbody>
