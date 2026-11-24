@@ -405,6 +405,35 @@ class CaseIntegrationTests(unittest.TestCase):
         self.assertIsNone(postgres.set_figure_decision(DSN, sha, "IMG-s1-p9"))                                                     # 모두 비우면 지운다
         self.assertNotIn("IMG-s1-p9", postgres.get_figure_decisions(DSN, sha))
 
+    def test_opinion_review_run_from_a_case_is_kept(self):
+        """세분류 건에서 돌린 의견 반영 검토는 의견서 파일, 의견별 결과, 담당자 확정까지 보관한다(REQ-02-003 사람 작업 4번)."""
+        from ncs_service.postgres import save_work_record
+        from ncs_service.workflow import opinion_archive
+
+        editor, author, other, url, first, second = self.flow_setup()
+        record = save_work_record(DSN, "opinion", "수정본.hwpx", {"전체": {"총 의견": 2, "반영 후보": 1, "미반영 후보": 1, "확인 필요": 0}}, [], module_code=A)
+        self.addCleanup(lambda: self.drop("work_records", record["id"]))
+        with psycopg.connect(DSN) as connection:
+            connection.execute("UPDATE work_records SET case_volume_id = %s, case_stage = 'revision' WHERE id = %s", (first, record["id"]))
+        path = f"/api/opinion/records/{record['id']}"
+        self.assertEqual(editor.get(path).status_code, 404)                                          # 보관하기 전
+        rows = [{"번호": 1, "차수": "1차", "의견": "그림 1-2의 출처를 밝힐 것", "판정": "반영 후보", "근거": [], "비고": []},
+                {"번호": 2, "차수": "1차", "의견": "용어를 통일할 것", "판정": "미반영 후보", "근거": [], "비고": []}]
+        result = {"원고": "수정본.hwpx", "의견": rows, "의견서": [{"파일": "1차 검토의견서.pdf", "차수": "1차"}]}
+        self.assertTrue(opinion_archive.keep(DSN, record["id"], result, [("1차", "1차 검토의견서.pdf", b"%PDF sheet")], name="김에디터"))
+        self.assertEqual(author.get(path).status_code, 403)                                          # 집필진은 열지 못한다
+        kept = editor.get(path).json()
+        self.assertEqual((kept["result"]["의견"][0]["의견"], kept["result"]["진행 현황 기록"]["id"], kept["decisions"]), ("그림 1-2의 출처를 밝힐 것", record["id"], {}))
+        self.assertEqual([(item["round"], item["filename"], item["byte_size"]) for item in kept["files"]], [("1차", "1차 검토의견서.pdf", 10)])
+        got = editor.get(f"{path}/files/{kept['files'][0]['id']}")
+        self.assertEqual((got.status_code, got.content), (200, b"%PDF sheet"))
+        self.assertEqual(editor.get("/api/opinion/records/not-a-uuid").status_code, 404)
+        saved = editor.post("/api/opinion/decisions", json={"record_id": record["id"], "rows": rows, "decisions": {"1": "반영", "2": "미반영"}})
+        self.assertEqual((saved.status_code, saved.json()["저장"]), (200, True), saved.text)
+        again = editor.get(path).json()
+        self.assertEqual((again["decisions"], again["decided"]["by"]), ({"1": "반영", "2": "미반영"}, f"김에디터({EDITOR})"))
+        self.assertIn('"kept":true', editor.get(url).text.replace(" ", ""))                         # 권 화면의 근거 기록에 '보관한 검토 열기'
+
     def drop(self, table: str, record_id: str) -> None:
         with psycopg.connect(DSN) as connection:
             connection.execute(f"DELETE FROM {table} WHERE id = %s", (record_id,))

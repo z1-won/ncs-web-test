@@ -430,7 +430,8 @@ function StageAction({ detail, volume, standing, onChange }) {
           <p>이 단계의 근거 기록{records.length === 0 && <span className="meta"> 아직 없습니다. 아래 도구를 여기서 열어 돌리면 이 단계에 붙습니다.</span>}</p>
           {records.length > 0 && (
             <ul className="cases-records">
-              {records.map((record) => <li key={record.id}>{TOOLS[record.tool]?.[1] || record.tool}: {record.text} <span className="meta">{when(record.at)}</span></li>)}
+              {records.map((record) => <li key={record.id}>{TOOLS[record.tool]?.[1] || record.tool}: {record.text} <span className="meta">{when(record.at)}</span>
+                {record.kept && detail.can_manage && <> <Link to={`/opinion?record=${record.id}&case=${detail.id}&volume=${volume.id}`} className="krds-btn small text">보관한 검토 열기</Link></>}</li>)}
             </ul>
           )}
           <p>
@@ -560,11 +561,31 @@ function VolumePanel({ detail, volume, onChange, onClose }) {
         </div>
       )}
 
+      {detail.can_manage && keptReviews(detail, volume).length > 0 && (
+        <>
+          <h4 className="table-title">보관한 의견 반영 검토 <span className="meta">의견서 파일, 의견별 결과, 담당자 확정</span></h4>
+          <ul className="cases-records">
+            {keptReviews(detail, volume).map((record) => (
+              <li key={record.id}>{record.stage}: {record.text} <span className="meta">{when(record.at)}</span>
+                {" "}<Link to={`/opinion?record=${record.id}&case=${detail.id}&volume=${volume.id}`} className="krds-btn small text">보관한 검토 열기</Link></li>
+            ))}
+          </ul>
+        </>
+      )}
+
       <h4 className="table-title">이 권의 기록 <span className="meta">최근 것부터. 지우거나 고칠 수 없습니다</span></h4>
       <EventTable events={events} showVolume={false} />
       {figures && <ProgressFigures detail={figures} />}
     </section>
   );
+}
+
+// 이 권에서 돌려 보관한 의견 반영 검토(REQ-02-003 사람 작업 4번) — 단계가 지나간 뒤에도 다시 열 수 있게 모든 단계의 것을 모은다
+function keptReviews(detail, volume) {
+  const names = Object.fromEntries(detail.stages.map((stage) => [stage.key, stage.name]));
+  return Object.entries(volume.records || {})
+    .flatMap(([key, records]) => records.filter((record) => record.kept).map((record) => ({ ...record, stage: names[key] || key })))
+    .sort((a, b) => (a.at < b.at ? 1 : -1));
 }
 
 function EventTable({ events, showVolume }) {

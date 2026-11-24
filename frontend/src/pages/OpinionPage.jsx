@@ -2,7 +2,8 @@
 // 판정은 서버(ncs_opinion)가 Claude(ncs_llmreview.claude)로 내고 모두 후보다. Claude 설정(ANTHROPIC_API_KEY·반출 승인)이 없으면
 // 서버가 모든 의견을 '확인 필요'와 이유로 돌려준다(체크박스 없음). 'LLM' 뱃지에 모델·호출 수·토큰·비용이 함께 온다.
 // 화면에서 사람이 의견마다 반영/미반영을 정하면 자동 후보와의 오차율(기준 6% 이내)을 바로 센다.
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { api } from "../lib/api.js";
 import { plainReason } from "../lib/plain.js";
@@ -13,6 +14,7 @@ import { PageAlert } from "../components/PageAlert.jsx";
 import { RawJson } from "../components/RawJson.jsx";
 import { ResultHead } from "../components/ResultHead.jsx";
 import { CaseLinkNote, useCaseManuscript } from "../components/CaseLink.jsx";
+import { formatDate } from "../lib/format.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 
 // 판정 후보 → KRDS 배지 색
@@ -33,6 +35,23 @@ export default function OpinionPage() {
   const [result, setResult] = useState(null);
   const aborter = useRef(null);
   const ready = file && (first || second || third);
+  // 세분류 건에서 돌려 보관한 검토를 다시 연다(?record=). 의견별 결과와 담당자 확정, 의견서 파일이 그대로 보인다
+  const [params] = useSearchParams();
+  const recordId = params.get("record");
+  const [kept, setKept] = useState(null);
+  useEffect(() => {
+    if (!recordId) return undefined;
+    let alive = true;
+    setBusy(true);
+    api.opinionRecord(recordId).then(({ ok, data, error: message }) => {
+      if (!alive) return;
+      setBusy(false);
+      if (!ok) { setError(message); return; }
+      setKept({ ...data, id: recordId });
+      setResult(data.result);
+    });
+    return () => { alive = false; };
+  }, [recordId]);
 
   async function submit(e) {
     e.preventDefault();
@@ -45,6 +64,7 @@ export default function OpinionPage() {
     setBusy(false);
     if (aborted) return;
     if (!ok) { setError(message); setResult(null); return; }
+    setKept(null);
     setResult(data);
   }
 
@@ -57,7 +77,7 @@ export default function OpinionPage() {
       <p className="page-desc">
         검토의견서나 심의의견서(PDF, hwp, hwpx)와 의견을 반영한 최종 원고(hwp, hwpx)를 올리면, 생성형 AI가 의견마다
         <strong> 반영 후보, 미반영 후보, 확인 필요</strong>를 근거 문단과 함께 보여 줍니다.
-        판정은 참고용이며 최종 판단은 담당자가 합니다. 생성형 AI를 쓸 수 없을 때는 모든 의견을 확인 필요로 표시합니다. 올린 파일은 검토 뒤 바로 지웁니다.
+        판정은 참고용이며 최종 판단은 담당자가 합니다. 생성형 AI를 쓸 수 없을 때는 모든 의견을 확인 필요로 표시합니다. 올린 파일은 검토 뒤 바로 지웁니다. 세분류 건에서 연 검토만 의견서와 결과를 그 건에 보관합니다.
       </p>
       <CaseLinkNote />
 
@@ -95,8 +115,9 @@ export default function OpinionPage() {
         </div>
       </form>
 
-      {busy && <ResultHead status={<Spinner label="생성형 AI가 의견서와 원고를 대조하는 중" />} />}
-      {result && !busy && <OpinionResult result={result} />}
+      {busy && <ResultHead status={<Spinner label={recordId && !result ? "보관한 검토를 불러오는 중" : "생성형 AI가 의견서와 원고를 대조하는 중"} />} />}
+      {result && !busy && <OpinionResult key={kept?.id || result["진행 현황 기록"]?.id || "new"} result={result} kept={kept}
+                                         backTo={params.get("case") && `/cases?case=${encodeURIComponent(params.get("case"))}${params.get("volume") ? `&volume=${encodeURIComponent(params.get("volume"))}` : ""}`} />}
       <TopButton />
     </main>
     <Footer />
@@ -117,9 +138,9 @@ function errorRate(rows, decisions) {
   return { judged, wrong, held, rate: judged ? (wrong / judged) * 100 : null };
 }
 
-function OpinionResult({ result }) {
+function OpinionResult({ result, kept, backTo }) {
   const [filter, setFilter] = useState("전체");
-  const [decisions, setDecisions] = useState({});
+  const [decisions, setDecisions] = useState(kept?.decisions || {});
   const [working, setWorking] = useState(null);     // "export" | "save"
   const [note, setNote] = useState(null);           // { kind, text } — 결과표·확정 저장 안내
   const picked = Object.fromEntries(Object.entries(decisions).filter(([, value]) => value));
@@ -158,6 +179,23 @@ function OpinionResult({ result }) {
         </div>
       </dl>
       {result.알림.length > 0 && <PageAlert kind="info">{result.알림.map((note) => <p key={note}>{note}</p>)}</PageAlert>}
+      {kept && (
+        <div className="opinion-kept">
+          <p>
+            세분류 건에 보관한 검토입니다. {formatDate(kept.created_at)}{kept.kept_by ? `, ${kept.kept_by}` : ""}.
+            {kept.decided ? ` 담당자 확정: ${formatDate(kept.decided.at)}${kept.decided.by ? `, ${kept.decided.by}` : ""}.` : " 아직 확정을 저장하지 않았습니다."}
+            {backTo && <> <Link to={backTo}>건 화면으로 돌아가기</Link></>}
+          </p>
+          {kept.files.length > 0 && (
+            <ul className="krds-info-list">
+              {kept.files.map((item) => (
+                <li key={item.id}>{item.round ? `${item.round} ` : ""}<a href={api.opinionRecordFileUrl(kept.id, item.id)}>{item.filename}</a></li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {!kept && result.보관 && <PageAlert kind="success">의견서 파일과 의견별 결과를 이 건에 보관했습니다. 확정을 저장하면 확정도 함께 남고, 건의 권 화면에서 다시 열 수 있습니다.</PageAlert>}
 
       <h2 className="section-title">의견별 반영 여부</h2>
       <p className="meta section-desc">{result["판정 원칙"]} 표의 '담당자 확정'에서 반영/미반영을 고르면 위 오차율이 바뀝니다. 확정은 [확정 저장]으로 진행 현황 기록에 남기고, [결과표 내려받기]로 후보와 확정을 함께 적은 표를 보관합니다.</p>

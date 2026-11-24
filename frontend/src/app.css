@@ -1066,6 +1066,12 @@ main [hidden] { display: none !important; }
 .cases-detail-results > summary { margin-bottom: var(--krds-gap-3); }
 .cases-detail-results .krds-table-wrap { max-width: 100%; margin-left: 0; margin-right: 0; overflow-x: auto; }
 .cases-detail-results .figures-panel { margin-top: var(--krds-gap-5); }
+
+/* 의견 반영 검토: 건에 보관한 검토를 다시 열었을 때의 안내와 의견서 파일 목록 */
+.opinion-kept { margin: var(--krds-gap-5) 0; padding: var(--krds-gap-4) var(--krds-gap-5); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); }
+.opinion-kept p { margin: 0; }
+.opinion-kept ul { margin-top: var(--krds-gap-2); }
+
 /* 그림 검수: 담당자 최종 판단과 태깅 값 고치기 — '판정과 근거' 칸 맨 아래 */
 .fig-decide-guide { margin: 0 0 var(--krds-gap-3); }
 .fig-decide { margin-top: var(--krds-gap-3); padding-top: var(--krds-gap-3); border-top: 1px solid var(--krds-light-color-border-gray-light); }

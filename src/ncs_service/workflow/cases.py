@@ -356,6 +356,9 @@ def _linked(connection, volume_ids: list[str]) -> dict[tuple[str, str], list[dic
     records = connection.execute(
         "SELECT id, kind, created_at, counts, case_volume_id, case_stage FROM work_records "
         "WHERE case_volume_id = ANY(%s::uuid[]) AND kind IN ('opinion', 'rights')", (volume_ids,)).fetchall()
+    from . import opinion_archive
+
+    kept = opinion_archive.kept_ids(connection, [str(row["id"]) for row in records if row["kind"] == "opinion"])
     for row in records:
         counts = row["counts"] or {}
         if row["kind"] == "opinion":
@@ -364,7 +367,7 @@ def _linked(connection, volume_ids: list[str]) -> dict[tuple[str, str], list[dic
         else:
             text = f"판정 {counts.get('판정') or '-'}, 원고 그림 {counts.get('원고 그림') or 0}개, 누락 {counts.get('누락') or 0}개"
         out.setdefault((str(row["case_volume_id"]), row["case_stage"]), []).append(
-            {"tool": row["kind"], "id": str(row["id"]), "at": row["created_at"], "text": text})
+            {"tool": row["kind"], "id": str(row["id"]), "at": row["created_at"], "text": text, "kept": str(row["id"]) in kept})
     runs = connection.execute(
         "SELECT id, created_at, pages, case_volume_id, case_stage FROM volume_runs WHERE case_volume_id = ANY(%s::uuid[])", (volume_ids,)).fetchall()
     for row in runs:

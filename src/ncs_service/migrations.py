@@ -491,4 +491,26 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "    PRIMARY KEY (manuscript_sha, figure_key)\n"
      ");\n"
      "CREATE INDEX IF NOT EXISTS figure_decisions_version_idx ON figure_decisions (version_id)"),
+    # 021: 의견 반영 검토의 보관(REQ-02-003 사람 작업 4번) — 세분류 건의 권에서 돌린 검토만. 의견별 결과(의견 글, 판정 후보, 근거 문단)와
+    # 담당자 확정, 올린 의견서 파일을 둔다. 따로 연 검토는 전처럼 개수만 남는다. 개수 기록을 지우면 같이 지워진다.
+    ("021_opinion_archives",
+     "CREATE TABLE IF NOT EXISTS opinion_archives (\n"
+     "    record_id uuid PRIMARY KEY REFERENCES work_records(id) ON DELETE CASCADE,\n"
+     "    created_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    kept_name text NOT NULL DEFAULT '',\n"
+     "    result jsonb NOT NULL,\n"
+     "    decisions jsonb NOT NULL DEFAULT '{}',\n"
+     "    decided_name text NOT NULL DEFAULT '',\n"
+     "    decided_at timestamptz\n"
+     ");\n"
+     "CREATE TABLE IF NOT EXISTS opinion_archive_files (\n"
+     "    id uuid PRIMARY KEY,\n"
+     "    record_id uuid NOT NULL REFERENCES opinion_archives(record_id) ON DELETE CASCADE,\n"
+     "    round text NOT NULL DEFAULT '',\n"
+     "    filename text NOT NULL,\n"
+     "    sha256 text NOT NULL,\n"
+     "    byte_size bigint NOT NULL,\n"
+     "    content bytea NOT NULL\n"
+     ");\n"
+     "CREATE INDEX IF NOT EXISTS opinion_archive_files_record_idx ON opinion_archive_files (record_id)"),
 )
