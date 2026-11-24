@@ -1066,6 +1066,18 @@ main [hidden] { display: none !important; }
 .cases-detail-results > summary { margin-bottom: var(--krds-gap-3); }
 .cases-detail-results .krds-table-wrap { max-width: 100%; margin-left: 0; margin-right: 0; overflow-x: auto; }
 .cases-detail-results .figures-panel { margin-top: var(--krds-gap-5); }
+/* 그림 검수: 담당자 최종 판단과 태깅 값 고치기 — '판정과 근거' 칸 맨 아래 */
+.fig-decide-guide { margin: 0 0 var(--krds-gap-3); }
+.fig-decide { margin-top: var(--krds-gap-3); padding-top: var(--krds-gap-3); border-top: 1px solid var(--krds-light-color-border-gray-light); }
+.fig-decide-main { display: flex; flex-wrap: wrap; gap: var(--krds-gap-2); }
+.fig-decide-main select { flex: 1 1 13rem; }
+.fig-decide-main input { flex: 1 1 12rem; min-width: 0; }
+.fig-decide .meta { display: block; margin-top: 2px; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.fig-fix { margin-top: var(--krds-gap-2); }
+.fig-fix > summary { cursor: pointer; font-size: var(--krds-pc-font-size-body-small); }
+.fig-fix-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--krds-gap-2); margin-top: var(--krds-gap-2); }
+.fig-fix-fields label { display: flex; flex-direction: column; gap: 2px; font-size: var(--krds-pc-font-size-body-small); }
+.fig-fix-fields select, .fig-fix-fields input { width: 100%; }
 .cases-review .krds-btn + .krds-btn { margin-left: var(--krds-gap-3); }
 .case-link-note { margin: var(--krds-gap-5) 0; }
 .cases-action-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--krds-gap-3); }

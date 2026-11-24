@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api.js";
+import { useCanManage } from "../lib/auth.jsx";
+import { formatDate } from "../lib/format.jsx";
 import { Spinner } from "./Badge.jsx";
 import { PageAlert } from "./PageAlert.jsx";
 import { FigureReadBar, FigureReadResults } from "./FigureReadPanel.jsx";
@@ -30,7 +32,22 @@ export function FiguresPanel({ uploadToken, moduleCode, refresh = 0 }) {
   const [tab, setTab] = useState("review");
   const [onlyIssues, setOnlyIssues] = useState(false);   // 기본은 그림 전부(문제없음 포함)
   const [readResult, setReadResult] = useState(null);
+  const canRead = useCanManage();     // 그림 판독(그림을 밖으로 보내고 비용이 듦)은 에디터와 직능연 계정만 — 그 밖의 계정에는 버튼과 결과 탭을 그리지 않는다
   const [reload, setReload] = useState(0);   // 그림 판독이 끝나면 늘려 규칙 결과(③이 든 위험도)를 다시 불러온다
+  // 담당자 최종 판단과 태깅에서 고친 값 — 서버가 보관한다(이력을 두는 서버에서만, 아니면 null이라 판단 칸을 그리지 않는다)
+  const [decisions, setDecisions] = useState(null);
+  const [decideError, setDecideError] = useState(null);
+  async function decide(key, imageId, next) {
+    setDecideError(null);
+    const { ok, data: body, error: message } = await api.figures.decide(uploadToken, { key, image_id: imageId || "", ...next });
+    if (!ok) { setDecideError(`판단을 저장하지 못했습니다. ${message}`); return false; }
+    setDecisions((have) => {
+      const out = { ...(have || {}) };
+      if (body.decision) out[key] = body.decision; else delete out[key];
+      return out;
+    });
+    return true;
+  }
 
   useEffect(() => {
     setData(null);
@@ -40,7 +57,7 @@ export function FiguresPanel({ uploadToken, moduleCode, refresh = 0 }) {
     setLoading(true);
     api.figures.rules(uploadToken, { moduleCode, signal: controller.signal }).then(({ ok, data: body, error: message, aborted }) => {
       if (aborted) return;
-      if (ok) setData(body);
+      if (ok) { setData(body); setDecisions(body.decisions ?? null); }
       else setError(message);
       setLoading(false);
     });
@@ -52,6 +69,8 @@ export function FiguresPanel({ uploadToken, moduleCode, refresh = 0 }) {
   const fallback = onlyIssues && !issues.length && merged.length > 0;
   const shown = onlyIssues && !fallback ? issues : merged;
   const s = data?.review.summary;
+  const decided = Object.values(decisions || {}).filter((item) => item.verdict);
+  const fixedTags = Object.values(decisions || {}).some((item) => Object.keys(item.fixes || {}).length > 0);
   const onlyListed = Object.entries(data?.submissions?.["목록에만 있음"] || {});
 
   return (
@@ -65,12 +84,12 @@ export function FiguresPanel({ uploadToken, moduleCode, refresh = 0 }) {
 
       {data && (
         <>
-          <FigureReadBar uploadToken={uploadToken} onResult={setReadResult} onDone={() => setReload((n) => n + 1)} />
+          {canRead && <FigureReadBar uploadToken={uploadToken} onResult={setReadResult} onDone={() => setReload((n) => n + 1)} />}
 
           <div className="fig-toolbar">
             <div className="fig-tabs" role="tablist" aria-label="그림 결과 보기">
               <button type="button" role="tab" aria-selected={tab === "review"} className={tab === "review" ? "on" : ""} onClick={() => setTab("review")}>그림 검수 · 태깅</button>
-              <button type="button" role="tab" aria-selected={tab === "read"} className={tab === "read" ? "on" : ""} onClick={() => setTab("read")}>그림 판독 결과</button>
+              {canRead && <button type="button" role="tab" aria-selected={tab === "read"} className={tab === "read" ? "on" : ""} onClick={() => setTab("read")}>그림 판독 결과</button>}
             </div>
             <span className="fig-counts">
               <span className="count fail">고위험 {s.위험도.고위험}</span>
@@ -86,6 +105,7 @@ export function FiguresPanel({ uploadToken, moduleCode, refresh = 0 }) {
               <a className="krds-btn small tertiary" href={api.figures.reportUrl(uploadToken)} target="_blank" rel="noreferrer">검수표(인쇄→PDF)</a>
               <a className="krds-btn small tertiary" href={api.figures.memoUrl(uploadToken)}>메모 단 원고(hwpx)</a>
               <a className="krds-btn small tertiary" href={api.figures.csvUrl(uploadToken)}>태깅 표(CSV)</a>
+              {fixedTags && <a className="krds-btn small tertiary" href={api.figures.overridesUrl(uploadToken)}>고친 태깅 값(TSV)</a>}
               <a className="krds-btn small tertiary" href={api.figures.jsonUrl(uploadToken)}>원본 데이터(JSON)</a>
             </div>
           </div>
@@ -93,8 +113,17 @@ export function FiguresPanel({ uploadToken, moduleCode, refresh = 0 }) {
             <PageAlert key={name} kind="warning">{name}에만 있고 원고에 없는 그림: {items.join(", ")}</PageAlert>
           ))}
 
+          {tab === "review" && decisions && (
+            <p className="form-hint fig-decide-guide">
+              {canRead
+                ? "그림마다 ‘판정과 근거’ 칸 아래에서 최종 판단을 고르고 까닭을 적습니다. 서버에 저장되어 같은 원고 파일을 다시 올려도 보입니다."
+                : "담당자가 내린 최종 판단이 ‘판정과 근거’ 칸 아래에 보입니다."}
+              {decided.length > 0 && ` 지금까지 ${decided.length}개를 판단했고 그중 정정 필요는 ${decided.filter((item) => item.verdict === "정정 필요").length}개입니다.`}
+            </p>
+          )}
+          {decideError && <PageAlert kind="danger">{decideError}</PageAlert>}
           {tab === "review" && fallback && <PageAlert kind="success">확인할 그림 없음 — {merged.length}개 모두 문제없음</PageAlert>}
-          {tab === "review" && <FigureTable items={shown} token={uploadToken} hasDb={Boolean(data.db)} />}
+          {tab === "review" && <FigureTable items={shown} token={uploadToken} hasDb={Boolean(data.db)} decisions={decisions} canDecide={canRead} onDecide={decide} />}
           {tab === "read" && <FigureReadResults uploadToken={uploadToken} result={readResult} />}
         </>
       )}
@@ -306,7 +335,69 @@ function pageText(u) {
 }
 
 // 그림 검수(005)와 태깅(009)을 한 표로: 그림 · 위치 · 출처 · 주변 글 · 학습·수행준거 · 유형·해상도 · 비슷한 그림 추천 · 판정과 근거
-function FigureTable({ items, token, hasDb }) {
+// 담당자 최종 판단(REQ-02-005 사람 작업 4번) — 사용 가능 / 정정 필요와 까닭. 판정은 고르는 즉시, 까닭은 칸을 벗어날 때 저장한다.
+// 태깅이 '사람 확인'으로 남긴 그림(REQ-02-009 사람 작업 4번)은 출처 종류·저작자·연도·그림 유형을 고쳐 적을 수 있다 — 고친 값이 태깅 표에 들어간다.
+const FIGURE_CHOICES = ["", "사용 가능", "정정 필요"];
+const SOURCE_KINDS = ["집필진 제작", "기존 학습모듈", "공공누리", "웹·검색", "스크린숏", "문헌", "법령", "AI 표기", "알 수 없음"];
+const FIX_FIELDS = [["source.kind", "출처 종류"], ["source.author", "저작자"], ["source.year", "연도"], ["image_type.value", "그림 유형"]];
+
+function DecideCell({ figureKey, imageId, name, mine, canDecide, onDecide, canFix }) {
+  const [reason, setReason] = useState(mine?.reason || "");
+  const [fixes, setFixes] = useState(mine?.fixes || {});
+  useEffect(() => { setReason(mine?.reason || ""); setFixes(mine?.fixes || {}); }, [mine]);
+  const fixed = Object.entries(mine?.fixes || {});
+  if (!canDecide) {
+    if (!mine?.verdict && !mine?.reason && !fixed.length) return null;
+    return (
+      <div className="fig-decide">
+        {(mine.verdict || mine.reason) && <div><b>담당자 판단: {mine.verdict || "판단 전"}</b>{mine.reason ? `, ${mine.reason}` : ""}</div>}
+        {fixed.length > 0 && <div className="sub">고친 태깅 값: {fixed.map(([field, value]) => `${FIX_FIELDS.find(([f]) => f === field)?.[1] || field} ${value}`).join(", ")}</div>}
+        <span className="meta">{mine.by}, {formatDate(mine.at)}</span>
+      </div>
+    );
+  }
+  const save = (next) => onDecide(figureKey, imageId, { verdict: mine?.verdict || "", reason, fixes, ...next });
+  const saveFix = (field, value) => {
+    const next = { ...fixes, [field]: value };
+    setFixes(next);
+    if ((mine?.fixes?.[field] || "") !== value.trim()) save({ fixes: next });
+  };
+  return (
+    <div className="fig-decide">
+      <div className="fig-decide-main">
+        <select className="krds-form-select small" aria-label={`${name} 최종 판단`} value={mine?.verdict || ""} onChange={(e) => save({ verdict: e.target.value })}>
+          {FIGURE_CHOICES.map((c) => <option key={c} value={c}>{c || "판단 전"}</option>)}
+        </select>
+        <input type="text" className="krds-input small" maxLength={500} aria-label={`${name} 판단한 까닭`} placeholder="판단한 까닭"
+               value={reason} onChange={(e) => setReason(e.target.value)} onBlur={() => { if (reason.trim() !== (mine?.reason || "")) save({ reason }); }} />
+      </div>
+      {mine?.by && <span className="meta">{mine.by}, {formatDate(mine.at)}</span>}
+      {canFix && (
+        <details className="fig-fix" open={fixed.length > 0}>
+          <summary>태깅 값 고치기{fixed.length > 0 ? ` (${fixed.length}칸 고침)` : ""}</summary>
+          <div className="fig-fix-fields">
+            {FIX_FIELDS.map(([field, label]) => (
+              <label key={field}>
+                <span>{label}</span>
+                {field === "source.kind" ? (
+                  <select className="krds-form-select small" value={fixes[field] || ""} onChange={(e) => saveFix(field, e.target.value)}>
+                    <option value="">고치지 않음</option>
+                    {SOURCE_KINDS.map((kind) => <option key={kind} value={kind}>{kind}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" className="krds-input small" maxLength={100} value={fixes[field] || ""}
+                         onChange={(e) => setFixes({ ...fixes, [field]: e.target.value })} onBlur={(e) => saveFix(field, e.target.value)} />
+                )}
+              </label>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function FigureTable({ items, token, hasDb, decisions, canDecide, onDecide }) {
   if (!items.length) return <p className="empty">확인할 그림 없음</p>;
   return (
     <div className="krds-table-wrap">
@@ -347,6 +438,12 @@ function FigureTable({ items, token, hasDb }) {
                   <td className="verdict">
                     {row && <VerdictCell row={row} />}
                     {extra.map((x) => <div key={x} className="v-line bad"><b>{x}</b></div>)}
+                    {rec?.overridden?.length > 0 && <div className="sub">사람이 고친 칸이 있어 태깅의 사람 확인에서 빠졌습니다.</div>}
+                    {decisions && (row || rec?.image_id) && (
+                      <DecideCell figureKey={row?.item_id || rec.image_id} imageId={row?.image_id || rec?.image_id} name={caption || "캡션 없는 그림"}
+                                  mine={decisions[row?.item_id || rec.image_id]} canDecide={canDecide} onDecide={onDecide}
+                                  canFix={Boolean(rec?.image_id) && ((rec.review_reasons || []).length > 0 || Object.keys(decisions[row?.item_id || rec.image_id]?.fixes || {}).length > 0)} />
+                    )}
                   </td>
                 </tr>
               );

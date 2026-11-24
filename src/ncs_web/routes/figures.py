@@ -17,10 +17,11 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, Response, UploadFile
+from fastapi import FastAPI, File, Form, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
 
-from ..common import Services, error_response, logger
+from ..common import Services, actor, error_response, logger, manager_only, viewer
 
 KIND_ORDER = {"고위험": 0, "확인 필요": 1, "문제없음": 2, "판정 안 함": 3}
 
@@ -43,6 +44,15 @@ def _preload() -> None:
         import ncs_figures.vision  # noqa: F401
     except ImportError:
         pass   # 패키지가 없으면 요청 때 _call이 설치 안내를 돌려준다
+
+
+class FigureDecision(BaseModel):
+    """그림 하나의 담당자 판단. key = 검수 행의 item_id(없으면 image_id). fixes = 태깅에서 고친 값({필드: 값})."""
+    key: str = Field(min_length=1, max_length=120)
+    image_id: str = Field(default="", max_length=120)
+    verdict: str = Field(default="", max_length=10)
+    reason: str = Field(default="", max_length=500)
+    fixes: dict[str, str] = Field(default_factory=dict, max_length=10)
 
 
 def register(app: FastAPI, services: Services) -> None:
@@ -168,7 +178,7 @@ def register(app: FastAPI, services: Services) -> None:
         from ncs_service.workflow.progress import FIGURES, summarize_figures
 
         try:
-            services.store.save_work_record(FIGURES, manuscript, summarize_figures(result), [{"role": "manuscript", "filename": manuscript}],
+            record = services.store.save_work_record(FIGURES, manuscript, summarize_figures(result), [{"role": "manuscript", "filename": manuscript}],
                                             module_code=module_code or "")
             if record and version_id:      # 세분류 건의 판본으로 돌린 것 — 권 화면이 그 판본 옆에 보인다
                 from ncs_service.workflow import cases
@@ -177,14 +187,98 @@ def register(app: FastAPI, services: Services) -> None:
         except Exception as error:
             logger.exception("그림 검수 개수 기록 실패: %s", error)
 
+    # ---------------------------------------------------------------- 담당자 판단(005 ④)과 태깅의 사람 확인(009 ④)
+
+    def _sha(manuscript: Path, work: Path) -> str:
+        """원고 파일의 sha256 — 담당자 판단을 찾는 열쇠. 업로드마다 한 번만 센다."""
+        kept = work / "manuscript.sha256"
+        if kept.is_file():
+            return kept.read_text(encoding="ascii").strip()
+        import hashlib
+
+        digest = hashlib.sha256(manuscript.read_bytes()).hexdigest()
+        work.mkdir(parents=True, exist_ok=True)
+        kept.write_text(digest, encoding="ascii")
+        return digest
+
+    def _decisions(manuscript: Path, work: Path) -> dict[str, dict] | None:
+        """이 원고의 그림별 담당자 판단. 이력을 두지 않는 서버면 None(화면이 판단 칸을 그리지 않는다). 읽지 못해도 검수 결과는 그대로 준다."""
+        if not services.store.supports_history:
+            return None
+        from ncs_service import postgres
+
+        try:
+            return postgres.get_figure_decisions(services.store.dsn, _sha(manuscript, work))
+        except Exception as error:
+            logger.exception("그림 판단 읽기 실패: %s", error)
+            return None
+
+    def _fixed(records: list[dict], decisions: dict[str, dict] | None) -> list[dict]:
+        """태깅 레코드에 사람이 고친 값을 넣는다(원래 결과 파일은 그대로 둔다). 고친 그림은 '사람 확인'에서 빠진다."""
+        from ncs_figures.export import apply_fixes
+
+        by_image = {item["image_id"]: item["fixes"] for item in (decisions or {}).values() if item.get("image_id") and item.get("fixes")}
+        if not by_image:
+            return records
+        out = []
+        for record in records:
+            fixes = by_image.get(record.get("image_id"))
+            if fixes:
+                record = json.loads(json.dumps(record, default=str))
+                apply_fixes(record, fixes)
+                record["needs_human_review"] = False
+            out.append(record)
+        return out
+
     @app.get("/api/uploads/{token}/figures")
     def figures_rules(token: str, module_code: str = "") -> Response:
-        """형식 검수 뒤 화면이 바로 부른다 — 모델·외부 전송 없음. 원고 하나에 수 초~십수 초."""
+        """형식 검수 뒤 화면이 바로 부른다 — 모델·외부 전송 없음. 원고 하나에 수 초~십수 초.
+        응답의 decisions는 담당자 판단(이력을 두는 서버에서만, 없으면 null)이고 태깅 레코드에는 사람이 고친 값이 들어가 있다."""
         def action():
             manuscript, work = _upload(token)
             result = _rules(manuscript, work, module_code, token)
             uploads_store.touch(token)
-            return JSONResponse(result)
+            decisions = _decisions(manuscript, work)
+            return JSONResponse({**result, "tags": {**result["tags"], "records": _fixed(result["tags"]["records"], decisions)}, "decisions": decisions})
+        return _call(action)
+
+    @app.post("/api/uploads/{token}/figures/decisions")
+    def figures_decide(token: str, body: FigureDecision, request: Request) -> Response:
+        """그림 하나의 담당자 판단(사용 가능 / 정정 필요, 사유)과 태깅에서 고친 값을 적는다. 모두 비우면 지운다. 에디터와 직능연 계정만."""
+        manager_only(request, "그림의 최종 판단은")
+
+        def action():
+            from ncs_service import postgres
+
+            if not services.store.supports_history:
+                return error_response(404, "이 서버는 그림 판단을 보관하지 않습니다")
+            manuscript, work = _upload(token)
+            module_code = _rules(manuscript, work, token=token).get("module_code") or ""
+            account = viewer(request)
+            saved = postgres.set_figure_decision(
+                services.store.dsn, _sha(manuscript, work), body.key, verdict=body.verdict, reason=body.reason, fixes=body.fixes,
+                image_id=body.image_id, module_code=module_code, version_id=uploads_store.version_of(work) or None,
+                account_id=account.get("id") if account else None, name=actor(request, ""))
+            return JSONResponse({"decision": saved})
+        return _call(action)
+
+    @app.get("/api/uploads/{token}/figures/overrides.tsv")
+    def figures_overrides(token: str) -> Response:
+        """웹에서 사람이 고친 태깅 값을 overrides.tsv로 — 명령줄의 합치기(python -m ncs_figures merge --overrides)가 그대로 읽는다."""
+        def action():
+            import csv
+            import io
+
+            manuscript, work = _upload(token)
+            buffer = io.StringIO()
+            writer = csv.writer(buffer, delimiter="\t", lineterminator="\n")
+            writer.writerow(("image_id", "필드", "고친 값", "메모"))
+            for item in (_decisions(manuscript, work) or {}).values():
+                for field, value in (item.get("fixes") or {}).items():
+                    if item.get("image_id"):
+                        writer.writerow((item["image_id"], field, value, item.get("by") or ""))
+            return _attachment(("\ufeff" + buffer.getvalue()).encode("utf-8"), "text/tab-separated-values; charset=utf-8", "overrides.tsv",
+                               f"{manuscript.stem}_overrides.tsv")
         return _call(action)
 
     @app.post("/api/uploads/{token}/figures/submissions")
@@ -258,7 +352,13 @@ def register(app: FastAPI, services: Services) -> None:
     def figures_csv(token: str) -> Response:
         def action():
             manuscript, work = _upload(token)
-            _rules(manuscript, work, token=token)
+            result = _rules(manuscript, work, token=token)
+            fixed = _fixed(result["tags"]["records"], _decisions(manuscript, work))
+            if fixed is not result["tags"]["records"]:        # 사람이 고친 값이 있으면 그 값으로 다시 쓴다('고친 필드' 열에 남는다)
+                from ncs_figures.export import write_csv
+
+                write_csv(fixed, work / "figures_fixed.csv")
+                return _attachment((work / "figures_fixed.csv").read_bytes(), "text/csv; charset=utf-8", "figures.csv", f"{manuscript.stem}_그림태깅.csv")
             return _attachment((work / "figures.csv").read_bytes(), "text/csv; charset=utf-8", "figures.csv", f"{manuscript.stem}_그림태깅.csv")
         return _call(action)
 
@@ -306,9 +406,10 @@ def register(app: FastAPI, services: Services) -> None:
         return _call(action)
 
     @app.post("/api/uploads/{token}/figures/read")
-    def figures_read(token: str, limit: Annotated[int, Form()] = 5) -> Response:
+    def figures_read(token: str, request: Request, limit: Annotated[int, Form()] = 5) -> Response:
         """본문 그림을 앞에서부터 limit장(0 = 전부) 판독 + 캡션 판정. 외부 전송이 허용된 그림만 보낸다(나머지는 '보내지 않음').
-        끝나면 005 검수표를 다시 만든다 — ③ 판정이 들어가야 위험도가 정해진다."""
+        끝나면 005 검수표를 다시 만든다 — ③ 판정이 들어가야 위험도가 정해진다. 그림을 밖으로 보내고 비용이 드는 일이라 에디터와 직능연 계정만 한다."""
+        manager_only(request, "그림 판독은")
         def action():
             from ncs_core.documents import load_document
             from ncs_figures.config import FigureConfig

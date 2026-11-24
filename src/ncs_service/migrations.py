@@ -471,4 +471,24 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
      "    decided_at timestamptz NOT NULL DEFAULT now(),\n"
      "    PRIMARY KEY (group_id, item_key)\n"
      ")"),
+    # 020: 그림 검수의 담당자 최종 판단(REQ-02-005 사람 작업 4번)과 태깅의 사람 확인(REQ-02-009 사람 작업 4번) — 그림마다 하나.
+    # 그림 검수 결과는 서버에 두지 않으므로(업로드와 함께 사라진다) 원고 파일의 sha256과 그림 자리(item_id, 없으면 image_id)로 찾는다:
+    # 같은 파일을 다시 올리면 앞의 판단이 그대로 보인다. fixes는 태깅에서 고친 값({필드: 값}, 필드 이름은 overrides.tsv와 같다).
+    # 세분류 건의 판본으로 돌린 것이면 version_id를 적어 권 화면이 확정 개수를 센다.
+    ("020_figure_decisions",
+     "CREATE TABLE IF NOT EXISTS figure_decisions (\n"
+     "    manuscript_sha text NOT NULL,\n"
+     "    figure_key text NOT NULL,\n"
+     "    image_id text NOT NULL DEFAULT '',\n"
+     "    verdict text NOT NULL DEFAULT '' CHECK (verdict IN ('', '사용 가능', '정정 필요')),\n"
+     "    reason text NOT NULL DEFAULT '',\n"
+     "    fixes jsonb NOT NULL DEFAULT '{}',\n"
+     "    module_code text NOT NULL DEFAULT '',\n"
+     "    version_id uuid REFERENCES volume_versions(id) ON DELETE SET NULL,\n"
+     "    decided_by uuid REFERENCES accounts(id) ON DELETE SET NULL,\n"
+     "    decided_name text NOT NULL DEFAULT '',\n"
+     "    decided_at timestamptz NOT NULL DEFAULT now(),\n"
+     "    PRIMARY KEY (manuscript_sha, figure_key)\n"
+     ");\n"
+     "CREATE INDEX IF NOT EXISTS figure_decisions_version_idx ON figure_decisions (version_id)"),
 )

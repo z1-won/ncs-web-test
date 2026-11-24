@@ -432,6 +432,13 @@ def _versions(connection, volume_ids: list[str]) -> dict[str, list[dict]]:
     extra: dict[str, dict] = {}
     for item in counted:
         extra.setdefault(str(item["version_id"]), {})[item["kind"]] = {**(item["counts"] or {}), "at": item["created_at"]}
+    # 그 판본의 그림에 담당자가 내린 최종 판단(REQ-02-005 사람 작업 4번)의 개수
+    decided = connection.execute(
+        "SELECT version_id, count(*) FILTER (WHERE verdict <> '') AS decided, count(*) FILTER (WHERE verdict = '정정 필요') AS fix "
+        "FROM figure_decisions WHERE version_id = ANY(%s::uuid[]) GROUP BY version_id", ([row["id"] for row in rows],)).fetchall() if rows else []
+    for item in decided:
+        if item["decided"]:
+            extra.setdefault(str(item["version_id"]), {})["figure_decisions"] = {"확정": item["decided"], "정정 필요": item["fix"]}
     by_version: dict[str, dict[str, list[dict]]] = {}
     for run in runs:
         by_version.setdefault(str(run["version_id"]), {}).setdefault(str(run["grp"]), []).append(run)

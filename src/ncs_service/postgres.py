@@ -218,6 +218,44 @@ def set_group_decisions(dsn: str, group_id: str, decisions: dict[str, dict], *, 
     return get_group_decisions(dsn, group_id)
 
 
+FIGURE_VERDICTS = ("", "사용 가능", "정정 필요")      # 그림 검수의 담당자 최종 판단(빈 값 = 사유나 고친 값만 적음). migrations 020의 CHECK와 같다
+FIGURE_FIX_FIELDS = ("source.kind", "source.author", "source.year", "image_type.value")     # 태깅에서 사람이 고치는 칸 — overrides.tsv의 '필드'와 같은 이름
+
+
+def get_figure_decisions(dsn: str, manuscript_sha: str) -> dict[str, dict]:
+    """원고 파일(sha256)의 그림별 담당자 판단 — {그림 열쇠: {'verdict', 'reason', 'fixes', 'image_id', 'by', 'at'}}."""
+    with psycopg.connect(dsn, row_factory=dict_row) as connection:
+        rows = connection.execute("SELECT figure_key, image_id, verdict, reason, fixes, decided_name, decided_at FROM figure_decisions "
+                                  "WHERE manuscript_sha = %s", (manuscript_sha,)).fetchall()
+    return {row["figure_key"]: {"verdict": row["verdict"], "reason": row["reason"], "fixes": row["fixes"] or {}, "image_id": row["image_id"],
+                                "by": row["decided_name"], "at": row["decided_at"].isoformat()} for row in rows}
+
+
+def set_figure_decision(dsn: str, manuscript_sha: str, figure_key: str, *, verdict: str = "", reason: str = "", fixes: dict | None = None,
+                        image_id: str = "", module_code: str = "", version_id: str | None = None, account_id: str | None = None,
+                        name: str = "") -> dict | None:
+    """그림 하나의 판단을 적는다. 판정, 사유, 고친 값이 모두 비면 지운다(None을 돌려준다). 고친 값은 FIGURE_FIX_FIELDS의 칸만, 빈 값은 뺀다."""
+    if verdict not in FIGURE_VERDICTS:
+        raise ValueError("그림 판단은 사용 가능 또는 정정 필요입니다")
+    fixes = {field: str(value).strip() for field, value in (fixes or {}).items() if str(value or "").strip()}
+    unknown = sorted(set(fixes) - set(FIGURE_FIX_FIELDS))
+    if unknown:
+        raise ValueError(f"고칠 수 없는 칸입니다: {', '.join(unknown)}")
+    reason = (reason or "").strip()
+    with psycopg.connect(dsn) as connection:
+        if not (verdict or reason or fixes):
+            connection.execute("DELETE FROM figure_decisions WHERE manuscript_sha = %s AND figure_key = %s", (manuscript_sha, figure_key))
+            return None
+        connection.execute(
+            "INSERT INTO figure_decisions (manuscript_sha, figure_key, image_id, verdict, reason, fixes, module_code, version_id, decided_by, decided_name) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (manuscript_sha, figure_key) DO UPDATE SET image_id = EXCLUDED.image_id, "
+            "verdict = EXCLUDED.verdict, reason = EXCLUDED.reason, fixes = EXCLUDED.fixes, module_code = EXCLUDED.module_code, "
+            "version_id = COALESCE(EXCLUDED.version_id, figure_decisions.version_id), decided_by = EXCLUDED.decided_by, "
+            "decided_name = EXCLUDED.decided_name, decided_at = now()",
+            (manuscript_sha, figure_key, image_id or "", verdict, reason, Jsonb(fixes), module_code or "", version_id or None, account_id, name))
+    return get_figure_decisions(dsn, manuscript_sha).get(figure_key)
+
+
 def get_group(dsn: str, group_id: str) -> dict | None:
     """묶음 한 건: 실행 순서대로 각 검수의 전체 결과(get_review와 같은 모양) 목록."""
     try:

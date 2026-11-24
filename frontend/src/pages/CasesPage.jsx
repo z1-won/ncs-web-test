@@ -479,6 +479,7 @@ function VersionChecks({ checks, compact = false }) {
   if (!figures && !sources) return null;
   const lines = [
     figures && `그림 검수: 그림 ${figures.그림 ?? 0}개 중 정정 필요 ${figures["정정 필요"] ?? 0}개${figures.고위험 ? `(고위험 ${figures.고위험}개)` : ""}`,
+    checks?.figure_decisions && `그림 최종 판단: ${checks.figure_decisions.확정}개 판단, 그중 정정 필요 ${checks.figure_decisions["정정 필요"]}개`,
     sources && `출처 검토: 출처 ${sources["총 출처"] ?? 0}개 중 정정 필요 ${sources["정정 필요"] ?? 0}개`,
   ].filter(Boolean);
   return compact ? lines.map((line) => <span key={line} className="meta">{line}</span>) : lines.map((line) => <p key={line}>{line}</p>);

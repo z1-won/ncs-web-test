@@ -374,6 +374,37 @@ class CaseIntegrationTests(unittest.TestCase):
         self.assertEqual(author.get("/api/images").status_code, 200)                                 # 보는 것은 된다
         self.assertEqual(self.client(EDITOR).post(f"/api/images/{missing}/confirm", json={}).status_code, 404)
 
+    def test_figure_decisions_are_kept_per_manuscript_and_counted_on_the_version(self):
+        """그림의 담당자 최종 판단(REQ-02-005 사람 작업 4번)과 태깅에서 고친 값(REQ-02-009 사람 작업 4번)은 원고 파일마다 남고, 판본 옆에 개수가 보인다."""
+        from ncs_service import postgres
+
+        editor, author, other, url, first, second = self.flow_setup()
+        author.post(f"{url}/files", data={"stage": "plan"}, files={"file": ("계획서.hwpx", b"PK plan")})
+        editor.post(f"{url}/events", json={"stage": "plan", "action": "done", "note": "종이로 확인"})
+        sent = author.post(f"{url}/volumes/{first}/versions", data={"stage": "draft_edit"}, files={"file": ("초고본.hwpx", b"PK draft")})
+        version = sent.json()["volumes"][0]["versions"][0]["id"]
+        sha = "f" * 64
+
+        def forget():
+            with psycopg.connect(DSN) as connection:
+                connection.execute("DELETE FROM figure_decisions WHERE manuscript_sha = %s", (sha,))
+
+        self.addCleanup(forget)
+        saved = postgres.set_figure_decision(DSN, sha, "IMG-s1-p3", verdict="정정 필요", reason="출처 줄 없음", fixes={"source.kind": "문헌", "source.author": " "},
+                                             image_id="abc123", version_id=version, account_id=self.ids[EDITOR], name="김에디터")
+        self.assertEqual((saved["verdict"], saved["fixes"], saved["by"]), ("정정 필요", {"source.kind": "문헌"}, "김에디터"))     # 빈 값은 뺀다
+        postgres.set_figure_decision(DSN, sha, "IMG-s1-p9", verdict="사용 가능", version_id=version)
+        postgres.set_figure_decision(DSN, sha, "IMG-s1-p12", fixes={"image_type.value": "사진"}, image_id="def456")                # 판정 없이 고친 값만
+        with self.assertRaises(ValueError):
+            postgres.set_figure_decision(DSN, sha, "IMG-s1-p3", verdict="보류")
+        with self.assertRaises(ValueError):
+            postgres.set_figure_decision(DSN, sha, "IMG-s1-p3", fixes={"uses": "x"})
+        self.assertEqual(sorted(postgres.get_figure_decisions(DSN, sha)), ["IMG-s1-p12", "IMG-s1-p3", "IMG-s1-p9"])
+        shown = editor.get(url).json()["volumes"][0]["versions"][0]["checks"]
+        self.assertEqual(shown["figure_decisions"], {"확정": 2, "정정 필요": 1})
+        self.assertIsNone(postgres.set_figure_decision(DSN, sha, "IMG-s1-p9"))                                                     # 모두 비우면 지운다
+        self.assertNotIn("IMG-s1-p9", postgres.get_figure_decisions(DSN, sha))
+
     def drop(self, table: str, record_id: str) -> None:
         with psycopg.connect(DSN) as connection:
             connection.execute(f"DELETE FROM {table} WHERE id = %s", (record_id,))

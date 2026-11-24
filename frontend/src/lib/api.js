@@ -287,6 +287,9 @@ export const api = {
     csvUrl: (token) => `/api/uploads/${token}/figures/figures.csv`,
     jsonUrl: (token) => `/api/uploads/${token}/figures/result.json`,
     memoUrl: (token) => `/api/uploads/${token}/figures/memo`,
+    // 담당자 최종 판단(REQ-02-005 사람 작업 4번)과 태깅에서 고친 값(REQ-02-009 사람 작업 4번). decision: { key, image_id, verdict, reason, fixes }
+    decide: (token, decision) => postJson(`/api/uploads/${token}/figures/decisions`, decision),
+    overridesUrl: (token) => `/api/uploads/${token}/figures/overrides.tsv`,
     // ⑥⑦ 집필자 제출 서류(수록 현황 목록·제작 목록·동의서·서약서) — 올리면 규칙 결과를 다시 만든다
     uploadSubmissions: (token, files) =>
       request(`/api/uploads/${token}/figures/submissions`, { method: "POST", body: multipart({}, files) }),

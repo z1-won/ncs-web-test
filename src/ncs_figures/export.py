@@ -147,6 +147,15 @@ def _set(record: dict, dotted: str, value: str) -> None:
     node[last] = [v.strip() for v in value.split(",")] if isinstance(node.get(last), list) else value
 
 
+def apply_fixes(record: dict, fields: dict[str, str]) -> int:
+    """사람이 고친 값({필드: 값})을 레코드에 넣고 overridden에 남긴다. 넣은 칸 수를 돌려준다. merge(overrides.tsv)와 웹의 사람 확인이 함께 쓴다."""
+    for field, value in fields.items():
+        _set(record, field, value)
+        if field not in record.setdefault("overridden", []):
+            record["overridden"].append(field)
+    return len(fields)
+
+
 def merge(out: Path, *, overrides: Path | None = None) -> dict:
     """modules/*.jsonl → figures.jsonl·figures.csv·review.tsv. image_id가 같으면 하나로 합치고 uses를 모은다."""
     out = Path(out)
@@ -185,11 +194,7 @@ def merge(out: Path, *, overrides: Path | None = None) -> dict:
         record = merged.get(key)
         if record is None:
             continue
-        for field, value in fields.items():
-            _set(record, field, value)
-            if field not in record["overridden"]:
-                record["overridden"].append(field)
-            applied += 1
+        applied += apply_fixes(record, fields)
     records = list(merged.values()) + broken
     for record in records:
         record["needs_human_review"] = bool(record["review_reasons"]) and not record.get("overridden")
