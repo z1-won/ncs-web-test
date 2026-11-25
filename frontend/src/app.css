@@ -1349,3 +1349,7 @@ main [hidden] { display: none !important; }
   .ai-notice .gen-enter .krds-btn { order: 0; }
 }
 @media (max-width: 767px) { .gen-steps { margin-bottom: 0; } .gen-step-now { margin-bottom: var(--krds-gap-5); } }
+/* 단계 표시를 본문 가운데에 둔다 — 폭을 줄여 가운데로. 마지막 단계는 동그라미 폭만 차지해 이름('받기')이 오른쪽으로 나오므로 그만큼 오른쪽을 비워 눈에 보이는 가운데를 맞춘다 */
+.gen-steps { box-sizing: border-box; max-width: 76rem; margin-left: auto; margin-right: auto; padding-right: var(--krds-padding-8); }
+.gen-step-now { text-align: center; }
+@media (max-width: 767px) { .gen-steps { max-width: none; padding-right: 0; } }
