@@ -17,9 +17,9 @@ const STAGE_COUNT = 7;
 // ai: 원고 문장이나 입력한 글 일부가 생성형 AI 서비스로 나가는 기능(개인정보처리방침 '외부로 보내는 내용'과 같아야 한다)
 const GROUPS = [
   { title: "집필", items: [
-    { path: "/plan", label: "개발계획서 작성", desc: "세분류를 고르면 NCS 기준정보를 채운 초안을 만들고, 작성한 계획서를 점검합니다.",
+    { path: "/plan", label: "개발계획서 작성", desc: "세분류를 선택하면 NCS 기준정보를 채운 초안을 만들고, 작성한 계획서를 점검합니다.",
       files: "초안은 파일 없이 세분류 선택. 점검은 개발계획서(hwp, hwpx)" },
-    { path: "/suggest", label: "문장 추천", desc: "작성 규칙에 맞지 않는 문장을 찾아 고칠 후보를 보여 줍니다.", files: "원고(hwp, hwpx)", ai: "생성형 AI 사용" },
+    { path: "/suggest", label: "문장 추천", desc: "작성 규칙에 맞지 않는 문장을 찾아 수정 후보를 보여 줍니다.", files: "원고(hwp, hwpx)", ai: "생성형 AI 사용" },
   ] },
   { title: "검수", items: [
     { path: "/review", label: "원고 검수", desc: "검수 확인서 항목별로 적합 여부와 위치, 사유를 보여 줍니다.", main: true,
@@ -30,12 +30,12 @@ const GROUPS = [
   { title: "이미지", items: [
     { path: "/upscale", label: "업스케일링", desc: "해상도가 낮은 그림의 화질을 높인 제안본을 만듭니다.", files: "원고(hwpx)" },
     { path: "/images", label: "이미지 저작권 DB", desc: "그림과 권리 정보를 등록하고 기관이 확정합니다.", files: "그림 파일과 권리 정보(JSON)" },
-    { path: "/recommend", label: "이미지 추천", desc: "문단에 어울리는 그림을 이미지 저작권 DB에서 찾아 줍니다.", files: "파일 없이 문단을 화면에 입력", ai: "켰을 때만 생성형 AI 사용" },
-    { path: "/ai-generate", label: "이미지 AI 생성", desc: "집필한 문단을 바탕으로 도표, 표, 그래프를 만듭니다. 문단에 있는 말과 수만 쓰는지 검사하고, 그림은 서버가 그립니다.", files: "파일 없이 문단을 화면에 입력", ai: "생성형 AI 사용(직접 적어 그릴 수도 있음)" },
-    { path: "/ai-image", label: "이미지 AI 보완", desc: "AI로 만들거나 고친 그림에 활용 표기를 넣고, 서약서에 붙일 결과물 현황을 만듭니다.", files: "원고(hwp, hwpx). 출력본 PDF는 선택" },
+    { path: "/recommend", label: "이미지 추천", desc: "문단에 어울리는 그림을 이미지 저작권 DB에서 찾아 줍니다.", files: "파일 없이 문단을 화면에 입력", ai: "선택 시 생성형 AI 사용" },
+    { path: "/ai-generate", label: "이미지 AI 생성", desc: "집필한 문단으로 도표, 표, 그래프, 사진, 삽화를 만듭니다. 문단에 있는 내용만 사용했는지 검사합니다.", files: "파일 없이 문단을 화면에 입력", ai: "생성형 AI 사용(직접 입력도 가능)" },
+    { path: "/ai-image", label: "이미지 AI 보완", desc: "AI로 만들거나 수정한 그림에 활용 표기를 넣고, 서약서에 첨부할 결과물 현황을 만듭니다.", files: "원고(hwp, hwpx). 출력본 PDF는 선택" },
   ] },
   { title: "기타", items: [
-    { path: "/rights", label: "권리 증빙 점검", desc: "원고의 그림과 제출 서류를 대조해 빠진 증빙과 기한을 알려 줍니다.", files: "원고, 제출 서류(수록 현황 목록, 동의서, 서약서)" },
+    { path: "/rights", label: "권리 증빙 점검", desc: "원고의 그림과 제출 서류를 대조해 누락된 증빙과 기한을 알려 줍니다.", files: "원고, 제출 서류(수록 현황 목록, 동의서, 서약서)" },
     { path: "/volume", label: "원고 분량", desc: "계약서 기준으로 원고 분량(매)과 집필료를 산정합니다.", files: "최종 원고(hwp, hwpx). 기존 원고와 출력본 PDF는 선택" },
   ] },
 ];
@@ -69,47 +69,47 @@ export default function HomePage() {
         <div>
           <h1 className="page-title">어떤 업무를 하시겠습니까?</h1>
           <p className="page-desc">
-            개발계획서 작성부터 원고 검수, 그림의 권리 확인까지 한곳에서 할 수 있습니다. 결과는 모두 참고용이며 최종 판단은 담당자가 합니다.
-            {signedOut && " 기능을 쓰려면 로그인해 주세요."}
+            개발계획서 작성, 원고 검수, 그림 권리 확인 업무를 한곳에서 처리합니다. 검수와 점검 결과는 참고용이며 최종 판단은 담당자가 합니다.
+            {signedOut && " 업무를 시작하려면 로그인해 주세요."}
           </p>
         </div>
         {signedOut ? <Link className="krds-btn large primary" to="/login">로그인</Link>
-                   : todo ? <Link className="krds-btn large primary" to="/cases">세분류 건 열기</Link>
+                   : todo ? <Link className="krds-btn large primary" to="/cases">세분류 건 바로가기</Link>
                    : <Link className="krds-btn large primary" to="/review">원고 검수 시작</Link>}
       </div>
 
       {todo && (
         <section aria-labelledby="home-todo-title">
           <div className="home-section-head">
-            <h2 className="section-title" id="home-todo-title">내 할 일 <span className="meta">{todo.length}건, 세분류 건에서 지금 내 차례인 일</span></h2>
+            <h2 className="section-title" id="home-todo-title">나의 업무 <span className="meta">처리 대기 {todo.length}건</span></h2>
             <Link className="krds-btn small tertiary" to="/cases">세분류 건 전체 보기</Link>
           </div>
-          {todo.length === 0 ? <p className="meta">지금 내 차례인 일이 없습니다.</p> : (
+          {todo.length === 0 ? <p className="meta">처리할 업무가 없습니다.</p> : (
             <ul className="cases-todo-list">
               {todo.slice(0, TODO_PREVIEW).map((item) => (
                 <li key={`${item.case_id}-${item.volume_id || item.stage}`}>
                   <div>
                     <strong>{item.title}</strong> <span className="meta">{item.case_name} {item.year}년{item.module_code ? `, ${item.module_code}` : ""}</span>
-                    <p>{item.stage_name}: {item.todo}{item.proxy && <span className="meta"> {item.turn.join(", ")} 차례이며 대신 기록할 수 있습니다.</span>}</p>
-                    {item.note && <p className="meta">보완 요청 메모: {item.note}</p>}
+                    <p>{item.stage_name}: {item.todo}{item.proxy && <span className="meta"> 처리 담당은 {item.turn.join(", ")}이며, 대리 처리할 수 있습니다.</span>}</p>
+                    {item.note && <p className="meta">보완 요청 사항: {item.note}</p>}
                   </div>
                   <Link className="krds-btn small secondary" to={`/cases?case=${item.case_id}${item.volume_id ? `&volume=${item.volume_id}` : ""}`}>열기</Link>
                 </li>
               ))}
             </ul>
           )}
-          {todo.length > TODO_PREVIEW && <p className="meta">나머지 {todo.length - TODO_PREVIEW}건은 세분류 건 화면에서 볼 수 있습니다.</p>}
+          {todo.length > TODO_PREVIEW && <p className="meta">나머지 {todo.length - TODO_PREVIEW}건은 세분류 건에서 확인할 수 있습니다.</p>}
         </section>
       )}
 
       {list && (
         <section aria-labelledby="home-recent-title">
           <div className="home-section-head">
-            <h2 className="section-title" id="home-recent-title">최근 원고 <span className="meta">담당자가 완료로 표시한 단계, {STAGE_COUNT}단계 중</span></h2>
+            <h2 className="section-title" id="home-recent-title">최근 원고 <span className="meta">전체 {STAGE_COUNT}단계 중 완료 처리한 단계</span></h2>
             <Link className="krds-btn small tertiary" to="/progress">진행 현황 전체 보기</Link>
           </div>
           {list.length === 0 ? (
-            <p className="meta">아직 기록이 없습니다. 파일 이름에 모듈 코드가 있는 원고로 검수나 산정을 하면 여기에 보입니다.</p>
+            <p className="meta">기록이 없습니다. 파일 이름에 모듈 코드가 있는 원고로 검수하거나 분량을 산정하면 여기에 표시됩니다.</p>
           ) : (
             <ul className="home-grid home-recent">
               {list.slice(0, PREVIEW).map((row) => (

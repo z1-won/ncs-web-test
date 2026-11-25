@@ -17,7 +17,7 @@ import { PageAlert } from "../components/PageAlert.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 import { ProgressFigures } from "./ProgressPage.jsx";
 
-const ANCHORS = [{ id: "cases-list", label: "건 목록" }, { id: "cases-detail", label: "권과 단계" }];
+const ANCHORS = [{ id: "cases-list", label: "건 목록" }, { id: "cases-detail", label: "권별 단계" }];
 const DONE = "완료", WAITING = "대기";
 const CHECK_NAMES = { position: "위치", plan: "개발계획서", toc: "차례", overview: "개요", knowledge: "필요 지식", perform: "수행 내용", teaching: "교수학습 방법", evaluation: "평가",
                       references: "참고 자료", colophon: "판권", misc: "기타" };
@@ -55,7 +55,7 @@ function CreateForm({ options, onCreated }) {
     const { ok, data, error: message } = await api.cases.lookup(code);
     setBusy(null);
     if (!ok) { setListing(null); setError(message); return; }
-    if (!data.volumes.length) { setListing(null); setError("NCS 목록에 없는 세분류 코드입니다. 코드 8자리를 다시 확인해 주세요."); return; }
+    if (!data.volumes.length) { setListing(null); setError("NCS 목록에 없는 세분류 코드입니다. 코드 8자리를 확인해 주세요."); return; }
     setListing(data);
     setPicked(Object.fromEntries(data.volumes.map((v) => [v.module_code, true])));
   }
@@ -79,9 +79,9 @@ function CreateForm({ options, onCreated }) {
           <div className="form-conts progress-open">
             <input id="case-subclass" type="text" inputMode="numeric" className="krds-input" placeholder="예: 12030202" maxLength={8} value={subclass}
                    onChange={(e) => { setSubclass(e.target.value.replace(/\D/g, "")); setListing(null); }} aria-describedby="case-subclass-hint" />
-            <button type="submit" className="krds-btn medium secondary" disabled={code.length !== 8 || !!busy}>{busy === "lookup" ? "찾는 중" : "권 불러오기"}</button>
+            <button type="submit" className="krds-btn medium secondary" disabled={code.length !== 8 || !!busy}>{busy === "lookup" ? "조회하는 중" : "학습모듈 조회"}</button>
           </div>
-          <p className="form-hint" id="case-subclass-hint">모듈 코드에서 LM 다음의 숫자 8자리입니다. NCS 목록에서 그 세분류의 학습모듈을 불러옵니다.</p>
+          <p className="form-hint" id="case-subclass-hint">모듈 코드에서 LM 뒤의 숫자 8자리입니다. NCS 목록에서 해당 세분류의 학습모듈을 조회합니다.</p>
         </div>
         <div className="form-group">
           <div className="form-tit"><label htmlFor="case-year">사업 연도</label></div>
@@ -114,7 +114,7 @@ function CreateForm({ options, onCreated }) {
             ))}
           </ul>
           <div className="form-actions">
-            <button type="button" className="krds-btn large primary" disabled={!chosen.length || !!busy} onClick={create}>{busy === "create" ? "만드는 중" : "건 만들기"}</button>
+            <button type="button" className="krds-btn large primary" disabled={!chosen.length || !!busy} onClick={create}>{busy === "create" ? "등록하는 중" : "건 등록"}</button>
           </div>
         </div>
       )}
@@ -187,7 +187,7 @@ export default function CasesPage() {
     <Header anchors={ANCHORS} />
     <main id="container" className="inner page">
       <h1 className="page-title">세분류 건</h1>
-      <p className="page-desc">세분류 한 건이 일의 단위입니다. 권마다 단계를 순서대로 지나고, 제출과 확인이 오갈 때마다 누가 언제 무엇을 했는지 기록에 남습니다.</p>
+      <p className="page-desc">업무는 세분류 건 단위로 진행합니다. 권마다 단계를 순서대로 진행하며, 제출과 확인 내용은 처리자, 일시와 함께 처리 이력에 기록됩니다.</p>
 
       {history === null && <Spinner label="기록을 확인하는 중" />}
       {history === false && <PageAlert kind="info">데이터베이스가 연결된 서버에서만 세분류 건을 쓸 수 있습니다. 관리자에게 문의해 주세요.</PageAlert>}
@@ -195,16 +195,16 @@ export default function CasesPage() {
       {history && todo && (
         <section className="cases-todo" aria-labelledby="cases-todo-title">
           <div className="section-head">
-            <h2 className="section-title" id="cases-todo-title">내 할 일<span className="meta"> {todo.length}건</span></h2>
+            <h2 className="section-title" id="cases-todo-title">나의 업무<span className="meta"> 처리 대기 {todo.length}건</span></h2>
           </div>
-          {todo.length === 0 ? <p className="empty">지금 내 차례인 일이 없습니다.</p> : (
+          {todo.length === 0 ? <p className="empty">처리할 업무가 없습니다.</p> : (
             <ul className="cases-todo-list">
               {todo.map((item) => (
                 <li key={`${item.case_id}-${item.volume_id || item.stage}`}>
                   <div>
                     <strong>{item.title}</strong> <span className="meta">{item.case_name} {item.year}년{item.module_code ? `, ${item.module_code}` : ""}</span>
-                    <p>{item.stage_name}: {item.todo}{item.proxy && <span className="meta"> {item.turn.join(", ")} 차례이며 대신 기록할 수 있습니다.</span>}</p>
-                    {item.note && <p className="meta">보완 요청 메모: {item.note}</p>}
+                    <p>{item.stage_name}: {item.todo}{item.proxy && <span className="meta"> 처리 담당은 {item.turn.join(", ")}이며, 대리 처리할 수 있습니다.</span>}</p>
+                    {item.note && <p className="meta">보완 요청 사항: {item.note}</p>}
                   </div>
                   <button type="button" className="krds-btn small secondary" onClick={() => open({ case: item.case_id, volume: item.volume_id })}>열기</button>
                 </li>
@@ -217,7 +217,7 @@ export default function CasesPage() {
       {history && list?.can_manage && options && (
         <div className="cases-new">
           <button type="button" className="krds-btn medium secondary" aria-expanded={creating} aria-controls="cases-new-form" onClick={() => setCreating((now) => !now)}>
-            {creating ? "새 건 만들기 닫기" : "새 건 만들기"}
+            {creating ? "건 등록 닫기" : "건 등록"}
           </button>
           {creating && (
             <div id="cases-new-form">
@@ -233,15 +233,15 @@ export default function CasesPage() {
             <h2 className="section-title">건 목록{cases ? <span className="meta"> {cases.length}건</span> : null}</h2>
           </div>
           <PageAlert kind="danger">{listError}</PageAlert>
-          {!list && !listError && <Spinner label="목록을 읽는 중" />}
+          {!list && !listError && <Spinner label="목록을 불러오는 중" />}
           {cases && (cases.length === 0 ? (
-            <p className="empty">{list.can_manage ? "아직 만든 건이 없습니다. ‘새 건 만들기’에서 세분류 코드로 건을 만들어 주세요." : "담당으로 정해진 권이 아직 없습니다. 에디터가 권에 담당을 정하면 여기에 나타납니다."}</p>
+            <p className="empty">{list.can_manage ? "등록된 건이 없습니다. [건 등록]에서 세분류 코드로 건을 등록해 주세요." : "담당으로 지정된 권이 없습니다. 에디터가 담당을 지정하면 여기에 표시됩니다."}</p>
           ) : (
             <div className="krds-table-wrap">
               <table className="tbl col data progress-table">
-                <caption>세분류 건과 권 단계 진도</caption>
+                <caption>세분류 건과 권별 진행 현황</caption>
                 <thead>
-                  <tr><th scope="col">세분류</th><th scope="col">사업 연도</th><th scope="col">개선 유형</th><th scope="col">권</th><th scope="col">권 단계 진도</th><th scope="col">열기</th></tr>
+                  <tr><th scope="col">세분류</th><th scope="col">사업 연도</th><th scope="col">개선 유형</th><th scope="col">권</th><th scope="col">권별 진행 현황</th><th scope="col">열기</th></tr>
                 </thead>
                 <tbody>
                   {cases.map((row) => (
@@ -249,7 +249,7 @@ export default function CasesPage() {
                       <th scope="row">{row.name || row.subclass}{row.name && <span className="meta">{row.subclass}</span>}</th>
                       <td>{row.year}</td>
                       <td>{row.improvement}</td>
-                      <td>{row.volumes}권<span className="meta">담당 정함 {row.assigned}권</span></td>
+                      <td>{row.volumes}권<span className="meta">담당 지정 {row.assigned}권</span></td>
                       <td><ProgressBar done={row.progress.done} total={row.progress.total} /></td>
                       <td>
                         <button type="button" className="krds-btn small tertiary" aria-pressed={row.id === caseId}
@@ -303,8 +303,8 @@ function StageAction({ detail, volume, standing, onChange }) {
 
   async function send(action) {
     setError(null);
-    if (action.needs_note && !note.trim()) { setError("순서를 건너뛰어 완료하려면 사유를 메모에 적어 주세요."); return; }
-    if (action.action === "submit" && needsFile && !file) { setError("제출할 파일을 골라 주세요."); return; }
+    if (action.needs_note && !note.trim()) { setError("순서를 건너뛰어 완료하려면 메모에 사유를 입력해 주세요."); return; }
+    if (action.action === "submit" && needsFile && !file) { setError("제출할 파일을 선택해 주세요."); return; }
     setBusy(action.action);
     const result = action.action === "submit" && needsFile
       ? await (volume ? api.cases.submitVersion(detail.id, volume.id, { stage: standing.key, note: note.trim(), file })
@@ -338,7 +338,7 @@ function StageAction({ detail, volume, standing, onChange }) {
     setResultToken(upload);
     setRunning(null);
     setBusy(null);
-    if (failed.length) setError(`검수 가운데 ${failed.length}개를 마치지 못했습니다. ${failed[0]}`);
+    if (failed.length) setError(`검수 ${failed.length}개를 완료하지 못했습니다. ${failed[0]}`);
     const fresh = await api.cases.get(detail.id);
     if (fresh.ok) onChange(fresh.data);
   }
@@ -354,7 +354,7 @@ function StageAction({ detail, volume, standing, onChange }) {
     await api.uploads.remove(ready.data.upload);
     setRunning(null);
     setBusy(null);
-    if (!result.ok) setError(`개발계획서 점검을 마치지 못했습니다. ${result.error}`);
+    if (!result.ok) setError(`개발계획서 점검을 완료하지 못했습니다. ${result.error}`);
     const fresh = await api.cases.get(detail.id);
     if (fresh.ok) onChange(fresh.data);
   }
@@ -368,26 +368,26 @@ function StageAction({ detail, volume, standing, onChange }) {
   return (
     <div className="cases-action">
       <p className="cases-action-state">
-        <Badge value={standing.state} /> {standing.turn.length ? <span>{standing.turn.join(", ")} 차례입니다.</span> : null}
-        {standing.by && <span className="meta"> 마지막 기록: {standing.by}, {when(standing.at)}</span>}
+        <Badge value={standing.state} /> {standing.turn.length ? <span>처리 담당: {standing.turn.join(", ")}</span> : null}
+        {standing.by && <span className="meta"> 최근 처리: {standing.by}, {when(standing.at)}</span>}
       </p>
       {standing.note && <p className="cases-action-note">메모: {standing.note}</p>}
 
       {latest && standing.review && (
         <div className="cases-review">
           <p>
-            검수할 판본: <a href={api.cases.versionFileUrl(detail.id, latest.id)}>{latest.filename}</a> <span className="meta">{latest.stage_name} {latest.number}차, {latest.by}, {when(latest.at)}</span>
+            검수 대상 판본: <a href={api.cases.versionFileUrl(detail.id, latest.id)}>{latest.filename}</a> <span className="meta">{latest.stage_name} {latest.number}차, {latest.by}, {when(latest.at)}</span>
           </p>
           {latest.review ? (
             <p>
               검수 결과: <Badge value={latest.review.verdict} /> <span className="meta">검수 {latest.review.checks}개, {Object.entries(latest.review.counts).map(([k, n]) => `${k} ${n}`).join(", ")}, {when(latest.review.at)}</span>{" "}
               <Link to={`/review?group=${latest.review.group}`} className="krds-btn small text">결과 자세히 보기</Link>
             </p>
-          ) : <p className="meta">이 판본은 아직 검수하지 않았습니다.</p>}
+          ) : <p className="meta">이 판본은 검수 전입니다.</p>}
           <VersionChecks checks={latest.checks} />
           {resultToken && (
             <details className="progress-history cases-detail-results">
-              <summary>그림 검수와 출처 검토 결과 자세히 보기 <span className="meta">방금 돌린 결과입니다. 이 화면을 떠나면 닫힙니다</span></summary>
+              <summary>그림 검수와 출처 검토 결과 자세히 보기 <span className="meta">방금 실행한 결과입니다. 이 화면을 벗어나면 닫힙니다.</span></summary>
               <FiguresPanel uploadToken={resultToken} moduleCode={volume.module_code} />
               <SourcesPanel uploadToken={resultToken} moduleCode={volume.module_code} />
             </details>
@@ -403,14 +403,14 @@ function StageAction({ detail, volume, standing, onChange }) {
       {document && (
         <div className="cases-review">
           <p>
-            올린 문서: <a href={api.cases.fileUrl(detail.id, document.id)}>{document.filename}</a> <span className="meta">{document.number}차, {document.by}, {when(document.at)}</span>
+            제출 문서: <a href={api.cases.fileUrl(detail.id, document.id)}>{document.filename}</a> <span className="meta">{document.number}차, {document.by}, {when(document.at)}</span>
           </p>
           {document.review ? (
             <p>
               점검 결과: <Badge value={document.review.verdict} /> <span className="meta">{when(document.review.at)}</span>{" "}
               <Link to={`/review?run=${document.review.run}`} className="krds-btn small text">결과 자세히 보기</Link>
             </p>
-          ) : <p className="meta">이 문서는 아직 점검하지 않았습니다.</p>}
+          ) : <p className="meta">이 문서는 점검 전입니다.</p>}
           {detail.can_manage && standing.state !== WAITING && (
             <button type="button" className="krds-btn medium secondary" disabled={!!busy} onClick={checkPlan}>
               {running ? "점검하는 중" : document.review ? "개발계획서 점검 다시 실행" : "이 문서로 개발계획서 점검 실행"}
@@ -421,13 +421,13 @@ function StageAction({ detail, volume, standing, onChange }) {
 
       {volume && !standing.review && standing.kind === "외부 판정" && volume.versions[0] && (
         <div className="cases-review">
-          <p>판정할 원고: <a href={api.cases.versionFileUrl(detail.id, volume.versions[0].id)}>{volume.versions[0].filename}</a> <span className="meta">{volume.versions[0].stage_name} {volume.versions[0].number}차, {when(volume.versions[0].at)}</span></p>
+          <p>판정 대상 원고: <a href={api.cases.versionFileUrl(detail.id, volume.versions[0].id)}>{volume.versions[0].filename}</a> <span className="meta">{volume.versions[0].stage_name} {volume.versions[0].number}차, {when(volume.versions[0].at)}</span></p>
         </div>
       )}
 
       {volume && standing.tools.length > 0 && (
         <div className="cases-review">
-          <p>이 단계의 근거 기록{records.length === 0 && <span className="meta"> 아직 없습니다. 아래 도구를 여기서 열어 돌리면 이 단계에 붙습니다.</span>}</p>
+          <p>이 단계의 근거 기록{records.length === 0 && <span className="meta">이 없습니다. 아래 도구를 여기서 열어 실행하면 이 단계의 근거 기록으로 남습니다.</span>}</p>
           {records.length > 0 && (
             <ul className="cases-records">
               {records.map((record) => <li key={record.id}>{TOOLS[record.tool]?.[1] || record.tool}: {record.text} <span className="meta">{when(record.at)}</span>
@@ -448,26 +448,26 @@ function StageAction({ detail, volume, standing, onChange }) {
         <form className="review-form cases-action-form" onSubmit={(e) => e.preventDefault()}>
           {canSubmitFile && (
             <FileSlot id={`${id}-file`} label={volume ? "제출할 원고" : "제출할 개발계획서"} required accept=".hwp,.hwpx" file={file} onChange={setFile} disabled={!!busy}
-                      hint="hwp, hwpx. 올린 파일은 판본으로 보관됩니다." />
+                      hint="hwp, hwpx. 제출한 파일은 판본으로 보관합니다." />
           )}
           <div className="form-group">
             <div className="form-tit"><label htmlFor={`${id}-note`}>메모</label></div>
             <div className="form-conts">
               <input id={`${id}-note`} type="text" className="krds-input" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)}
-                     placeholder="보완 요청이면 무엇을 고칠지, 건너뛴 완료면 사유를 적습니다" />
+                     placeholder="보완 요청은 수정할 내용을, 순서를 건너뛴 완료는 사유를 입력해 주세요" />
             </div>
           </div>
           <div className="cases-action-buttons">
             {actions.map((action, index) => (
               <button key={`${action.action}-${action.needs_note}`} type="button" disabled={!!busy}
                       className={`krds-btn medium ${index === actions.length - 1 && !action.needs_note ? "primary" : "secondary"}`} onClick={() => send(action)}>
-                {busy === action.action ? "보내는 중" : action.name}{action.proxy ? " (대신 기록)" : ""}
+                {busy === action.action ? "처리하는 중" : action.name}{action.proxy ? " (대리 처리)" : ""}
               </button>
             ))}
           </div>
         </form>
       )}
-      {actions.length === 0 && standing.turn.length > 0 && <p className="meta">이 계정으로 할 일은 없습니다. {standing.turn.join(", ")}의 처리를 기다립니다.</p>}
+      {actions.length === 0 && standing.turn.length > 0 && <p className="meta">이 계정으로 처리할 업무가 없습니다. {standing.turn.join(", ")}의 처리를 기다리고 있습니다.</p>}
       <PageAlert kind="danger">{error}</PageAlert>
     </div>
   );
@@ -509,10 +509,10 @@ function VolumePanel({ detail, volume, onChange, onClose }) {
   return (
     <section className="cases-volume" aria-labelledby="cases-volume-title">
       <div className="section-head">
-        <h3 className="table-title" id="cases-volume-title">{volume.title || volume.module_code} <span className="meta">{volume.module_code}, 담당 {volume.author ? volume.author.name : "없음"}</span></h3>
+        <h3 className="table-title" id="cases-volume-title">{volume.title || volume.module_code} <span className="meta">{volume.module_code}, 담당 {volume.author ? volume.author.name : "미지정"}</span></h3>
         <button type="button" className="krds-btn small tertiary" onClick={onClose}>권 닫기</button>
       </div>
-      {!current && <PageAlert kind="success">이 권은 모든 단계를 마쳤습니다.</PageAlert>}
+      {!current && <PageAlert kind="success">이 권은 모든 단계를 완료했습니다.</PageAlert>}
       <PageAlert kind="danger">{error}</PageAlert>
       <ol className="progress-steps">
         {detail.stages.map((stage, index) => {
@@ -528,10 +528,10 @@ function VolumePanel({ detail, volume, onChange, onClose }) {
                   <span className="progress-step-who">{stage.unit === "건" ? "건 전체, " : ""}{stage.kind}. {stage.who}</span>
                   {!isCurrent && state.state !== WAITING && <Badge value={state.state} />}
                   {state.changed && <span className="krds-badge bg-light-warning">완료 후 변경됨</span>}
-                  {canReopen && <button type="button" className="krds-btn small text" onClick={() => reopen(stage)}>되돌리기</button>}
+                  {canReopen && <button type="button" className="krds-btn small text" onClick={() => reopen(stage)}>완료 취소</button>}
                 </div>
                 {!isCurrent && state.state === DONE && <p className="meta">{state.by}, {when(state.at)}{state.note ? `. ${state.note}` : ""}</p>}
-                {state.changed && <p className="meta">완료한 뒤에 이 단계의 판본, 검수, 붙은 기록이 새로 생겼습니다. 다시 확인하려면 되돌려 주세요.</p>}
+                {state.changed && <p className="meta">완료 처리한 뒤 이 단계에 판본, 검수, 근거 기록이 추가되었습니다. 다시 확인하려면 [완료 취소]를 눌러 주세요.</p>}
                 {isCurrent && <StageAction key={`${volume.id}-${stage.key}-${state.state}`} detail={detail} volume={stage.unit === "건" ? null : volume} standing={current} onChange={onChange} />}
               </div>
             </li>
@@ -539,8 +539,8 @@ function VolumePanel({ detail, volume, onChange, onClose }) {
         })}
       </ol>
 
-      <h4 className="table-title">판본 <span className="meta">{volume.versions.length}개. 제출한 원고 파일은 지우지 않고 보관합니다</span></h4>
-      {volume.versions.length === 0 ? <p className="empty">아직 제출한 원고가 없습니다.</p> : (
+      <h4 className="table-title">판본 <span className="meta">{volume.versions.length}개. 제출한 원고 파일은 삭제하지 않고 보관합니다.</span></h4>
+      {volume.versions.length === 0 ? <p className="empty">제출한 원고가 없습니다.</p> : (
         <div className="krds-table-wrap">
           <table className="tbl col data progress-table">
             <caption>이 권에 제출한 원고 판본과 검수 결과</caption>
@@ -573,7 +573,7 @@ function VolumePanel({ detail, volume, onChange, onClose }) {
         </>
       )}
 
-      <h4 className="table-title">이 권의 기록 <span className="meta">최근 것부터. 지우거나 고칠 수 없습니다</span></h4>
+      <h4 className="table-title">처리 이력 <span className="meta">최근 순. 수정하거나 삭제할 수 없습니다.</span></h4>
       <EventTable events={events} showVolume={false} />
       {figures && <ProgressFigures detail={figures} />}
     </section>
@@ -592,15 +592,15 @@ function EventTable({ events, showVolume }) {
   return (
     <div className="krds-table-wrap">
       <table className="tbl col data progress-table">
-        <caption>누가 언제 무엇을 했는지</caption>
+        <caption>처리 이력(일시, 처리자, 단계, 처리 내용)</caption>
         <thead>
-          <tr><th scope="col">일시</th><th scope="col">누가</th>{showVolume && <th scope="col">권</th>}<th scope="col">단계</th><th scope="col">무엇을</th><th scope="col">메모</th></tr>
+          <tr><th scope="col">일시</th><th scope="col">처리자</th>{showVolume && <th scope="col">권</th>}<th scope="col">단계</th><th scope="col">처리 내용</th><th scope="col">메모</th></tr>
         </thead>
         <tbody>
           {events.map((event) => (
             <tr key={event.id}>
               <td>{formatDate(event.at)}</td>
-              <td>{event.actor}{event.proxy && <span className="meta">대신 기록</span>}</td>
+              <td>{event.actor}{event.proxy && <span className="meta">대리 처리</span>}</td>
               {showVolume && <td>{event.module_code || "건 전체"}</td>}
               <td>{event.stage_name || "-"}</td>
               <td>{event.action_name}{event.version_id ? " (원고 첨부)" : ""}</td>
@@ -655,18 +655,18 @@ function CaseDetail({ detail, authors, volumeId, onVolume, onChange, onClose }) 
 
       {caseStanding.map((standing) => (
         <div key={standing.key} className="cases-case-stage">
-          <h3 className="table-title">{standing.name} <span className="meta">건 전체가 함께 지나는 단계입니다. 끝나야 권들이 다음 단계로 갑니다</span></h3>
+          <h3 className="table-title">{standing.name} <span className="meta">건 전체가 함께 진행하는 단계입니다. 완료해야 각 권이 다음 단계로 넘어갑니다.</span></h3>
           <StageAction key={`case-${standing.key}-${standing.state}`} detail={detail} volume={null} standing={standing} onChange={onChange} />
         </div>
       ))}
 
-      <h3 className="table-title">권 <span className="meta">{detail.volumes.length}권. 권을 열면 단계와 할 일이 나옵니다</span></h3>
+      <h3 className="table-title">권 <span className="meta">{detail.volumes.length}권. 권을 열면 단계와 처리할 업무를 확인할 수 있습니다.</span></h3>
       <PageAlert kind="danger">{error}</PageAlert>
       <div className="krds-table-wrap">
         <table className="tbl col data progress-table">
-          <caption>권마다 담당 집필자, 지금 단계와 차례</caption>
+          <caption>권별 담당 집필자, 현재 단계, 처리 담당</caption>
           <thead>
-            <tr><th scope="col">학습모듈</th><th scope="col">담당 집필자</th><th scope="col">지금 단계</th><th scope="col">누구 차례</th><th scope="col">완료한 단계</th><th scope="col">열기</th></tr>
+            <tr><th scope="col">학습모듈</th><th scope="col">담당 집필자</th><th scope="col">현재 단계</th><th scope="col">처리 담당</th><th scope="col">완료한 단계</th><th scope="col">열기</th></tr>
           </thead>
           <tbody>
             {detail.volumes.map((volume) => (
@@ -676,12 +676,12 @@ function CaseDetail({ detail, authors, volumeId, onVolume, onChange, onClose }) 
                   {detail.can_manage ? (
                     <select className={`krds-form-select small${volume.author ? " completed" : ""}`} aria-label={`${volume.title || volume.module_code} 담당 집필자`} disabled={saving === volume.id}
                             value={volume.author?.id || ""} onChange={(e) => assign(volume, e.target.value)}>
-                      <option value="">담당 없음</option>
+                      <option value="">미지정</option>
                       {authors.map((author) => <option key={author.id} value={author.id}>{author.name}({author.login}){author.org ? `, ${author.org}` : ""}</option>)}
                     </select>
-                  ) : (volume.author ? volume.author.name : "담당 없음")}
+                  ) : (volume.author ? volume.author.name : "미지정")}
                 </td>
-                <td>{volume.current ? <>{volume.current.name}<span className="meta">{volume.current.state}</span></> : "모두 마침"}</td>
+                <td>{volume.current ? <>{volume.current.name}<span className="meta">{volume.current.state}</span></> : "전 단계 완료"}</td>
                 <td>{volume.current?.turn.join(", ") || "-"}</td>
                 <td>{volume.done} / {volume.total}</td>
                 <td>
@@ -694,7 +694,7 @@ function CaseDetail({ detail, authors, volumeId, onVolume, onChange, onClose }) 
         </table>
       </div>
       {detail.can_manage && authors.length === 0 && (
-        <p className="form-hint">집필진 계정이 아직 없습니다. 관리자가 집필진 역할의 계정을 만들면 여기서 고를 수 있습니다.</p>
+        <p className="form-hint">집필진 계정이 없습니다. 관리자가 집필진 역할의 계정을 등록하면 여기서 선택할 수 있습니다.</p>
       )}
 
       <div ref={panel} className="nav-anchor">
@@ -702,12 +702,12 @@ function CaseDetail({ detail, authors, volumeId, onVolume, onChange, onClose }) 
       </div>
 
       <details className="progress-history">
-        <summary>단계별 진도와 단계 정의표</summary>
+        <summary>단계별 진행 현황과 단계 정의</summary>
         <div className="krds-table-wrap">
           <table className="tbl col data progress-table">
-            <caption>단계마다 단위, 확인 방식, 담당과 지금 진도. {detail.basis}</caption>
+            <caption>단계별 단위, 확인 방식, 담당, 진행 현황. {detail.basis}</caption>
             <thead>
-              <tr><th scope="col">단계</th><th scope="col">단위</th><th scope="col">확인 방식</th><th scope="col">담당</th><th scope="col">근거 기록</th><th scope="col">진도</th></tr>
+              <tr><th scope="col">단계</th><th scope="col">단위</th><th scope="col">확인 방식</th><th scope="col">담당</th><th scope="col">근거 기록</th><th scope="col">진행 현황</th></tr>
             </thead>
             <tbody>
               {detail.stages.map((stage, index) => (
@@ -725,7 +725,7 @@ function CaseDetail({ detail, authors, volumeId, onVolume, onChange, onClose }) 
         </div>
       </details>
       <details className="progress-history">
-        <summary>건 전체 기록 {detail.events.length}건</summary>
+        <summary>건 전체 처리 이력 {detail.events.length}건</summary>
         <EventTable events={detail.events} showVolume />
       </details>
     </section>
