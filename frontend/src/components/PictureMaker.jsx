@@ -1,4 +1,4 @@
-// 사진·삽화 만들기(REQ-02-006 ① AI 생성) — 이미지 AI 생성 페이지가 유형을 사진이나 삽화로 골랐을 때 후보와 고치고 받기 자리에 놓는다.
+// 사진·삽화 만들기(REQ-02-006 ① AI 생성) — 이미지 AI 생성 페이지가 유형을 사진이나 삽화로 골랐을 때 후보와 수정과 내려받기 자리에 놓는다.
 // 흐름: 장면 후보(생성형 AI가 문단에서 쓴 한국어 장면과 영어 글, 프롬프트 검사) → 장면을 골라 고침 → 서버의 모델이 그림을 만듦 → 한 장을 골라 확인 → 받기.
 // 그림은 서버에 올린 공개 모델이 만든다(외부 전송 없음). 엔진이 꺼진 서버에서는 장면과 모델에 보낼 글까지만 만든다.
 // 그림 자체는 규칙으로 검사하지 못한다. 그래서 프롬프트에서 막고(얼굴, 상표, 화풍 따라 하기), 받기 전에 사람이 세 가지를 확인해야 한다
@@ -14,11 +14,12 @@ import { Spinner } from "./Badge.jsx";
 import { PageAlert } from "./PageAlert.jsx";
 
 const KIND_LABEL = { photo: "사진", illustration: "삽화" };
+const METHOD_LABEL = { "같은 파일": "같은 파일", "지각 해시": "크기나 형식만 바뀐 그림", "임베딩": "내용이 비슷한 그림" };      // 서버가 알려 주는 찾은 방법을 화면의 말로
 const ASSET_LABEL = { photo: "사진", illustration: "삽화", table: "도표", graph: "그래프", screenshot: "화면 캡처", other: "기타" };
 const CONFIRMS = [
-  ["face", "얼굴이 드러난 사람이 없습니다(뒷모습, 멀리 있는 모습, 손은 됩니다)"],
-  ["letters", "읽히는 글자, 로고, 상표가 없습니다"],
-  ["real", "실제 장비와 작업 모습과 다르지 않습니다"],
+  ["face", "얼굴이 드러난 사람이 없습니다(뒷모습, 멀리 있는 모습, 손은 허용)"],
+  ["letters", "읽을 수 있는 글자, 로고, 상표가 없습니다"],
+  ["real", "실제 장비, 작업 모습과 다르지 않습니다"],
 ];
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const dataUrl = (png) => `data:image/png;base64,${png}`;
@@ -26,9 +27,9 @@ async function toBlob(png) { return (await fetch(dataUrl(png))).blob(); }
 
 // 같은 갈래의 지적은 한 줄로 묶는다('얼굴이 드러나는 그림은 만들지 않습니다: 웃는, 얼굴, portrait')
 const PROBLEM_LEAD = {
-  face: ["얼굴이 드러나는 그림은 만들지 않습니다", "뒷모습, 멀리 있는 모습, 손은 됩니다."],
-  imitate: ["특정 작가·작품·상표의 화풍을 따르게 하지 않습니다", ""],
-  brand: ["상표·상품명은 넣지 않습니다", "일반 명칭으로 바꿔 주세요."],
+  face: ["얼굴이 드러나는 그림은 만들지 않습니다", "뒷모습, 멀리 있는 모습, 손은 사용할 수 있습니다."],
+  imitate: ["특정 작가, 작품, 상표의 화풍은 따라 하지 않습니다", ""],
+  brand: ["상표와 상품명은 넣지 않습니다", "일반 명칭으로 바꿔 주세요."],
 };
 function groupProblems(problems) {
   const groups = new Map();
@@ -115,9 +116,9 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
     setBusy("");
     if (!ok) { setMakeError({ error: message }); return; }
     const first = data.scenes[0];
-    if (!first) { setMakeError({ error: plainReason(data.note) || "영어 글을 만들지 못했습니다. 직접 적어 주세요." }); return; }
+    if (!first) { setMakeError({ error: plainReason(data.note) || "영어 장면을 만들지 못했습니다. 직접 입력해 주세요." }); return; }
     setScene({ ko: scene.ko, en: first.en });
-    if (!first.ok) setMakeError({ error: "이 장면으로는 만들지 않습니다.", problems: first.problems });
+    if (!first.ok) setMakeError({ error: "이 장면으로는 그림을 만들지 않습니다.", problems: first.problems });
   }
 
   async function make() {
@@ -130,7 +131,7 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
 
   async function save() {
     saveBlob(await toBlob(image.png), `${(mark.title || KIND_LABEL[kind]).replace(/[\\/:*?"<>|]+/g, "_")}.png`);
-    setDone(`그림을 내려받았습니다. 원고에는 가로 ${seen?.["300 DPI 폭"] || ""}mm 이하로 놓아야 300 DPI가 됩니다.`);
+    setDone(`그림을 내려받았습니다. 원고에 가로 ${seen?.["300 DPI 폭"] || ""}mm 이하로 넣어야 300 DPI가 됩니다.`);
   }
 
   async function register() {
@@ -150,7 +151,7 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
       {error && <PageAlert kind="danger">{error}</PageAlert>}
       {!drafted && !error && <Spinner label="장면을 만드는 중" />}
       {!engine?.["사용 가능"] && (
-        <PageAlert kind="info">이 서버에서는 지금 그림을 만들 수 없습니다. {engine?.이유}{"\n"}장면과 모델에 보낼 글까지는 만들 수 있습니다. 바깥 도구로 만든 그림의 표기와 결과물 현황은 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.</PageAlert>
+        <PageAlert kind="info">이 서버에서는 지금 그림을 만들 수 없습니다. {engine?.이유}{"\n"}장면과 이미지 모델에 보낼 영어 장면까지는 만들 수 있습니다. 다른 도구로 만든 그림의 표기와 결과물 현황은 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.</PageAlert>
       )}
       {drafted && !request.manual && (<>
         <p className="recommend-method">
@@ -161,20 +162,20 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
           {drafted.scenes.map((entry, i) => (
             <li key={i} className={`gen-candidate${entry.ok ? "" : " is-rejected"}`}>
               <h3><span className="gen-candidate-name">장면 {i + 1}</span>
-                <span className="gen-candidate-badges"><span className={`krds-badge ${entry.ok ? "bg-light-success" : "bg-light-danger"}`}>{entry.ok ? "검사 통과" : "쓰지 않음"}</span></span></h3>
+                <span className="gen-candidate-badges"><span className={`krds-badge ${entry.ok ? "bg-light-success" : "bg-light-danger"}`}>{entry.ok ? "검사 통과" : "제외"}</span></span></h3>
               <p className="gen-scene">{entry.ko}</p>
               <p className="gen-scene meta" lang="en">{entry.en}</p>
               <Problems problems={entry.problems} notes={entry.notes} />
               <div className="gen-candidate-actions">
                 <button type="button" className={`krds-btn small ${entry.ok ? "primary" : "tertiary"}`} onClick={() => choose(entry)}>
-                  {entry.ok ? "이 장면 고르기" : "고쳐서 쓰기"}<span className="sr-only"> 장면 {i + 1}</span></button>
+                  {entry.ok ? "이 장면 선택" : "수정해서 사용"}<span className="sr-only"> 장면 {i + 1}</span></button>
               </div>
             </li>
           ))}
         </ul>
         {!scene && (
           <div className="run-buttons image-actions gen-enter">
-            <button type="button" className="krds-btn medium secondary" onClick={() => choose({ ko: focus || "", en: "" })}>장면을 직접 적기</button>
+            <button type="button" className="krds-btn medium secondary" onClick={() => choose({ ko: focus || "", en: "" })}>장면 직접 입력</button>
           </div>
         )}
       </>)}
@@ -182,8 +183,8 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
 
     {scene && (
     <section id="generate-edit" className="nav-anchor image-section">
-      <h2 className="section-title">고치고 받기<span className="meta"> {KIND_LABEL[kind]}, 표기 예 {usage}({usage === 1 ? "문단을 바탕으로 생성" : "AI 창작"})</span></h2>
-      <PageAlert kind="warning">만든 그림이 문단의 내용과 맞는지, 실제 장비·작업과 다르지 않은지는 자동으로 검사하지 못합니다. 그림을 직접 보고 확인해 주세요.</PageAlert>
+      <h2 className="section-title">수정과 내려받기<span className="meta"> {KIND_LABEL[kind]}, 표기 예 {usage}({usage === 1 ? "문단을 바탕으로 생성" : "AI 창작"})</span></h2>
+      <PageAlert kind="warning">만든 그림이 문단의 내용과 맞는지, 실제 장비나 작업과 다르지 않은지는 자동으로 검사하지 못합니다. 그림을 직접 확인해 주세요.</PageAlert>
       <div className="gen-work">
         <div className="gen-work-left">
           {text.trim() && <blockquote className="gen-source"><strong>문단</strong>{text}</blockquote>}
@@ -193,19 +194,19 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
               <textarea id="gen-scene-ko" className="krds-input" rows={3} maxLength={400} value={scene.ko} disabled={!!busy} onChange={(e) => setScene({ ...scene, ko: e.target.value })} />
             </div>
             <div className="gen-editor-actions">
-              <button type="button" className="krds-btn small tertiary" disabled={!!busy || !scene.ko.trim()} onClick={translate}>{busy === "translate" ? "옮기는 중" : "이 장면으로 영어 글 다시 쓰기"}</button>
+              <button type="button" className="krds-btn small tertiary" disabled={!!busy || !scene.ko.trim()} onClick={translate}>{busy === "translate" ? "번역하는 중" : "영어로 다시 번역"}</button>
             </div>
             <div className="gen-field">
-              <label htmlFor="gen-scene-en">모델에 보내는 장면 글(영어)</label>
+              <label htmlFor="gen-scene-en">이미지 모델에 보내는 장면(영어)</label>
               <textarea id="gen-scene-en" className="krds-input" rows={4} maxLength={800} lang="en" value={scene.en} disabled={!!busy} onChange={(e) => setScene({ ...scene, en: e.target.value })} />
             </div>
-            <p className="form-hint">이 글 뒤에 화풍과 제한 문구(얼굴이 드러난 사람 없음, 글자·로고·워터마크 없음)가 항상 붙습니다. [영어 글 다시 쓰기]는 한국어 장면을 외부 생성형 AI 서비스로 보냅니다.</p>
+            <p className="form-hint">이 장면 뒤에 화풍과 제한 문구(얼굴이 드러난 사람 없음, 글자, 로고, 워터마크 없음)가 항상 붙습니다. [영어로 다시 번역]을 누르면 한국어 장면이 외부 생성형 AI 서비스로 전송됩니다.</p>
             <div className="gen-mark-fields">
-              <div className="gen-field"><label htmlFor="gen-shape">모양</label>
+              <div className="gen-field"><label htmlFor="gen-shape">비율</label>
                 <select id="gen-shape" className="krds-form-select" value={options.shape} disabled={!!busy} onChange={(e) => setOptions({ ...options, shape: e.target.value })}>
                   {(engine?.모양 || []).map((entry) => <option key={entry.shape} value={entry.shape}>{entry.이름} {entry.width}×{entry.height}</option>)}
                 </select></div>
-              <div className="gen-field"><label htmlFor="gen-count">장수</label>
+              <div className="gen-field"><label htmlFor="gen-count">만들 장수</label>
                 <select id="gen-count" className="krds-form-select" value={options.count} disabled={!!busy} onChange={(e) => setOptions({ ...options, count: Number(e.target.value) })}>
                   {Array.from({ length: engine?.["최대 장수"] || 4 }, (_, i) => <option key={i} value={i + 1}>{i + 1}장</option>)}
                 </select></div>
@@ -215,12 +216,12 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
           {makeError?.problems && <Problems problems={makeError.problems} />}
           <div className="run-buttons image-actions">
             <button type="button" className="krds-btn medium primary" disabled={!!busy || !scene.en.trim() || !engine?.["사용 가능"]} onClick={make}>{busy === "image" ? "만드는 중" : made ? "다시 만들기" : "그림 만들기"}</button>
-            <button type="button" className="krds-btn medium secondary" disabled={!scene.en.trim()} onClick={async () => setDone((await copyText(scene.en)) ? "모델에 보내는 장면 글을 복사했습니다." : "복사하지 못했습니다.")}>장면 글 복사</button>
+            <button type="button" className="krds-btn medium secondary" disabled={!scene.en.trim()} onClick={async () => setDone((await copyText(scene.en)) ? "영어 장면을 복사했습니다." : "복사하지 못했습니다.")}>영어 장면 복사</button>
           </div>
         </div>
         <div className="gen-work-right" aria-live="polite">
-          {busy === "image" && <div className="gen-preview is-loading"><Spinner label="서버의 모델이 그림을 만드는 중입니다. 컴퓨터에 따라 몇 분이 걸릴 수 있습니다" /></div>}
-          {!made && busy !== "image" && <p className="meta">장면을 고친 뒤 [그림 만들기]를 누르면 여기에 그림이 보입니다.</p>}
+          {busy === "image" && <div className="gen-preview is-loading"><Spinner label="서버의 이미지 모델이 그림을 만드는 중입니다. 서버 성능에 따라 몇 분이 걸릴 수 있습니다" /></div>}
+          {!made && busy !== "image" && <p className="meta">장면을 수정한 뒤 [그림 만들기]를 누르면 여기에 그림이 표시됩니다.</p>}
           {made && (<>
             <Problems notes={made.notes} />
             <ul className="gen-pictures">
@@ -228,31 +229,31 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
                 <li key={one.seed} className={pick === i ? "is-picked" : undefined}>
                   <img src={dataUrl(one.png)} alt={`만든 그림 ${i + 1}`} />
                   <button type="button" className={`krds-btn small ${pick === i ? "primary" : "secondary"}`} aria-pressed={pick === i} onClick={() => setPick(i)}>
-                    {pick === i ? "고른 그림" : "이 그림 고르기"}<span className="sr-only"> {i + 1}</span></button>
+                    {pick === i ? "선택한 그림" : "이 그림 선택"}<span className="sr-only"> {i + 1}</span></button>
                 </li>
               ))}
             </ul>
-            <p className="meta gen-sent">모델({made.model})에 보낸 글: <span lang="en">{made.prompt}</span></p>
+            <p className="meta gen-sent">이미지 모델({made.model})에 보낸 내용: <span lang="en">{made.prompt}</span></p>
           </>)}
       {image && (<>
-      <h3 className="form-section-title gen-mark-title">받기 전에 확인할 것</h3>
+      <h3 className="form-section-title gen-mark-title">내려받기 전 확인 사항</h3>
       {!seen && <Spinner label="그림을 확인하는 중" />}
       {seen?.error && <PageAlert kind="danger">{seen.error}</PageAlert>}
       {seen && !seen.error && (<>
         <PageAlert kind={seen.충분 ? "success" : "warning"}>
-          {seen.width}×{seen.height}px, 가로 {seen.width_mm}mm에 놓으면 {seen.dpi} DPI입니다.
-          {seen.충분 ? "" : ` 300 DPI가 되려면 가로 ${seen["300 DPI 폭"]}mm 이하로 놓거나, 원고에 넣은 뒤 업스케일링으로 화질을 높여야 합니다.`}
+          {seen.width}×{seen.height}px, 가로 {seen.width_mm}mm 기준 {seen.dpi} DPI입니다.
+          {seen.충분 ? "" : ` 300 DPI가 되려면 가로 ${seen["300 DPI 폭"]}mm 이하로 넣거나, 원고에 넣은 뒤 업스케일링으로 화질을 높여야 합니다.`}
         </PageAlert>
         {similar && (similar["닮은 그림"].length === 0
-          ? <p className="form-hint">{similar.범위} {similar["대조한 그림"]}장과 견주어 닮은 그림을 찾지 못했습니다.</p>
+          ? <p className="form-hint">{similar.범위} {similar["대조한 그림"]}장과 비교했습니다. 유사한 그림을 찾지 못했습니다.</p>
           : (<>
-            <PageAlert kind="warning">이미지 저작권 DB에 닮은 그림이 있습니다. 같은 그림이거나 지나치게 닮았는지 직접 보고 판단해 주세요.</PageAlert>
+            <PageAlert kind="warning">이미지 저작권 DB에 유사한 그림이 있습니다. 같은 그림이거나 지나치게 비슷한지 직접 확인해 주세요.</PageAlert>
             <ul className="gen-similar">
               {similar["닮은 그림"].map((entry) => (
                 <li key={entry.id}>
                   <img src={canManage ? api.images.fileUrl(entry.id) : api.images.recommendableFileUrl(entry.id)} alt={entry.title || "제목 없는 그림"} loading="lazy" />
                   <div><strong>{entry.title || "제목 없음"}</strong>
-                    <span className="meta">{ASSET_LABEL[entry.kind] || "종류 없음"}, {entry.방법}{entry.거리 > 0 ? ` 거리 ${entry.거리}` : ""}, 점수 {entry.점수}, {entry.확정 ? "기관 확정" : "확정 전"}</span></div>
+                    <span className="meta">{ASSET_LABEL[entry.kind] || "종류 없음"}, {METHOD_LABEL[entry.방법] || entry.방법}, 유사도 {entry.점수}, {entry.확정 ? "기관 확정" : "확정 전"}</span></div>
                 </li>
               ))}
             </ul>
@@ -265,10 +266,10 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
             </div>
           ))}
         </div>
-        <p className="form-hint">세 가지를 모두 확인해야 내려받거나 이미지 저작권 DB에 올릴 수 있습니다. 하나라도 아니면 장면을 고쳐 다시 만들어 주세요.</p>
+        <p className="form-hint">세 가지를 모두 확인해야 내려받거나 이미지 저작권 DB에 등록할 수 있습니다. 하나라도 해당하지 않으면 장면을 수정해 다시 만들어 주세요.</p>
       </>)}
 
-      <h3 className="form-section-title gen-mark-title">원고에 붙일 표기</h3>
+      <h3 className="form-section-title gen-mark-title">원고 표기 문구</h3>
       <div className="gen-mark-fields is-four">
         <div className="gen-field"><label htmlFor="gen-title">제목</label>
           <input id="gen-title" type="text" className="krds-input" maxLength={40} value={mark.title} onChange={(e) => setMark({ ...mark, title: e.target.value })} /></div>
@@ -283,11 +284,11 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
       {marking?.lines && (
         <div className="recommend-credit gen-mark-lines">
           <code>{marking.lines.map((line) => <span key={line}>{line}</span>)}</code>
-          <button type="button" className="krds-btn small secondary" onClick={async () => setDone((await copyText(marking.lines.join("\n"))) ? "표기 줄을 복사했습니다." : "복사하지 못했습니다.")}>표기 줄 복사</button>
+          <button type="button" className="krds-btn small secondary" onClick={async () => setDone((await copyText(marking.lines.join("\n"))) ? "표기 문구를 복사했습니다." : "복사하지 못했습니다.")}>표기 문구 복사</button>
         </div>
       )}
       {marking?.note && <p className="form-hint">{marking.note}</p>}
-      <p className="form-hint">서약서에 붙일 결과물 현황은 그림을 원고에 넣은 뒤 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.</p>
+      <p className="form-hint">서약서에 첨부할 결과물 현황은 그림을 원고에 넣은 뒤 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.</p>
       {done && <PageAlert kind="success">{done}</PageAlert>}
       <div className="run-buttons image-actions">
         <button type="button" className="krds-btn medium primary" disabled={!allConfirmed} onClick={save}>그림(PNG) 내려받기</button>
@@ -295,19 +296,19 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
 
       {hasDb && canManage && (<>
         <h3 className="form-section-title gen-mark-title">이미지 저작권 DB</h3>
-        <p className="form-hint">이 그림을 이미지 저작권 DB에 올립니다. 분류는 집필진 제작, AI 활용 유형은 {usage}로 도구와 일자와 함께 적습니다. 권리 귀속과 재사용 범위는 정하지 않으므로 확정하기 전에는 추천에 나오지 않습니다.</p>
+        <p className="form-hint">이 그림을 이미지 저작권 DB에 등록합니다. 분류는 ‘집필진 제작’, AI 활용 유형은 {usage}로 도구, 일자와 함께 기록합니다. 권리 귀속과 재사용 범위는 정하지 않습니다. 확정하기 전에는 추천 목록에 나오지 않습니다.</p>
         <div className="gen-mark-fields">
           <div className="gen-field"><label htmlFor="gen-module">모듈 코드 <span className="meta">(선택)</span></label>
             <input id="gen-module" type="text" className="krds-input" maxLength={30} value={store.module} placeholder="예: LM1203020201_24v3" onChange={(e) => setStore({ ...store, module: e.target.value })} /></div>
           {needsName && (
-            <div className="gen-field"><label htmlFor="gen-by">올리는 사람</label>
+            <div className="gen-field"><label htmlFor="gen-by">등록자</label>
               <input id="gen-by" type="text" className="krds-input" maxLength={80} value={store.by} onChange={(e) => setStore({ ...store, by: e.target.value })} /></div>
           )}
         </div>
         {store.error && <PageAlert kind="danger">{store.error}</PageAlert>}
-        {store.result && <PageAlert kind="success">{store.result["새 그림"] ? "이미지 저작권 DB에 올렸습니다." : "같은 그림이 이미 있어 정보를 합쳤습니다."} <Link to="/images">이미지 저작권 DB</Link>에서 권리 정보를 확인하고 확정해 주세요.</PageAlert>}
+        {store.result && <PageAlert kind="success">{store.result["새 그림"] ? "이미지 저작권 DB에 등록했습니다." : "같은 그림이 이미 있어 정보를 합쳤습니다."} <Link to="/images">이미지 저작권 DB</Link>에서 권리 정보를 확인하고 확정해 주세요.</PageAlert>}
         <div className="run-buttons image-actions">
-          <button type="button" className="krds-btn medium secondary" disabled={!allConfirmed || store.busy || !mark.tool.trim() || (needsName && !store.by.trim())} onClick={register}>{store.busy ? "올리는 중" : "이미지 저작권 DB에 올리기"}</button>
+          <button type="button" className="krds-btn medium secondary" disabled={!allConfirmed || store.busy || !mark.tool.trim() || (needsName && !store.by.trim())} onClick={register}>{store.busy ? "등록하는 중" : "이미지 저작권 DB에 등록"}</button>
         </div>
       </>)}
       </>)}
