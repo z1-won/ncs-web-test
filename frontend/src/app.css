@@ -1241,7 +1241,7 @@ main [hidden] { display: none !important; }
 /* ── 이미지 AI 생성(/ai-generate) ── 후보 카드, 문단과 그림을 나란히 놓는 작업 영역, 칸 입력 */
 .generate-page .gen-types { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3) var(--krds-gap-7); }
 .generate-page .gen-kind { margin-top: var(--krds-gap-5); max-width: 32rem; }
-.gen-candidates { display: grid; gap: var(--krds-gap-6); margin: var(--krds-gap-5) 0 0; padding: 0; list-style: none; }
+.gen-candidates { display: grid; grid-template-columns: repeat(auto-fill, minmax(30rem, 1fr)); align-items: start; gap: var(--krds-gap-6); margin: var(--krds-gap-5) 0 0; padding: 0; list-style: none; }
 .gen-candidate { padding: var(--krds-padding-7) var(--krds-padding-8); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-large1); background: var(--krds-light-color-surface-white); }
 .gen-candidate.is-rejected { background: var(--krds-light-color-surface-gray-subtler); }
 .gen-candidate h3 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3); margin: 0 0 var(--krds-gap-4); font-size: var(--krds-pc-font-size-heading-xsmall); }
@@ -1251,12 +1251,15 @@ main [hidden] { display: none !important; }
 .gen-preview img { display: block; max-width: 100%; height: auto; border: 1px solid var(--krds-light-color-border-gray-light); background: #fff; }
 .gen-preview figcaption { margin-top: var(--krds-gap-2); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
 .gen-preview.is-loading { display: flex; align-items: center; justify-content: center; min-height: 8rem; border: 1px dashed var(--krds-light-color-border-gray-light); }
-.gen-notes { margin: 0 0 var(--krds-gap-4); padding: 0; list-style: none; }
-.gen-notes li { margin-top: var(--krds-gap-2); padding: var(--krds-padding-3) var(--krds-padding-5); border-radius: var(--krds-radius-medium2); overflow-wrap: anywhere; font-size: var(--krds-pc-font-size-body-small); }
-.gen-notes li.is-problem { background: var(--krds-light-color-surface-danger-subtler); }
-.gen-notes li.is-omission { background: var(--krds-light-color-surface-warning-subtler); }
-.gen-notes li strong { margin-right: var(--krds-gap-2); }
-.gen-notes li .meta { display: block; color: var(--krds-light-color-text-subtle); }
+.gen-notes { display: grid; gap: var(--krds-gap-2); margin: 0 0 var(--krds-gap-4); }
+.gen-note { padding: var(--krds-padding-4) var(--krds-padding-5); border-radius: var(--krds-radius-medium2); overflow-wrap: anywhere; font-size: var(--krds-pc-font-size-body-small); }
+.gen-note.is-problem { background: var(--krds-light-color-surface-danger-subtler); }
+.gen-note.is-omission { background: var(--krds-light-color-surface-warning-subtler); }
+.gen-note p { margin: 0; }
+.gen-note p + p { margin-top: var(--krds-gap-1); }
+.gen-note strong { margin-right: var(--krds-gap-2); }
+.gen-note ul { margin: var(--krds-gap-2) 0 0; padding-left: 1.8rem; }
+.gen-note li .meta { display: block; color: var(--krds-light-color-text-subtle); }
 .gen-work { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--krds-gap-8); align-items: start; margin-top: var(--krds-gap-5); }
 .gen-work-right { position: sticky; top: 11rem; }      /* 붙어 있는 머리(로고 줄 + 메뉴 + 하위 메뉴) 아래 */
 .gen-source { margin: 0 0 var(--krds-gap-5); padding: var(--krds-padding-5) var(--krds-padding-6); border-left: 4px solid var(--krds-light-color-border-gray); background: var(--krds-light-color-surface-gray-subtler); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -1295,3 +1298,31 @@ main [hidden] { display: none !important; }
   .gen-work-right { position: static; }
   .gen-items li, .gen-mark-fields { grid-template-columns: minmax(0, 1fr); }
 }
+/* 이미지 AI 생성: 단계 표시, 접힌 단계의 한 줄 요약, 후보 카드(작은 그림, 누르면 넓게), 지적된 입력 칸, 받기 앞의 확인 */
+.gen-steps { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3) var(--krds-gap-6); margin: var(--krds-gap-7) 0 0; padding: 0; list-style: none; color: var(--krds-light-color-text-subtle); }
+.gen-steps li { display: inline-flex; align-items: center; gap: var(--krds-gap-2); }
+.gen-steps li + li::before { content: ""; width: 2.4rem; height: 1px; margin-right: var(--krds-gap-4); background: var(--krds-light-color-border-gray); }
+.gen-step-no { display: inline-flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.4rem; border: 1px solid var(--krds-light-color-border-gray); border-radius: 50%; font-size: var(--krds-pc-font-size-body-small); }
+.gen-steps li.is-now { color: var(--krds-light-color-text-basic); font-weight: var(--krds-font-weight-bold); }
+.gen-steps li.is-now .gen-step-no { border-color: var(--krds-light-color-button-primary-fill); background: var(--krds-light-color-button-primary-fill); color: var(--krds-light-color-text-inverse-static); }
+.gen-steps li.is-done { color: var(--krds-light-color-text-basic); }
+.gen-steps li.is-done .gen-step-no { border-color: var(--krds-light-color-border-gray-dark); background: var(--krds-light-color-surface-gray-subtler); }
+.gen-folded { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-3) var(--krds-gap-5); margin: var(--krds-gap-4) 0; padding: var(--krds-padding-4) var(--krds-padding-6); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-gray-subtler); }
+.gen-folded > span { min-width: 0; overflow-wrap: anywhere; }
+.gen-folded strong { margin-right: var(--krds-gap-2); }
+.gen-candidate.is-wide { grid-column: 1 / -1; }
+.gen-candidate.is-picked { border-color: var(--krds-light-color-button-primary-fill); }
+.gen-candidate h3 { justify-content: space-between; }
+.gen-candidate-badges { display: inline-flex; flex-wrap: wrap; gap: var(--krds-gap-2); }
+.gen-preview-toggle { display: block; width: 100%; padding: 0; border: 0; background: none; text-align: left; cursor: zoom-in; }
+.gen-preview-toggle[aria-expanded="true"] { cursor: zoom-out; }
+.gen-preview-toggle img { width: 100%; max-height: 22rem; object-fit: contain; }
+.gen-preview-toggle[aria-expanded="true"] img { max-height: none; }
+.gen-preview-toggle .meta { display: block; margin-top: var(--krds-gap-2); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); text-decoration: underline; }
+.gen-preview-toggle:focus-visible { outline: 0.2rem solid var(--krds-light-color-border-primary); outline-offset: 0.2rem; }
+.generate-page .krds-input[data-flagged] { border-color: var(--krds-light-color-border-danger); background: var(--krds-light-color-surface-danger-subtler); }
+.gen-flag { margin: 0; color: var(--krds-light-color-text-danger); font-size: var(--krds-pc-font-size-body-small); overflow-wrap: anywhere; }
+.gen-agree-here { margin-top: var(--krds-gap-5); padding: var(--krds-padding-5) var(--krds-padding-6); border: 1px solid var(--krds-light-color-border-warning, var(--krds-light-color-border-gray)); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-warning-subtler); }
+.gen-agree-here p { margin: 0 0 var(--krds-gap-3); }
+.gen-agree-here a { text-decoration: underline; }
+.gen-items li { align-items: start; }
