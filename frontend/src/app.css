@@ -1262,8 +1262,9 @@ main [hidden] { display: none !important; }
 .gen-note li .meta { display: block; color: var(--krds-light-color-text-subtle); }
 .gen-work { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--krds-gap-8); align-items: start; margin-top: var(--krds-gap-5); }
 .gen-work-right { position: sticky; top: 11rem; }      /* 붙어 있는 머리(로고 줄 + 메뉴 + 하위 메뉴) 아래 */
-.gen-source { margin: 0 0 var(--krds-gap-5); padding: var(--krds-padding-5) var(--krds-padding-6); border-left: 4px solid var(--krds-light-color-border-gray); background: var(--krds-light-color-surface-gray-subtler); white-space: pre-wrap; overflow-wrap: anywhere; }
-.gen-source strong { display: block; margin-bottom: var(--krds-gap-2); }
+/* 문단 상자 — 이미지 추천의 정보 상자(.recommend-context)와 같은 규격: 안쪽 여백 6, 1px 테두리, 모서리 medium2, 옅은 회색 바탕 */
+.gen-source { margin: 0 0 var(--krds-gap-5); padding: var(--krds-padding-6); border: 1px solid var(--krds-light-color-divider-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-gray-subtler); white-space: pre-wrap; overflow-wrap: anywhere; }
+.gen-source strong { display: block; margin-bottom: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); }
 .gen-editor { display: grid; gap: var(--krds-gap-4); margin-bottom: var(--krds-gap-5); }
 .gen-field { display: grid; gap: var(--krds-gap-2); min-width: 0; }
 .gen-field label { font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-bold); }
