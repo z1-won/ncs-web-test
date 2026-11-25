@@ -2,8 +2,9 @@
 // 생성형 AI(글)는 그림이 아니라 '명세'(칸과 글)를 쓰고, 그림은 서버의 코드가 그린다. 그래서 글자가 깨지지 않고 같은 명세는 같은 그림이 된다.
 // 유의 안내(AI를 쓰기 전에 확인할 것)를 확인하고 [확인하고 시작하기]를 눌러야 문단 입력부터의 화면이 열린다 — 확인 전에는 안내만 보인다.
 // 흐름: 유의 안내 확인 → 문단 입력 → 후보(검사 통과/탈락과 까닭) → 하나를 골라 칸을 고침 → 그림(PNG)과 표기 줄 받기.
-// 화면 위의 단계 표시가 지금 어디인지 보이고, 지나온 단계(유의 안내, 문단, 후보)는 한 줄 요약으로 접힌다([다시 보기]로 편다).
-// 후보는 작은 그림의 카드로 나란히 놓아 견주고, 그림을 누르면 그 카드만 넓게 편다.
+// 화면 위의 단계 표시가 지금 어디인지 보이고, 지나온 단계(유의 안내, 문단, 후보)는 단계 표시 아래의 요약 묶음 한 곳에 한 줄씩 접힌다(단추로 다시 편다).
+// 후보는 작은 그림의 카드로 나란히 놓아 견주고, 가로로 긴 그림(순서 도표 등)은 카드를 한 줄 전체로 편다.
+// 고치고 받기는 두 열이다: 왼쪽에 문단과 입력 칸, 오른쪽에 그림과 그 아래의 표기, 받기, 이미지 저작권 DB. 주 단추는 구역(열)의 오른쪽 끝에 둔다.
 // 검사는 둘이다. 근거(명세의 글이 문단에 있는 말인가): AI 후보는 지적이 있으면 쓰지 않는다. 사람이 고친 명세에는 알림만 보인다.
 //                빠진 내용(문단의 금지·주의, 한 줄에서 빠진 말): 알림만 보인다. 칸의 자리가 맞는지는 규칙이 보지 못하므로 사람이 문단과 견주어 본다.
 // 그래프의 값은 문단에 적힌 수여야 하고, 그 수가 같은 문장에서 그 범주 이름 뒤에 적혀 있어야 한다(뒤바뀐 값을 잡는다).
@@ -37,6 +38,7 @@ const KIND_LABEL = { sequence: "순서", cycle: "순환", structure: "구성", c
 const FAMILY = { diagram: ["sequence", "cycle", "structure", "compare"], graph: ["bar", "line", "pie"] };
 const GRAPH_KINDS = FAMILY.graph;
 const isGraph = (kind) => GRAPH_KINDS.includes(kind);
+const LONG = 3.5;      // 그림의 가로/세로 비가 이보다 크면(가로 한 줄 순서 도표 등) 작은 카드에서 글자를 읽을 수 없다 — 카드를 한 줄 전체로 편다
 const ASSET_LABEL = { photo: "사진", illustration: "삽화", table: "도표", graph: "그래프", screenshot: "화면 캡처", other: "기타" };
 const BLANK = {
   sequence: { kind: "sequence", title: "", items: [{ label: "", note: "" }, { label: "", note: "" }, { label: "", note: "" }] },
@@ -283,6 +285,7 @@ export default function GeneratePage() {
   const [done, setDone] = useState(null);
   const [view, setView] = useState({ notice: true, input: true, candidates: true });      // 단계를 펴 두었는가(지나온 단계는 접는다)
   const [wide, setWide] = useState(null);                     // 넓게 편 후보의 순번
+  const [aspects, setAspects] = useState({});                 // 후보 그림의 가로/세로 비 — 가로로 긴 그림은 카드를 한 줄 전체로 편다
   const [picked, setPicked] = useState(null);                 // 고른 후보의 순번(생성형 AI 후보에서 골랐을 때)
   const [picture, setPicture] = useState(null);               // 사진·삽화 요청 { key, kind, text, criterion, focus, width, manual } — PictureMaker에 넘긴다
   const [pictureStage, setPictureStage] = useState(3);        // PictureMaker가 알려 주는 단계(3 후보, 4 고치기, 5 받기)
@@ -322,7 +325,7 @@ export default function GeneratePage() {
     setBusy(false);
     if (!ok) { setError(message); return; }
     setAsked({ text: form.text, criterion: form.criterion });
-    setResult(data); setWide(null); setPicked(null);
+    setResult(data); setWide(null); setPicked(null); setAspects({});
     setDraft(null); setShown(null);
     setView((old) => ({ ...old, input: false, candidates: true }));
     setTimeout(() => document.getElementById("generate-candidates")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
@@ -402,7 +405,7 @@ export default function GeneratePage() {
   const STEPS = ["확인", "문단", "후보", "고치기", "받기"];
   return (
     <>
-    <Header anchors={entered && (result || draft || picture) ? ANCHORS : []} hasHistory={false} hasResult={false} />
+    <Header anchors={entered && (result || draft || picture) ? ANCHORS.filter((anchor) => picture ? true : anchor.id === "generate-input" ? view.input : anchor.id === "generate-candidates" ? result && view.candidates : draft) : []} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page image-db-page generate-page">
       <h1 className="page-title">이미지 AI 생성</h1>
       <p className="page-desc">
@@ -421,12 +424,27 @@ export default function GeneratePage() {
           </li>
         ))}
       </ol>
+      <p className="gen-step-now" aria-hidden="true">{step}/{STEPS.length}단계 <strong>{STEPS[step - 1]}</strong></p>
 
       {entered ? (
-        <p className="gen-folded">
-          <span><strong>AI를 쓰기 전에 확인할 것</strong> 확인했습니다.</span>
-          <button type="button" className="krds-btn small tertiary" onClick={() => setView((old) => ({ ...old, notice: true }))}>다시 보기</button>
-        </p>
+        <ul className="gen-trail" aria-label="지나온 단계">
+          <li>
+            <span><strong>확인</strong> ‘AI를 쓰기 전에 확인할 것’을 확인했습니다.</span>
+            <button type="button" className="krds-btn small tertiary" onClick={() => setView((old) => ({ ...old, notice: true }))}>다시 보기</button>
+          </li>
+          {ready && !view.input && (
+            <li>
+              <span><strong>문단</strong> {type.label}{FAMILY[form.type] && form.kind ? `(${KIND_LABEL[form.kind]})` : ""}, {form.text.trim() ? `${form.text.trim().length}자: ${form.text.trim().slice(0, 60)}${form.text.trim().length > 60 ? "…" : ""}` : "문단 없이 직접 적는 중"}</span>
+              <button type="button" className="krds-btn small tertiary" onClick={() => setView((old) => ({ ...old, input: true }))}>문단 고치기</button>
+            </li>
+          )}
+          {result && !view.candidates && (
+            <li>
+              <span><strong>후보</strong> {candidates.length}개 가운데 {result.usable}개 통과, {picked !== null ? `후보 ${picked + 1}을 골랐습니다.` : "고르지 않고 직접 적는 중입니다."}</span>
+              <button type="button" className="krds-btn small tertiary" onClick={() => setView((old) => ({ ...old, candidates: true }))}>후보 다시 보기</button>
+            </li>
+          )}
+        </ul>
       ) : (
       <section className="ai-notice" aria-labelledby="gen-notice-title">
         <h2 className="section-title" id="gen-notice-title">AI를 쓰기 전에 확인할 것</h2>
@@ -453,16 +471,10 @@ export default function GeneratePage() {
       )}
       {ready && entered && status["글꼴 안내"] && <PageAlert kind="warning">그림을 그릴 수 없습니다. {status["글꼴 안내"]}</PageAlert>}
 
-      {ready && entered && (
+      {ready && entered && view.input && (
       <section id="generate-input" className="nav-anchor image-section">
         <h2 className="section-title">문단</h2>
-        {!view.input && (
-          <p className="gen-folded">
-            <span><strong>{type.label}{FAMILY[form.type] && form.kind ? `(${KIND_LABEL[form.kind]})` : ""}</strong> {form.text.trim() ? `문단 ${form.text.trim().length}자: ${form.text.trim().slice(0, 60)}${form.text.trim().length > 60 ? "…" : ""}` : "문단 없이 직접 적는 중"}</span>
-            <button type="button" className="krds-btn small tertiary" onClick={() => setView((old) => ({ ...old, input: true }))}>문단 고치기</button>
-          </p>
-        )}
-        <form className="fieldset review-form is-sectioned" onSubmit={ask} hidden={!view.input}>
+        <form className="fieldset review-form is-sectioned" onSubmit={ask}>
           <div className="form-section" role="radiogroup" aria-labelledby="gen-type-title">
             <h3 className="form-section-title" id="gen-type-title">만들 그림의 유형</h3>
             <div className="krds-check-area gen-types">
@@ -536,37 +548,31 @@ export default function GeneratePage() {
         <PictureMaker key={picture.key} request={picture} engine={status["그림 엔진"]} hasDb={!!status.DB} canManage={canManage} needsName={authStatus === "open"} onStage={setPictureStage} />
       )}
 
-      {entered && result && (
+      {entered && result && view.candidates && (
       <section id="generate-candidates" className="nav-anchor image-section" aria-live="polite">
         <h2 className="section-title">후보<span className="meta"> {candidates.length}개 가운데 {result.usable}개 통과</span></h2>
-        {!view.candidates && (
-          <p className="gen-folded">
-            <span>{picked !== null ? <><strong>후보 {picked + 1}</strong>을 골랐습니다.</> : "후보를 고르지 않고 직접 적는 중입니다."}</span>
-            <button type="button" className="krds-btn small tertiary" onClick={() => setView((old) => ({ ...old, candidates: true }))}>후보 다시 보기</button>
-          </p>
-        )}
-        <div hidden={!view.candidates}>
         <p className="recommend-method">
           <span className={`krds-badge ${result.method === "llm" ? "bg-light-information" : "bg-light-gray"}`}>{result.method === "llm" ? `생성형 AI${result.model ? `(${result.model})` : ""}` : "생성형 AI 사용 안 함"}</span>
           <span className="meta"> {plainReason(result.note)}{result.reason ? ` 생성형 AI의 설명: ${result.reason}` : ""}</span>
         </p>
         <ul className="gen-candidates">
           {candidates.map((entry, i) => (
-            <li key={i} className={`gen-candidate${entry.ok ? "" : " is-rejected"}${wide === i ? " is-wide" : ""}${picked === i ? " is-picked" : ""}`}>
+            <li key={i} className={`gen-candidate${entry.ok ? "" : " is-rejected"}${wide === i || aspects[i] > LONG ? " is-wide" : ""}${picked === i ? " is-picked" : ""}`}>
               <h3><span className="gen-candidate-name">후보 {i + 1}{entry.spec && <span className="meta"> {KIND_LABEL[entry.spec.kind]}{entry.spec.title ? `, ${entry.spec.title}` : ""}</span>}</span>
                 <span className="gen-candidate-badges">
                   <span className={`krds-badge ${entry.ok ? "bg-light-success" : "bg-light-danger"}`}>{entry.ok ? "검사 통과" : "쓰지 않음"}</span>
                   {entry.ok && entry.omissions?.length > 0 && <span className="krds-badge bg-light-warning">빠진 듯한 내용 {entry.omissions.length}건</span>}
                 </span></h3>
               {entry.ok && <Preview spec={entry.spec} width={form.width} alt={`후보 ${i + 1} ${entry.spec.title || KIND_LABEL[entry.spec.kind]}`}
-                                    compact={wide !== i} />}
+                                    compact={wide !== i && !(aspects[i] > LONG)}
+                                    onDrawn={(blob, summary) => { if (summary) setAspects((old) => (old[i] ? old : { ...old, [i]: summary.width / summary.height })); }} />}
               {entry.error && <p className="form-hint-invalid">{entry.error}</p>}
               <Notes problems={entry.problems} omissions={entry.ok ? entry.omissions : []} />
               {entry.spec && (
                 <div className="gen-candidate-actions">
                   <button type="button" className={`krds-btn small ${entry.ok ? "primary" : "tertiary"}`} onClick={() => open(entry.spec, "ai", i)}>
                     {entry.ok ? "이 후보 고르기" : "고쳐서 쓰기"}<span className="sr-only"> 후보 {i + 1}</span></button>
-                  {entry.ok && (
+                  {entry.ok && !(aspects[i] > LONG) && (
                     <button type="button" className="krds-btn small tertiary" aria-expanded={wide === i} onClick={() => setWide(wide === i ? null : i)}>
                       {wide === i ? "작게 보기" : "크게 보기"}<span className="sr-only"> 후보 {i + 1}</span></button>
                   )}
@@ -576,7 +582,6 @@ export default function GeneratePage() {
           ))}
         </ul>
         {candidates.length === 0 && result.method === "llm" && <PageAlert kind="info">이 문단에서는 {type.label}(으)로 나타낼 것을 찾지 못했습니다. 유형이나 종류를 바꾸거나 칸을 직접 적어 그릴 수 있습니다.</PageAlert>}
-        </div>
       </section>
       )}
 
@@ -609,9 +614,6 @@ export default function GeneratePage() {
               {isGraph(shown.spec.kind) && <p className="form-hint">그래프의 값이 문단의 수와 같은지, 범주와 값이 제자리에 있는지 문단과 견주어 확인해 주세요.</p>}
               {shown.problems.length > 0 && <p className="form-hint">문단에 없는 말은 집필자가 직접 고쳐 넣은 것이라면 그대로 쓸 수 있습니다. 생성형 AI가 넣은 말이라면 문단의 말로 바꿔 주세요.</p>}
             </>) : <p className="meta">칸을 적고 [그리기]를 누르면 여기에 그림이 보입니다.</p>}
-          </div>
-        </div>
-
         {shown && (<>
         <h3 className="form-section-title gen-mark-title">원고에 붙일 표기</h3>
         {origin === "manual" ? (
@@ -690,6 +692,9 @@ export default function GeneratePage() {
         </>)}
         </>)}
         </>)}
+          </div>
+        </div>
+
       </section>
       )}
     </main>

@@ -1259,7 +1259,6 @@ main [hidden] { display: none !important; }
 .gen-notes .page-alert ul { margin: var(--krds-gap-2) 0 0; padding-left: var(--krds-padding-6); list-style: disc; }
 .gen-notes .page-alert li .meta { display: block; color: var(--krds-light-color-text-subtle); }
 .gen-work { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--krds-gap-8); align-items: start; margin-top: var(--krds-gap-5); }
-.gen-work-right { position: sticky; top: calc(var(--header-height, 14.4rem) + var(--krds-gap-5)); }      /* 붙어 있는 머리 아래 — 앵커와 같은 --header-height */
 /* 문단 상자 — 이미지 추천의 정보 상자(.recommend-context)와 같은 규격: 안쪽 여백 6, 1px 테두리, 모서리 medium2, 옅은 회색 바탕 */
 .gen-source { margin: 0 0 var(--krds-gap-5); padding: var(--krds-padding-6); border: 1px solid var(--krds-light-color-divider-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-gray-subtler); white-space: pre-wrap; overflow-wrap: anywhere; }
 .gen-source strong { display: block; margin-bottom: var(--krds-gap-2); font-size: var(--krds-pc-font-size-body-small); }
@@ -1276,9 +1275,6 @@ main [hidden] { display: none !important; }
 .gen-mark-title { margin-top: var(--krds-gap-8); padding-top: var(--krds-padding-7); border-top: 1px solid var(--krds-light-color-divider-gray-light); }
 .gen-mark-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(13rem, 1fr) minmax(0, 1fr); gap: var(--krds-gap-5); max-width: 56rem; margin-bottom: var(--krds-gap-4); }
 .gen-mark-fields .krds-input { min-width: 0; }
-.generate-page #generate-edit > .form-hint { margin: var(--krds-gap-3) 0; }
-.generate-page #generate-edit > .run-buttons { display: flex; flex-wrap: wrap; gap: var(--krds-gap-4); margin-top: var(--krds-gap-5); }
-.generate-page #generate-edit > .run-buttons .krds-btn { flex: 0 0 auto; width: auto; }
 .generate-page .review-form .form-section { display: grid; gap: var(--krds-gap-6); }
 .generate-page .review-form .form-section > .form-section-title { margin-bottom: 0; }
 .gen-mark-lines code span { display: block; }
@@ -1291,20 +1287,16 @@ main [hidden] { display: none !important; }
 .gen-similar .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
 @media (max-width: 1023px) {
   .gen-work { grid-template-columns: minmax(0, 1fr); }
-  .gen-work-right { position: static; }
   .gen-items li, .gen-mark-fields { grid-template-columns: minmax(0, 1fr); }
 }
 /* 이미지 AI 생성: 단계 표시, 접힌 단계의 한 줄 요약, 후보 카드(작은 그림, 누르면 넓게), 지적된 입력 칸, 받기 앞의 확인 */
-.gen-folded { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-3) var(--krds-gap-5); margin: var(--krds-gap-4) 0; padding: var(--krds-padding-4) var(--krds-padding-6); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-gray-subtler); }
-.gen-folded > span { min-width: 0; overflow-wrap: anywhere; }
-.gen-folded strong { margin-right: var(--krds-gap-2); }
 .gen-candidate.is-wide { grid-column: 1 / -1; }
 .gen-candidate.is-picked { border-color: var(--krds-light-color-border-primary); }
 .gen-candidate h3 { justify-content: space-between; }
 .gen-candidate-badges { display: inline-flex; flex-wrap: wrap; gap: var(--krds-gap-2); }
 .gen-items li { align-items: start; }
 /* 이미지 AI 생성: KRDS 구성요소를 그대로 쓰는 곳의 자리 잡기 — 단계 표시기(.krds-step-wrap), 입력 표(.tbl), 오류 입력(.is-error), 알림(.page-alert) */
-.gen-steps { max-width: 56rem; margin: var(--krds-gap-7) 0 0; padding: 0; }
+.gen-steps { margin: var(--krds-gap-7) 0 0; padding: 0; }
 .gen-table th, .gen-table td { min-width: 8rem; padding: var(--krds-padding-2); }
 .gen-table caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 .gen-preview.is-thumb img { width: 100%; max-height: 22rem; object-fit: contain; }
@@ -1336,3 +1328,24 @@ main [hidden] { display: none !important; }
   .generate-page #generate-input .run-buttons { flex-wrap: wrap; }
   .generate-page #generate-input .run-buttons .krds-btn { flex: 1 1 100%; width: 100%; }
 }
+/* 이미지 AI 생성의 배치(2026-11-25 점검): 지나온 단계의 요약 묶음, 좁은 화면의 현재 단계 글, 주 단추는 구역(열)의 오른쪽 끝, 고치고 받기의 오른쪽 열 */
+.gen-trail { margin: var(--krds-gap-5) 0 0; padding: 0; list-style: none; border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-medium2); background: var(--krds-light-color-surface-gray-subtler); }
+.gen-trail li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-2) var(--krds-gap-5); padding: var(--krds-padding-3) var(--krds-padding-6); }
+.gen-trail li + li { border-top: 1px solid var(--krds-light-color-divider-gray-light); }
+.gen-trail li > span { flex: 1 1 24rem; min-width: 0; overflow-wrap: anywhere; }
+.gen-trail strong { display: inline-block; min-width: 4rem; margin-right: var(--krds-gap-3); }
+.gen-step-now { display: none; margin: var(--krds-gap-2) 0 0; color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.gen-step-now strong { color: var(--krds-light-color-text-basic); }
+@media (max-width: 767px) { .gen-step-now { display: block; } }      /* KRDS 단계 표시기가 이름을 숨기는 폭 */
+.generate-page .gen-work .run-buttons, .ai-notice .gen-enter { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--krds-gap-3) var(--krds-gap-5); }
+.generate-page .gen-work .run-buttons { margin-top: var(--krds-gap-5); }
+.generate-page .gen-work .run-buttons .krds-btn, .generate-page .gen-work .run-buttons .krds-btn.primary { flex: 0 0 auto; width: auto; }
+.ai-notice .gen-enter .krds-btn { order: 2; }
+.gen-work-right > .form-hint { margin: var(--krds-gap-3) 0; }
+.gen-work-right > .gen-mark-title:first-of-type { margin-top: var(--krds-gap-7); }
+.gen-work-right .gen-mark-fields { max-width: none; }
+@media (max-width: 599px) {
+  .generate-page .gen-work .run-buttons .krds-btn, .generate-page .gen-work .run-buttons .krds-btn.primary, .ai-notice .gen-enter .krds-btn { flex: 1 1 100%; width: 100%; }
+  .ai-notice .gen-enter .krds-btn { order: 0; }
+}
+@media (max-width: 767px) { .gen-steps { margin-bottom: 0; } .gen-step-now { margin-bottom: var(--krds-gap-5); } }

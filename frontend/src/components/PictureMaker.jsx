@@ -234,9 +234,6 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
             </ul>
             <p className="meta gen-sent">모델({made.model})에 보낸 글: <span lang="en">{made.prompt}</span></p>
           </>)}
-        </div>
-      </div>
-
       {image && (<>
       <h3 className="form-section-title gen-mark-title">받기 전에 확인할 것</h3>
       {!seen && <Spinner label="그림을 확인하는 중" />}
@@ -314,6 +311,9 @@ export default function PictureMaker({ request, engine, hasDb, canManage, needsN
         </div>
       </>)}
       </>)}
+        </div>
+      </div>
+
     </section>
     )}
     </>
