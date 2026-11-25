@@ -22,10 +22,13 @@ const MODE_OPTIONS = [
 const MODE_WORD = { modified: "수정 보완함", generated: "생성함" };
 const stem = (name) => (name || "원고").replace(/\.[^.]+$/, "");
 
+const STEPS = ["확인", "원고", "표기", "내려받기"];      // 단계 표시 — 확인 사항을 확인해야 원고를 올릴 수 있다
+
 export default function AiImagePage() {
   usePageTitle("이미지 AI 보완");
   const [notice, setNotice] = useState(null);          // { 근거, 항목: [{제목, 내용}] }
   const [agreed, setAgreed] = useState(false);
+  const [entered, setEntered] = useState(false);       // 확인 사항에 체크하고 [확인하고 시작하기]를 눌렀는가 — 그 전에는 확인 사항만 보인다(이미지 AI 생성과 같다)
   const [manuscript, setManuscript] = useState(null);
   const [printCopy, setPrintCopy] = useState(null);
   const [busy, setBusy] = useState(null);              // "read" | "preview" | "marked" | "results"
@@ -89,6 +92,7 @@ export default function AiImagePage() {
     setPicked((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
   }
 
+  const step = !entered ? 1 : !data ? 2 : done ? 4 : 3;
   return (
     <>
     <Header anchors={[]} hasHistory={false} hasResult={false} />
@@ -104,8 +108,25 @@ export default function AiImagePage() {
         문단을 바탕으로 도표와 표를 새로 만드는 일은 <Link to="/ai-generate">이미지 AI 생성</Link>에서 합니다.
       </p>
 
+      <ol className="krds-step-wrap gen-steps" aria-label="진행 단계">
+        {STEPS.map((label, i) => (
+          <li key={label} className={i + 1 === step ? "active" : i + 1 < step ? "done" : undefined} aria-current={i + 1 === step ? "step" : undefined}>
+            <span><span className="step">{i + 1}단계{i + 1 < step && <span className="sr-only"> 마침</span>}</span><span className="step-tit">{label}</span></span>
+          </li>
+        ))}
+      </ol>
+      <p className="gen-step-now" aria-hidden="true">{step}/{STEPS.length}단계 <strong>{STEPS[step - 1]}</strong></p>
+
+      {entered ? (
+        <ul className="gen-trail" aria-label="완료한 단계">
+          <li>
+            <span><strong>확인</strong> ‘AI 사용 전 확인 사항’을 확인했습니다.</span>
+            <button type="button" className="krds-btn small tertiary" onClick={() => setEntered(false)}>다시 보기</button>
+          </li>
+        </ul>
+      ) : (
       <section className="ai-notice" aria-labelledby="ai-notice-title">
-        <h2 className="section-title" id="ai-notice-title">AI를 쓰기 전에 확인할 것</h2>
+        <h2 className="section-title" id="ai-notice-title">AI 사용 전 확인 사항</h2>
         {notice ? (
           <>
             <ol className="ai-notice-list">
@@ -115,11 +136,18 @@ export default function AiImagePage() {
           </>
         ) : <p className="meta">안내를 불러오는 중입니다.</p>}
         <div className="krds-form-check">
-          <input type="checkbox" id="ai-agreed" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+          <input type="checkbox" id="ai-agreed" checked={agreed} disabled={!notice} onChange={(e) => setAgreed(e.target.checked)} />
           <label htmlFor="ai-agreed">위 내용을 확인했습니다</label>
         </div>
+        <div className="gen-enter">
+          <button type="button" className="krds-btn large primary" disabled={!agreed} aria-describedby="ai-enter-hint"
+                  onClick={() => { setEntered(true); window.scrollTo({ top: 0 }); }}>{manuscript || data ? "계속하기" : "확인하고 시작하기"}</button>
+          <p className="form-hint" id="ai-enter-hint">확인해야 다음 단계로 넘어갈 수 있습니다.{manuscript || data ? " 작업하던 내용은 그대로 유지됩니다." : ""}</p>
+        </div>
       </section>
+      )}
 
+      {entered && (<>
       <form className="fieldset review-form is-sectioned" onSubmit={read}>
         <div className="form-section" role="group" aria-labelledby="ai-files-title">
         <h2 className="form-section-title" id="ai-files-title">원고</h2>
@@ -212,7 +240,6 @@ export default function AiImagePage() {
           <div className="upscale-bar">
             {error && <PageAlert kind="danger">{error}</PageAlert>}
             {done && !error && <PageAlert kind="success">{done}</PageAlert>}
-            {!agreed && <PageAlert kind="warning">위의 ‘AI를 쓰기 전에 확인할 것’을 확인해 주세요. 확인해야 내려받을 수 있습니다.</PageAlert>}
             <div className="bar-row">
               <span className="meta" role="status">고른 그림 <strong>{picked.size}</strong>개{marks.length > 0 && !marksReady ? ". 도구와 일자를 적어 주세요" : ""}</span>
               <div className="bar-actions">
@@ -234,6 +261,7 @@ export default function AiImagePage() {
           {shown && <Preview shown={shown} />}
         </section>
       )}
+      </>)}
       <TopButton />
     </main>
     <Footer />
