@@ -10,6 +10,7 @@ from psycopg.rows import dict_row
 
 from ncs_core.ncs_catalog import catalog
 from ncs_recommend import context as recommend_context
+from ncs_recommend import describe as recommend_describe
 from ncs_recommend import embed as recommend_embed
 from ncs_recommend import rank as recommend_rank
 
@@ -28,7 +29,12 @@ SELECT v.*, a.source_id, a.upscaled_width_px, a.upscaled_height_px,
        (SELECT coalesce(array_agg(DISTINCT p.module_code), '{{}}') FROM image_placements p WHERE p.image_id = v.id) AS module_codes,
        (SELECT coalesce(jsonb_agg(jsonb_build_object('unit_code', l.unit_code, 'element_code', l.element_code,
                                                      'criterion_no', l.criterion_no)), '[]'::jsonb)
-          FROM image_ncs_links l WHERE l.image_id = v.id) AS links
+          FROM image_ncs_links l WHERE l.image_id = v.id) AS links,
+       (SELECT coalesce(jsonb_agg(jsonb_build_object('engine', d.engine, 'kind', d.kind, 'scene', d.scene, 'objects', d.objects,
+                                                     'visible_text', d.visible_text, 'keywords', d.keywords,
+                                                     'checked', d.checked_by IS NOT NULL)
+                                  ORDER BY (d.checked_by IS NOT NULL) DESC, d.created_at DESC), '[]'::jsonb)
+          FROM image_descriptions d WHERE d.image_id = v.id) AS descriptions
 FROM v_image_recommendable v JOIN image_assets a ON a.id = v.id
 WHERE {RECOMMENDABLE}
 ORDER BY v.confirmed_at DESC, v.id
@@ -66,6 +72,11 @@ def candidates(dsn: str, model: str = "") -> list[dict]:
         # 공공누리인데 출처 문구가 비어 있으면 URL·검색일·유형으로 만든다(적재 때와 같은 문구)
         if not item.get("credit_line") and item.get("license_scheme") == "kogl" and row.get("source_url") and row.get("retrieved_on"):
             item["credit_line"] = kogl_import.credit_line(row["source_url"], row["retrieved_on"], row["kogl_type"])
+        # 그림 설명(설명 색인): 엔진이 여럿이면 낱말은 모두 모으고, 화면에는 사람이 확인한 것 → 최근 것 하나를 보인다
+        descriptions = item.pop("descriptions", None) or []
+        item["described_terms"] = list(dict.fromkeys(term for one in descriptions for term in recommend_describe.terms(one)))
+        item["described"] = ({"engine": descriptions[0]["engine"], "kind": descriptions[0]["kind"], "scene": descriptions[0]["scene"],
+                              "checked": descriptions[0]["checked"]} if descriptions else None)
         out.append(item)
     return out
 
@@ -85,6 +96,53 @@ def criterion_text(unit_code: str, criterion_no: str) -> tuple[str, str]:
     return "", detail.get("name", "")
 
 
+def rank_pool(pool: list[dict], analyzed, *, embedder=None, unit_code: str = "", criterion_no: str = "", limit: int = 10,
+              signals=recommend_rank.SIGNALS, fusion: str = "sum", vectors: dict | None = None) -> dict:
+    """후보(pool)를 문맥(analyzed)으로 줄 세운다 → {'items', 'used', 'model', 'queries', 'covered', 'note'}.
+
+    그림과 견줄 글: 요약(없으면 핵심어) 한 줄 + 지점마다의 짧은 묘사. 모델의 글 길이 상한이 짧아 문단을 통째로 넣지 않는다.
+    vectors: 글 → 벡터의 캐시(같은 문단을 방식만 바꿔 여러 번 줄 세울 때 — scripts/probe/recommend_compare.py). 주면 여기에 채운다.
+    """
+    signals = frozenset(signals)
+    covered = sum(1 for row in pool if row.get("vector"))
+    summary_text = analyzed.summary or " ".join(analyzed.keywords)
+    wanted = "visual" in signals and embedder is not None and covered > 0
+    cache = vectors if vectors is not None else {}
+
+    def vector_of(text: str):
+        if not text:
+            return None
+        if text not in cache:
+            cache[text] = embedder.text(text)
+        return cache[text]
+
+    query_vector = vector_of(summary_text) if wanted else None
+    point_vectors = [vector_of(point.description) for point in analyzed.points] if wanted and "points" in signals else []
+    has_query = query_vector is not None or any(vector is not None for vector in point_vectors)
+    # 그림 유사도의 바탕: 관련 없는 글들의 벡터. 그림마다 이것과 견주어 문맥과 뚜렷이 맞는지 본다(rank.visual_scores)
+    reference = recommend_embed.reference_vectors(embedder) if has_query else []
+    items = recommend_rank.rank(pool, analyzed, unit_code=unit_code, criterion_no=criterion_no, limit=limit, query_vector=query_vector,
+                                reference_vectors=reference, point_vectors=point_vectors, signals=signals, fusion=fusion)
+    used = has_query and len(reference) >= recommend_rank.VISUAL_MIN_REFS
+    if used:
+        note = "" if covered == len(pool) else f"후보 {len(pool)}건 중 {covered}건만 그림 벡터가 있습니다(python -m ncs_service.images.image_embed로 채웁니다)"
+    elif "visual" not in signals:
+        note = "그림 유사도를 쓰지 않도록 골랐습니다"
+    elif embedder is None:
+        note = recommend_embed.why_not()
+    elif not covered:
+        note = "그림 벡터가 아직 없습니다 — python -m ncs_service.images.image_embed로 채웁니다"
+    else:
+        note = "그림과 견줄 글이 없거나 바탕 글의 벡터를 만들지 못해 그림 유사도를 쓰지 않았습니다"
+    queries = [text for text, vector in [(summary_text, query_vector), *zip([point.description for point in analyzed.points], point_vectors)]
+               if vector is not None]
+    for item in items:           # 화면에 필요 없는 긴 글은 뺀다
+        item.pop("contexts", None)
+        item.pop("described_terms", None)
+    return {"items": items, "used": used, "model": embedder.name if embedder else "", "queries": queries if used else [],
+            "covered": covered, "note": note}
+
+
 def recommend(dsn: str, *, text: str = "", unit_code: str = "", criterion_no: str = "", limit: int = 10,
               use_llm: bool = True, asker=None, embedder=None) -> dict:
     """문단·수행준거에 맞는 그림 추천. 반환: {'context', 'criterion', 'embedding', 'items', 'total_candidates', 'guidance'}.
@@ -102,34 +160,25 @@ def recommend(dsn: str, *, text: str = "", unit_code: str = "", criterion_no: st
     pool = candidates(dsn, embedder.name if embedder else "")
     truncated = len(pool) > MAX_CANDIDATES
     pool = pool[:MAX_CANDIDATES]
-    covered = sum(1 for row in pool if row.get("vector"))
-    # 그림과 견줄 글: AI 요약이 있으면 그것, 없으면 핵심어. 모델의 글 길이 상한이 짧아 문단을 통째로 넣지 않는다
-    query = analyzed.summary or " ".join(analyzed.keywords)
-    query_vector = embedder.text(query) if embedder and covered and query else None
-    # 그림 유사도의 바탕: 관련 없는 글들의 벡터. 그림마다 이것과 견주어 문맥과 뚜렷이 맞는지 본다(rank.visual_scores)
-    reference = recommend_embed.reference_vectors(embedder) if query_vector is not None else []
-    items = recommend_rank.rank(pool, analyzed, unit_code=unit_code, criterion_no=criterion_no, limit=limit, query_vector=query_vector,
-                                reference_vectors=reference)
-    used = query_vector is not None and len(reference) >= recommend_rank.VISUAL_MIN_REFS
-    if used:
-        note = "" if covered == len(pool) else f"후보 {len(pool)}건 중 {covered}건만 그림 벡터가 있습니다(python -m ncs_service.images.image_embed로 채웁니다)"
-    elif embedder is None:
-        note = recommend_embed.why_not()
-    elif not covered:
-        note = "그림 벡터가 아직 없습니다 — python -m ncs_service.images.image_embed로 채웁니다"
-    else:
-        note = "그림과 견줄 글이 없거나 바탕 글의 벡터를 만들지 못해 그림 유사도를 쓰지 않았습니다"
-    for item in items:           # 화면에 필요 없는 긴 글은 뺀다
-        item.pop("contexts", None)
+    ranked = rank_pool(pool, analyzed, embedder=embedder, unit_code=unit_code, criterion_no=criterion_no, limit=limit)
+    items = ranked["items"]
+    guidance = recommend_rank.guidance(items) if pool else _no_candidates(dsn)
+    if analyzed.needs_image is False:
+        guidance = [f"이 문단은 그림이 꼭 필요해 보이지 않습니다(생성형 AI의 판단: {analyzed.needs_reason or '그림으로 나타낼 대상이 없음'}). "
+                    "아래 추천은 참고로만 보세요.", *guidance]
     return {
         "context": {"summary": analyzed.summary, "keywords": analyzed.keywords, "method": analyzed.method,
-                    "model": analyzed.model, "note": analyzed.note, "dropped": analyzed.dropped},
+                    "model": analyzed.model, "note": analyzed.note, "dropped": analyzed.dropped,
+                    "points": [point.as_dict() for point in analyzed.points],
+                    "needs_image": analyzed.needs_image, "needs_reason": analyzed.needs_reason},
         "criterion": {"unit_code": unit_code, "unit_name": unit_name, "criterion_no": criterion_no, "text": criterion,
                       "found": bool(criterion) if criterion_no else bool(unit_name)},
         "items": items,
-        "embedding": {"used": used, "model": embedder.name if embedder else "", "query": query if used else "", "covered": covered, "note": note},
+        "embedding": {"used": ranked["used"], "model": ranked["model"], "query": " / ".join(ranked["queries"]), "queries": ranked["queries"],
+                      "covered": ranked["covered"], "note": ranked["note"]},
+        "described": sum(1 for row in pool if row.get("described")),
         "total_candidates": len(pool),
         "truncated": truncated,
         # 후보가 하나도 없으면 '맞는 그림이 없다'가 아니라 '확정된 그림이 없다'가 원인이다 — AI 생성으로 안내하지 않는다
-        "guidance": recommend_rank.guidance(items) if pool else _no_candidates(dsn),
+        "guidance": guidance,
     }

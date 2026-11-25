@@ -743,6 +743,14 @@ button.ncs-item:hover, button.ncs-item:focus-visible { background: var(--krds-li
 }
 .krds-date-field .krds-calendar-area .calendar-wrap .calendar-body .calendar-table-wrap .calendar-tbl th { padding-bottom: var(--krds-padding-4); }   /* 제목이 있던 자리(4.6rem)를 비워 두지 않는다 */
 .recommend-context .recommend-method + .recommend-method { margin-top: var(--krds-gap-2); }
+/* 이미지 추천: 그림이 필요한 지점 목록, 그림마다의 선택 단추, 선택 기록 내려받기 */
+.recommend-points { margin-top: var(--krds-gap-3); }
+.recommend-points ol { margin: var(--krds-gap-2) 0 0; padding: 0; list-style: none; }
+.recommend-points li { padding: var(--krds-padding-1) 0; overflow-wrap: anywhere; }
+.recommend-points .point-text { margin-right: var(--krds-gap-2); font-weight: var(--krds-font-weight-bold); }
+.recommend-points .meta { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
+.recommend-choice { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3); margin-top: var(--krds-gap-4); }
+.recommend-export { margin-top: var(--krds-gap-5); }
 
 /* LLM 검토(형식 검수 아래) — 수정해야 하는 부분 · 근거 · 수정 방안 */
 .llm-review { margin-top: var(--krds-gap-9); padding-top: var(--krds-gap-7); border-top: 1px solid var(--krds-light-color-border-gray-light); }

@@ -292,5 +292,171 @@ class VisualTests(unittest.TestCase):
             self.assertIn("모델 없음", embed.why_not())
 
 
+def points_answer(points, keywords=("접수대", "예약 내역"), **more):
+    return lambda system, user: {"data": {"summary": "접수대에서 예약을 확인한다.", "keywords": list(keywords), "points": points, **more}, "model": "m"}
+
+
+FRONT = "고객이 호텔에 도착하면 접수대에서 직원이 예약 내역을 확인하고 투숙 절차를 안내한다."
+
+
+class PointTests(unittest.TestCase):
+    """질의 구조화 — 문단을 '그림이 필요한 지점'으로 나눈다(짧은 묘사, 그림 종류, 문단 속 낱말, 다른 이름)."""
+
+    def test_points_are_grounded_in_the_text(self):
+        made = ctx.analyze(FRONT, asker=points_answer([
+            {"description": "  호텔 접수대와   직원 ", "kind": "PHOTO", "terms": ["접수대", "직원", "수영장"], "aliases": ["프런트 데스크", "접수대", "예약 내역", "x"]},
+            {"description": "수영장", "kind": "photo", "terms": ["수영장"], "aliases": ["풀장"]},          # 문단에 있는 낱말이 없다
+            {"description": "", "kind": "movie", "terms": ["투숙 절차"], "aliases": []},
+            "글", {"terms": "접수대"}]))
+        self.assertEqual([p.as_dict() for p in made.points], [
+            {"description": "호텔 접수대와 직원", "kind": "photo", "terms": ["접수대", "직원", "예약 내역"], "aliases": ["프런트 데스크"]},
+            {"description": "투숙 절차", "kind": "", "terms": ["투숙 절차"], "aliases": []}],
+            "문단에 없는 낱말은 terms에서 빼고, 문단에 있는 다른 이름은 terms로 옮기고, 문단과 이어지지 않는 지점은 버린다")
+        self.assertIsNone(made.needs_image)
+
+    def test_limits_and_needs_image(self):
+        many = [{"description": "가" * 200, "kind": "photo", "terms": ["접수대"], "aliases": ["a1", "b2", "c3", "d4", "e5", "f6"]}] * 6
+        made = ctx.analyze(FRONT, asker=points_answer(many, needs_image=False, needs_reason="정의만  나열한  문단"))
+        self.assertEqual((len(made.points), len(made.points[0].description), len(made.points[0].aliases)),
+                         (ctx.MAX_POINTS, ctx.MAX_DESCRIPTION, ctx.MAX_ALIASES))
+        self.assertEqual((made.needs_image, made.needs_reason), (False, "정의만 나열한 문단"))
+        self.assertEqual(ctx.analyze(FRONT, use_llm=False).points, [], "규칙으로 뽑으면 지점이 없다")
+        self.assertIn("points", ctx.SYSTEM)
+
+    def test_alias_matches_score_lower_and_can_be_turned_off(self):
+        made = ctx.analyze(FRONT, asker=points_answer([{"description": "호텔 접수대", "kind": "photo", "terms": ["접수대"], "aliases": ["프런트", "프런트 데스크"]}]))
+        pool = [image("desk", keywords=["프런트 데스크"], captions=["프런트 사진"], kind="photo"), image("hall", keywords=["연회장"])]
+        (item,) = rank.rank(pool, made)
+        self.assertEqual((item["id"], item["matched"], item["matched_alias"], item["point"], item["kind_match"]), ("desk", [], ["프런트"], 0, True))
+        self.assertEqual(item["score"], round(3.0 * rank.ALIAS_FACTOR + rank.KIND_BONUS, 2),
+                         "다른 이름은 낮게 치고, 한 지점의 다른 이름은 여럿이 맞아도 한 번만 치고, 그림 종류가 같으면 조금 더한다")
+        self.assertEqual(rank.rank(pool, made, signals=rank.SIGNALS - {"alias"}), [], "다른 이름을 끄면 낱말이 달라 못 찾는다")
+        (plain,) = rank.rank(pool, made, signals=rank.SIGNALS - {"kind"})
+        self.assertEqual((plain["score"], plain["kind_match"]), (round(3.0 * rank.ALIAS_FACTOR, 2), False))
+
+    def test_described_terms_are_a_lower_field(self):
+        pool = [image("human", keywords=["접수대"]), image("described", described_terms=["접수대", "FRONT"]), image("none")]
+        ranked = rank.rank(pool, context("접수대"))
+        self.assertEqual([(item["id"], item["score"], item["described_matched"]) for item in ranked], [("human", 3.0, []), ("described", 2.0, ["접수대"])],
+                         "그림 설명에서 맞은 낱말은 사람이 단 키워드보다 낮다")
+        self.assertEqual([item["id"] for item in rank.rank(pool, context("접수대"), signals=rank.SIGNALS - {"describe"})], ["human"])
+        both = rank.rank([image("both", keywords=["접수대"], described_terms=["접수대"])], context("접수대"))
+        self.assertEqual((both[0]["score"], both[0]["described_matched"]), (3.0, []), "핵심어마다 가장 높은 칸 하나만 친다")
+
+    def test_each_point_is_compared_with_pictures_on_its_own(self):
+        """요약 한 줄로는 어느 그림도 가리키지 못해도, 지점의 짧은 묘사가 그 그림과 맞으면 찾는다."""
+        made = ctx.Context("요약", ["없는말"], "llm", points=[ctx.Point("연회장", "photo", ["연회장"]), ctx.Point("호텔 접수대", "photo", ["접수대"])])
+        pool = VisualTests().pool()
+        blur = toward(0.17)                                   # 요약: 바탕 글과 같은 쪽 — 아무 그림도 가리키지 않는다
+        ranked = rank.rank(pool, made, query_vector=blur, reference_vectors=VisualTests.REFS, point_vectors=[blur, VisualTests.QUERY])
+        self.assertEqual([(item["id"], item["visual"], item["point"]) for item in ranked], [("same", 1.0, 1)], "둘째 지점의 묘사가 맞았다")
+        self.assertEqual(rank.rank(pool, made, query_vector=blur, reference_vectors=VisualTests.REFS, point_vectors=[blur, VisualTests.QUERY],
+                                   signals=rank.SIGNALS - {"points"}), [], "지점을 끄면 요약으로만 견준다")
+        self.assertEqual(rank.rank(pool, made, query_vector=blur, reference_vectors=VisualTests.REFS, point_vectors=[None, None]), [])
+
+    def test_rank_fusion_orders_by_ranks_not_by_added_points(self):
+        """순위 융합: 글·연결·그림 유사도의 순위를 따로 내어 더한다. 추천할지 말지는 더하기 방식과 같다."""
+        pool = VisualTests().pool()
+        pool[2]["keywords"] = ["객실"]                        # far: 낱말 1위, 그림 유사도 없음
+        pool[3]["keywords"] = ["객실"]                        # no-vector: 낱말 공동 1위
+        pool[0]["links"] = [{"unit_code": "1203020201_24v3", "element_code": "1203020201_24v3.1", "criterion_no": "1.1"}]
+        args = {"query_vector": VisualTests.QUERY, "reference_vectors": VisualTests.REFS, "unit_code": "1203020201", "criterion_no": "1.1"}
+        summed = rank.rank(pool, context("객실"), **args)
+        fused = rank.rank(pool, context("객실"), fusion="rrf", **args)
+        self.assertEqual({item["id"] for item in fused}, {item["id"] for item in summed}, "나오는 그림은 같다")
+        self.assertEqual(fused[0]["id"], "same")
+        self.assertAlmostEqual(fused[0]["score"], round(2000 / (rank.RRF_K + 1), 2), places=2, msg="연결 1위 + 그림 유사도 1위")
+        self.assertEqual(fused[1]["score"], fused[2]["score"], "값이 같으면 같은 순위")
+        with self.assertRaises(ValueError):
+            rank.rank(pool, context("객실"), fusion="max")
+
+
+class DescribeTests(unittest.TestCase):
+    """그림 설명(설명 색인)의 응답 검사 — 모델이 오류 없이 이상한 답을 내는 경우를 거른다."""
+
+    GOOD = {"kind": "photo", "scene": "호텔 로비의 접수대. 긴 나무 카운터 뒤에 로고가 걸려 있다.",
+            "objects": [{"name": "접수대", "detail": "긴 나무 카운터", "position": "가운데"}, {"name": "", "detail": "x", "position": ""}, "글"],
+            "visible_text": ["HOTEL", "HOTEL", " "], "keywords": ["접수대", "프런트 데스크", "접수대", "x", "호텔 로비"]}
+
+    def test_clean_keeps_what_can_be_used(self):
+        from ncs_recommend import describe
+
+        cleaned, problems = describe.clean(self.GOOD)
+        self.assertEqual(problems, [])
+        self.assertEqual(cleaned["objects"], [{"name": "접수대", "detail": "긴 나무 카운터", "position": "가운데"}])
+        self.assertEqual((cleaned["visible_text"], cleaned["keywords"]), (["HOTEL"], ["접수대", "프런트 데스크", "호텔 로비"]))
+        self.assertEqual(describe.terms(cleaned), ["접수대", "프런트 데스크", "호텔 로비", "HOTEL"], "핵심어, 대상 이름, 그림 속 글자를 한 번씩")
+        self.assertEqual(describe.terms(None), [])
+        self.assertEqual((describe.asset_kind("flowchart"), describe.asset_kind("photo"), describe.asset_kind(None)), ("illustration", "photo", None))
+        self.assertEqual(set(describe.SCHEMA["properties"]["kind"]["enum"]), set(describe.KINDS))
+        self.assertIn("보이는 것만", describe.SYSTEM)
+
+    def test_bad_answers_are_rejected_with_reasons(self):
+        from ncs_recommend import describe
+
+        for change, why in (({"scene": "짧다"}, "너무 짧음"), ({"scene": "A hotel lobby with a long wooden counter."}, "한글이 없음"),
+                            ({"kind": "movie"}, "그림 종류"), ({"keywords": ["접수대"]}, "핵심어가 2개 미만")):
+            cleaned, problems = describe.clean({**self.GOOD, **change})
+            self.assertIsNone(cleaned)
+            self.assertTrue(any(why in problem for problem in problems), (change, problems))
+        self.assertEqual(describe.clean("글"), (None, ["설명이 JSON 객체가 아님"]))
+
+
+class EvaluateTests(unittest.TestCase):
+    """정답 세트로 추천을 잰다 — 등급(2 딱 맞음, 1 관련 있음), 권하지 말아야 할 문단의 오탐."""
+
+    def setUp(self):
+        from ncs_recommend import evaluate
+
+        self.evaluate = evaluate
+        self.pool = [{"id": "1", "source_id": "KOGL-0002", "filename": "kogl_0002.jpg"}, {"id": "2", "sha256": "ab" * 32},
+                     {"id": "3", "filename": "hall.png"}, {"id": "4"}]
+
+    def gold(self, *queries):
+        return self.evaluate.load_gold({"queries": list(queries)})
+
+    def test_images_are_named_by_any_label(self):
+        (query,) = self.gold({"text": "문단", "relevant": {"kogl-0002": 2, "AB" * 32: 1, "hall": 1, "없는그림": 2}})
+        self.assertEqual([self.evaluate.grade_of(item, query) for item in self.pool], [2, 1, 1, 0])
+        self.assertEqual(self.evaluate.missing(query, self.pool), ["없는그림"], "후보에 없는 정답은 따로 알린다")
+
+    def test_metrics(self):
+        (query,) = self.gold({"id": "q", "text": "문단", "relevant": {"KOGL-0002": 2, "hall": 1}})
+        best = self.evaluate.score(query, [self.pool[0], self.pool[2], self.pool[3]], self.pool)
+        self.assertEqual((best["hit@1"], best["hit@5"], best["recall@5"], best["ndcg@10"], best["mrr"], best["first"]), (1.0, 1.0, 1.0, 1.0, 1.0, 1))
+        late = self.evaluate.score(query, [self.pool[3], self.pool[2], self.pool[0]], self.pool)
+        self.assertEqual((late["hit@1"], late["hit@5"], late["recall@5"], late["mrr"], late["first"]), (0.0, 1.0, 1.0, 0.5, 2))
+        self.assertTrue(0 < late["ndcg@10"] < 1, "딱 맞는 그림이 뒤에 있으면 깎인다")
+        none = self.evaluate.score(query, [], self.pool)
+        self.assertEqual((none["hit@5"], none["recall@5"], none["ndcg@10"], none["mrr"]), (0.0, 0.0, 0.0, 0.0))
+
+    def test_no_image_queries_count_false_recommendations(self):
+        queries = self.gold({"id": "a", "text": "문단", "relevant": {"KOGL-0002": 2}}, {"id": "b", "text": "용접", "no_image": True},
+                            {"id": "c", "text": "다른 문단", "relevant": {"없는그림": 2}})
+        rows = [self.evaluate.score(queries[0], [self.pool[0]], self.pool), self.evaluate.score(queries[1], [self.pool[1], self.pool[2]], self.pool),
+                self.evaluate.score(queries[2], [self.pool[1]], self.pool)]
+        total = self.evaluate.summarize(rows)
+        self.assertEqual((total["queries"], total["unreachable"], total["hit@1"], total["no_image_queries"], total["no_image_with_recs"], total["false_recs"]),
+                         (1, 1, 1.0, 1, 1, 2), "후보에 정답이 없는 문단은 평균에서 뺀다")
+
+    def test_bad_gold_files_say_where(self):
+        for data, why in (([], "queries"), ({"queries": []}, "하나도"), ({"queries": [{"text": ""}]}, "text"),
+                          ({"queries": [{"text": "a", "relevant": {"x": 3}}]}, "등급"), ({"queries": [{"text": "a"}]}, "no_image"),
+                          ({"queries": [{"text": "a", "no_image": True, "relevant": {"x": 1}}]}, "no_image"),
+                          ({"queries": [{"id": "q", "text": "a", "no_image": True}, {"id": "q", "text": "b", "no_image": True}]}, "겹칩니다")):
+            with self.subTest(why=why), self.assertRaises(self.evaluate.GoldError) as caught:
+                self.evaluate.load_gold(data)
+            self.assertIn(why, str(caught.exception))
+
+    def test_example_gold_file_is_valid(self):
+        import json
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[2] / "docs" / "examples" / "recommend_gold.example.json"
+        queries = self.evaluate.load_gold(json.loads(path.read_text(encoding="utf-8")))
+        self.assertGreaterEqual(len(queries), 15)
+        self.assertGreaterEqual(sum(1 for query in queries if query.no_image), 5, "권하지 말아야 할 문단이 있어야 오탐을 잴 수 있다")
+
+
 if __name__ == "__main__":
     unittest.main()

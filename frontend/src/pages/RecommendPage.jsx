@@ -1,5 +1,9 @@
 // 이미지 추천(REQ-02-011) — 집필 중인 문단·수행준거를 넣으면 이미지 저작권 DB에서 실을 수 있는 그림을 권한다.
 // 추천되는 것은 기관이 확정했고 재사용 범위가 확인된 그림뿐이다(서버의 v_image_recommendable). 서버가 PostgreSQL일 때만 쓸 수 있다.
+// 생성형 AI가 문단을 읽으면 '그림이 필요한 지점'(짧은 묘사, 그림 종류, 문단 속 낱말, 넓힌 말)이 함께 오고, 그림마다 어느 지점에 맞았는지 보인다.
+// 그림 설명(그림을 글로 풀어 둔 것)이 DB에 있으면 그 낱말로도 찾는다 — 사람이 단 키워드와 따로 보인다.
+// 그림마다 [쓸 그림으로 표시]와 [맞지 않음]으로 선택을 남긴다. 선택은 문단 글과 함께 서버 DB에 남아 추천을 재는 정답 세트가 된다
+// (에디터와 직능연 계정은 [선택 기록 내려받기]로 받는다 — scripts/probe/recommend_compare.py가 읽는 형식).
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -10,14 +14,18 @@ import { FileSlot } from "../components/FileSlot.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { usePageTitle } from "../lib/hooks.js";
+import { useCanManage } from "../lib/auth.jsx";
 import { copyText } from "../lib/clipboard.js";
 import { licenseLabel } from "../lib/imageTerms.js";
 
 const ANCHORS = [{ id: "recommend-input", label: "문단과 수행준거" }, { id: "recommend-result", label: "추천 결과" }];
 const LINK_LABEL = { criterion: "같은 수행준거", element: "같은 능력단위요소", unit: "같은 능력단위" };
+const KIND_LABEL = { photo: "사진", illustration: "삽화·도해", diagram: "도해", flowchart: "흐름도", table: "표", graph: "그래프", screenshot: "화면 캡처", other: "기타" };
+const CHOICE_LABEL = { used: "쓸 그림으로 표시함", rejected: "맞지 않음으로 표시함" };
 
 // manuscript: 함께 올린 원고(없으면 null). targets: 그 원고에서 출처 줄이 없는 그림 [{ key, 그림 번호, 그림명 }] — 이 그림의 출처 문구를 그 자리에 넣는다
-function Card({ item, rank, terms, manuscript, targets }) {
+// choice: 이 그림에 남긴 선택(used | rejected | undefined). onChoose(choice): 같은 선택을 다시 누르면 지운다
+function Card({ item, rank, terms, manuscript, targets, points, choice, onChoose }) {
   const [copied, setCopied] = useState(false);
   const [target, setTarget] = useState("");
   const [placing, setPlacing] = useState(false);
@@ -46,12 +54,23 @@ function Card({ item, rank, terms, manuscript, targets }) {
           {item.link_level && <span className="krds-badge bg-light-information">{LINK_LABEL[item.link_level]}</span>}
           {item.low_quality && <span className="krds-badge bg-light-danger">화질 낮음</span>}
           {item.ai_used && <span className="krds-badge bg-light-gray">AI 활용 그림</span>}
+          {item.point != null && points?.[item.point] && <span className="krds-badge bg-light-secondary">지점 {item.point + 1}에 맞음</span>}
+          {choice && <span className={`krds-badge ${choice === "used" ? "bg-light-success" : "bg-light-gray"}`}>{CHOICE_LABEL[choice]}</span>}
         </p>
         <dl className="recommend-facts">
           {item.similarity != null && (
             <div><dt>그림 유사도</dt><dd>{item.similarity.toFixed(3)}<span className="meta">, 바탕보다 {item.visual_z >= 0 ? "+" : ""}{item.visual_z.toFixed(1)}σ, 유사도 점수 {Math.round(item.visual * 100)}%</span></dd></div>
           )}
           <div><dt>맞은 핵심어</dt><dd>{item.matched.length ? item.matched.map((word) => (item.common?.includes(word) ? `${word}(후보 대부분에 있음)` : word)).join(", ") : "-"}<span className="meta">, 점수 {item.score}</span></dd></div>
+          {item.matched_alias?.length > 0 && (
+            <div><dt>넓힌 말로 맞음</dt><dd>{item.matched_alias.join(", ")}<span className="meta">, 문단에 없는 다른 이름이라 낮게 칩니다</span></dd></div>
+          )}
+          {item.described_matched?.length > 0 && (
+            <div><dt>그림 설명에서 맞음</dt><dd>{item.described_matched.join(", ")}<span className="meta">, 그림을 본 모델이 쓴 낱말</span></dd></div>
+          )}
+          {item.described && (
+            <div><dt>그림 설명</dt><dd>{item.described.scene}<span className="meta"> ({KIND_LABEL[item.described.kind] || "종류 없음"}, {item.described.checked ? "사람이 확인함" : `모델이 씀: ${item.described.engine}`})</span></dd></div>
+          )}
           <div><dt>라이선스</dt><dd>{licenseLabel(item, terms)}{item.license_scheme ? <span className="meta">, {item.conditions.length ? item.conditions.join(", ") : "조건 없음"}</span> : null}</dd></div>
           <div><dt>권리 귀속</dt><dd>{terms?.ownership?.[item.ownership] || item.ownership}, 재사용 범위 {terms?.reuse_scope?.[item.reuse_scope] || item.reuse_scope}</dd></div>
           <div><dt>출처</dt><dd>{item.source_org || item.author || "-"}{item.source_url && <>, <a href={item.source_url} target="_blank" rel="noreferrer">원 출처 열기</a></>}</dd></div>
@@ -81,6 +100,12 @@ function Card({ item, rank, terms, manuscript, targets }) {
         )}
         {placed && <PageAlert kind={placed.kind}>{placed.text}</PageAlert>}
         {item.low_quality && <p className="form-hint">화질이 낮습니다. 원고에 실은 뒤 <Link to="/upscale">업스케일링</Link>에서 화질을 높일 수 있습니다.</p>}
+        <div className="recommend-choice">
+          <button type="button" className={`krds-btn small ${choice === "used" ? "primary" : "secondary"}`} aria-pressed={choice === "used"}
+                  onClick={() => onChoose("used")}>{choice === "used" ? "쓸 그림으로 표시함" : "쓸 그림으로 표시"}<span className="sr-only"> {rank}번 그림</span></button>
+          <button type="button" className={`krds-btn small ${choice === "rejected" ? "primary" : "tertiary"}`} aria-pressed={choice === "rejected"}
+                  onClick={() => onChoose("rejected")}>{choice === "rejected" ? "맞지 않음으로 표시함" : "맞지 않음"}<span className="sr-only"> {rank}번 그림</span></button>
+        </div>
       </div>
     </li>
   );
@@ -96,6 +121,11 @@ export default function RecommendPage() {
   const [result, setResult] = useState(null);
   const [manuscript, setManuscript] = useState(null);       // 선택: 추천 그림의 출처 문구를 넣을 원고(hwpx)
   const [figures, setFigures] = useState({ status: "idle", targets: [] });   // 그 원고에서 출처 줄이 없는 그림
+  const [asked, setAsked] = useState(null);                  // 지금 결과를 낸 입력(문단·수행준거) — 선택 기록은 이것과 함께 남긴다
+  const [choices, setChoices] = useState({});                // 그림 id → used | rejected (이 문단에서 남긴 선택)
+  const [choiceError, setChoiceError] = useState(null);
+  const [exported, setExported] = useState(null);            // 선택 기록 내려받기 결과 { kind, text }
+  const canManage = useCanManage();
   const set = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   useEffect(() => {
@@ -125,9 +155,41 @@ export default function RecommendPage() {
     const { ok, data, error: message } = await api.recommend.images(form);
     setBusy(false);
     if (!ok) { setError(message); return; }
+    const sent = { ...form };
     setResult(data);
+    setAsked(sent);
+    setChoices({});
+    setChoiceError(null);
+    api.recommend.myChoices(sent).then((found) => { if (found.ok) setChoices(found.data.choices || {}); });
     requestAnimationFrame(() => document.getElementById("recommend-result")?.scrollIntoView({
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
+  }
+
+  // 같은 선택을 다시 누르면 지운다. 서버가 받은 뒤에만 화면을 바꾼다
+  async function choose(item, rank, choice) {
+    const next = choices[item.id] === choice ? "none" : choice;
+    setChoiceError(null);
+    const { ok, data, error: message } = await api.recommend.choose(asked, item, rank, next);
+    if (!ok) { setChoiceError(message); return; }
+    setChoices((old) => {
+      const copy = { ...old };
+      if (data.choice) copy[item.id] = data.choice; else delete copy[item.id];
+      return copy;
+    });
+  }
+
+  async function exportChoices() {
+    setExported(null);
+    const { ok, data, error: message } = await api.recommend.exportChoices();
+    if (!ok) { setExported({ kind: "danger", text: message }); return; }
+    const { counts, ...gold } = data;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(gold, null, 1)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `추천_선택기록_정답세트_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExported({ kind: "success", text: `문단 ${gold.queries.length}개의 선택 기록을 내려받았습니다(쓸 그림 ${counts.used}건, 맞지 않음 ${counts.rejected}건).` });
   }
 
   const unitError = form.unitCode.trim() && !/\d{10}/.test(form.unitCode) ? "숫자 10자리가 들어 있어야 합니다(예: 1203020201)." : "";
@@ -232,6 +294,22 @@ export default function RecommendPage() {
                   ? `견준 글: “${result.embedding.query}”${result.embedding.note ? ` (${plainReason(result.embedding.note)})` : ""}`
                   : `핵심어와 수행준거 연결로만 찾았습니다. ${plainReason(result.embedding.note)}`}</span>
               </p>
+              {context.points?.length > 0 && (
+                <div className="recommend-points">
+                  <strong>그림이 필요한 지점</strong>
+                  <ol>
+                    {context.points.map((point, index) => (
+                      <li key={index}>
+                        <span className="point-text">{index + 1}. {point.description}</span>
+                        {point.kind && <span className="krds-badge bg-light-gray">{KIND_LABEL[point.kind] || point.kind}</span>}
+                        <span className="meta"> 문단 속 낱말: {point.terms.join(", ")}{point.aliases.length > 0 && ` / 넓힌 말: ${point.aliases.join(", ")}`}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="form-hint">지점의 짧은 묘사는 생성형 AI가 문단을 읽고 쓴 것입니다. 넓힌 말은 문단에 없는 다른 이름이라 맞아도 점수를 낮게 칩니다.</p>
+                </div>
+              )}
+              {result.described > 0 && <p className="form-hint">후보 {result.total_candidates}건 가운데 {result.described}건에 그림 설명이 있어 그 낱말로도 찾았습니다.</p>}
               {context.dropped.length > 0 && <p className="form-hint">생성형 AI가 제시했지만 문단에 없어 쓰지 않은 낱말: {context.dropped.join(", ")}</p>}
               {result.criterion.criterion_no && (result.criterion.found
                 ? <p><strong>수행준거 {result.criterion.criterion_no}</strong> {result.criterion.text}<span className="meta"> ({result.criterion.unit_name})</span></p>
@@ -249,8 +327,23 @@ export default function RecommendPage() {
             {result.truncated && <p className="form-hint">후보가 많아 최근 확정된 {result.total_candidates}건만 보았습니다.</p>}
             {result.items.length > 0 && (
               <ol className="recommend-list">
-                {result.items.map((item, index) => <Card key={item.id} item={item} rank={index + 1} terms={terms} manuscript={manuscript} targets={figures.targets} />)}
+                {result.items.map((item, index) => (
+                  <Card key={item.id} item={item} rank={index + 1} terms={terms} manuscript={manuscript} targets={figures.targets}
+                        points={context.points} choice={choices[item.id]} onChoose={(choice) => choose(item, index + 1, choice)} />
+                ))}
               </ol>
+            )}
+            <PageAlert kind="danger">{choiceError}</PageAlert>
+            {result.items.length > 0 && (
+              <p className="form-hint">
+                [쓸 그림으로 표시]와 [맞지 않음]은 이 문단과 함께 서버에 기록되어 추천을 고치는 자료로 쓰입니다. 같은 단추를 다시 누르면 지워집니다.
+              </p>
+            )}
+            {canManage && (
+              <div className="recommend-export">
+                <button type="button" className="krds-btn small tertiary" onClick={exportChoices}>선택 기록 내려받기(정답 세트 JSON)</button>
+                {exported && <PageAlert kind={exported.kind}>{exported.text}</PageAlert>}
+              </div>
             )}
             {result.items.length > 0 && (
               <p className="form-hint">출처 문구는 ‘복사’해서 원고의 출처 줄에 붙여 넣거나, 위에 원고(hwpx)를 올려 출처 줄이 없는 그림 위에 넣은 사본을 받습니다. 그림을 실은 뒤에는 사진·삽화 수록 현황 목록에도 올려야 합니다.</p>

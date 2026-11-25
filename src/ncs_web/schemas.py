@@ -119,6 +119,19 @@ class DiagramMarkingRequest(BaseModel):
     number: str = Field("", max_length=10, pattern=r"^(\d+-\d*)?$")     # '1-2', 번호를 아직 모르면 '1-' 또는 빈 글
 
 
+class RecommendChoiceRequest(BaseModel):
+    """추천 선택 기록(REQ-02-011). 추천을 돌린 문단·수행준거와 그림, 선택(used 쓸 그림 / rejected 맞지 않음 / none 지움)."""
+    text: str = Field("", max_length=4000)
+    unit_code: str = Field("", max_length=30)
+    criterion_no: str = Field("", max_length=10, pattern=r"^(\d+\.\d+)?$")
+    image_id: str = Field(max_length=40)
+    choice: Literal["used", "rejected", "none"]
+    rank: int | None = Field(None, ge=1, le=100)
+    score: float | None = None
+    by: str = Field("", max_length=80)               # 로그인을 쓰지 않는 서버에서만 쓴다. 로그인했으면 계정 이름이 남는다
+    detail: dict[str, Any] = Field(default_factory=dict)   # 그때의 근거(맞은 핵심어, 유사도 등) — 화면이 보낸 그대로 남긴다
+
+
 class ImageRightsRequest(ImageActionRequest):
     """권리 정보 수정. rights의 모양은 이미지 레코드의 rights와 같다(docs/IMAGE_RECORD.md). null은 그 칸을 비운다."""
     rights: dict[str, Any]

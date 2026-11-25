@@ -16,6 +16,15 @@
   핵심어도 연결도 맞지 않는 그림은, 그림 유사도가 뚜렷이 높을 때(0.5 이상, σ 2.25부터)만 추천한다.
   정부 귀속 + 전체 재사용 자산은 +1 — 비슷하게 맞는 그림 가운데서는 이것이 앞에 온다
   (원고 집필 계약서 제12조, 사진·삽화 제작 계약서 제11조. 관련이 훨씬 높은 다른 그림을 밀어내지는 않는다).
+
+2026-11-23에 더한 것(모두 signals로 켜고 끌 수 있다 — 정답 세트로 방식별 효과를 견주기 위해. scripts/probe/recommend_compare.py):
+  alias     지점(context.Point)의 '다른 이름'이 그림의 글에 있으면 같은 칸 점수의 0.7배. 문단에 없는 넓힌 말이라 낮게 친다.
+  describe  그림 설명(image_descriptions — 그림을 글로 풀어 둔 것)의 핵심어·대상 이름·그림 속 글자에 있으면 2
+            (사람이 단 키워드 3보다 낮다 — 모델이 쓴 것이라 틀릴 수 있다).
+  points    그림 유사도를 요약 한 줄이 아니라 지점의 짧은 묘사마다 따로 재고, 그림마다 가장 높은 것을 쓴다.
+  kind      가장 잘 맞은 지점이 바라는 그림 종류와 그림의 종류가 같으면 +0.5.
+  fusion    'sum'(기본, 위 점수를 더함) / 'rrf'(글·연결·그림 유사도의 순위를 따로 내어 1/(60+순위)를 더함 — 손으로 정한 가중치에
+            덜 기댄다). 어느 쪽이 나은지는 재 본 뒤 정한다. 추천할지 말지(qualified)의 기준은 두 방식이 같다.
 """
 
 import re
@@ -23,7 +32,11 @@ import re
 from .context import Context, squash
 from .embed import cosine
 
-KEYWORD_POINTS = (("keywords", 3.0), ("titles", 2.0), ("contexts", 1.0))
+KEYWORD_POINTS = (("keywords", 3.0), ("titles", 2.0), ("described", 2.0), ("contexts", 1.0))
+ALIAS_FACTOR = 0.7           # 지점의 '다른 이름'(문단에 없는 넓힌 말)이 맞았을 때 곱하는 값
+KIND_BONUS = 0.5             # 지점이 바라는 그림 종류와 그림의 종류가 같을 때
+RRF_K = 60                   # 순위 융합의 상수(Cormack 외 2009의 관례값)
+SIGNALS = frozenset({"keyword", "alias", "describe", "link", "visual", "points", "kind"})
 PRIORITY_BONUS = 1.0
 PRINT_DPI = 300
 LOW_WIDTH_MM = 40            # 300dpi로 가로 40mm도 못 싣는 그림(약 470px 미만)은 '화질 낮음'
@@ -110,20 +123,59 @@ def describe(row: dict) -> dict:
     }
 
 
-def keyword_hits(row: dict, context: Context) -> list[tuple[str, float]]:
-    """그 그림에 맞은 핵심어와 점수 — 핵심어마다 가장 높은 칸 하나, 앞 순위 핵심어일수록 더 쳐 준다."""
-    fields = {"keywords": [squash(k) for k in row.get("keywords") or []],
-              "titles": [squash(t) for t in [row.get("title"), *(row.get("captions") or [])] if t],
-              "contexts": [squash(t) for t in row.get("contexts") or [] if t]}
+def _fields(row: dict, signals: frozenset = SIGNALS) -> dict[str, list[str]]:
+    """그림의 글을 칸별로(squash한 꼴). 'describe'가 꺼져 있으면 그림 설명 칸은 비운다."""
+    return {"keywords": [squash(k) for k in row.get("keywords") or []],
+            "titles": [squash(t) for t in [row.get("title"), *(row.get("captions") or [])] if t],
+            "described": [squash(t) for t in row.get("described_terms") or [] if t] if "describe" in signals else [],
+            "contexts": [squash(t) for t in row.get("contexts") or [] if t]}
+
+
+def _field_points(word: str, fields: dict[str, list[str]]) -> tuple[float, str]:
+    """낱말이 맞은 칸 가운데 가장 높은 것의 (점수, 칸 이름). 안 맞으면 (0, '')."""
+    key = squash(word)
+    if len(key) < 2:
+        return 0.0, ""
+    for name, value in KEYWORD_POINTS:
+        if any(key in text or (len(text) >= 2 and text in key) for text in fields[name]):
+            return value, name
+    return 0.0, ""
+
+
+def _keyword_hits(row: dict, context: Context, signals: frozenset = SIGNALS) -> list[tuple[str, float, str]]:
+    """[(핵심어, 점수, 맞은 칸)] — 핵심어마다 가장 높은 칸 하나, 앞 순위 핵심어일수록 더 쳐 준다."""
+    fields = _fields(row, signals)
     hits = []
     count = len(context.keywords)
     for position, keyword in enumerate(context.keywords):
-        key = squash(keyword)
-        if len(key) < 2:
-            continue
-        points = next((value for name, value in KEYWORD_POINTS if any(key in text or (len(text) >= 2 and text in key) for text in fields[name])), 0.0)
+        points, name = _field_points(keyword, fields)
         if points:
-            hits.append((keyword, points * (1.0 - 0.4 * position / max(count - 1, 1))))
+            hits.append((keyword, points * (1.0 - 0.4 * position / max(count - 1, 1)), name))
+    return hits
+
+
+def keyword_hits(row: dict, context: Context, signals: frozenset = SIGNALS) -> list[tuple[str, float]]:
+    """그 그림에 맞은 핵심어와 점수 — 핵심어마다 가장 높은 칸 하나, 앞 순위 핵심어일수록 더 쳐 준다."""
+    return [(keyword, points) for keyword, points, _ in _keyword_hits(row, context, signals)]
+
+
+def alias_hits(row: dict, context: Context, signals: frozenset = SIGNALS) -> list[tuple[str, float, int]]:
+    """[(다른 이름, 점수, 지점 순번)] — 지점의 '다른 이름'이 그림의 글에 있을 때. **지점마다 가장 높은 것 하나만** 친다:
+    한 지점의 다른 이름들은 같은 대상을 가리키는 말이라(프런트 데스크, 프런트) 여럿이 맞아도 근거는 하나다. 같은 말은 한 번만(먼저 나온 지점)."""
+    fields = _fields(row, signals)
+    hits, seen = [], set()
+    for index, point in enumerate(context.points):
+        best = None
+        for alias in point.aliases:
+            key = squash(alias)
+            if key in seen:
+                continue
+            points, _ = _field_points(alias, fields)
+            if points and (best is None or points > best[1]):
+                best = (alias, points, key)
+        if best is not None:
+            seen.add(best[2])
+            hits.append((best[0], best[1] * ALIAS_FACTOR, index))
     return hits
 
 
@@ -179,41 +231,100 @@ def visual_scores(candidates: list[dict], query_vector: list[float] | None,
     return scores
 
 
+def _best_visual(candidates: list[dict], queries: list[tuple[int | None, list[float]]],
+                 reference_vectors: list[list[float]] | None) -> dict[int, tuple[float, float, float, int | None]]:
+    """글 여러 개(요약, 지점 묘사들)로 그림 유사도를 따로 재어 그림마다 가장 높은 것 — 후보 순번 → (유사도, σ, 가산 비율, 지점 순번|None)."""
+    best: dict[int, tuple[float, float, float, int | None]] = {}
+    for origin, vector in queries:
+        for index, (similarity, z, position) in visual_scores(candidates, vector, reference_vectors).items():
+            if index not in best or (position, z) > (best[index][2], best[index][1]):
+                best[index] = (similarity, z, position, origin)
+    return best
+
+
+def _positions(values: dict[int, float]) -> dict[int, int]:
+    """값이 0보다 큰 것만 높은 순으로 1위부터 — 값이 같으면 같은 순위."""
+    order: dict[int, int] = {}
+    last, place = None, 0
+    for count, (index, value) in enumerate(sorted(((i, v) for i, v in values.items() if v > 0), key=lambda item: -item[1]), 1):
+        if value != last:
+            last, place = value, count
+        order[index] = place
+    return order
+
+
 def rank(candidates: list[dict], context: Context, *, unit_code: str = "", criterion_no: str = "", limit: int = 10,
-         query_vector: list[float] | None = None, reference_vectors: list[list[float]] | None = None) -> list[dict]:
-    """관련 있는 후보만 점수순으로. 각 항목은 후보의 값 + describe() + score·matched·common·link_level·similarity·visual_z·visual.
+         query_vector: list[float] | None = None, reference_vectors: list[list[float]] | None = None,
+         point_vectors: list[list[float] | None] | None = None, signals=SIGNALS, fusion: str = "sum") -> list[dict]:
+    """관련 있는 후보만 점수순으로. 각 항목은 후보의 값 + describe() + score·matched·common·link_level·similarity·visual_z·visual
+    + matched_alias(맞은 '다른 이름')·described_matched(그림 설명에서 맞은 핵심어)·point(가장 잘 맞은 지점 순번|None)·kind_match.
 
     query_vector: 문맥(요약·핵심어)의 임베딩. 후보의 'vector'(그림 임베딩)와 견준다. 없으면 핵심어·연결로만 한다.
+    point_vectors: context.points와 같은 순서의 지점 묘사 임베딩(없는 지점은 None). 'points' 신호가 켜져 있으면 요약과 함께 견주어 가장 높은 것을 쓴다.
     reference_vectors: 관련 없는 글들의 임베딩(embed.reference_vectors). 그림 유사도의 바탕 — 없으면 그림 유사도를 쓰지 않는다.
+    signals: 쓸 신호(SIGNALS의 부분집합). fusion: 'sum' | 'rrf'(모듈 머리 설명).
     """
+    signals = frozenset(signals)
+    if fusion not in ("sum", "rrf"):
+        raise ValueError(f"fusion은 sum 또는 rrf입니다: {fusion}")
     unit = unit_base(unit_code)
     criterion_no = (criterion_no or "").strip()
-    hits = [keyword_hits(row, context) for row in candidates]
-    common = common_keywords(hits)
-    visual = visual_scores(candidates, query_vector, reference_vectors)
+    hits = [_keyword_hits(row, context, signals) if "keyword" in signals else [] for row in candidates]
+    aliases = [alias_hits(row, context, signals) if "alias" in signals else [] for row in candidates]
+    common = common_keywords([[(word, points) for word, points, _ in found] + [(word, points) for word, points, _ in extra]
+                              for found, extra in zip(hits, aliases)])
+    queries: list[tuple[int | None, list[float]]] = []
+    if "visual" in signals:
+        if query_vector:
+            queries.append((None, query_vector))
+        if "points" in signals:
+            queries += [(index, vector) for index, vector in enumerate(point_vectors or []) if vector and index < len(context.points)]
+    visual = _best_visual(candidates, queries, reference_vectors)
     entries = []
     for index, row in enumerate(candidates):
-        level = _link_level(row.get("links") or [], unit, criterion_no)
-        distinct = sum(points for keyword, points in hits[index] if keyword not in common)
-        shared = COMMON_FACTOR * sum(points for keyword, points in hits[index] if keyword in common)
-        relevance = distinct + shared + LINK_POINTS[level]
-        similarity, z, position = visual.get(index, (None, None, 0.0))
+        level = _link_level(row.get("links") or [], unit, criterion_no) if "link" in signals else ""
+        words = [(word, points) for word, points, _ in hits[index]] + [(word, points) for word, points, _ in aliases[index]]
+        distinct = sum(points for word, points in words if word not in common)
+        shared = COMMON_FACTOR * sum(points for word, points in words if word in common)
+        similarity, z, position, origin = visual.get(index, (None, None, 0.0, None))
+        # 가장 잘 맞은 지점: 그림 유사도가 지점 묘사에서 나왔으면 그 지점, 아니면 낱말(문단 속 낱말 → 다른 이름)이 맞은 첫 지점
+        point = origin if position > 0 and origin is not None else None
+        if point is None:
+            matched_keys = {squash(word) for word, _, _ in hits[index]}
+            point = next((n for n, item in enumerate(context.points) if any(squash(term) in matched_keys for term in item.terms)), None)
+        if point is None and aliases[index]:
+            point = aliases[index][0][2]
+        kind_match = bool("kind" in signals and point is not None and context.points[point].kind
+                          and context.points[point].kind == row.get("kind"))
         qualified = distinct > 0 or bool(level) or position >= VISUAL_ALONE
-        entries.append((qualified, relevance, index, level, similarity, z, position))
+        entries.append({"index": index, "qualified": qualified, "text": distinct + shared, "link": LINK_POINTS[level], "level": level,
+                        "similarity": similarity, "z": z, "position": position, "point": point, "kind_match": kind_match})
     # 흔한 핵심어만 맞은 그림은 빼되, 그래서 하나도 안 남으면 그 그림들을 보여 준다(같은 종류의 그림만 든 작은 DB)
-    chosen = [entry for entry in entries if entry[0]] or [entry for entry in entries if entry[1] > 0]
+    chosen = [entry for entry in entries if entry["qualified"]] or [entry for entry in entries if entry["text"] + entry["link"] > 0]
+    if fusion == "rrf":
+        orders = [_positions({entry["index"]: entry[name] for entry in chosen}) for name in ("text", "link", "position")]
     ranked = []
-    for _, relevance, index, level, similarity, z, position in chosen:
+    for entry in chosen:
+        index = entry["index"]
         row = candidates[index]
         extra = describe(row)
-        final = relevance + VISUAL_WEIGHT * position + (PRIORITY_BONUS if extra["priority"] else 0.0)
+        bonus = (PRIORITY_BONUS if extra["priority"] else 0.0) + (KIND_BONUS if entry["kind_match"] else 0.0)
+        if fusion == "rrf":
+            # 순위 융합 점수(×1000)에 정부 귀속·종류 일치를 조금만 더한다 — 이웃한 순위를 뒤집을 만큼만(0.3배)
+            final = 1000 * sum(1.0 / (RRF_K + order[index]) for order in orders if index in order) + 0.3 * bonus
+        else:
+            final = entry["text"] + entry["link"] + VISUAL_WEIGHT * entry["position"] + bonus
         item = {key: value for key, value in row.items() if key != "vector"}
-        matched = [keyword for keyword, _ in hits[index]]
-        ranked.append({**item, **extra, "score": round(final, 2), "matched": matched,
-                       "common": [keyword for keyword in matched if keyword in common], "link_level": level,
+        matched = [word for word, _, _ in hits[index]]
+        matched_alias = [word for word, _, _ in aliases[index]]
+        similarity, z = entry["similarity"], entry["z"]
+        ranked.append({**item, **extra, "score": round(final, 2), "matched": matched, "matched_alias": matched_alias,
+                       "described_matched": [word for word, _, name in hits[index] if name == "described"],
+                       "common": [word for word in [*matched, *matched_alias] if word in common], "link_level": entry["level"],
+                       "point": entry["point"], "kind_match": entry["kind_match"],
                        "similarity": None if similarity is None else round(similarity, 4),
                        "visual_z": None if z is None else round(max(-99.0, min(99.0, z)), 2),
-                       "visual": round(position, 2) if similarity is not None else None})
+                       "visual": round(entry["position"], 2) if similarity is not None else None})
     ranked.sort(key=lambda item: (-item["score"], not item["priority"], item["low_quality"], str(item.get("id"))))
     return ranked[:limit]
 

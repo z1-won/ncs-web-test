@@ -61,6 +61,56 @@
 정부 귀속 가산은 1점이다. 비슷하게 맞는 그림 가운데서는 정부 귀속 자산이 앞에 오지만, 관련이 훨씬 높은 다른 그림을 밀어내지는 않는다.
 점수의 크기는 PoC에서 정한 값이며 정답 세트로 Recall@k·nDCG를 재면서 조정할 대상이다(아직 재지 않았다).
 
+## 질의 구조화, 그림 설명, 선택 기록, 방식 비교 (2026-11-23)
+
+문단을 요약 한 줄과 핵심어 묶음으로 뭉쳐 점수를 더하던 것을 네 군데 넓혔다. 모두 `rank.SIGNALS`의 신호로 켜고 끌 수 있고,
+**어느 것이 얼마나 보태는지는 아직 실제 생성형 AI·임베딩으로 재지 않았다** — 아래 비교 스크립트로 재는 것이 다음 일이다.
+
+**그림이 필요한 지점** (`context.Point`) — 생성형 AI가 문단을 읽을 때 지점을 0~3개 함께 낸다. 지점마다 짧은 묘사(그림에 보일 것만,
+60자 이내), 그림 종류(photo·illustration·table·graph·screenshot), 문단 속 낱말, 다른 이름(문단에 없어도 되는 넓힌 말)이 있다.
+- 문단 속 낱말이 하나도 없는 지점은 버린다. 다른 이름 가운데 문단에 있는 말은 문단 속 낱말로 옮긴다.
+- 그림 유사도는 요약뿐 아니라 **지점의 묘사마다 따로** 재고 그림마다 가장 높은 것을 쓴다(짧은 묘사가 긴 문장보다 잘 가려낸다는 위 측정에 따른 것).
+- 다른 이름이 그림의 글에 있으면 같은 칸 점수의 0.7배. 한 지점의 다른 이름은 여럿이 맞아도 한 번만 친다(같은 대상을 가리키는 말이다).
+- 가장 잘 맞은 지점이 바라는 그림 종류와 그림의 종류가 같으면 +0.5. 결과의 `point`가 그 지점의 순번이다.
+- 문단에 그림이 필요 없다고 보면 `needs_image: false`와 까닭을 낸다. 추천은 그대로 내고 안내 첫 줄에 적는다.
+- 규칙으로 핵심어를 뽑을 때(생성형 AI 없음)는 지점이 없다.
+
+**그림 설명** (`ncs_recommend/describe.py`, `ncs_service/images/image_describe.py`, 표 `image_descriptions`) — 그림을 보는 모델이 그림을
+글(종류, 장면 2~4문장, 대상 7개까지, 그림 속 글자, 핵심어)로 풀어 둔다. 설명의 핵심어·대상 이름·그림 속 글자는 핵심어 맞추기의
+한 칸(`described`, 2점)이 된다 — 사람이 키워드를 달지 않은 그림도 낱말로 찾는다. 설명 글을 임베딩해 뜻으로 견주는 단계는 아직 없다.
+- **그림이 외부로 나간다.** `.env`에 `NCS_DESCRIBE_ENGINE=api`, `LLM_ALLOW_UPLOAD=1`, `LLM_ALLOW_IMAGE_UPLOAD=1`이 모두 있어야 하고(기본 꺼짐),
+  화면이 아니라 운영자가 명령으로 채운다: `python -m ncs_service.images.image_describe [--status] [--scope public|all] [--limit N]`.
+- 보내는 범위의 기본은 `public`(라이선스 체계가 공공누리·CC·만료·기증인 그림만). `all`은 원고에서 온 그림도 보낸다. 비공개 그림은 어느 쪽에서도 보내지 않는다.
+- 모델은 `NCS_DESCRIBE_MODEL`('제공자:모델'), 없으면 그림 검수의 모델(`ncs_figures.vision`). 이 컴퓨터에서 도는 로컬 엔진은 아직 없다.
+- 빈 설명·너무 짧은 장면·목록에 없는 종류·핵심어 2개 미만인 답은 저장하지 않는다. 엔진마다 한 벌이고 이미 있는 설명은 다시 만들지 않는다.
+
+**선택 기록** (`ncs_service/images/image_choices.py`, 표 `recommend_choices`) — 추천된 그림마다 [쓸 그림으로 표시]와 [맞지 않음]을 누르면
+문단, 수행준거, 그림, 선택, 누른 사람, 그때의 순위와 근거가 DB에 남는다. 같은 사람이 같은 문단·같은 그림을 다시 고르면 바뀌고, 같은 단추를
+다시 누르면 지워진다. 추천 대상이 아닌 그림에는 남길 수 없다. `GET /api/recommend/choices/export`(에디터·직능연)가 이것을 아래 정답 세트
+형식으로 내보낸다: 누구든 쓴 그림은 등급 2, 쓴 그림이 없는 문단은 뺀다. **문단 글이 DB에 남는다**(개인정보처리방침에 적었다).
+
+**방식 비교** (`ncs_recommend/evaluate.py`, `scripts/probe/recommend_compare.py`, 시작본 `docs/examples/recommend_gold.example.json`) —
+정답 세트는 문단마다 맞는 그림과 등급(2 딱 맞음, 1 관련 있으나 꼭 맞지 않음), 또는 `no_image`(그림을 권하지 말아야 하는 문단)를 적은 JSON이다.
+그림은 id·sha256·source_id·파일 이름 가운데 아무것으로나 가리킨다.
+
+```
+set -a; source .env; set +a
+python scripts/probe/recommend_compare.py docs/examples/recommend_gold.example.json --out 결과/추천비교 [--no-llm] [--dump 후보.json | --load 후보.json]
+```
+
+신호를 하나씩 더한 일곱 방식(핵심어+연결 → +다른 이름 → +그림 설명 → +그림 유사도(요약) → +그림 유사도(지점) → 모두 → 모두, 순위 융합)의
+hit@1·hit@5·recall@5·nDCG@10·MRR과 '권하지 말아야 할 문단에서 권한 횟수'를 표로 내고, 문단마다 방식별 상위 5장을 나란히 보인다.
+`--dump`로 후보·문맥·벡터를 남기면 `--load`로 DB와 모델 없이 점수 식만 바꿔 다시 잴 수 있다.
+
+순위 융합(`rank(..., fusion="rrf")`)은 글·연결·그림 유사도의 순위를 따로 내어 1/(60+순위)를 더한다. 손으로 정한 가중치(3·2·1, ×6)에 덜
+기대는 방식이지만 화면의 기본은 아직 더하기(`sum`)다 — 견주어 본 뒤 바꾼다.
+
+2026-11-23 확인(시험 DB에 공공누리 사진 8장, **규칙 핵심어만** — 생성형 AI·임베딩·그림 설명 없음, 정답 세트 시작본 17문단):
+hit@1 0.727, hit@5 0.909, nDCG@10 0.824. 신호가 없어 일곱 방식이 모두 같다. 권하지 말아야 할 문단 6개 가운데 3개에서 그림을 권했는데,
+모두 '호텔'처럼 후보 대부분에 있는 낱말만 맞은 경우다('호텔 경영 전략을 수립하고…'에 호텔 사진 5장). 위 '흔한 핵심어'의
+"그래서 추천이 하나도 없으면 그 그림들을 그대로 보여 준다"는 규칙이 원인이다 — 이 규칙을 둘지는 정해야 한다.
+정답 세트 시작본의 등급은 그림을 보고 붙인 초안이라 에디팅 기관의 확인이 필요하다.
+
 ## 그림마다 함께 보여 주는 것
 
 - **범위 확인 필요** — 이용허락 한정 자산이거나 재사용 범위가 '해당 학습모듈 한정'인 그림
@@ -130,16 +180,24 @@ POST /api/recommend/images
 
 `text`와 `unit_code` 중 하나는 있어야 한다. 응답:
 
-- `context` — `summary`, `keywords`, `method`, `model`, `note`, `dropped`
-- `embedding` — `used`, `model`, `query`(그림과 견준 글), `covered`(벡터가 있는 후보 수), `note`
+- `context` — `summary`, `keywords`, `method`, `model`, `note`, `dropped`, `points`(지점: `description`, `kind`, `terms`, `aliases`), `needs_image`, `needs_reason`
+- `embedding` — `used`, `model`, `query`·`queries`(그림과 견준 글: 요약과 지점 묘사들), `covered`(벡터가 있는 후보 수), `note`
+- `described` — 그림 설명이 있는 후보 수
 - `criterion` — 넣은 능력단위·수행준거와 NCS 목록에서 찾은 글
-- `items` — 추천 그림. 권리·출처 정보와 `score`, `matched`, `link_level`, `similarity`, `visual`, `priority`, `scope_check_needed`, `conditions`, `notes`, `credit`, `max_width_mm`, `low_quality`
+- `items` — 추천 그림. 권리·출처 정보와 `score`, `matched`, `matched_alias`(맞은 다른 이름), `described_matched`(그림 설명에서 맞은 핵심어), `described`(그림 설명: `scene`, `kind`, `engine`, `checked`), `point`(가장 잘 맞은 지점 순번), `kind_match`, `link_level`, `similarity`, `visual`, `priority`, `scope_check_needed`, `conditions`, `notes`, `credit`, `max_width_mm`, `low_quality`
 - `guidance` — 추천이 없거나 화질이 낮을 때의 안내
 - 그림 파일은 `GET /api/images/recommendable/{id}/file`
+
+```
+POST /api/recommend/choices        { "text", "unit_code", "criterion_no", "image_id", "choice": "used" | "rejected" | "none", "rank", "score", "detail" }
+POST /api/recommend/choices/mine   { "text", "unit_code", "criterion_no" }  →  { "choices": { "<그림 id>": "used" } }
+GET  /api/recommend/choices/export →  정답 세트(JSON) + counts      (에디터와 직능연 계정만)
+```
 
 ## 하지 않는 것
 
 - **출처 표기 자동 삽입은 출처 줄이 없는 그림에만** — 추천 화면에 원고(hwpx)를 함께 올리면, 추천 그림의 출처 문구를 원고에서 출처 줄이 없는 그림의 캡션 위에 넣은 사본을 내려받는다(`POST /api/ai-image/source`, AI 활용 줄이 있으면 그 위에). 그림 파일 자체를 원고에 넣거나 이미 있는 출처 줄을 바꾸지는 않는다. 집필 화면(원고 편집기)은 이 시스템에 없다.
 - **그림 임베딩이 꺼져 있을 때** — 그림 자체를 보지 않고 DB에 적힌 키워드·제목·캡션·수행준거 연결로만 찾는다. 낱말이 달라도 뜻이 같은 것('프런트' ↔ '접수대')은 찾지 못한다.
-- **그림 설명 자동 생성** — 그림을 보고 설명·키워드를 써 주지는 않는다(벡터로 견줄 뿐이다).
-- **검증 수치** — Recall@k·nDCG, 요약 충실도 85%, 집필자 Likert는 아직 재지 않았다. 확정된 그림과 정답 세트가 있어야 한다.
+- **그림 설명은 기본으로 꺼져 있다** — 켜고 명령으로 채워야 생긴다(그림이 외부로 나간다). 만드는 일은 화면에 없고, 만들어진 설명을 사람이 읽고 고쳐 확인하는 화면만 있다(위 '그림 설명'). 대상 목록(objects)은 화면에서 고치지 않는다.
+- **상위 몇 장을 그림 모델로 다시 보는 재순위, 원고 한 권의 그림 없는 절에 한꺼번에 배정하는 일** — 하지 않는다. 앞의 것은 추천할 때마다 그림이 외부로 나가고 비용이 들며, 뒤의 것은 방식 비교 결과를 본 뒤에 정한다.
+- **검증 수치** — 실제 생성형 AI·임베딩을 켠 방식 비교, 요약 충실도 85%, 집필자 Likert는 아직 재지 않았다. 재는 도구와 정답 세트 시작본은 있다(위). 그림이 사진 8장뿐이라 도해·흐름도에 대해서는 알 수 없다.

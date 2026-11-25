@@ -268,9 +268,18 @@ export const api = {
     load: (files, { checkOnly }) => request("/api/images/load", { method: "POST", body: multipart({ check_only: checkOnly ? "true" : "false" }, files) }),
   },
   // 이미지 추천(REQ-02-011). 문단과 능력단위 코드 중 하나는 있어야 한다. useLlm이 꺼져 있으면 문단을 외부로 보내지 않는다
+  // 선택 기록: 추천된 그림을 '쓸 그림'(used)으로 골랐는지 '맞지 않음'(rejected)으로 보았는지 남긴다(none이면 지움). 문단 글이 서버 DB에 남는다
+  // exportChoices: 선택 기록을 추천 평가용 정답 세트(JSON)로 — 에디터와 직능연 계정만
   recommend: {
     images: ({ text, unitCode, criterionNo, useLlm, limit }) => postJson("/api/recommend/images", {
       text: text || "", unit_code: (unitCode || "").trim(), criterion_no: (criterionNo || "").trim(), use_llm: !!useLlm, limit: limit || 10 }),
+    choose: ({ text, unitCode, criterionNo }, item, rank, choice) => postJson("/api/recommend/choices", {
+      text: text || "", unit_code: (unitCode || "").trim(), criterion_no: (criterionNo || "").trim(), image_id: item.id, choice, rank, score: item.score,
+      detail: { matched: item.matched, matched_alias: item.matched_alias, described_matched: item.described_matched, link_level: item.link_level,
+                visual: item.visual, visual_z: item.visual_z, point: item.point } }),
+    myChoices: ({ text, unitCode, criterionNo }) => postJson("/api/recommend/choices/mine", {
+      text: text || "", unit_code: (unitCode || "").trim(), criterion_no: (criterionNo || "").trim() }),
+    exportChoices: () => request("/api/recommend/choices/export"),
   },
   // 권리 증빙 제출 현황 점검(REQ-02-014). manuscript: 원고 파일, forms: 제출 서류(작성된 한글 양식) 파일들
   // options: { firstReviewOn, submittedOn, transferAuthor, transferMaker, portrait, pledge } + DB 반영용 { save, moduleCode }. 변경한 사람은 서버가 로그인한 계정에서 읽는다
