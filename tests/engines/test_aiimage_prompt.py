@@ -107,6 +107,13 @@ class EngineTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {imagegen.ENGINE_ENV: "cloud"}):
             self.assertIn("알 수 없는 엔진", imagegen.status()["이유"])
 
+    def test_gated_model_error_says_what_to_do(self):
+        error = OSError("black-forest-labs/FLUX.1-schnell is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'")
+        told = imagegen._explain("black-forest-labs/FLUX.1-schnell", error)
+        self.assertIn("hf auth login", told)
+        self.assertIn("https://huggingface.co/black-forest-labs/FLUX.1-schnell", told)
+        self.assertIn("ValueError: x", imagegen._explain("m", ValueError("x")))
+
     def test_runner_gets_consecutive_seeds_and_the_shape(self):
         calls = []
         made = imagegen.generate("a bench", count=3, seed=10, shape="portrait", runner=lambda *args: calls.append(args) or b"png")

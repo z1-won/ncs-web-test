@@ -84,6 +84,18 @@ def _device(torch) -> str:
     return "mps" if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available() else "cpu"
 
 
+def _explain(name: str, error: Exception) -> str:
+    """모델을 못 올린 까닭을 할 일과 함께 적는다. 접근 동의가 필요한 모델(FLUX.1 schnell 등)은 로그인 없이 받으면 '없는 모델'이라고 나온다."""
+    text = f"{type(error).__name__}: {error}"
+    if "not a valid model identifier" in text or "gated" in text.lower() or "401" in text or "403" in text:
+        return (f"모델 {name}을(를) 내려받지 못했습니다. 허깅페이스에서 접근 동의가 필요한 모델일 수 있습니다 — "
+                f"① https://huggingface.co/{name} 에 로그인해 접근 조건에 동의하고 ② 터미널에서 `hf auth login`으로 토큰을 넣은 뒤 다시 실행합니다"
+                "(또는 환경 변수 HF_TOKEN). 모델 이름이 틀렸을 때도 같은 오류가 납니다")
+    if "out of memory" in text.lower() or isinstance(error, MemoryError):
+        return f"메모리가 모자라 모델 {name}을(를) 올리지 못했습니다. 더 작은 모델을 NCS_IMAGEGEN_MODEL로 지정해 보세요(그 모델의 라이선스 확인)"
+    return text[:300]
+
+
 def _pipeline():
     """모델을 한 번만 올린다. 못 올리면 까닭을 적어 두고 EngineOff."""
     global _loaded
@@ -97,7 +109,7 @@ def _pipeline():
             pipe = AutoPipelineForText2Image.from_pretrained(name, torch_dtype=torch.float32 if device == "cpu" else torch.float16)
             _loaded = (name, (pipe.to(device), torch))
         except Exception as error:      # noqa: BLE001 — 설치 안 됨, 모델 없음(내려받기·접근 동의 필요), 메모리 부족 모두 '꺼짐'으로 다룬다
-            _loaded = (name, f"{type(error).__name__}: {error}"[:300])
+            _loaded = (name, _explain(name, error))
     if isinstance(_loaded[1], str):
         raise EngineOff(f"모델을 올리지 못했습니다: {_loaded[1]}")
     return _loaded[1]
