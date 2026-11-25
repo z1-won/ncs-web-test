@@ -50,7 +50,7 @@ const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 // 명세 하나를 그려 보여 준다. 명세나 폭이 바뀌면 다시 그린다. onDrawn(blob, summary): 내려받기에 쓸 수 있게 올려 준다
-function Preview({ spec, width, alt, onDrawn, compact, onToggle }) {
+function Preview({ spec, width, alt, onDrawn, compact }) {
   const [state, setState] = useState({ status: "loading" });
   const key = JSON.stringify(spec) + width;
   useEffect(() => {
@@ -68,15 +68,8 @@ function Preview({ spec, width, alt, onDrawn, compact, onToggle }) {
   }, [key]);                                                    // eslint-disable-line react-hooks/exhaustive-deps
   if (state.status === "loading") return <div className="gen-preview is-loading"><Spinner label="그리는 중" /></div>;
   if (state.status === "error") return <PageAlert kind="danger">{state.error}</PageAlert>;
-  if (onToggle) {
-    return (
-      <figure className="gen-preview is-thumb">
-        <button type="button" className="gen-preview-toggle" onClick={onToggle} aria-expanded={!compact}>
-          <img src={state.url} alt={alt} />
-          <span className="meta">{compact ? "크게 보기" : "작게 보기"}</span>
-        </button>
-      </figure>
-    );
+  if (compact !== undefined) {
+    return <figure className={`gen-preview is-thumb${compact ? "" : " is-open"}`}><img src={state.url} alt={alt} /></figure>;
   }
   return (
     <figure className="gen-preview">
@@ -103,21 +96,26 @@ function groupProblems(problems) {
   return [...groups].map(([label, values]) => ({ label, values: [...values] }));
 }
 
+// 알림 상자는 PageAlert와 같은 모양(.page-alert)을 쓴다. 후보마다 여러 개가 함께 뜨므로 role은 두지 않는다(목록이 aria-live 영역 안에 있다)
 function Notes({ problems, omissions }) {
   if (!problems?.length && !omissions?.length) return null;
   return (
     <div className="gen-notes">
       {problems?.length > 0 && (
-        <div className="gen-note is-problem">
-          {groupProblems(problems).map((group) => (
-            <p key={group.label}><strong>{group.label} {group.values.length}개</strong> {group.values.join(", ")}</p>
-          ))}
+        <div className="page-alert danger">
+          <i className="svg-icon" aria-hidden="true"></i>
+          <div className="page-alert-body">
+            {groupProblems(problems).map((group) => <p key={group.label}><strong>{group.label} {group.values.length}개</strong> {group.values.join(", ")}</p>)}
+          </div>
         </div>
       )}
       {omissions?.length > 0 && (
-        <div className="gen-note is-omission">
-          <p><strong>빠진 듯한 내용 {omissions.length}건</strong></p>
-          <ul>{omissions.map((missing, i) => <li key={i}>{missing.reason}<span className="meta"> 문단: {missing.sentence}</span></li>)}</ul>
+        <div className="page-alert warning">
+          <i className="svg-icon" aria-hidden="true"></i>
+          <div className="page-alert-body">
+            <p><strong>빠진 듯한 내용 {omissions.length}건</strong></p>
+            <ul>{omissions.map((missing, i) => <li key={i}>{missing.reason}<span className="meta"> 문단: {missing.sentence}</span></li>)}</ul>
+          </div>
         </div>
       )}
     </div>
@@ -128,15 +126,16 @@ function Notes({ problems, omissions }) {
 // flags: 근거 검사가 지적한 칸({ 칸 이름: 까닭 }) — 그 입력 칸에 테두리와 까닭을 붙인다. 칸을 고치는 동안에는 비어 있다(자리가 달라질 수 있어서)
 function SpecEditor({ spec, onChange, disabled, flags = {} }) {
   const set = (patch) => onChange({ ...spec, ...patch });
-  const mark = (name) => (flags[name] ? { "aria-invalid": true, title: flags[name], "data-flagged": "" } : {});
+  const mark = (name) => (flags[name] ? { "aria-invalid": true, title: flags[name] } : {});
+  const bad = (name) => (flags[name] ? "is-error" : undefined);
   const under = (prefix) => Object.keys(flags).find((name) => name.startsWith(prefix));
   const setItem = (index, patch) => set({ items: spec.items.map((item, i) => (i === index ? { ...item, ...patch } : item)) });
   const field = (id, label, value, change, { name, ...props } = {}) => (
-    <div className="gen-field">
+    <div className={`gen-field${flags[name] ? " is-error" : ""}`}>
       <label htmlFor={id}>{label}</label>
       <input id={id} type="text" className="krds-input" value={value} disabled={disabled} onChange={(e) => change(e.target.value)} {...props} {...mark(name)}
              aria-describedby={flags[name] ? `${id}-flag` : undefined} />
-      {flags[name] && <p className="gen-flag" id={`${id}-flag`}>{flags[name]}</p>}
+      {flags[name] && <p className="form-hint-invalid" id={`${id}-flag`}>{flags[name]}</p>}
     </div>
   );
   if (spec.kind === "table") {
@@ -144,14 +143,15 @@ function SpecEditor({ spec, onChange, disabled, flags = {} }) {
     return (
       <div className="gen-editor">
         {field("gen-title", "제목(그림 안에는 그리지 않고 제목 줄에 씁니다)", spec.title, (title) => set({ title }), { maxLength: 40, name: "title" })}
-        <div className="gen-table-wrap">
-          <table className="gen-table">
+        <div className="krds-table-wrap">
+          <table className="tbl col data gen-table">
+            <caption>표의 열 이름과 칸</caption>
             <thead><tr>{spec.header.map((cell, c) => (
-              <th key={c}><input type="text" className="krds-input" aria-label={`${c + 1}열 이름`} maxLength={24} value={cell} disabled={disabled}
+              <th key={c} scope="col" className={bad(`header[${c}]`)}><input type="text" className="krds-input" aria-label={`${c + 1}열 이름`} maxLength={24} value={cell} disabled={disabled}
                                  onChange={(e) => set({ header: spec.header.map((old, j) => (j === c ? e.target.value : old)) })} {...mark(`header[${c}]`)} /></th>))}</tr></thead>
             <tbody>{spec.rows.map((row, r) => (
               <tr key={r}>{row.map((cell, c) => (
-                <td key={c}><input type="text" className="krds-input" aria-label={`${r + 1}줄 ${spec.header[c] || `${c + 1}열`}`} maxLength={60} value={cell} disabled={disabled}
+                <td key={c} className={bad(`rows[${r}][${c}]`)}><input type="text" className="krds-input" aria-label={`${r + 1}줄 ${spec.header[c] || `${c + 1}열`}`} maxLength={60} value={cell} disabled={disabled}
                                    onChange={(e) => setCell(r, c, e.target.value)} {...mark(`rows[${r}][${c}]`)} /></td>))}</tr>))}</tbody>
           </table>
         </div>
@@ -176,19 +176,20 @@ function SpecEditor({ spec, onChange, disabled, flags = {} }) {
       <div className="gen-editor">
         {field("gen-title", "제목(그림 안에는 그리지 않고 제목 줄에 씁니다)", spec.title, (title) => set({ title }), { maxLength: 40, name: "title" })}
         {field("gen-unit", "단위(선택, 예: 건, %, 명)", spec.unit || "", (unit) => set({ unit }), { maxLength: 12, name: "unit" })}
-        <div className="gen-table-wrap">
-          <table className="gen-table">
+        <div className="krds-table-wrap">
+          <table className="tbl col data gen-table">
+            <caption>그래프의 범주와 값</caption>
             <thead><tr>
               <th scope="col">범주</th>
               {spec.series.map((one, c) => (
-                <th key={c} scope="col"><input type="text" className="krds-input" aria-label={`${c + 1}번 계열 이름`} maxLength={24} value={one.name} disabled={disabled}
+                <th key={c} scope="col" className={bad(`series[${c}].name`)}><input type="text" className="krds-input" aria-label={`${c + 1}번 계열 이름`} maxLength={24} value={one.name} disabled={disabled}
                                                placeholder={spec.series.length > 1 ? "계열 이름" : "값(계열 이름은 선택)"} onChange={(e) => setSeries(c, { name: e.target.value })} {...mark(`series[${c}].name`)} /></th>))}
             </tr></thead>
             <tbody>{spec.categories.map((category, r) => (
               <tr key={r}>
-                <td><input type="text" className="krds-input" aria-label={`${r + 1}번 범주`} maxLength={24} value={category} disabled={disabled} onChange={(e) => setCategory(r, e.target.value)} {...mark(`categories[${r}]`)} /></td>
+                <td className={bad(`categories[${r}]`)}><input type="text" className="krds-input" aria-label={`${r + 1}번 범주`} maxLength={24} value={category} disabled={disabled} onChange={(e) => setCategory(r, e.target.value)} {...mark(`categories[${r}]`)} /></td>
                 {spec.series.map((one, c) => (
-                  <td key={c}><input type="text" inputMode="decimal" className="krds-input" aria-label={`${category || `${r + 1}번 범주`}의 ${one.name || "값"}`} value={one.values[r] ?? ""} disabled={disabled}
+                  <td key={c} className={bad(`series[${c}].values[${r}]`)}><input type="text" inputMode="decimal" className="krds-input" aria-label={`${category || `${r + 1}번 범주`}의 ${one.name || "값"}`} value={one.values[r] ?? ""} disabled={disabled}
                                      onChange={(e) => setValue(c, r, e.target.value)} {...mark(`series[${c}].values[${r}]`)} /></td>))}
               </tr>))}</tbody>
           </table>
@@ -219,11 +220,11 @@ function SpecEditor({ spec, onChange, disabled, flags = {} }) {
           <li key={i}>
             {field(`gen-label-${i}`, `${i + 1}번 칸`, item.label, (label) => setItem(i, { label }), { maxLength: 24, name: `items[${i}].label` })}
             {withChildren ? (
-              <div className="gen-field">
+              <div className={`gen-field${under(`items[${i}].children`) ? " is-error" : ""}`}>
                 <label htmlFor={`gen-children-${i}`}>아래 줄(한 줄에 하나, 6줄까지)</label>
                 <textarea id={`gen-children-${i}`} className="krds-input" rows={3} disabled={disabled} value={(item.children || []).join("\n")}
                           onChange={(e) => setItem(i, { children: e.target.value.split("\n") })} {...mark(under(`items[${i}].children`))} />
-                {under(`items[${i}].children`) && <p className="gen-flag">{Object.entries(flags).filter(([name]) => name.startsWith(`items[${i}].children`)).map(([, why]) => why).join(" / ")}</p>}
+                {under(`items[${i}].children`) && <p className="form-hint-invalid">{Object.entries(flags).filter(([name]) => name.startsWith(`items[${i}].children`)).map(([, why]) => why).join(" / ")}</p>}
               </div>
             ) : field(`gen-note-${i}`, "설명(선택)", item.note || "", (note) => setItem(i, { note }), { maxLength: 40, name: `items[${i}].note` })}
           </li>
@@ -422,10 +423,10 @@ export default function GeneratePage() {
       )}
 
       {ready && (
-        <ol className="gen-steps" aria-label="진행 단계">
+        <ol className="krds-step-wrap gen-steps" aria-label="진행 단계">
           {STEPS.map((label, i) => (
-            <li key={label} className={i + 1 === step ? "is-now" : i + 1 < step ? "is-done" : ""} aria-current={i + 1 === step ? "step" : undefined}>
-              <span className="gen-step-no">{i + 1}</span>{label}{i + 1 < step && <span className="sr-only"> 마침</span>}
+            <li key={label} className={i + 1 === step ? "active" : i + 1 < step ? "done" : undefined} aria-current={i + 1 === step ? "step" : undefined}>
+              <span><span className="step">{i + 1}단계{i + 1 < step && <span className="sr-only"> 마침</span>}</span><span className="step-tit">{label}</span></span>
             </li>
           ))}
         </ol>
@@ -537,13 +538,17 @@ export default function GeneratePage() {
                   {entry.ok && entry.omissions?.length > 0 && <span className="krds-badge bg-light-warning">빠진 듯한 내용 {entry.omissions.length}건</span>}
                 </span></h3>
               {entry.ok && <Preview spec={entry.spec} width={form.width} alt={`후보 ${i + 1} ${entry.spec.title || KIND_LABEL[entry.spec.kind]}`}
-                                    compact={wide !== i} onToggle={() => setWide(wide === i ? null : i)} />}
+                                    compact={wide !== i} />}
               {entry.error && <p className="form-hint-invalid">{entry.error}</p>}
               <Notes problems={entry.problems} omissions={entry.ok ? entry.omissions : []} />
               {entry.spec && (
                 <div className="gen-candidate-actions">
                   <button type="button" className={`krds-btn small ${entry.ok ? "primary" : "tertiary"}`} onClick={() => open(entry.spec, "ai", i)}>
                     {entry.ok ? "이 후보 고르기" : "고쳐서 쓰기"}<span className="sr-only"> 후보 {i + 1}</span></button>
+                  {entry.ok && (
+                    <button type="button" className="krds-btn small tertiary" aria-expanded={wide === i} onClick={() => setWide(wide === i ? null : i)}>
+                      {wide === i ? "작게 보기" : "크게 보기"}<span className="sr-only"> 후보 {i + 1}</span></button>
+                  )}
                 </div>
               )}
             </li>
@@ -610,10 +615,10 @@ export default function GeneratePage() {
           <p className="form-hint">AI 도구 사용 표기 예 1(집필진이 내용을 작성하고 AI로 이미지를 만든 경우)의 꼴입니다. 서약서에 붙일 결과물 현황은 그림을 원고에 넣은 뒤 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.</p>
         </>)}
         {!agreed && (
-          <div className="gen-agree-here">
+          <PageAlert kind="warning" className="gen-agree-here">
             <p>확인해야 그림을 내려받거나 이미지 저작권 DB에 올릴 수 있습니다. <a href="#gen-notice-title" onClick={() => setView((old) => ({ ...old, notice: true }))}>내용 보기</a></p>
             {agree("gen-agreed-here")}
-          </div>
+          </PageAlert>
         )}
         {done && <PageAlert kind="success">{done}</PageAlert>}
         <div className="run-buttons image-actions">
