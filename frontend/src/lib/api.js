@@ -249,6 +249,11 @@ export const api = {
     // 이미지 저작권 DB가 있는 서버만(status의 DB). similar: 닮은 그림 대조, register: 그린 그림을 DB에 올린다(에디터·직능연)
     similar: (body) => postJson("/api/ai-image/generate/similar", body),
     register: (body) => postJson("/api/ai-image/generate/register", body),
+    // 사진·삽화: 장면 후보(생성형 AI), 서버의 모델이 만든 그림(PNG base64 — 몇 분이 걸릴 수 있다), 받기 전 확인, DB에 올리기
+    prompt: (body) => postJson("/api/ai-image/generate/prompt", body),
+    image: (body) => postJson("/api/ai-image/generate/image", body),
+    inspect: (body) => postJson("/api/ai-image/generate/inspect", body),
+    registerImage: (body) => postJson("/api/ai-image/generate/register-image", body),
   },
   // 이미지 저작권 DB(REQ-02-010). 서버가 PostgreSQL일 때만 있다(/api/health의 image_db)
   images: {

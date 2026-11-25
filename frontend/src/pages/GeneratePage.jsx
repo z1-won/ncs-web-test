@@ -7,7 +7,7 @@
 // 검사는 둘이다. 근거(명세의 글이 문단에 있는 말인가): AI 후보는 지적이 있으면 쓰지 않는다. 사람이 고친 명세에는 알림만 보인다.
 //                빠진 내용(문단의 금지·주의, 한 줄에서 빠진 말): 알림만 보인다. 칸의 자리가 맞는지는 규칙이 보지 못하므로 사람이 문단과 견주어 본다.
 // 그래프의 값은 문단에 적힌 수여야 하고, 그 수가 같은 문장에서 그 범주 이름 뒤에 적혀 있어야 한다(뒤바뀐 값을 잡는다).
-// 사진, 삽화는 아직 만들지 않는다(이미지 생성 모델의 약관과 기관 승인이 먼저다).
+// 사진, 삽화는 서버에 올린 공개 이미지 모델이 만든다(components/PictureMaker.jsx) — 문단 입력까지는 이 페이지가, 장면 후보부터는 PictureMaker가 맡는다.
 // 문단은 이미지 추천에서 넘겨받을 수 있다(라우터 state — 주소에 문단을 싣지 않는다).
 // 올린 글과 만든 그림은 서버에 남기지 않는다 — 에디터·직능연이 [이미지 저작권 DB에 올리기]를 누른 그림만 남는다.
 // 생성형 AI의 응답은 서버의 캐시에 보관 기한 동안 남는다(개인정보처리방침).
@@ -19,6 +19,7 @@ import { plainReason } from "../lib/plain.js";
 import { Spinner } from "../components/Badge.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
+import PictureMaker from "../components/PictureMaker.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 import { copyText } from "../lib/clipboard.js";
 import { useAuth, useCanManage } from "../lib/auth.jsx";
@@ -29,8 +30,8 @@ const TYPES = [
   { value: "diagram", label: "도표", hint: "순서, 순환, 구성, 비교" },
   { value: "table", label: "표", hint: "여러 대상을 같은 기준으로 정리" },
   { value: "graph", label: "그래프", hint: "같은 기준의 수치가 둘 이상 적힌 문단: 막대, 꺾은선, 원" },
-  { value: "photo", label: "사진", off: "이미지 생성 모델을 쓰는 유형입니다. 쓸 서비스의 약관(출판, 권리 양도)과 기관 승인이 정해진 뒤에 엽니다." },
-  { value: "illustration", label: "삽화", off: "이미지 생성 모델을 쓰는 유형입니다. 쓸 서비스의 약관(출판, 권리 양도)과 기관 승인이 정해진 뒤에 엽니다." },
+  { value: "photo", label: "사진", picture: true, hint: "장비, 작업 모습, 현장. 서버의 이미지 모델이 만듭니다. 얼굴이 드러난 사람과 글자는 넣지 않습니다" },
+  { value: "illustration", label: "삽화", picture: true, hint: "단순하게 그린 그림. 서버의 이미지 모델이 만듭니다. 얼굴이 드러난 사람과 글자는 넣지 않습니다" },
 ];
 const KIND_LABEL = { sequence: "순서", cycle: "순환", structure: "구성", compare: "비교", table: "표", bar: "막대 그래프", line: "꺾은선 그래프", pie: "원 그래프" };
 const FAMILY = { diagram: ["sequence", "cycle", "structure", "compare"], graph: ["bar", "line", "pie"] };
@@ -283,6 +284,8 @@ export default function GeneratePage() {
   const [view, setView] = useState({ notice: true, input: true, candidates: true });      // 단계를 펴 두었는가(지나온 단계는 접는다)
   const [wide, setWide] = useState(null);                     // 넓게 편 후보의 순번
   const [picked, setPicked] = useState(null);                 // 고른 후보의 순번(생성형 AI 후보에서 골랐을 때)
+  const [picture, setPicture] = useState(null);               // 사진·삽화 요청 { key, kind, text, criterion, focus, width, manual } — PictureMaker에 넘긴다
+  const [pictureStage, setPictureStage] = useState(3);        // PictureMaker가 알려 주는 단계(3 후보, 4 고치기, 5 받기)
   const [similar, setSimilar] = useState(null);               // 닮은 그림 대조 { 닮은 그림, … } | { error } | "loading"
   const [store, setStore] = useState({ module: "", by: "", busy: false, result: null, error: null });      // 이미지 저작권 DB에 올리기
   const drawn = useRef(null);                                 // { blob, summary } — 마지막으로 그린 그림
@@ -301,10 +304,18 @@ export default function GeneratePage() {
   const kind = form.type === "table" ? "table" : (form.kind || form.type);      // 종류를 고르지 않았으면 유형(diagram, graph)을 보낸다
   const blankKind = BLANK[kind] ? kind : FAMILY[form.type]?.[0] || "sequence";
   const ready = status && status !== "error";
-  const canAsk = ready && !type.off && form.text.trim().length > 0 && !busy;
+  const canAsk = ready && !type.off && !busy && (type.picture ? (form.text.trim().length > 0 || form.focus.trim().length > 0) : form.text.trim().length > 0);
+
+  function startPicture(manual) {
+    setResult(null); setDraft(null); setShown(null); setError(null); setPictureStage(3);
+    setPicture({ key: Date.now(), kind: form.type, text: form.text, criterion: form.criterion, focus: form.focus, width: form.width, manual });
+    setView((old) => ({ ...old, input: false }));
+  }
 
   async function ask(event) {
     event.preventDefault();
+    if (type.picture) { startPicture(false); return; }
+    setPicture(null);
     setBusy(true); setError(null); setResult(null); setDone(null);
     const body = { text: form.text, criterion: form.criterion, kind, focus: form.focus };
     const { ok, data, error: message } = await api.generate.spec(body);
@@ -318,6 +329,7 @@ export default function GeneratePage() {
   }
 
   function open(spec, from, index = null) {
+    setPicture(null);
     if (!asked || from === "manual") setAsked({ text: form.text, criterion: form.criterion });
     setPicked(index);
     setView((old) => ({ ...old, input: false, candidates: false }));
@@ -386,16 +398,16 @@ export default function GeneratePage() {
   const dirty = draft && shown && JSON.stringify(tidy(draft)) !== JSON.stringify(shown.spec);
   const flags = shown && !dirty ? Object.fromEntries(shown.problems.map((problem) => [problem.field, problem.reason])) : {};
   const entered = agreed && !view.notice;                     // 유의 안내를 확인하고 들어왔는가 — 아니면 안내만 보인다
-  const step = !entered ? 1 : shown ? 5 : draft ? 4 : result ? 3 : 2;
+  const step = !entered ? 1 : picture ? pictureStage : shown ? 5 : draft ? 4 : result ? 3 : 2;
   const STEPS = ["확인", "문단", "후보", "고치기", "받기"];
   return (
     <>
-    <Header anchors={entered && (result || draft) ? ANCHORS : []} hasHistory={false} hasResult={false} />
+    <Header anchors={entered && (result || draft || picture) ? ANCHORS : []} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page image-db-page generate-page">
       <h1 className="page-title">이미지 AI 생성</h1>
       <p className="page-desc">
-        집필한 문단을 바탕으로 <strong>도표, 표, 그래프</strong>를 만듭니다. 생성형 AI는 그림이 아니라 칸과 글(명세)을 쓰고, 그림은 서버가 그립니다.
-        그래서 글자가 깨지지 않고, 문단에 없는 말이나 수가 들어간 후보는 걸러집니다. 그림을 그리는 데에는 외부 전송이 없습니다.
+        집필한 문단을 바탕으로 <strong>도표, 표, 그래프</strong>와 <strong>사진, 삽화</strong>를 만듭니다. 도표, 표, 그래프는 생성형 AI가 칸과 글(명세)만 쓰고 그림은 서버가 그려,
+        글자가 깨지지 않고 문단에 없는 말이나 수가 들어간 후보는 걸러집니다. 사진과 삽화는 서버에 올린 이미지 모델이 만듭니다. 그림을 만드는 데에는 외부 전송이 없습니다.
       </p>
       <p className="page-desc">
         실을 수 있는 기존 그림이 있는지는 <Link to="/recommend">이미지 추천</Link>에서 먼저 찾아볼 수 있습니다.
@@ -481,7 +493,7 @@ export default function GeneratePage() {
               <div className="form-conts">
                 <div className="textarea-wrap">
                   <textarea id="gen-text" className="krds-input recommend-text" rows={7} maxLength={4000} value={form.text} aria-describedby="gen-text-hint"
-                            placeholder="도표, 표, 그래프로 나타낼 문단을 붙여 넣으세요." onChange={(e) => set("text")(e.target.value)} />
+                            placeholder={type.picture ? `${type.label}(으)로 보일 문단을 붙여 넣으세요. 문단 없이 아래 '그림으로 나타낼 부분'에 주제만 적을 수도 있습니다.` : "도표, 표, 그래프로 나타낼 문단을 붙여 넣으세요."} onChange={(e) => set("text")(e.target.value)} />
                   <p className="textarea-count"><span className="sr-only">적은 글자 수 </span><span className="count-now">{form.text.length}</span><span className="count-total">/4000</span></p>
                 </div>
               </div>
@@ -496,7 +508,8 @@ export default function GeneratePage() {
               <div className="form-tit"><label htmlFor="gen-focus">그림으로 나타낼 부분 <span className="meta">(선택)</span></label></div>
               <div className="form-conts"><input id="gen-focus" type="text" className="krds-input" maxLength={200} value={form.focus}
                                                  placeholder="예: 예약 접수의 순서" onChange={(e) => set("focus")(e.target.value)} /></div>
-              <p className="form-hint">문단이 길 때 어느 부분을 그릴지 알려 줍니다. 여기 적은 말은 그림에 쓰이지 않습니다.</p>
+              <p className="form-hint">{type.picture ? "문단이 길 때 어느 부분을 그릴지 알려 줍니다. 문단 없이 주제만 적으면 AI 창작(표기 예 4)으로 표기합니다."
+                : "문단이 길 때 어느 부분을 그릴지 알려 줍니다. 여기 적은 말은 그림에 쓰이지 않습니다."}</p>
             </div>
             <div className="form-group">
               <div className="form-tit"><label htmlFor="gen-width">원고에 놓을 가로 크기(mm)</label></div>
@@ -508,13 +521,19 @@ export default function GeneratePage() {
           <div className="form-group form-group-wide form-actions">
             {error && <PageAlert kind="danger">{error}</PageAlert>}
             <div className="run-buttons image-actions">
-              <button type="submit" className="krds-btn large primary" disabled={!canAsk || !status["사용 가능"]}>{busy ? "후보를 만드는 중" : "후보 만들기"}</button>
-              <button type="button" className="krds-btn large secondary" disabled={busy} onClick={() => open(BLANK[blankKind], "manual")}>칸을 직접 적기</button>
+              <button type="submit" className="krds-btn large primary" disabled={!canAsk || !status["사용 가능"]}>{busy ? "후보를 만드는 중" : type.picture ? "장면 만들기" : "후보 만들기"}</button>
+              {type.picture
+                ? <button type="button" className="krds-btn large secondary" onClick={() => startPicture(true)}>장면을 직접 적기</button>
+                : <button type="button" className="krds-btn large secondary" disabled={busy} onClick={() => open(BLANK[blankKind], "manual")}>칸을 직접 적기</button>}
             </div>
           </div>
           </>)}
         </form>
       </section>
+      )}
+
+      {entered && picture && (
+        <PictureMaker key={picture.key} request={picture} engine={status["그림 엔진"]} hasDb={!!status.DB} canManage={canManage} needsName={authStatus === "open"} onStage={setPictureStage} />
       )}
 
       {entered && result && (
