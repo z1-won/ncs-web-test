@@ -287,6 +287,7 @@ export default function GeneratePage() {
   const [wide, setWide] = useState(null);                     // 넓게 편 후보의 순번
   const [aspects, setAspects] = useState({});                 // 후보 그림의 가로/세로 비 — 가로로 긴 그림은 카드를 한 줄 전체로 편다
   const [picked, setPicked] = useState(null);                 // 고른 후보의 순번(생성형 AI 후보에서 골랐을 때)
+  const [more, setMore] = useState(!!handed.criterion);       // 문단 입력의 선택 항목(수행준거, 그림으로 나타낼 부분, 가로 크기)을 펴 두었는가
   const [picture, setPicture] = useState(null);               // 사진·삽화 요청 { key, kind, text, criterion, focus, width, manual } — PictureMaker에 넘긴다
   const [pictureStage, setPictureStage] = useState(3);        // PictureMaker가 알려 주는 단계(3 후보, 4 고치기, 5 받기)
   const [similar, setSimilar] = useState(null);               // 닮은 그림 대조 { 닮은 그림, … } | { error } | "loading"
@@ -477,28 +478,27 @@ export default function GeneratePage() {
         <form className="fieldset review-form is-sectioned" onSubmit={ask}>
           <div className="form-section" role="radiogroup" aria-labelledby="gen-type-title">
             <h3 className="form-section-title" id="gen-type-title">제작 그림 유형</h3>
-            <div className="krds-check-area gen-types">
-              {TYPES.map((entry) => (
-                <div className="krds-form-check" key={entry.value}>
-                  <input type="radio" id={`gen-type-${entry.value}`} name="gen-type" checked={form.type === entry.value} onChange={() => setForm((old) => ({ ...old, type: entry.value, kind: "" }))} />
-                  <label htmlFor={`gen-type-${entry.value}`}>{entry.label}{entry.off && <span className="meta"> (아직 없음)</span>}</label>
-                </div>
-              ))}
-            </div>
-            {type.off ? <PageAlert kind="info">{type.label}은(는) 아직 만들 수 없습니다. {type.off}</PageAlert> : <p className="form-hint">{type.hint}</p>}
-            {FAMILY[form.type] && (
-              <div className="form-group gen-kind">
-                <div className="form-tit"><label htmlFor="gen-kind">{type.label}의 종류</label></div>
-                <div className="form-conts">
+            <div className="gen-type-row">
+              <div className="krds-check-area gen-types">
+                {TYPES.map((entry) => (
+                  <div className="krds-form-check" key={entry.value}>
+                    <input type="radio" id={`gen-type-${entry.value}`} name="gen-type" checked={form.type === entry.value} onChange={() => setForm((old) => ({ ...old, type: entry.value, kind: "" }))} />
+                    <label htmlFor={`gen-type-${entry.value}`}>{entry.label}</label>
+                  </div>
+                ))}
+              </div>
+              {FAMILY[form.type] && (
+                <div className="gen-kind">
+                  <label htmlFor="gen-kind">종류</label>
                   <select id="gen-kind" className="krds-form-select" value={form.kind} onChange={(e) => set("kind")(e.target.value)}>
                     <option value="">생성형 AI가 고르기</option>
                     {FAMILY[form.type].map((value) => <option key={value} value={value}>{KIND_LABEL[value]}</option>)}
                   </select>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+            <p className="form-hint">{type.hint}</p>
           </div>
-          {!type.off && (<>
           <div className="form-section">
             <div className="form-group form-group-wide">
               <div className="form-tit"><label htmlFor="gen-text">집필한 문단</label></div>
@@ -509,27 +509,31 @@ export default function GeneratePage() {
                   <p className="textarea-count"><span className="sr-only">적은 글자 수 </span><span className="count-now">{form.text.length}</span><span className="count-total">/4000</span></p>
                 </div>
               </div>
-              <p className="form-hint" id="gen-text-hint">{handed.text ? "이미지 추천에서 넘겨받은 문단입니다. " : ""}그림의 글과 수는 이 문단(과 수행준거)에 있는 것으로만 씁니다. 후보를 만들면 이 글이 외부 생성형 AI 서비스로 전송됩니다.</p>
-            </div>
-            <div className="form-group form-group-wide">
-              <div className="form-tit"><label htmlFor="gen-criterion">수행준거 <span className="meta">(선택)</span></label></div>
-              <div className="form-conts"><input id="gen-criterion" type="text" className="krds-input" maxLength={400} value={form.criterion}
-                                                 placeholder="예: 1.1 예약 접수 절차에 따라 예약을 접수할 수 있다." onChange={(e) => set("criterion")(e.target.value)} /></div>
-            </div>
-            <div className="form-group form-group-wide">
-              <div className="form-tit"><label htmlFor="gen-focus">그림으로 나타낼 부분 <span className="meta">(선택)</span></label></div>
-              <div className="form-conts"><input id="gen-focus" type="text" className="krds-input" maxLength={200} value={form.focus}
-                                                 placeholder="예: 예약 접수의 순서" onChange={(e) => set("focus")(e.target.value)} /></div>
-              <p className="form-hint">{type.picture ? "문단이 길 때 어느 부분을 그릴지 알려 줍니다. 문단 없이 주제만 적으면 AI 창작(표기 예 4)으로 표기합니다."
-                : "문단이 길 때 어느 부분을 그릴지 알려 줍니다. 여기 적은 말은 그림에 쓰이지 않습니다."}</p>
-            </div>
-            <div className="form-group">
-              <div className="form-tit"><label htmlFor="gen-width">원고에 놓을 가로 크기(mm)</label></div>
-              <div className="form-conts"><input id="gen-width" type="number" className="krds-input" min={40} max={170} step={5} value={form.width}
-                                                 onChange={(e) => set("width")(Math.min(170, Math.max(40, Number(e.target.value) || 150)))} /></div>
-              <p className="form-hint">이 크기에서 300 DPI가 되도록 그립니다. 글자의 인쇄 크기는 같습니다.</p>
+              <p className="form-hint" id="gen-text-hint">{handed.text ? "이미지 추천에서 넘겨받은 문단입니다. " : ""}그림의 글과 수는 이 문단에 있는 것으로만 씁니다. 후보를 만들 때 이 글이 외부 생성형 AI 서비스로 전송됩니다.</p>
             </div>
           </div>
+          <details className="gen-more" open={more || !!type.picture} onToggle={(e) => setMore(e.currentTarget.open)}>
+            <summary>더 적기 <span className="meta">(선택) 수행준거{form.criterion.trim() ? " 있음" : ""}, 그림으로 나타낼 부분{form.focus.trim() ? " 있음" : ""}, 가로 {form.width}mm</span></summary>
+            <div className="gen-more-body">
+              <div className="gen-field gen-more-wide">
+                <label htmlFor="gen-criterion">수행준거</label>
+                <input id="gen-criterion" type="text" className="krds-input" maxLength={400} value={form.criterion}
+                       placeholder="예: 1.1 예약 접수 절차에 따라 예약을 접수할 수 있다." onChange={(e) => set("criterion")(e.target.value)} />
+              </div>
+              <div className="gen-field">
+                <label htmlFor="gen-focus">그림으로 나타낼 부분</label>
+                <input id="gen-focus" type="text" className="krds-input" maxLength={200} value={form.focus} aria-describedby="gen-focus-hint"
+                       placeholder="예: 예약 접수의 순서" onChange={(e) => set("focus")(e.target.value)} />
+                <p className="form-hint" id="gen-focus-hint">{type.picture ? "문단 없이 주제만 적으면 AI 창작(표기 예 4)으로 표기합니다." : "문단이 길 때 적습니다. 그림의 글로는 쓰이지 않습니다."}</p>
+              </div>
+              <div className="gen-field">
+                <label htmlFor="gen-width">원고에 놓을 가로 크기(mm)</label>
+                <input id="gen-width" type="number" className="krds-input" min={40} max={170} step={5} value={form.width} aria-describedby="gen-width-hint"
+                       onChange={(e) => set("width")(Math.min(170, Math.max(40, Number(e.target.value) || 150)))} />
+                <p className="form-hint" id="gen-width-hint">이 크기에서 300 DPI가 되게 그립니다.</p>
+              </div>
+            </div>
+          </details>
           <div className="form-group form-group-wide form-actions">
             {error && <PageAlert kind="danger">{error}</PageAlert>}
             <div className="run-buttons image-actions">
@@ -539,7 +543,6 @@ export default function GeneratePage() {
                 : <button type="button" className="krds-btn large secondary" disabled={busy} onClick={() => open(BLANK[blankKind], "manual")}>칸을 직접 적기</button>}
             </div>
           </div>
-          </>)}
         </form>
       </section>
       )}

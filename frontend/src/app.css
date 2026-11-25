@@ -1240,7 +1240,6 @@ main [hidden] { display: none !important; }
 
 /* ── 이미지 AI 생성(/ai-generate) ── 후보 카드, 문단과 그림을 나란히 놓는 작업 영역, 칸 입력 */
 .generate-page .gen-types { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3) var(--krds-gap-7); }
-.generate-page .gen-kind { margin-top: var(--krds-gap-5); max-width: 32rem; }
 .gen-candidates { display: grid; grid-template-columns: repeat(auto-fill, minmax(30rem, 1fr)); align-items: start; gap: var(--krds-gap-6); margin: var(--krds-gap-5) 0 0; padding: 0; list-style: none; }
 .gen-candidate { padding: var(--krds-padding-7) var(--krds-padding-8); border: 1px solid var(--krds-light-color-border-gray-light); border-radius: var(--krds-radius-large1); background: var(--krds-light-color-surface-white); }
 .gen-candidate.is-rejected { background: var(--krds-light-color-surface-gray-subtler); }
@@ -1362,3 +1361,16 @@ main [hidden] { display: none !important; }
 .gen-steps.krds-step-wrap > li > span::before,
 .gen-steps.krds-step-wrap > li.done > span::after,
 .gen-steps.krds-step-wrap > li.active > span::after { left: 50%; transform: translateX(-50%); }
+/* 이미지 AI 생성의 문단 입력: 유형과 종류를 한 줄에, 선택 항목(수행준거, 그림으로 나타낼 부분, 가로 크기)은 접는 묶음에 */
+.gen-type-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--krds-gap-4) var(--krds-gap-8); }
+.generate-page .gen-kind { display: flex; align-items: center; gap: var(--krds-gap-3); }
+.generate-page .gen-kind label { font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-bold); white-space: nowrap; }
+.generate-page .gen-kind .krds-form-select { min-width: 20rem; }
+.gen-more { border-top: 1px solid var(--krds-light-color-divider-gray-light); padding-top: var(--krds-padding-5); }
+.gen-more > summary { cursor: pointer; font-weight: var(--krds-font-weight-bold); }
+.gen-more > summary .meta { margin-left: var(--krds-gap-2); color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); font-weight: var(--krds-font-weight-regular); }
+.gen-more-body { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--krds-gap-5); margin-top: var(--krds-gap-5); }
+.gen-more-wide { grid-column: 1 / -1; }
+.gen-more-body .form-hint { margin: 0; }
+@media (max-width: 767px) { .gen-more-body { grid-template-columns: minmax(0, 1fr); } .generate-page .gen-kind { flex: 1 1 100%; } .generate-page .gen-kind .krds-form-select { flex: 1; min-width: 0; } }
+.gen-more-body .form-hint { font-size: var(--krds-pc-font-size-body-small); color: var(--krds-light-color-text-subtle); }
