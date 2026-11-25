@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from .diagram import Spec, read_spec
+from .diagram import Spec, number_text, read_spec
 
 ROOT = Path(__file__).resolve().parents[2]
 REGULAR = ("KoPub Dotum Medium.ttf", "KoPubDotumMedium.ttf", "KoPubWorld Dotum Medium.ttf", "KoPubWorldDotumMedium.ttf",
@@ -392,7 +392,165 @@ def _table(pen: _Pen, spec: Spec):
     return image
 
 
-LAYOUTS = {"sequence": _sequence, "cycle": _cycle, "structure": _structure, "compare": _compare, "table": _table}
+GRAYS = ((70, 76, 83), (140, 147, 154), (196, 201, 206), (244, 245, 246))      # 계열 1~4 (어두운 것부터). 흑백 인쇄에서도 구분된다
+PIE_GRAYS = ((70, 76, 83), (196, 201, 206), (110, 118, 126), (228, 231, 234), (160, 167, 174), (244, 245, 246), (90, 97, 104), (212, 216, 220))
+TICK_PT = 7.5
+
+
+def _nice_ticks(top: float) -> list[float]:
+    """0부터 top을 덮는 눈금 4~6개(1·2·2.5·5 × 10의 거듭제곱 간격)."""
+    if top <= 0:
+        return [0.0, 1.0]
+    raw = top / 5
+    power = 10 ** math.floor(math.log10(raw))
+    step = next(base * power for base in (1, 2, 2.5, 5, 10) if base * power >= raw)
+    count = math.ceil(top / step - 1e-9)
+    return [round(step * i, 10) for i in range(count + 1)]
+
+
+def _legend(draw, pen: _Pen, names, x_right: int, y: int, marker) -> int:
+    """오른쪽 위에 계열 이름을 한 줄로. 그린 높이를 돌려준다."""
+    font = pen.font(TICK_PT)
+    box = round(TICK_PT * pen.u)
+    widths = [box + round(3 * pen.u) + pen.text_width(name, font) for name in names]
+    x = x_right - sum(widths) - round(10 * pen.u) * (len(names) - 1)
+    for i, (name, width) in enumerate(zip(names, widths)):
+        marker(i, x, y, box)
+        draw.text((x + box + round(3 * pen.u), y), name, font=font, fill=INK)
+        x += width + round(10 * pen.u)
+    return pen.line_height(TICK_PT)
+
+
+def _plot_frame(pen: _Pen, spec: Spec, draw_marker_factory):
+    """막대·꺾은선의 공통 틀: 단위, 범례, 세로 눈금, 가로 이름. (그림, draw, 좌표 함수 x(i)·y(v), 칸 폭, 바닥 y)를 돌려준다."""
+    m = pen.margin
+    font = pen.font(TICK_PT)
+    step = pen.line_height(TICK_PT)
+    top_value = max(max(values) for _, values in spec.series)
+    ticks = _nice_ticks(top_value)
+    tick_w = max(pen.text_width(number_text(t), font) for t in ticks) + round(4 * pen.u)
+    head_h = step + round(4 * pen.u) if (spec.unit or len(spec.series) > 1) else round(6 * pen.u)
+    left = m + tick_w
+    right = pen.w - m - round(2 * pen.u)
+    slot = (right - left) / len(spec.categories)
+    labels = [_block(pen, name, max(10, int(slot) - round(4 * pen.u)), TICK_PT) for name in spec.categories]
+    label_h = max(block.height(pen) for block in labels) + round(4 * pen.u)
+    plot_h = round(min(pen.w * 0.42, 150 * pen.u))
+    top = m + head_h + round(TICK_PT * pen.u)          # 맨 위 값 글자가 들어갈 자리
+    bottom = top + plot_h
+    image, draw = _canvas(pen.w, bottom + label_h + m)
+    if spec.unit:
+        draw.text((m, m), f"(단위: {spec.unit})", font=font, fill=INK)
+    if len(spec.series) > 1:
+        _legend(draw, pen, [name for name, _ in spec.series], right, m, draw_marker_factory(draw))
+
+    def y_of(value: float) -> float:
+        return bottom - plot_h * value / ticks[-1]
+
+    def x_of(index: int) -> float:
+        return left + slot * (index + 0.5)
+
+    for tick in ticks:
+        y = round(y_of(tick))
+        draw.line((left, y, right, y), fill=(214, 218, 222) if tick else LINE, width=pen.line)
+        text = number_text(tick)
+        draw.text((left - round(4 * pen.u) - pen.text_width(text, font), y - step // 2), text, font=font, fill=INK)
+    draw.line((left, top - round(TICK_PT * pen.u), left, bottom), fill=LINE, width=pen.line)
+    for i, block in enumerate(labels):
+        _draw_block(draw, pen, block, round(x_of(i) - slot / 2 + 2 * pen.u), bottom + round(3 * pen.u), max(10, int(slot) - round(4 * pen.u)))
+    return image, draw, x_of, y_of, slot, bottom
+
+
+def _value_label(draw, pen: _Pen, value: float, x: float, y: float) -> None:
+    font = pen.font(TICK_PT)
+    text = number_text(value)
+    draw.text((round(x - pen.text_width(text, font) / 2), round(y - pen.line_height(TICK_PT))), text, font=font, fill=INK)
+
+
+def _bar(pen: _Pen, spec: Spec):
+    def marker_factory(draw):
+        return lambda i, x, y, box: draw.rectangle((x, y, x + box, y + box), fill=GRAYS[i], outline=LINE, width=pen.line)
+
+    image, draw, x_of, y_of, slot, bottom = _plot_frame(pen, spec, marker_factory)
+    count = len(spec.series)
+    group = slot * (0.62 if count == 1 else 0.78)
+    width = group / count
+    labelled = count * len(spec.categories) <= 16
+    for s, (_, values) in enumerate(spec.series):
+        for c, value in enumerate(values):
+            x0 = x_of(c) - group / 2 + width * s
+            y0 = y_of(value)
+            draw.rectangle((round(x0), round(y0), round(x0 + width) - (1 if count > 1 else 0), bottom), fill=GRAYS[s], outline=LINE, width=pen.line)
+            if labelled:
+                _value_label(draw, pen, value, x0 + width / 2, y0)
+    return image
+
+
+def _marker(draw, pen: _Pen, shape: int, x: float, y: float, r: float, color) -> None:
+    if shape == 0:
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=color, outline=color)
+    elif shape == 1:
+        draw.rectangle((x - r, y - r, x + r, y + r), fill=WHITE, outline=color, width=max(2, pen.line))
+    elif shape == 2:
+        draw.polygon([(x, y - r * 1.2), (x + r * 1.1, y + r), (x - r * 1.1, y + r)], fill=color)
+    else:
+        draw.polygon([(x, y - r * 1.25), (x + r * 1.25, y), (x, y + r * 1.25), (x - r * 1.25, y)], fill=WHITE, outline=color)
+
+
+def _line(pen: _Pen, spec: Spec):
+    radius = 2.4 * pen.u
+    colors = (GRAYS[0], GRAYS[1], GRAYS[0], GRAYS[1])
+
+    def marker_factory(draw):
+        return lambda i, x, y, box: _marker(draw, pen, i, x + box / 2, y + box / 2, box * 0.36, colors[i])
+
+    image, draw, x_of, y_of, _slot, _bottom = _plot_frame(pen, spec, marker_factory)
+    stroke = max(2, round(1.1 * pen.u))
+    for s, (_, values) in enumerate(spec.series):
+        points = [(round(x_of(c)), round(y_of(value))) for c, value in enumerate(values)]
+        draw.line(points, fill=colors[s], width=stroke, joint="curve")
+        for (x, y), value in zip(points, values):
+            _marker(draw, pen, s, x, y, radius, colors[s])
+            if len(spec.series) == 1 and len(values) <= 12:
+                _value_label(draw, pen, value, x, y - radius - pen.u)
+    return image
+
+
+def _pie(pen: _Pen, spec: Spec):
+    m = pen.margin
+    values = spec.series[0][1]
+    total = sum(values)
+    font = pen.font(BODY_PT)
+    step = pen.line_height(BODY_PT) + round(2 * pen.u)
+    radius = round(min(pen.w * 0.19, 78 * pen.u))
+    height = max(2 * radius, step * len(values)) + 2 * m + round(4 * pen.u)
+    image, draw = _canvas(pen.w, height)
+    cx, cy = m + radius + round(8 * pen.u), height // 2
+    angle = -90.0
+    for i, value in enumerate(values):
+        sweep = 360.0 * value / total
+        if sweep > 0:
+            draw.pieslice((cx - radius, cy - radius, cx + radius, cy + radius), angle, angle + sweep, fill=PIE_GRAYS[i % len(PIE_GRAYS)],
+                          outline=WHITE, width=max(2, round(0.9 * pen.u)))
+        angle += sweep
+    draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), outline=LINE, width=pen.line)
+    x = cx + radius + round(18 * pen.u)
+    y = cy - step * len(values) // 2
+    box = round(BODY_PT * pen.u)
+    for i, (name, value) in enumerate(zip(spec.categories, values)):
+        draw.rectangle((x, y + (step - box) // 2, x + box, y + (step - box) // 2 + box), fill=PIE_GRAYS[i % len(PIE_GRAYS)], outline=LINE, width=pen.line)
+        text = f"{name}  {number_text(value)}{spec.unit}"
+        room = pen.w - m - (x + box + round(5 * pen.u))
+        while pen.text_width(text, font) > room and len(text) > 4:      # 긴 이름은 줄인다(값은 남긴다)
+            name = name[:-1]
+            text = f"{name}…  {number_text(value)}{spec.unit}"
+        draw.text((x + box + round(5 * pen.u), y + (step - round(BODY_PT * pen.u)) // 2), text, font=font, fill=INK)
+        y += step
+    return image
+
+
+LAYOUTS = {"sequence": _sequence, "cycle": _cycle, "structure": _structure, "compare": _compare, "table": _table,
+           "bar": _bar, "line": _line, "pie": _pie}
 
 
 def render(spec, *, width_mm: float = DEFAULT_WIDTH, dpi: int = DEFAULT_DPI) -> Rendered:

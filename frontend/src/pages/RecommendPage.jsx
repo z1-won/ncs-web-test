@@ -325,6 +325,12 @@ export default function RecommendPage() {
               </PageAlert>
             )}
             {result.truncated && <p className="form-hint">후보가 많아 최근 확정된 {result.total_candidates}건만 보았습니다.</p>}
+            {asked?.text?.trim() && (
+              <p className="recommend-generate">
+                {result.items.length === 0 ? "실을 수 있는 그림을 찾지 못했다면 " : "맞는 그림이 없다면 "}이 문단으로 도표, 표, 그래프를 만들 수 있습니다.{" "}
+                <Link className="krds-btn small secondary" to="/ai-generate" state={{ text: asked.text, criterion: result.criterion?.found ? result.criterion.text : "" }}>이 문단으로 이미지 AI 생성</Link>
+              </p>
+            )}
             {result.items.length > 0 && (
               <ol className="recommend-list">
                 {result.items.map((item, index) => (

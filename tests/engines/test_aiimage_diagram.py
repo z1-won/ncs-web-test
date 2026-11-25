@@ -32,7 +32,7 @@ class ReadSpecTests(unittest.TestCase):
 
     def test_shape_errors(self):
         bad = [
-            {"kind": "pie"},
+            {"kind": "donut"},
             {"kind": "sequence", "items": [{"label": "하나"}]},                                        # 2칸 미만
             {"kind": "sequence", "items": [{"label": "가"}, {"label": "가 "}]},                        # 같은 이름
             {"kind": "sequence", "items": [{"label": "가" * 25}, {"label": "나"}]},                    # 너무 긴 이름
@@ -187,10 +187,76 @@ class CandidateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             propose("  ", "수행준거만 있음", asker=fake([SEQUENCE]))
         with self.assertRaises(ValueError):
-            propose(TEXT, kind="pie", asker=fake([SEQUENCE]))
+            propose(TEXT, kind="donut", asker=fake([SEQUENCE]))
 
     def test_task_is_on_the_allow_list(self):
         self.assertTrue(llm.task_allowed("image_generate_spec"))
+
+
+NUMBERS = "2023년 예약은 1,200건이었고 2024년에는 1,850건, 2025년에는 2,400건으로 늘었다. 평균 객실 단가는 12.5만 원이다."
+BAR = {"kind": "bar", "title": "연도별 예약 건수", "unit": "건", "categories": ["2023년", "2024년", "2025년"],
+       "series": [{"name": "", "values": [1200, 1850, 2400]}]}
+SHARE = "예약 경로는 온라인이 62.5%로 가장 많고 전화가 30%, 방문이 7.5%이다."
+PIE = {"kind": "pie", "title": "예약 경로 비율", "unit": "%", "categories": ["온라인", "전화", "방문"], "series": [{"name": "", "values": [62.5, 30, 7.5]}]}
+
+
+class GraphTests(unittest.TestCase):
+    def test_round_trip_and_number_strings(self):
+        self.assertEqual(read_spec(BAR).as_dict(), BAR)
+        loose = {**BAR, "series": [{"name": "", "values": ["1,200", "1850", 2400.0]}]}
+        self.assertEqual(read_spec(loose).as_dict(), BAR)
+
+    def test_shape_errors(self):
+        bad = [
+            {**BAR, "categories": ["2023년"], "series": [{"name": "", "values": [1]}]},               # 범주 2개 미만
+            {**BAR, "series": [{"name": "", "values": [1200, 1850]}]},                                 # 값의 수가 범주와 다름
+            {**BAR, "series": [{"name": "", "values": [1200, -1, 2400]}]},                             # 음수
+            {**BAR, "series": [{"name": "", "values": [1200, "많음", 2400]}]},
+            {**BAR, "series": []},
+            {**BAR, "categories": ["2023년", "2023년", "2025년"]},
+            {**PIE, "series": [{"name": "가", "values": [1, 2, 3]}, {"name": "나", "values": [1, 2, 3]}]},   # 원은 계열 하나
+            {**PIE, "series": [{"name": "", "values": [0, 0, 0]}]},
+        ]
+        for raw in bad:
+            with self.assertRaises(SpecError, msg=raw):
+                read_spec(raw)
+
+    def test_values_written_next_to_their_category_pass(self):
+        self.assertEqual(grounding(read_spec(BAR), NUMBERS).problems, [])
+        self.assertEqual(grounding(read_spec(PIE), SHARE).problems, [])
+
+    def test_sentence_with_a_category_is_not_reported_as_unused(self):
+        self.assertEqual(omissions(read_spec(BAR), NUMBERS), [{"sentence": "평균 객실 단가는 12.5만 원이다.", "reason": "이 문장의 내용이 명세에 쓰이지 않았습니다"}])
+
+    def test_number_not_in_the_paragraph_is_reported(self):
+        made_up = {**BAR, "series": [{"name": "", "values": [1200, 1850, 2500]}]}
+        problems = grounding(read_spec(made_up), NUMBERS).problems
+        self.assertEqual([problem["field"] for problem in problems], ["series[0].values[2]"])
+
+    def test_swapped_values_are_reported(self):
+        swapped = {**BAR, "series": [{"name": "", "values": [1200, 2400, 1850]}]}
+        fields = [problem["field"] for problem in grounding(read_spec(swapped), NUMBERS).problems]
+        self.assertEqual(fields, ["series[0].values[1]", "series[0].values[2]"])
+
+    def test_a_computed_value_is_not_in_the_paragraph(self):
+        total = {**BAR, "categories": ["2023년", "2024년", "합계"], "series": [{"name": "", "values": [1200, 1850, 3050]}]}
+        self.assertFalse(grounding(read_spec(total), NUMBERS).ok)
+
+    def test_propose_graph_family(self):
+        result = propose(NUMBERS, kind="graph", asker=fake([BAR, SEQUENCE]))
+        self.assertEqual([(c["spec"]["kind"], c["ok"]) for c in result["candidates"]], [("bar", True), ("sequence", False)])
+        self.assertEqual(propose(NUMBERS, kind="diagram", asker=fake([BAR]))["usable"], 0)
+        self.assertEqual(propose(NUMBERS, kind="bar", asker=fake([BAR]))["usable"], 1)
+
+    @unittest.skipUnless(font_available(), "한글 글꼴이 없음")
+    def test_graphs_render(self):
+        line = {"kind": "line", "title": "분기별 추이", "unit": "%", "categories": ["1분기", "2분기", "3분기", "4분기"],
+                "series": [{"name": "가동률", "values": [70, 75, 82, 88]}, {"name": "불량률", "values": [5, 4, 3.5, 2]}]}
+        for raw in (BAR, line, PIE):
+            drawn = render(raw, width_mm=120)
+            self.assertEqual(drawn.png[:8], b"\x89PNG\r\n\x1a\n")
+            self.assertEqual(drawn.width, round(120 / 25.4 * 300))
+            self.assertEqual(render(raw, width_mm=120).png, drawn.png)
 
 
 class TableTextTests(unittest.TestCase):

@@ -6,12 +6,15 @@
   structure 구성      root: 맨 위 칸의 이름, items: [{label, children?: [글]}]   2~6갈래
   compare   비교      items: [{label, children: [글]}]        2~4열, 열마다 1~6줄
   table     표        header: [글], rows: [[글]]              2~6열, 1~10행
+  bar 막대 / line 꺾은선 / pie 원   그래프. categories: [가로축의 이름], series: [{name, values: [수]}], unit: 단위
+            범주 2~12개(원은 2~8개), 계열 1~4개(원은 1개). 값은 0 이상의 수이고 범주와 같은 개수
   title은 그림 안에 그리지 않는다. 원고의 그림 제목 줄('[그림 1-1] …', '<표 1-1> …')에 쓸 글이다.
 
 두 가지를 따로 본다.
   read_spec  모양 — 칸 수, 글 길이, 겹치는 이름. 어기면 SpecError(그릴 수 없다). 사람이 고친 명세도 이 검사는 거친다.
   grounding  근거 — 명세의 글이 집필자가 쓴 글(문단, 수행준거)에 있는 말인가. 새 수치·영문·상표가 들어왔는가.
              생성형 AI가 낸 후보는 지적이 하나라도 있으면 쓰지 않는다(candidates). 사람이 고친 명세에는 알림으로만 쓴다.
+             그래프의 값은 글에 적힌 수여야 하고, 그 수가 범주 이름과 같은 문장에 있어야 한다(계산하거나 어림한 값, 다른 범주의 값을 막는다).
 낱말 대조는 형태소 분석이 아니라 어림이다: 낱말에서 조사·어미를 떼어 가며 글(띄어쓰기 없앤 것)에 있는지 본다.
 """
 
@@ -20,8 +23,13 @@ from dataclasses import dataclass, field
 
 from ncs_core.brands import find_brands
 
-KINDS = ("sequence", "cycle", "structure", "compare", "table")
-KIND_NAMES = {"sequence": "순서", "cycle": "순환", "structure": "구성", "compare": "비교", "table": "표"}
+GRAPH_KINDS = ("bar", "line", "pie")
+KINDS = ("sequence", "cycle", "structure", "compare", "table", *GRAPH_KINDS)
+KIND_NAMES = {"sequence": "순서", "cycle": "순환", "structure": "구성", "compare": "비교", "table": "표", "bar": "막대 그래프", "line": "꺾은선 그래프",
+              "pie": "원 그래프"}
+# 이미지 저작권 DB의 그림 종류(image_assets.kind) — DB의 'table'은 '도표'라 도해(순서·순환·구조·비교)와 표가 함께 여기에 든다
+ASSET_KIND = {"sequence": "table", "cycle": "table", "structure": "table", "compare": "table", "table": "table",
+              "bar": "graph", "line": "graph", "pie": "graph"}
 ITEM_RANGE = {"sequence": (2, 8), "cycle": (3, 6), "structure": (2, 6), "compare": (2, 4)}
 MAX_TITLE = 40
 MAX_LABEL = 24
@@ -32,10 +40,15 @@ COLUMN_RANGE = (2, 6)
 ROW_RANGE = (1, 10)
 MAX_CELL = 60
 MAX_CANDIDATES = 3
+CATEGORY_RANGE = (2, 12)
+PIE_RANGE = (2, 8)
+SERIES_RANGE = (1, 4)
+MAX_UNIT = 12
+MAX_VALUE = 1e12
 
 # 그림의 틀을 이루는 말 — 글에 없어도 받는다(대상·사실을 더하지 않는 말)
 FRAME_WORDS = frozenset("절차 과정 단계 순서 흐름 구성 구조 체계 비교 구분 종류 유형 항목 내용 특징 차이 요소 개요 예시 관계 분류 기준 순환 표 도표 "
-                        "비고 및 등 또는 그리고 와 과 의 대 별 간 후 전 중 시 내 외".split())
+                        "비고 연도 건수 비율 비중 추이 현황 변화 분포 수량 및 등 또는 그리고 와 과 의 대 별 간 후 전 중 시 내 외".split())
 SUFFIXES = ("으로부터", "에서는", "으로써", "으로서", "에서의", "이라는", "하도록", "하면서", "에서", "으로", "에게", "까지", "부터", "하여", "하고", "하는",
             "한다", "하며", "하기", "되는", "된다", "이다", "이며", "에는", "와의", "과의", "처럼", "보다", "마다", "이나", "하게", "해야", "들을", "들이",
             "들은", "들의", "은", "는", "이", "가", "을", "를", "의", "에", "와", "과", "로", "도", "만", "나", "들", "함", "됨", "임", "기",
@@ -65,9 +78,16 @@ class Spec:
     items: tuple[Item, ...] = ()
     header: tuple[str, ...] = ()
     rows: tuple[tuple[str, ...], ...] = ()
+    categories: tuple[str, ...] = ()
+    series: tuple[tuple[str, tuple[float, ...]], ...] = ()      # (계열 이름, 값들)
+    unit: str = ""
 
     def as_dict(self) -> dict:
         out: dict = {"kind": self.kind, "title": self.title}
+        if self.kind in GRAPH_KINDS:
+            out.update(unit=self.unit, categories=list(self.categories),
+                       series=[{"name": name, "values": [plain_number(value) for value in values]} for name, values in self.series])
+            return out
         if self.kind == "table":
             out.update(header=list(self.header), rows=[list(row) for row in self.rows])
             return out
@@ -87,9 +107,56 @@ class Spec:
             if item.note:
                 out.append((f"items[{i}].note", item.note))
             out += [(f"items[{i}].children[{j}]", child) for j, child in enumerate(item.children)]
+        if self.unit:
+            out.append(("unit", self.unit))
+        out += [(f"categories[{i}]", cell) for i, cell in enumerate(self.categories)]
+        out += [(f"series[{i}].name", name) for i, (name, _) in enumerate(self.series) if name]
         out += [(f"header[{i}]", cell) for i, cell in enumerate(self.header)]
         out += [(f"rows[{r}][{c}]", cell) for r, row in enumerate(self.rows) for c, cell in enumerate(row) if cell]
         return out
+
+
+def plain_number(value: float):
+    """12.0 → 12, 12.5 → 12.5 (JSON과 화면에 보일 꼴)."""
+    return int(value) if float(value).is_integer() else value
+
+
+def number_text(value: float) -> str:
+    """그림에 적을 꼴 — 천 단위 쉼표, 필요 없는 소수 0은 뺀다."""
+    return f"{int(value):,}" if float(value).is_integer() else f"{value:,.4f}".rstrip("0").rstrip(".")
+
+
+def _graph(raw: dict, kind: str, title: str) -> "Spec":
+    low, high = PIE_RANGE if kind == "pie" else CATEGORY_RANGE
+    categories, series = raw.get("categories"), raw.get("series")
+    if not isinstance(categories, list) or not low <= len(categories) <= high:
+        raise SpecError(f"{KIND_NAMES[kind]}의 categories는 {low}~{high}개여야 합니다")
+    names = tuple(_text(cell, f"categories[{i}]", MAX_LABEL) for i, cell in enumerate(categories))
+    if len({squash(name) for name in names}) != len(names):
+        raise SpecError("이름이 같은 범주가 있습니다")
+    limit = (1, 1) if kind == "pie" else SERIES_RANGE
+    if not isinstance(series, list) or not limit[0] <= len(series) <= limit[1]:
+        raise SpecError(f"{KIND_NAMES[kind]}의 series는 " + ("1개여야 합니다" if kind == "pie" else f"{limit[0]}~{limit[1]}개여야 합니다"))
+    out = []
+    for i, entry in enumerate(series):
+        if not isinstance(entry, dict) or not isinstance(entry.get("values"), list) or len(entry["values"]) != len(names):
+            raise SpecError(f"series[{i}].values의 개수가 categories와 다릅니다")
+        values = []
+        for j, value in enumerate(entry["values"]):
+            if isinstance(value, str):
+                try:
+                    value = float(value.replace(",", "").strip())
+                except ValueError:
+                    raise SpecError(f"series[{i}].values[{j}]는 수여야 합니다: {value[:20]}") from None
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value or not 0 <= value <= MAX_VALUE:
+                raise SpecError(f"series[{i}].values[{j}]는 0 이상의 수여야 합니다")
+            values.append(float(value))
+        out.append((_text(entry.get("name"), f"series[{i}].name", MAX_LABEL, required=len(series) > 1), tuple(values)))
+    if len(out) > 1 and len({squash(name) for name, _ in out}) != len(out):
+        raise SpecError("이름이 같은 계열이 있습니다")
+    if kind == "pie" and sum(out[0][1]) <= 0:
+        raise SpecError("원 그래프의 값이 모두 0입니다")
+    return Spec(kind, title, categories=names, series=tuple(out), unit=_text(raw.get("unit"), "unit", MAX_UNIT, required=False))
 
 
 def _text(value, name: str, limit: int, *, required: bool = True) -> str:
@@ -141,6 +208,8 @@ def read_spec(raw) -> Spec:
     if kind not in KINDS:
         raise SpecError(f"kind는 {', '.join(KINDS)} 가운데 하나여야 합니다")
     title = _text(raw.get("title"), "title", MAX_TITLE, required=False)
+    if kind in GRAPH_KINDS:
+        return _graph(raw, kind, title)
     if kind == "table":
         header, rows = raw.get("header"), raw.get("rows")
         if not isinstance(header, list) or not COLUMN_RANGE[0] <= len(header) <= COLUMN_RANGE[1]:
@@ -190,7 +259,7 @@ def _in_source(word: str, flat: str) -> bool:
     if word in flat or word in FRAME_WORDS:
         return True
     for suffix in SUFFIXES:
-        if word.endswith(suffix) and len(word) - len(suffix) >= 2 and word[:-len(suffix)] in flat:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 2 and (word[:-len(suffix)] in flat or word[:-len(suffix)] in FRAME_WORDS):
             return True
     return _conjugated(word, flat)
 
@@ -231,10 +300,53 @@ def grounding(spec: Spec, source: str) -> Grounding:
         missing = [word for token in WORD.findall(text) for word in HANGUL.findall(token) if len(word) >= 2 and not _in_source(word, flat)]
         if missing:
             add(name, text, "글에 없는 말 " + ", ".join(f"'{word}'" for word in dict.fromkeys(missing)))
+    if spec.kind in GRAPH_KINDS:
+        _graph_values(spec, source or "", add)
     return result
 
 
-SENTENCE = re.compile(r"[^.!?\n]+[.!?]?")
+def _numbers(text: str) -> set[float]:
+    out = set()
+    for found in NUMBER.findall(text):
+        try:
+            out.add(float(found.replace(",", "")))
+        except ValueError:
+            continue
+    return out
+
+
+def _beside(flat: str, category: str, shown: float, others: list[str]) -> bool:
+    """한 문장(띄어쓰기 없앤 것) 안에서 범주 이름과 그 수 사이에 다른 범주 이름이 끼어 있지 않은 짝이 있는가.
+
+    '2023년 1,200건, 2024년 1,850건'에서 2024년의 값은 1,850이지 1,200이 아니다 — 같은 문장에 있다는 것만으로는 짝이 아니다.
+    """
+    spots = [m.start() for m in re.finditer(re.escape(category), flat)]
+    numbers = [(m.start(), m.end()) for m in NUMBER.finditer(flat) if float(m.group().replace(",", "")) == shown]      # 우리말은 '이름 … 수' 순서로 적는다
+    walls = [m.start() for other in others for m in re.finditer(re.escape(other), flat)]
+    for spot in spots:
+        for start, _end in numbers:
+            if start >= spot + len(category) and not any(spot < wall < start for wall in walls):      # 이름 뒤에 오는 수만 그 이름의 값으로 본다
+                return True
+    return False
+
+
+def _graph_values(spec: Spec, source: str, add) -> None:
+    """그래프의 값마다: 글에 적힌 수인가, 그 수가 범주 이름의 값으로 적혀 있는가(같은 문장, 사이에 다른 범주 이름 없음)."""
+    known = _numbers(source)
+    sentences = [squash(match.group()) for match in SENTENCE.finditer(source)]
+    names = [squash(category) for category in spec.categories]
+    for s, (_name, values) in enumerate(spec.series):
+        for c, value in enumerate(values):
+            field_name, shown, category = f"series[{s}].values[{c}]", number_text(value), spec.categories[c]
+            if value not in known:
+                add(field_name, shown, f"글에 없는 수 '{shown}' ({category})")
+                continue
+            others = [name for i, name in enumerate(names) if i != c and name not in names[c] and names[c] not in name]
+            if not any(names[c] in flat and _beside(flat, names[c], value, others) for flat in sentences):
+                add(field_name, shown, f"글에서 '{category}'의 값으로 '{shown}'을(를) 찾지 못했습니다(같은 문장에 이름과 수가 나란히 있어야 합니다)")
+
+
+SENTENCE = re.compile(r"(?:[^.!?\n]|[.](?=\d))+[.!?]?")      # 소수점(12.5)에서는 끊지 않는다
 CLAUSE = re.compile(r"[,;]|(?<=[고며나])\s")
 CAUTION = re.compile(r"않|금지|금한다|안\s*된다|안\s*됨|말아야|말\s*것|못한다|못\s*함|주의|유의|제외|삼간다|피한다|피해야")
 UNUSED_SHARE = 0.34          # 문장의 낱말 가운데 명세에 쓰인 몫이 3분의 1에 못 미치면 "쓰이지 않은 문장"
@@ -273,6 +385,8 @@ def omissions(spec: Spec, text: str) -> list[dict]:
                 break
         if missed:
             continue
+        if spec.kind in GRAPH_KINDS and any(squash(category) in squash(sentence) for category in spec.categories):
+            continue                                  # 그래프는 수를 옮긴다 — 범주가 나온 문장은 쓰인 것으로 본다(낱말 겹침으로는 재지 못한다)
         used = sum(1 for word in words if _in_source(word, flat))
         if used / len(words) < UNUSED_SHARE:
             found.append({"sentence": sentence, "reason": "이 문장의 내용이 명세에 쓰이지 않았습니다"})
@@ -283,7 +397,9 @@ VERB_END = re.compile(r"(다|고|며|면|서|야|여|해|하여|지|게|는|은|
 
 
 def _groups(spec: Spec) -> list[tuple[str, str]]:
-    """(묶음의 이름, 그 묶음에 적힌 글 전부) — 표의 줄, 그 밖에는 칸 하나와 그 설명·아래 줄."""
+    """(묶음의 이름, 그 묶음에 적힌 글 전부) — 표의 줄, 그 밖에는 칸 하나와 그 설명·아래 줄. 그래프는 묶음으로 보지 않는다."""
+    if spec.kind in GRAPH_KINDS:
+        return []
     if spec.kind == "table":
         return [(row[0], " ".join(row)) for row in spec.rows if row[0]]
     return [(item.label, " ".join((item.label, item.note, *item.children))) for item in spec.items]

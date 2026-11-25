@@ -246,6 +246,9 @@ export const api = {
     // PNG를 받아 { ok, blob, summary }로 — 화면이 미리 보기와 내려받기에 함께 쓴다
     render: (spec, widthMm, signal) => fetchFile("/api/ai-image/generate/render", { spec, width_mm: widthMm, format: "png" }, signal),
     tableText: (spec, format) => fetchFile("/api/ai-image/generate/render", { spec, format }, undefined, true),
+    // 이미지 저작권 DB가 있는 서버만(status의 DB). similar: 닮은 그림 대조, register: 그린 그림을 DB에 올린다(에디터·직능연)
+    similar: (body) => postJson("/api/ai-image/generate/similar", body),
+    register: (body) => postJson("/api/ai-image/generate/register", body),
   },
   // 이미지 저작권 DB(REQ-02-010). 서버가 PostgreSQL일 때만 있다(/api/health의 image_db)
   images: {

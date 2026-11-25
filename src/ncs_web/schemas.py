@@ -91,7 +91,7 @@ class DiagramSpecRequest(BaseModel):
     """도표·표 명세 후보(REQ-02-006 ①). 집필자가 쓴 문단이 있어야 한다. kind를 주면 그 종류만 받는다."""
     text: str = Field(max_length=4000)
     criterion: str = Field("", max_length=4000)      # 수행준거 글(선택) — 근거 검사의 글에 함께 넣는다
-    kind: Literal["", "sequence", "cycle", "structure", "compare", "table"] = ""
+    kind: Literal["", "diagram", "graph", "sequence", "cycle", "structure", "compare", "table", "bar", "line", "pie"] = ""
     focus: str = Field("", max_length=200)           # 문단 가운데 그림으로 나타낼 부분(선택)
 
 
@@ -115,8 +115,25 @@ class DiagramMarkingRequest(BaseModel):
     title: str = Field("", max_length=40)
     tool: str = Field(max_length=40)
     date: date
-    kind: Literal["sequence", "cycle", "structure", "compare", "table"]
+    kind: Literal["sequence", "cycle", "structure", "compare", "table", "bar", "line", "pie"]
     number: str = Field("", max_length=10, pattern=r"^(\d+-\d*)?$")     # '1-2', 번호를 아직 모르면 '1-' 또는 빈 글
+
+
+class DiagramSimilarRequest(BaseModel):
+    """만든 그림과 닮은 그림을 이미지 저작권 DB에서 찾는다. 그림은 서버가 명세에서 다시 그린다."""
+    spec: dict[str, Any]
+    width_mm: float = Field(150.0, ge=40.0, le=170.0)
+    limit: int = Field(5, ge=1, le=20)
+
+
+class DiagramRegisterRequest(DiagramSimilarRequest):
+    """만든 그림을 이미지 저작권 DB에 올린다(에디터와 직능연). ai=false는 생성형 AI 없이 직접 적어 그린 그림."""
+    ai: bool = True
+    tool: str = Field("", max_length=40)
+    date: date
+    module_code: str = Field("", max_length=30)
+    number: str = Field("", max_length=10, pattern=r"^(\d+-\d+)?$")      # 그림 번호 '1-2'. 모듈 코드와 함께 적으면 수록 위치로 남는다
+    by: str = Field("", max_length=80)
 
 
 class RecommendChoiceRequest(BaseModel):

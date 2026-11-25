@@ -517,4 +517,12 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
     # {'총 쪽', '지적 쪽': [쪽 번호], '못 찾은 항목'}(ncs_service.annotate.page_progress). 쪽을 알 수 없는 원고(hwp, 배치 정보 없는 hwpx)는 비어 있다.
     ("022_review_pages",
      "ALTER TABLE review_runs ADD COLUMN IF NOT EXISTS pages jsonb"),
+    # 023: 그림의 지각 해시(pHash 64비트, 16진 16자) — 만든 도표·그래프를 DB의 그림과 견줄 때 쓴다(REQ-02-006 ①, image_generate.similar).
+    # 적재할 때가 아니라 대조할 때 없는 것만 채운다. 읽을 수 없는 그림은 빈 값이다. 그림을 지우면 같이 지워진다.
+    ("023_image_phashes",
+     "CREATE TABLE IF NOT EXISTS image_phashes (\n"
+     "    image_id uuid PRIMARY KEY REFERENCES image_assets(id) ON DELETE CASCADE,\n"
+     "    phash text NOT NULL CHECK (phash ~ '^([0-9a-f]{16})?$'),\n"
+     "    created_at timestamptz NOT NULL DEFAULT now()\n"
+     ")"),
 )

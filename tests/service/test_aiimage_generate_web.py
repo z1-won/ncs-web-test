@@ -30,7 +30,7 @@ class GenerateWebTests(unittest.TestCase):
         body = self.client.get("/api/ai-image/generate/status").json()
         self.assertFalse(body["사용 가능"])                       # 테스트 환경에는 키·승인이 없다
         self.assertTrue(body["이유"])
-        self.assertEqual([kind["kind"] for kind in body["종류"]], ["sequence", "cycle", "structure", "compare", "table"])
+        self.assertEqual([kind["kind"] for kind in body["종류"]], ["sequence", "cycle", "structure", "compare", "table", "bar", "line", "pie"])
 
     def test_spec_without_ai_makes_nothing(self):
         response = self.client.post("/api/ai-image/generate/spec", json={"text": TEXT})
@@ -39,7 +39,7 @@ class GenerateWebTests(unittest.TestCase):
 
     def test_spec_needs_a_paragraph(self):
         self.assertEqual(self.client.post("/api/ai-image/generate/spec", json={"text": "  "}).status_code, 400)
-        self.assertEqual(self.client.post("/api/ai-image/generate/spec", json={"text": TEXT, "kind": "pie"}).status_code, 400)
+        self.assertEqual(self.client.post("/api/ai-image/generate/spec", json={"text": TEXT, "kind": "donut"}).status_code, 400)
 
     def test_check(self):
         body = self.client.post("/api/ai-image/generate/check", json={"spec": SPEC, "text": TEXT}).json()
@@ -82,6 +82,24 @@ class GenerateWebTests(unittest.TestCase):
         self.assertIn("F08", table["note"])
         bad = self.client.post("/api/ai-image/generate/marking", json={"title": "x", "tool": "A, B", "date": "2026-07-20", "kind": "sequence"})
         self.assertEqual(bad.status_code, 400)
+
+    def test_graph_check_and_caption(self):
+        text = "2023년 예약은 1,200건이었고 2024년에는 1,850건으로 늘었다."
+        bar = {"kind": "bar", "title": "연도별 예약 건수", "unit": "건", "categories": ["2023년", "2024년"], "series": [{"name": "", "values": [1200, 1850]}]}
+        body = self.client.post("/api/ai-image/generate/check", json={"spec": bar, "text": text}).json()
+        self.assertEqual((body["ok"], body["spec"]), (True, bar))
+        swapped = {**bar, "series": [{"name": "", "values": [1850, 1200]}]}
+        self.assertFalse(self.client.post("/api/ai-image/generate/check", json={"spec": swapped, "text": text}).json()["ok"])
+        lines = self.client.post("/api/ai-image/generate/marking", json={"title": "연도별 예약 건수", "tool": "Claude", "date": "2026-11-25",
+                                                                         "kind": "bar", "number": "2-1"}).json()
+        self.assertEqual((lines["lines"][2], lines["note"]), ("[그림 2-1] 연도별 예약 건수", ""))
+
+    def test_database_paths_need_a_database(self):
+        self.assertFalse(self.client.get("/api/ai-image/generate/status").json()["DB"])
+        for path, more in (("similar", {}), ("register", {"tool": "Claude", "date": "2026-11-25", "by": "에디터"})):
+            response = self.client.post(f"/api/ai-image/generate/{path}", json={"spec": SPEC, **more})
+            self.assertEqual(response.status_code, 400, response.text)
+            self.assertIn("이미지 저작권 DB", response.json()["error"])
 
     def test_render_without_font_is_503(self):
         from unittest import mock

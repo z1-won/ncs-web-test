@@ -11,8 +11,11 @@
   POST /api/ai-image/generate/check    {spec, text?, criterion?} → 다듬은 명세, 근거 검사의 지적, 문단에서 빠진 듯한 내용(사람이 고친 명세에는 알림일 뿐이다)
   POST /api/ai-image/generate/render   {spec, width_mm?, dpi?, format?} → PNG(요약은 X-Ai-Summary) 또는 표의 html·tsv
   POST /api/ai-image/generate/marking  {title, tool, date, kind, number?} → 원고에 붙여 넣을 표기 줄(출처 줄, AI 활용 줄, 번호와 제목)
+  POST /api/ai-image/generate/similar   {spec, width_mm?, limit?} → 이미지 저작권 DB에서 닮은 그림(같은 파일, 지각 해시, 임베딩). DB가 있는 서버만
+  POST /api/ai-image/generate/register  {spec, width_mm?, ai, tool, date, module_code?, number?, by?} → 그린 PNG를 이미지 저작권 DB에 올린다(에디터·직능연)
 marks: [{"key": 그림 목록의 key, "tool": 도구 이름, "mode": "generated"|"modified", "date": "YYYY-MM-DD"}]
-실행은 ncs_aiimage가 맡는다. 올린 파일은 읽는 동안만 임시 폴더에 두고 지운다. 데이터베이스에 남기는 것은 없다.
+실행은 ncs_aiimage가 맡는다. 올린 파일은 읽는 동안만 임시 폴더에 두고 지운다. 데이터베이스에 남기는 것은 generate/register가 올리는 그림과
+generate/similar가 채우는 지각 해시(image_phashes)뿐이다.
 generate/spec은 생성형 AI(글)를 부른다 — 보내는 것은 화면에 넣은 문단과 수행준거 글뿐이고, 키와 외부 전송 승인(LLM_ALLOW_UPLOAD=1)이 없으면 부르지 않는다.
 그림은 서버의 코드가 그린다(ncs_aiimage.draw). 그리는 데에는 외부 전송이 없다.
 """
@@ -24,10 +27,11 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, Response, UploadFile
+from fastapi import FastAPI, File, Form, Request, Response, UploadFile
 
-from ..common import Services, error_response
-from ..schemas import DiagramCheckRequest, DiagramMarkingRequest, DiagramRenderRequest, DiagramSpecRequest, ErrorResponse
+from ..common import Services, actor, error_response
+from ..schemas import (DiagramCheckRequest, DiagramMarkingRequest, DiagramRegisterRequest, DiagramRenderRequest, DiagramSimilarRequest,
+                       DiagramSpecRequest, ErrorResponse)
 
 MAX_BYTES = 200 << 20      # 원고 + 출력본 합계 상한(업로드 보관함과 같은 200MB)
 
@@ -139,7 +143,7 @@ def register(app: FastAPI, services: Services) -> None:
             font_note = ""
         except draw.FontError as error:
             fonts, font_note = [], str(error)
-        return {**generate.status(), "글꼴": fonts, "글꼴 안내": font_note,
+        return {**generate.status(), "글꼴": fonts, "글꼴 안내": font_note, "DB": bool(services.store.supports_history),
                 "폭": {"기본": draw.DEFAULT_WIDTH, "범위": list(draw.WIDTH_RANGE)}, "dpi": draw.DEFAULT_DPI}
 
     @app.post("/api/ai-image/generate/spec", responses={400: {"model": ErrorResponse}})
@@ -200,3 +204,57 @@ def register(app: FastAPI, services: Services) -> None:
         note = ("표의 AI 활용 표기는 AI 도구 사용 표기 예(F08)에 따로 정해져 있지 않습니다. 그림과 같은 줄을 보이니 담당자에게 확인한 뒤 쓰세요."
                 if table else "")
         return {"lines": [f"출처: 집필진 제작({body.date.year})", line, caption], "usage": 1, "mode": "generated", "note": note}
+
+    def _drawn(body: DiagramSimilarRequest):
+        """명세를 다시 그린다 — 화면이 보낸 PNG가 아니라 서버가 그린 것만 DB와 견주고 올린다. → (Spec, Rendered) 또는 오류 응답."""
+        from ncs_aiimage import FontError, SpecError, read_spec, render
+
+        if not services.store.supports_history:
+            return error_response(400, "이 서버에는 이미지 저작권 DB가 연결되어 있지 않습니다. 관리자에게 문의해 주세요")
+        try:
+            spec = read_spec(body.spec)
+            return spec, render(spec, width_mm=body.width_mm)
+        except (SpecError, ValueError) as error:
+            return error_response(400, str(error))
+        except FontError as error:
+            return error_response(503, str(error))
+
+    def _manager(request: Request) -> bool:
+        from ncs_service.workflow.flow import MANAGER_ROLES
+
+        account = getattr(request.state, "account", None)
+        return account is None or account.get("role") in MANAGER_ROLES
+
+    @app.post("/api/ai-image/generate/similar", responses={400: {"model": ErrorResponse}, 503: {"model": ErrorResponse}})
+    def generate_similar(request: Request, body: DiagramSimilarRequest) -> Any:
+        """그린 그림과 닮은 그림을 이미지 저작권 DB에서 찾는다. 집필진에게는 기관이 확정해 추천에 나오는 그림하고만 견준다."""
+        from ncs_recommend import embed
+        from ncs_service.images import image_generate
+
+        drawn = _drawn(body)
+        if isinstance(drawn, Response):
+            return drawn
+        manager = _manager(request)
+        found = image_generate.similar(services.store.dsn, drawn[1].png, limit=body.limit, confirmed_only=not manager, embedder=embed.get())
+        return {**found, "범위": "DB의 모든 그림" if manager else "기관이 확정한 그림"}
+
+    @app.post("/api/ai-image/generate/register", responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse},
+                                                             503: {"model": ErrorResponse}})
+    def generate_register(request: Request, body: DiagramRegisterRequest) -> Any:
+        """그린 그림을 이미지 저작권 DB에 올린다 — 분류는 집필진 제작, AI 활용 유형 1·도구·일자와 함께. 에디터와 직능연만 한다.
+        권리 귀속과 재사용 범위는 정하지 않으므로 기관이 확정하기 전에는 추천에 나오지 않는다."""
+        from ncs_service.images import image_generate
+
+        if not _manager(request):
+            return error_response(403, "이미지 저작권 DB에 올리는 일은 에디터와 직능연 계정만 할 수 있습니다")
+        drawn = _drawn(body)
+        if isinstance(drawn, Response):
+            return drawn
+        who = actor(request, body.by)
+        if not who:
+            return error_response(400, "by(변경한 사람)가 필요합니다. 변경 이력에 남습니다")
+        try:
+            return image_generate.register(services.store.dsn, drawn[1].png, drawn[0], by=who, on=body.date, tool=body.tool, ai=body.ai,
+                                           module_code=body.module_code, number=body.number)
+        except ValueError as error:
+            return error_response(400, str(error))

@@ -1,12 +1,15 @@
-// 이미지 AI 생성(REQ-02-006 ① AI 생성) — 집필한 문단을 바탕으로 도표와 표를 만든다.
+// 이미지 AI 생성(REQ-02-006 ① AI 생성) — 집필한 문단을 바탕으로 도표, 표, 그래프를 만든다.
 // 생성형 AI(글)는 그림이 아니라 '명세'(칸과 글)를 쓰고, 그림은 서버의 코드가 그린다. 그래서 글자가 깨지지 않고 같은 명세는 같은 그림이 된다.
 // 흐름: 유의 안내 확인 → 문단 입력 → 후보(검사 통과/탈락과 까닭) → 하나를 골라 칸을 고침 → 그림(PNG)과 표기 줄 받기.
 // 검사는 둘이다. 근거(명세의 글이 문단에 있는 말인가): AI 후보는 지적이 있으면 쓰지 않는다. 사람이 고친 명세에는 알림만 보인다.
 //                빠진 내용(문단의 금지·주의, 한 줄에서 빠진 말): 알림만 보인다. 칸의 자리가 맞는지는 규칙이 보지 못하므로 사람이 문단과 견주어 본다.
-// 사진, 삽화, 그래프는 아직 만들지 않는다(사진·삽화는 이미지 생성 모델의 약관과 기관 승인이 먼저다).
-// 올린 글과 만든 그림은 서버에 남기지 않는다. 생성형 AI의 응답은 서버의 캐시에 보관 기한 동안 남는다(개인정보처리방침).
+// 그래프의 값은 문단에 적힌 수여야 하고, 그 수가 같은 문장에서 그 범주 이름 뒤에 적혀 있어야 한다(뒤바뀐 값을 잡는다).
+// 사진, 삽화는 아직 만들지 않는다(이미지 생성 모델의 약관과 기관 승인이 먼저다).
+// 문단은 이미지 추천에서 넘겨받을 수 있다(라우터 state — 주소에 문단을 싣지 않는다).
+// 올린 글과 만든 그림은 서버에 남기지 않는다 — 에디터·직능연이 [이미지 저작권 DB에 올리기]를 누른 그림만 남는다.
+// 생성형 AI의 응답은 서버의 캐시에 보관 기한 동안 남는다(개인정보처리방침).
 import React, { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { api, saveBlob } from "../lib/api.js";
 import { plainReason } from "../lib/plain.js";
@@ -15,24 +18,31 @@ import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 import { copyText } from "../lib/clipboard.js";
+import { useAuth, useCanManage } from "../lib/auth.jsx";
 
 const ANCHORS = [{ id: "generate-input", label: "문단" }, { id: "generate-candidates", label: "후보" }, { id: "generate-edit", label: "고치고 받기" }];
 // 유형은 요구사항정의서 REQ-02-009의 태그(사진 / 삽화 / 도표 / 그래프)와 같은 말을 쓴다. 표는 도표와 따로 고른다
 const TYPES = [
   { value: "diagram", label: "도표", hint: "순서, 순환, 구성, 비교" },
   { value: "table", label: "표", hint: "여러 대상을 같은 기준으로 정리" },
-  { value: "graph", label: "그래프", off: "준비 중입니다." },
+  { value: "graph", label: "그래프", hint: "같은 기준의 수치가 둘 이상 적힌 문단: 막대, 꺾은선, 원" },
   { value: "photo", label: "사진", off: "이미지 생성 모델을 쓰는 유형입니다. 쓸 서비스의 약관(출판, 권리 양도)과 기관 승인이 정해진 뒤에 엽니다." },
   { value: "illustration", label: "삽화", off: "이미지 생성 모델을 쓰는 유형입니다. 쓸 서비스의 약관(출판, 권리 양도)과 기관 승인이 정해진 뒤에 엽니다." },
 ];
-const KIND_LABEL = { sequence: "순서", cycle: "순환", structure: "구성", compare: "비교", table: "표" };
-const DIAGRAM_KINDS = ["sequence", "cycle", "structure", "compare"];
+const KIND_LABEL = { sequence: "순서", cycle: "순환", structure: "구성", compare: "비교", table: "표", bar: "막대 그래프", line: "꺾은선 그래프", pie: "원 그래프" };
+const FAMILY = { diagram: ["sequence", "cycle", "structure", "compare"], graph: ["bar", "line", "pie"] };
+const GRAPH_KINDS = FAMILY.graph;
+const isGraph = (kind) => GRAPH_KINDS.includes(kind);
+const ASSET_LABEL = { photo: "사진", illustration: "삽화", table: "도표", graph: "그래프", screenshot: "화면 캡처", other: "기타" };
 const BLANK = {
   sequence: { kind: "sequence", title: "", items: [{ label: "", note: "" }, { label: "", note: "" }, { label: "", note: "" }] },
   cycle: { kind: "cycle", title: "", items: [{ label: "", note: "" }, { label: "", note: "" }, { label: "", note: "" }] },
   structure: { kind: "structure", title: "", root: "", items: [{ label: "", children: [] }, { label: "", children: [] }] },
   compare: { kind: "compare", title: "", items: [{ label: "", children: [""] }, { label: "", children: [""] }] },
   table: { kind: "table", title: "", header: ["구분", "내용"], rows: [["", ""], ["", ""]] },
+  bar: { kind: "bar", title: "", unit: "", categories: ["", "", ""], series: [{ name: "", values: ["", "", ""] }] },
+  line: { kind: "line", title: "", unit: "", categories: ["", "", ""], series: [{ name: "", values: ["", "", ""] }] },
+  pie: { kind: "pie", title: "", unit: "%", categories: ["", "", ""], series: [{ name: "", values: ["", "", ""] }] },
 };
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -111,6 +121,48 @@ function SpecEditor({ spec, onChange, disabled }) {
       </div>
     );
   }
+  if (isGraph(spec.kind)) {
+    const pie = spec.kind === "pie";
+    const maxRows = pie ? 8 : 12;
+    const setCategory = (r, value) => set({ categories: spec.categories.map((old, i) => (i === r ? value : old)) });
+    const setSeries = (c, patch) => set({ series: spec.series.map((old, i) => (i === c ? { ...old, ...patch } : old)) });
+    const setValue = (c, r, value) => setSeries(c, { values: spec.series[c].values.map((old, i) => (i === r ? value : old)) });
+    return (
+      <div className="gen-editor">
+        {field("gen-title", "제목(그림 안에는 그리지 않고 제목 줄에 씁니다)", spec.title, (title) => set({ title }), { maxLength: 40 })}
+        {field("gen-unit", "단위(선택, 예: 건, %, 명)", spec.unit || "", (unit) => set({ unit }), { maxLength: 12 })}
+        <div className="gen-table-wrap">
+          <table className="gen-table">
+            <thead><tr>
+              <th scope="col">범주</th>
+              {spec.series.map((one, c) => (
+                <th key={c} scope="col"><input type="text" className="krds-input" aria-label={`${c + 1}번 계열 이름`} maxLength={24} value={one.name} disabled={disabled}
+                                               placeholder={spec.series.length > 1 ? "계열 이름" : "값(계열 이름은 선택)"} onChange={(e) => setSeries(c, { name: e.target.value })} /></th>))}
+            </tr></thead>
+            <tbody>{spec.categories.map((category, r) => (
+              <tr key={r}>
+                <td><input type="text" className="krds-input" aria-label={`${r + 1}번 범주`} maxLength={24} value={category} disabled={disabled} onChange={(e) => setCategory(r, e.target.value)} /></td>
+                {spec.series.map((one, c) => (
+                  <td key={c}><input type="text" inputMode="decimal" className="krds-input" aria-label={`${category || `${r + 1}번 범주`}의 ${one.name || "값"}`} value={one.values[r] ?? ""} disabled={disabled}
+                                     onChange={(e) => setValue(c, r, e.target.value)} /></td>))}
+              </tr>))}</tbody>
+          </table>
+        </div>
+        <p className="form-hint">값은 문단에 적힌 수를 그대로 적습니다(0 이상). 합계나 평균처럼 계산한 값은 문단에 적혀 있을 때만 씁니다.</p>
+        <div className="gen-editor-actions">
+          <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.categories.length >= maxRows}
+                  onClick={() => set({ categories: [...spec.categories, ""], series: spec.series.map((one) => ({ ...one, values: [...one.values, ""] })) })}>범주 더하기</button>
+          <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.categories.length <= 2}
+                  onClick={() => set({ categories: spec.categories.slice(0, -1), series: spec.series.map((one) => ({ ...one, values: one.values.slice(0, -1) })) })}>마지막 범주 빼기</button>
+          {!pie && (<>
+            <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.series.length >= 4}
+                    onClick={() => set({ series: [...spec.series, { name: "", values: spec.categories.map(() => "") }] })}>계열 더하기</button>
+            <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.series.length <= 1} onClick={() => set({ series: spec.series.slice(0, -1) })}>마지막 계열 빼기</button>
+          </>)}
+        </div>
+      </div>
+    );
+  }
   const withChildren = spec.kind === "structure" || spec.kind === "compare";
   const limits = { sequence: [2, 8], cycle: [3, 6], structure: [2, 6], compare: [2, 4] }[spec.kind];
   return (
@@ -140,9 +192,16 @@ function SpecEditor({ spec, onChange, disabled }) {
   );
 }
 
-// 입력 칸의 값을 서버에 보낼 명세로: 빈 설명과 빈 줄을 뺀다
+// 입력 칸의 값을 서버에 보낼 명세로: 빈 설명과 빈 줄을 뺀다. 그래프의 값은 수로 바꾼다(수가 아닌 글은 그대로 보내 서버가 까닭을 알려 준다)
 function tidy(spec) {
   if (spec.kind === "table") return spec;
+  if (isGraph(spec.kind)) {
+    const number = (value) => {
+      const text = String(value ?? "").replace(/,/g, "").trim();
+      return text !== "" && Number.isFinite(Number(text)) ? Number(text) : String(value ?? "");
+    };
+    return { ...spec, unit: (spec.unit || "").trim(), series: spec.series.map((one) => ({ name: one.name.trim(), values: one.values.map(number) })) };
+  }
   return { ...spec, items: spec.items.map((item) => {
     const out = { label: item.label };
     if (item.note?.trim()) out.note = item.note;
@@ -154,11 +213,13 @@ function tidy(spec) {
 
 export default function GeneratePage() {
   usePageTitle("이미지 AI 생성");
-  const [params] = useSearchParams();
+  const handed = useLocation().state || {};                    // 이미지 추천이 넘긴 { text, criterion }
+  const { status: authStatus } = useAuth();
+  const canManage = useCanManage();
   const [notice, setNotice] = useState(null);
   const [agreed, setAgreed] = useState(false);
   const [status, setStatus] = useState(null);                 // 서버 상태 { 사용 가능, 이유, 도구, 글꼴, … } | "error"
-  const [form, setForm] = useState({ type: "diagram", kind: "", text: params.get("text") || "", criterion: params.get("criterion") || "", focus: "", width: 150 });
+  const [form, setForm] = useState({ type: "diagram", kind: "", text: String(handed.text || "").slice(0, 4000), criterion: String(handed.criterion || "").slice(0, 400), focus: "", width: 150 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);                 // 후보 응답 { method, note, candidates, … }
@@ -171,6 +232,8 @@ export default function GeneratePage() {
   const [mark, setMark] = useState({ tool: "", date: today(), number: "" });
   const [marking, setMarking] = useState(null);               // { lines, note } | { error }
   const [done, setDone] = useState(null);
+  const [similar, setSimilar] = useState(null);               // 닮은 그림 대조 { 닮은 그림, … } | { error } | "loading"
+  const [store, setStore] = useState({ module: "", by: "", busy: false, result: null, error: null });      // 이미지 저작권 DB에 올리기
   const drawn = useRef(null);                                 // { blob, summary } — 마지막으로 그린 그림
   const editRef = useRef(null);
   const set = (key) => (value) => setForm((old) => ({ ...old, [key]: value }));
@@ -184,7 +247,8 @@ export default function GeneratePage() {
   }, []);
 
   const type = TYPES.find((entry) => entry.value === form.type);
-  const kind = form.type === "table" ? "table" : form.kind;
+  const kind = form.type === "table" ? "table" : (form.kind || form.type);      // 종류를 고르지 않았으면 유형(diagram, graph)을 보낸다
+  const blankKind = BLANK[kind] ? kind : FAMILY[form.type]?.[0] || "sequence";
   const ready = status && status !== "error";
   const canAsk = ready && !type.off && form.text.trim().length > 0 && !busy;
 
@@ -202,8 +266,9 @@ export default function GeneratePage() {
 
   function open(spec, from) {
     if (!asked) setAsked({ text: form.text, criterion: form.criterion });
-    const filled = spec.kind === "table" ? clone(spec) : { ...clone(spec), items: spec.items.map((item) => ({ note: "", children: [], ...clone(item) })) };
-    setDraft(filled); setOrigin(from); setShown(null); setDrawError(null); setMarking(null); setDone(null);
+    const filled = spec.kind === "table" || isGraph(spec.kind) ? clone(spec) : { ...clone(spec), items: spec.items.map((item) => ({ note: "", children: [], ...clone(item) })) };
+    setDraft(filled); setOrigin(from); setShown(null); setDrawError(null); setMarking(null); setDone(null); setSimilar(null);
+    setStore((old) => ({ ...old, result: null, error: null }));
     drawn.current = null;
     if (from === "ai") draw(filled);
     setTimeout(() => editRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
@@ -217,6 +282,22 @@ export default function GeneratePage() {
     setDrawing(false);
     if (!ok) { setDrawError(message); return; }
     setShown({ spec: data.spec, problems: data.problems, omissions: data.omissions });
+    setSimilar(null); setStore((old) => ({ ...old, result: null, error: null }));
+  }
+
+  async function findSimilar() {
+    setSimilar("loading");
+    const { ok, data, error: message } = await api.generate.similar({ spec: shown.spec, width_mm: form.width });
+    setSimilar(ok ? data : { error: message });
+  }
+
+  async function register() {
+    setStore((old) => ({ ...old, busy: true, result: null, error: null }));
+    const ai = origin === "ai";
+    const { ok, data, error: message } = await api.generate.register({
+      spec: shown.spec, width_mm: form.width, ai, tool: ai ? mark.tool : "", date: mark.date, module_code: store.module.trim(),
+      number: store.module.trim() ? mark.number : "", by: store.by });
+    setStore((old) => ({ ...old, busy: false, result: ok ? data : null, error: ok ? null : message }));
   }
 
   useEffect(() => {
@@ -254,8 +335,8 @@ export default function GeneratePage() {
     <main id="container" className="inner page image-db-page generate-page">
       <h1 className="page-title">이미지 AI 생성</h1>
       <p className="page-desc">
-        집필한 문단을 바탕으로 <strong>도표와 표</strong>를 만듭니다. 생성형 AI는 그림이 아니라 칸과 글(명세)을 쓰고, 그림은 서버가 그립니다.
-        그래서 글자가 깨지지 않고, 문단에 없는 말이 들어간 후보는 걸러집니다. 그림을 그리는 데에는 외부 전송이 없습니다.
+        집필한 문단을 바탕으로 <strong>도표, 표, 그래프</strong>를 만듭니다. 생성형 AI는 그림이 아니라 칸과 글(명세)을 쓰고, 그림은 서버가 그립니다.
+        그래서 글자가 깨지지 않고, 문단에 없는 말이나 수가 들어간 후보는 걸러집니다. 그림을 그리는 데에는 외부 전송이 없습니다.
       </p>
       <p className="page-desc">
         실을 수 있는 기존 그림이 있는지는 <Link to="/recommend">이미지 추천</Link>에서 먼저 찾아볼 수 있습니다.
@@ -290,19 +371,19 @@ export default function GeneratePage() {
             <div className="krds-check-area gen-types">
               {TYPES.map((entry) => (
                 <div className="krds-form-check" key={entry.value}>
-                  <input type="radio" id={`gen-type-${entry.value}`} name="gen-type" checked={form.type === entry.value} onChange={() => set("type")(entry.value)} />
+                  <input type="radio" id={`gen-type-${entry.value}`} name="gen-type" checked={form.type === entry.value} onChange={() => setForm((old) => ({ ...old, type: entry.value, kind: "" }))} />
                   <label htmlFor={`gen-type-${entry.value}`}>{entry.label}{entry.off && <span className="meta"> (아직 없음)</span>}</label>
                 </div>
               ))}
             </div>
             {type.off ? <PageAlert kind="info">{type.label}은(는) 아직 만들 수 없습니다. {type.off}</PageAlert> : <p className="form-hint">{type.hint}</p>}
-            {form.type === "diagram" && (
+            {FAMILY[form.type] && (
               <div className="form-group gen-kind">
-                <div className="form-tit"><label htmlFor="gen-kind">도표의 종류</label></div>
+                <div className="form-tit"><label htmlFor="gen-kind">{type.label}의 종류</label></div>
                 <div className="form-conts">
                   <select id="gen-kind" className="krds-form-select" value={form.kind} onChange={(e) => set("kind")(e.target.value)}>
                     <option value="">생성형 AI가 고르기</option>
-                    {DIAGRAM_KINDS.map((value) => <option key={value} value={value}>{KIND_LABEL[value]}</option>)}
+                    {FAMILY[form.type].map((value) => <option key={value} value={value}>{KIND_LABEL[value]}</option>)}
                   </select>
                 </div>
               </div>
@@ -315,11 +396,11 @@ export default function GeneratePage() {
               <div className="form-conts">
                 <div className="textarea-wrap">
                   <textarea id="gen-text" className="krds-input recommend-text" rows={7} maxLength={4000} value={form.text} aria-describedby="gen-text-hint"
-                            placeholder="도표나 표로 나타낼 문단을 붙여 넣으세요." onChange={(e) => set("text")(e.target.value)} />
+                            placeholder="도표, 표, 그래프로 나타낼 문단을 붙여 넣으세요." onChange={(e) => set("text")(e.target.value)} />
                   <p className="textarea-count"><span className="sr-only">적은 글자 수 </span><span className="count-now">{form.text.length}</span><span className="count-total">/4000</span></p>
                 </div>
               </div>
-              <p className="form-hint" id="gen-text-hint">그림의 글은 이 문단(과 수행준거)에 있는 말로만 씁니다. 후보를 만들면 이 글이 외부 생성형 AI 서비스로 전송됩니다.</p>
+              <p className="form-hint" id="gen-text-hint">{handed.text ? "이미지 추천에서 넘겨받은 문단입니다. " : ""}그림의 글과 수는 이 문단(과 수행준거)에 있는 것으로만 씁니다. 후보를 만들면 이 글이 외부 생성형 AI 서비스로 전송됩니다.</p>
             </div>
             <div className="form-group form-group-wide">
               <div className="form-tit"><label htmlFor="gen-criterion">수행준거 <span className="meta">(선택)</span></label></div>
@@ -343,7 +424,7 @@ export default function GeneratePage() {
             {error && <PageAlert kind="danger">{error}</PageAlert>}
             <div className="run-buttons image-actions">
               <button type="submit" className="krds-btn large primary" disabled={!canAsk || !status["사용 가능"]}>{busy ? "후보를 만드는 중" : "후보 만들기"}</button>
-              <button type="button" className="krds-btn large secondary" disabled={busy} onClick={() => open(BLANK[kind || "sequence"], "manual")}>칸을 직접 적기</button>
+              <button type="button" className="krds-btn large secondary" disabled={busy} onClick={() => open(BLANK[blankKind], "manual")}>칸을 직접 적기</button>
             </div>
           </div>
           </>)}
@@ -376,7 +457,7 @@ export default function GeneratePage() {
             </li>
           ))}
         </ul>
-        {candidates.length === 0 && result.method === "llm" && <PageAlert kind="info">이 문단에서는 도표나 표로 나타낼 것을 찾지 못했습니다. 종류를 바꾸거나 칸을 직접 적어 그릴 수 있습니다.</PageAlert>}
+        {candidates.length === 0 && result.method === "llm" && <PageAlert kind="info">이 문단에서는 {type.label}(으)로 나타낼 것을 찾지 못했습니다. 유형이나 종류를 바꾸거나 칸을 직접 적어 그릴 수 있습니다.</PageAlert>}
       </section>
       )}
 
@@ -406,6 +487,7 @@ export default function GeneratePage() {
               {dirty && <PageAlert kind="info">칸을 고쳤습니다. [다시 그리기]를 눌러야 그림에 반영됩니다.</PageAlert>}
               <Preview spec={shown.spec} width={form.width} alt={shown.spec.title || KIND_LABEL[shown.spec.kind]} onDrawn={(blob, summary) => { drawn.current = blob ? { blob, summary } : null; }} />
               <Notes problems={shown.problems} omissions={shown.omissions} />
+              {isGraph(shown.spec.kind) && <p className="form-hint">그래프의 값이 문단의 수와 같은지, 범주와 값이 제자리에 있는지 문단과 견주어 확인해 주세요.</p>}
               {shown.problems.length > 0 && <p className="form-hint">문단에 없는 말은 집필자가 직접 고쳐 넣은 것이라면 그대로 쓸 수 있습니다. 생성형 AI가 넣은 말이라면 문단의 말로 바꿔 주세요.</p>}
             </>) : <p className="meta">칸을 적고 [그리기]를 누르면 여기에 그림이 보입니다.</p>}
           </div>
@@ -440,6 +522,55 @@ export default function GeneratePage() {
           <button type="button" className="krds-btn medium primary" disabled={!agreed || dirty} onClick={savePng}>그림(PNG) 내려받기</button>
           {shown.spec.kind === "table" && <button type="button" className="krds-btn medium secondary" disabled={!agreed || dirty} onClick={copyTable}>표로 복사(한글에 붙여 넣기)</button>}
         </div>
+
+        {status.DB && (<>
+        <h3 className="form-section-title gen-mark-title">이미지 저작권 DB</h3>
+        <p className="form-hint">이 그림과 닮은 그림이 이미지 저작권 DB에 있는지 찾아봅니다. 같은 파일, 줄이거나 다시 저장한 그림(지각 해시)을 찾고, 임베딩을 켠 서버에서는 뜻이 가까운 그림도 찾습니다.
+          틀이 같은 도표는 내용이 달라도 닮은 그림으로 나올 수 있으니 직접 보고 판단해 주세요.{canManage ? "" : " 기관이 확정한 그림하고만 견줍니다."}</p>
+        <div className="run-buttons image-actions">
+          <button type="button" className="krds-btn medium secondary" disabled={dirty || similar === "loading"} onClick={findSimilar}>{similar === "loading" ? "찾는 중" : "닮은 그림 찾기"}</button>
+        </div>
+        <div aria-live="polite">
+          {similar?.error && <PageAlert kind="danger">{similar.error}</PageAlert>}
+          {similar && similar !== "loading" && !similar.error && (<>
+            <p className="meta gen-similar-summary">{similar.범위} {similar["대조한 그림"]}장과 견주었습니다{similar["남은 그림"] > 0 ? ` (아직 견주지 못한 그림 ${similar["남은 그림"]}장 — 다시 누르면 이어서 견줍니다)` : ""}.
+              {similar.임베딩 ? "" : " 임베딩은 꺼져 있어 쓰지 않았습니다."}</p>
+            {similar["닮은 그림"].length === 0 ? <PageAlert kind="success">닮은 그림을 찾지 못했습니다.</PageAlert> : (
+              <ul className="gen-similar">
+                {similar["닮은 그림"].map((entry) => (
+                  <li key={entry.id}>
+                    <img src={canManage ? api.images.fileUrl(entry.id) : api.images.recommendableFileUrl(entry.id)} alt={entry.title || "제목 없는 그림"} loading="lazy" />
+                    <div>
+                      <strong>{entry.title || "제목 없음"}</strong>
+                      <span className="meta">{ASSET_LABEL[entry.kind] || "종류 없음"}, {entry.방법}{entry.거리 > 0 ? ` 거리 ${entry.거리}` : ""}, 점수 {entry.점수}, {entry.확정 ? "기관 확정" : "확정 전"}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>)}
+        </div>
+        {canManage && (<>
+          <p className="form-hint">이 그림을 이미지 저작권 DB에 올립니다. 분류는 집필진 제작으로{origin === "ai" ? ", AI 활용 유형은 1(집필진 작성 내용 기반 AI 생성)로 도구와 일자와 함께" : ""} 적습니다.
+            권리 귀속과 재사용 범위는 정하지 않으므로, 이미지 저작권 DB에서 확정하기 전에는 추천에 나오지 않습니다.</p>
+          <div className="gen-mark-fields">
+            <div className="gen-field"><label htmlFor="gen-module">모듈 코드 <span className="meta">(선택)</span></label>
+              <input id="gen-module" type="text" className="krds-input" maxLength={30} value={store.module} placeholder="예: LM1203020201_24v3" onChange={(e) => setStore((old) => ({ ...old, module: e.target.value }))} /></div>
+            {authStatus === "open" && (
+              <div className="gen-field"><label htmlFor="gen-by">올리는 사람</label>
+                <input id="gen-by" type="text" className="krds-input" maxLength={80} value={store.by} onChange={(e) => setStore((old) => ({ ...old, by: e.target.value }))} /></div>
+            )}
+          </div>
+          <p className="form-hint">모듈 코드를 적으면 위의 번호와 함께 수록 위치로 남습니다.</p>
+          {store.error && <PageAlert kind="danger">{store.error}</PageAlert>}
+          {store.result && <PageAlert kind="success">{store.result["새 그림"] ? "이미지 저작권 DB에 올렸습니다." : "같은 그림이 이미 있어 정보를 합쳤습니다."}
+            {store.result["확정 유지"] ? " 기관이 확정한 권리 정보는 바꾸지 않았습니다." : ""} <Link to="/images">이미지 저작권 DB</Link>에서 권리 정보를 확인하고 확정해 주세요.</PageAlert>}
+          <div className="run-buttons image-actions">
+            <button type="button" className="krds-btn medium secondary" onClick={register}
+                    disabled={!agreed || dirty || store.busy || (origin === "ai" && !mark.tool.trim()) || (authStatus === "open" && !store.by.trim())}>{store.busy ? "올리는 중" : "이미지 저작권 DB에 올리기"}</button>
+          </div>
+        </>)}
+        </>)}
         </>)}
       </section>
       )}
