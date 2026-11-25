@@ -1312,9 +1312,6 @@ main [hidden] { display: none !important; }
 .gen-candidate-actions { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3); }
 .gen-field .form-hint-invalid { margin: 0; overflow-wrap: anywhere; }
 .gen-steps { margin-bottom: var(--krds-gap-7); }
-.ai-notice .gen-enter { margin-top: var(--krds-gap-5); }
-.ai-notice .gen-enter + .form-hint { margin: var(--krds-gap-3) 0 0; }
-.ai-notice .gen-enter .krds-btn { flex: 0 0 auto; width: auto; }
 /* 이미지 AI 생성의 사진·삽화(PictureMaker): 장면 글, 만든 그림 목록, 받기 전 확인 */
 .gen-scene { margin: 0 0 var(--krds-gap-3); overflow-wrap: anywhere; }
 .gen-scene.meta, .gen-sent { color: var(--krds-light-color-text-subtle); font-size: var(--krds-pc-font-size-body-small); }
@@ -1329,3 +1326,7 @@ main [hidden] { display: none !important; }
 .gen-mark-fields.is-four { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(13rem, 1fr) minmax(0, 1fr); max-width: 80rem; }
 .generate-page [lang="en"] { font-family: inherit; }
 @media (max-width: 1023px) { .gen-mark-fields.is-four { grid-template-columns: minmax(0, 1fr); } }
+/* 유의 안내의 시작 단추와 그 옆의 안내 글 — 한 줄에 나란히, 좁으면 아래로 */
+.ai-notice .gen-enter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3) var(--krds-gap-5); margin-top: var(--krds-gap-5); }
+.ai-notice .gen-enter .krds-btn { flex: 0 0 auto; width: auto; }
+.ai-notice .gen-enter .form-hint { margin: 0; }

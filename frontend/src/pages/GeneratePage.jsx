@@ -438,11 +438,11 @@ export default function GeneratePage() {
           <input type="checkbox" id="gen-agreed" checked={agreed} disabled={!notice} onChange={(e) => setAgreed(e.target.checked)} />
           <label htmlFor="gen-agreed">위 내용을 확인했습니다</label>
         </div>
-        <div className="run-buttons image-actions gen-enter">
+        <div className="gen-enter">
           <button type="button" className="krds-btn large primary" disabled={!agreed} aria-describedby="gen-enter-hint"
-                  onClick={() => { setView((old) => ({ ...old, notice: false })); window.scrollTo({ top: 0 }); }}>{result || draft ? "계속하기" : "확인하고 시작하기"}</button>
+                  onClick={() => { setView((old) => ({ ...old, notice: false })); window.scrollTo({ top: 0 }); }}>{result || draft || picture ? "계속하기" : "확인하고 시작하기"}</button>
+          <p className="form-hint" id="gen-enter-hint">확인해야 문단을 넣고 그림을 만들 수 있습니다.{result || draft || picture ? " 만들던 내용은 그대로 있습니다." : ""}</p>
         </div>
-        <p className="form-hint" id="gen-enter-hint">확인해야 문단을 넣고 그림을 만들 수 있습니다.{result || draft ? " 만들던 내용은 그대로 있습니다." : ""}</p>
       </section>
       )}
 
