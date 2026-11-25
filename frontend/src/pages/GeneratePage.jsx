@@ -1,5 +1,6 @@
 // 이미지 AI 생성(REQ-02-006 ① AI 생성) — 집필한 문단을 바탕으로 도표, 표, 그래프를 만든다.
 // 생성형 AI(글)는 그림이 아니라 '명세'(칸과 글)를 쓰고, 그림은 서버의 코드가 그린다. 그래서 글자가 깨지지 않고 같은 명세는 같은 그림이 된다.
+// 유의 안내(AI를 쓰기 전에 확인할 것)를 확인하고 [확인하고 시작하기]를 눌러야 문단 입력부터의 화면이 열린다 — 확인 전에는 안내만 보인다.
 // 흐름: 유의 안내 확인 → 문단 입력 → 후보(검사 통과/탈락과 까닭) → 하나를 골라 칸을 고침 → 그림(PNG)과 표기 줄 받기.
 // 화면 위의 단계 표시가 지금 어디인지 보이고, 지나온 단계(유의 안내, 문단, 후보)는 한 줄 요약으로 접힌다([다시 보기]로 편다).
 // 후보는 작은 그림의 카드로 나란히 놓아 견주고, 그림을 누르면 그 카드만 넓게 편다.
@@ -384,17 +385,12 @@ export default function GeneratePage() {
   const candidates = result?.candidates || [];
   const dirty = draft && shown && JSON.stringify(tidy(draft)) !== JSON.stringify(shown.spec);
   const flags = shown && !dirty ? Object.fromEntries(shown.problems.map((problem) => [problem.field, problem.reason])) : {};
-  const step = shown ? 4 : draft ? 3 : result ? 2 : 1;
-  const STEPS = ["문단", "후보", "고치기", "받기"];
-  const agree = (id) => (
-    <div className="krds-form-check">
-      <input type="checkbox" id={id} checked={agreed} onChange={(e) => { setAgreed(e.target.checked); if (e.target.checked) setView((old) => ({ ...old, notice: false })); }} />
-      <label htmlFor={id}>‘AI를 쓰기 전에 확인할 것’을 확인했습니다</label>
-    </div>
-  );
+  const entered = agreed && !view.notice;                     // 유의 안내를 확인하고 들어왔는가 — 아니면 안내만 보인다
+  const step = !entered ? 1 : shown ? 5 : draft ? 4 : result ? 3 : 2;
+  const STEPS = ["확인", "문단", "후보", "고치기", "받기"];
   return (
     <>
-    <Header anchors={result || draft ? ANCHORS : []} hasHistory={false} hasResult={false} />
+    <Header anchors={entered && (result || draft) ? ANCHORS : []} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page image-db-page generate-page">
       <h1 className="page-title">이미지 AI 생성</h1>
       <p className="page-desc">
@@ -406,8 +402,16 @@ export default function GeneratePage() {
         바깥 도구로 만든 그림의 표기와 결과물 현황은 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.
       </p>
 
-      {agreed && !view.notice ? (
-        <p className="gen-folded" id="gen-notice-title">
+      <ol className="krds-step-wrap gen-steps" aria-label="진행 단계">
+        {STEPS.map((label, i) => (
+          <li key={label} className={i + 1 === step ? "active" : i + 1 < step ? "done" : undefined} aria-current={i + 1 === step ? "step" : undefined}>
+            <span><span className="step">{i + 1}단계{i + 1 < step && <span className="sr-only"> 마침</span>}</span><span className="step-tit">{label}</span></span>
+          </li>
+        ))}
+      </ol>
+
+      {entered ? (
+        <p className="gen-folded">
           <span><strong>AI를 쓰기 전에 확인할 것</strong> 확인했습니다.</span>
           <button type="button" className="krds-btn small tertiary" onClick={() => setView((old) => ({ ...old, notice: true }))}>다시 보기</button>
         </p>
@@ -418,28 +422,26 @@ export default function GeneratePage() {
           <ol className="ai-notice-list">{notice.항목.map((item) => <li key={item.제목}><strong>{item.제목}</strong><span>{item.내용}</span></li>)}</ol>
           <p className="meta">근거: {notice.근거}</p>
         </>) : <p className="meta">안내를 불러오는 중입니다.</p>}
-        {agree("gen-agreed")}
+        <div className="krds-form-check">
+          <input type="checkbox" id="gen-agreed" checked={agreed} disabled={!notice} onChange={(e) => setAgreed(e.target.checked)} />
+          <label htmlFor="gen-agreed">위 내용을 확인했습니다</label>
+        </div>
+        <div className="run-buttons image-actions gen-enter">
+          <button type="button" className="krds-btn large primary" disabled={!agreed} aria-describedby="gen-enter-hint"
+                  onClick={() => { setView((old) => ({ ...old, notice: false })); window.scrollTo({ top: 0 }); }}>{result || draft ? "계속하기" : "확인하고 시작하기"}</button>
+        </div>
+        <p className="form-hint" id="gen-enter-hint">확인해야 문단을 넣고 그림을 만들 수 있습니다.{result || draft ? " 만들던 내용은 그대로 있습니다." : ""}</p>
       </section>
-      )}
-
-      {ready && (
-        <ol className="krds-step-wrap gen-steps" aria-label="진행 단계">
-          {STEPS.map((label, i) => (
-            <li key={label} className={i + 1 === step ? "active" : i + 1 < step ? "done" : undefined} aria-current={i + 1 === step ? "step" : undefined}>
-              <span><span className="step">{i + 1}단계{i + 1 < step && <span className="sr-only"> 마침</span>}</span><span className="step-tit">{label}</span></span>
-            </li>
-          ))}
-        </ol>
       )}
 
       {status === null && <Spinner label="서버 상태를 확인하는 중" />}
       {status === "error" && <PageAlert kind="danger">서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요. 계속되면 관리자에게 문의해 주세요.</PageAlert>}
-      {ready && !status["사용 가능"] && (
+      {ready && entered && !status["사용 가능"] && (
         <PageAlert kind="info">지금은 생성형 AI로 후보를 만들 수 없습니다. {plainReason(status.이유)}{"\n"}칸을 직접 적어 그리는 것은 할 수 있습니다.</PageAlert>
       )}
-      {ready && status["글꼴 안내"] && <PageAlert kind="warning">그림을 그릴 수 없습니다. {status["글꼴 안내"]}</PageAlert>}
+      {ready && entered && status["글꼴 안내"] && <PageAlert kind="warning">그림을 그릴 수 없습니다. {status["글꼴 안내"]}</PageAlert>}
 
-      {ready && (
+      {ready && entered && (
       <section id="generate-input" className="nav-anchor image-section">
         <h2 className="section-title">문단</h2>
         {!view.input && (
@@ -515,7 +517,7 @@ export default function GeneratePage() {
       </section>
       )}
 
-      {result && (
+      {entered && result && (
       <section id="generate-candidates" className="nav-anchor image-section" aria-live="polite">
         <h2 className="section-title">후보<span className="meta"> {candidates.length}개 가운데 {result.usable}개 통과</span></h2>
         {!view.candidates && (
@@ -559,7 +561,7 @@ export default function GeneratePage() {
       </section>
       )}
 
-      {draft && (
+      {entered && draft && (
       <section id="generate-edit" className="nav-anchor image-section" ref={editRef}>
         <h2 className="section-title">고치고 받기<span className="meta"> {KIND_LABEL[draft.kind]}{origin === "manual" ? ", 직접 적음" : ", 생성형 AI 후보"}</span></h2>
         <PageAlert kind="warning">칸의 자리가 문단의 뜻과 맞는지는 자동으로 검사하지 못합니다. 아래 문단과 그림을 견주어 보고, 틀린 칸은 고친 뒤 다시 그려 주세요.</PageAlert>
@@ -614,16 +616,10 @@ export default function GeneratePage() {
           {marking?.note && <p className="form-hint">{marking.note}</p>}
           <p className="form-hint">AI 도구 사용 표기 예 1(집필진이 내용을 작성하고 AI로 이미지를 만든 경우)의 꼴입니다. 서약서에 붙일 결과물 현황은 그림을 원고에 넣은 뒤 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.</p>
         </>)}
-        {!agreed && (
-          <PageAlert kind="warning" className="gen-agree-here">
-            <p>확인해야 그림을 내려받거나 이미지 저작권 DB에 올릴 수 있습니다. <a href="#gen-notice-title" onClick={() => setView((old) => ({ ...old, notice: true }))}>내용 보기</a></p>
-            {agree("gen-agreed-here")}
-          </PageAlert>
-        )}
         {done && <PageAlert kind="success">{done}</PageAlert>}
         <div className="run-buttons image-actions">
-          <button type="button" className="krds-btn medium primary" disabled={!agreed || dirty} onClick={savePng}>그림(PNG) 내려받기</button>
-          {shown.spec.kind === "table" && <button type="button" className="krds-btn medium secondary" disabled={!agreed || dirty} onClick={copyTable}>표로 복사(한글에 붙여 넣기)</button>}
+          <button type="button" className="krds-btn medium primary" disabled={dirty} onClick={savePng}>그림(PNG) 내려받기</button>
+          {shown.spec.kind === "table" && <button type="button" className="krds-btn medium secondary" disabled={dirty} onClick={copyTable}>표로 복사(한글에 붙여 넣기)</button>}
         </div>
 
         {status.DB && (<>
@@ -670,7 +666,7 @@ export default function GeneratePage() {
             {store.result["확정 유지"] ? " 기관이 확정한 권리 정보는 바꾸지 않았습니다." : ""} <Link to="/images">이미지 저작권 DB</Link>에서 권리 정보를 확인하고 확정해 주세요.</PageAlert>}
           <div className="run-buttons image-actions">
             <button type="button" className="krds-btn medium secondary" onClick={register}
-                    disabled={!agreed || dirty || store.busy || (origin === "ai" && !mark.tool.trim()) || (authStatus === "open" && !store.by.trim())}>{store.busy ? "올리는 중" : "이미지 저작권 DB에 올리기"}</button>
+                    disabled={dirty || store.busy || (origin === "ai" && !mark.tool.trim()) || (authStatus === "open" && !store.by.trim())}>{store.busy ? "올리는 중" : "이미지 저작권 DB에 올리기"}</button>
           </div>
         </>)}
         </>)}

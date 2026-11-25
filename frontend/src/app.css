@@ -1311,6 +1311,7 @@ main [hidden] { display: none !important; }
 .gen-preview.is-thumb.is-open img { max-height: none; }
 .gen-candidate-actions { display: flex; flex-wrap: wrap; gap: var(--krds-gap-3); }
 .gen-field .form-hint-invalid { margin: 0; overflow-wrap: anywhere; }
-.gen-agree-here { margin-top: var(--krds-gap-5); }
-.gen-agree-here p { margin: 0 0 var(--krds-gap-3); }
-.gen-agree-here a { text-decoration: underline; }
+.gen-steps { margin-bottom: var(--krds-gap-7); }
+.ai-notice .gen-enter { margin-top: var(--krds-gap-5); }
+.ai-notice .gen-enter + .form-hint { margin: var(--krds-gap-3) 0 0; }
+.ai-notice .gen-enter .krds-btn { flex: 0 0 auto; width: auto; }
