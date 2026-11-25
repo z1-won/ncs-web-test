@@ -476,7 +476,7 @@ export default function GeneratePage() {
         <h2 className="section-title">문단</h2>
         <form className="fieldset review-form is-sectioned" onSubmit={ask}>
           <div className="form-section" role="radiogroup" aria-labelledby="gen-type-title">
-            <h3 className="form-section-title" id="gen-type-title">만들 그림의 유형</h3>
+            <h3 className="form-section-title" id="gen-type-title">제작 그림 유형</h3>
             <div className="krds-check-area gen-types">
               {TYPES.map((entry) => (
                 <div className="krds-form-check" key={entry.value}>
