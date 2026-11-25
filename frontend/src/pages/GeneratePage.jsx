@@ -28,9 +28,9 @@ import { useAuth, useCanManage } from "../lib/auth.jsx";
 const ANCHORS = [{ id: "generate-input", label: "문단" }, { id: "generate-candidates", label: "후보" }, { id: "generate-edit", label: "고치고 받기" }];
 // 유형은 요구사항정의서 REQ-02-009의 태그(사진 / 삽화 / 도표 / 그래프)와 같은 말을 쓴다. 표는 도표와 따로 고른다
 const TYPES = [
-  { value: "diagram", label: "도표", hint: "순서, 순환, 구성, 비교" },
-  { value: "table", label: "표", hint: "여러 대상을 같은 기준으로 정리" },
-  { value: "graph", label: "그래프", hint: "같은 기준의 수치가 둘 이상 적힌 문단: 막대, 꺾은선, 원" },
+  { value: "diagram", label: "도표", hint: "순서, 순환, 구성, 비교 가운데 하나로 그립니다. 고르지 않으면 문단에 맞는 것을 생성형 AI가 고릅니다" },
+  { value: "table", label: "표", hint: "여러 대상을 같은 기준으로 정리합니다. 한글에 붙여 넣을 표로도 받을 수 있습니다" },
+  { value: "graph", label: "그래프", hint: "같은 기준의 수치가 둘 이상 적힌 문단을 막대, 꺾은선, 원 그래프로 그립니다" },
   { value: "photo", label: "사진", picture: true, hint: "장비, 작업 모습, 현장. 서버의 이미지 모델이 만듭니다. 얼굴이 드러난 사람과 글자는 넣지 않습니다" },
   { value: "illustration", label: "삽화", picture: true, hint: "단순하게 그린 그림. 서버의 이미지 모델이 만듭니다. 얼굴이 드러난 사람과 글자는 넣지 않습니다" },
 ];
@@ -478,26 +478,28 @@ export default function GeneratePage() {
         <form className="fieldset review-form is-sectioned" onSubmit={ask}>
           <div className="form-section" role="radiogroup" aria-labelledby="gen-type-title">
             <h3 className="form-section-title" id="gen-type-title">제작 그림 유형</h3>
-            <div className="gen-type-row">
-              <div className="krds-check-area gen-types">
-                {TYPES.map((entry) => (
-                  <div className="krds-form-check" key={entry.value}>
-                    <input type="radio" id={`gen-type-${entry.value}`} name="gen-type" checked={form.type === entry.value} onChange={() => setForm((old) => ({ ...old, type: entry.value, kind: "" }))} />
-                    <label htmlFor={`gen-type-${entry.value}`}>{entry.label}</label>
-                  </div>
-                ))}
-              </div>
+            <div className="krds-check-area gen-types">
+              {TYPES.map((entry) => (
+                <div className="krds-form-check" key={entry.value}>
+                  <input type="radio" id={`gen-type-${entry.value}`} name="gen-type" checked={form.type === entry.value} aria-describedby="gen-type-hint"
+                         onChange={() => setForm((old) => ({ ...old, type: entry.value, kind: "" }))} />
+                  <label htmlFor={`gen-type-${entry.value}`}>{entry.label}</label>
+                </div>
+              ))}
+            </div>
+            {/* 고른 유형의 설명과, 종류가 여럿인 유형(도표, 그래프)의 종류 고르기를 한 줄에 둔다 — 유형을 고른 바로 아래에서 이어 읽힌다 */}
+            <div className="gen-type-detail">
               {FAMILY[form.type] && (
                 <div className="gen-kind">
-                  <label htmlFor="gen-kind">종류</label>
+                  <label htmlFor="gen-kind">{type.label}의 종류</label>
                   <select id="gen-kind" className="krds-form-select" value={form.kind} onChange={(e) => set("kind")(e.target.value)}>
                     <option value="">생성형 AI가 고르기</option>
                     {FAMILY[form.type].map((value) => <option key={value} value={value}>{KIND_LABEL[value]}</option>)}
                   </select>
                 </div>
               )}
+              <p className="form-hint" id="gen-type-hint">{type.hint}</p>
             </div>
-            <p className="form-hint">{type.hint}</p>
           </div>
           <div className="form-section">
             <div className="form-group form-group-wide">
