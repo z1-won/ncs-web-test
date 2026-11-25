@@ -1330,3 +1330,9 @@ main [hidden] { display: none !important; }
 .ai-notice .gen-enter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--krds-gap-3) var(--krds-gap-5); margin-top: var(--krds-gap-5); }
 .ai-notice .gen-enter .krds-btn { flex: 0 0 auto; width: auto; }
 .ai-notice .gen-enter .form-hint { margin: 0; }
+/* 점검(2026-11-25)에서 찾은 넘침: 좁은 화면에서 문단 단추 둘이 상자 왼쪽 밖으로 나감 → 한 줄에 하나씩. 그림 테두리 2px이 칸 밖으로 나감 → 테두리를 폭에 넣음 */
+.gen-preview img, .gen-pictures img, .gen-similar img { box-sizing: border-box; }
+@media (max-width: 599px) {
+  .generate-page #generate-input .run-buttons { flex-wrap: wrap; }
+  .generate-page #generate-input .run-buttons .krds-btn { flex: 1 1 100%; width: 100%; }
+}
