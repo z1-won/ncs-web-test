@@ -106,7 +106,7 @@ def _pipeline():
             from diffusers import AutoPipelineForText2Image
 
             device = _device(torch)
-            pipe = AutoPipelineForText2Image.from_pretrained(name, torch_dtype=torch.float32 if device == "cpu" else torch.float16)
+            pipe = AutoPipelineForText2Image.from_pretrained(name, dtype=torch.float32 if device == "cpu" else torch.float16)      # diffusers 0.43: torch_dtype는 곧 없어진다
             _loaded = (name, (pipe.to(device), torch))
         except Exception as error:      # noqa: BLE001 — 설치 안 됨, 모델 없음(내려받기·접근 동의 필요), 메모리 부족 모두 '꺼짐'으로 다룬다
             _loaded = (name, _explain(name, error))
