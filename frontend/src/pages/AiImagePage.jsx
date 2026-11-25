@@ -101,7 +101,7 @@ export default function AiImagePage() {
       </p>
       <p className="page-desc">
         그림의 화질을 높이는 보정은 <Link to="/upscale">업스케일링</Link>에서 합니다. 거기서 제안본을 만들 때 보정한 그림에 표기를 함께 넣을 수 있습니다.
-        AI로 그림을 새로 만드는 기능은 아직 없습니다.
+        문단을 바탕으로 도표와 표를 새로 만드는 일은 <Link to="/ai-generate">이미지 AI 생성</Link>에서 합니다.
       </p>
 
       <section className="ai-notice" aria-labelledby="ai-notice-title">

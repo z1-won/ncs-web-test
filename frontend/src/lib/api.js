@@ -93,7 +93,26 @@ export async function download(path, body, filename) {
   return { ok: true, summary: summary ? JSON.parse(summary) : null };
 }
 
-function saveBlob(blob, filename) {
+// POST(JSON)로 파일을 받아 돌려준다(저장하지 않는다). text=true면 글로 읽는다. 실패하면 { ok:false, error }
+async function fetchFile(path, body, signal, text = false) {
+  let response;
+  try {
+    response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
+  } catch (e) {
+    if (e.name === "AbortError") return { ok: false, aborted: true, error: "취소됨" };
+    console.error("서버 연결 실패:", e);
+    return { ok: false, error: `${CONNECT_FAILED}. ${CONNECT_HINT}` };
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    if (response.status === 401) window.dispatchEvent(new Event("ncs-auth-lost"));
+    return { ok: false, status: response.status, error: plainReason(data?.error || `${response.status} ${response.statusText}`) };
+  }
+  const summary = response.headers.get("x-ai-summary");
+  return text ? { ok: true, text: await response.text() } : { ok: true, blob: await response.blob(), summary: summary ? JSON.parse(summary) : null };
+}
+
+export function saveBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -216,6 +235,17 @@ export const api = {
       form.append("credit", credit);
       return download("/api/ai-image/source", form, filename);
     },
+  },
+  // 이미지 AI 생성(REQ-02-006 ①): 문단 → 도표·표 명세 후보 → 검사 → 그림(PNG). 그림은 서버의 코드가 그린다
+  // spec: { kind, title, items | root | header, rows } (docs/AI_IMAGE.md '도표·표 만들기')
+  generate: {
+    status: () => request("/api/ai-image/generate/status"),
+    spec: (body) => postJson("/api/ai-image/generate/spec", body),
+    check: (spec, text, criterion) => postJson("/api/ai-image/generate/check", { spec, text: text || "", criterion: criterion || "" }),
+    marking: (body) => postJson("/api/ai-image/generate/marking", body),
+    // PNG를 받아 { ok, blob, summary }로 — 화면이 미리 보기와 내려받기에 함께 쓴다
+    render: (spec, widthMm, signal) => fetchFile("/api/ai-image/generate/render", { spec, width_mm: widthMm, format: "png" }, signal),
+    tableText: (spec, format) => fetchFile("/api/ai-image/generate/render", { spec, format }, undefined, true),
   },
   // 이미지 저작권 DB(REQ-02-010). 서버가 PostgreSQL일 때만 있다(/api/health의 image_db)
   images: {

@@ -38,7 +38,7 @@ export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 �
 
 /* 페이지 메뉴 — 처음 화면(HomePage)의 기능 묶음 넷(집필, 검수, 이미지, 마무리)과 같은 묶음, 같은 순서다.
    메뉴와 처음 화면의 묶음이 다르면(예전: 업스케일링이 처음 화면에서는 이미지 묶음, 메뉴에서는 혼자) 같은 기능을 두 자리에서 찾게 된다.
-   묶음은 눌러서 펼치는 2Depth다. 묶음 안 순서는 일하는 순서: 검수는 한 원고 → 여러 원고 → 의견 반영, 이미지는 화질 → 권리 정보 쌓기 → 찾기 → AI 표기.
+   묶음은 눌러서 펼치는 2Depth다. 묶음 안 순서는 일하는 순서: 검수는 한 원고 → 여러 원고 → 의견 반영, 이미지는 화질 → 권리 정보 쌓기 → 찾기 → 없으면 만들기 → AI 표기.
    페이지 안 영역(anchors)은 하위 메뉴(.page-subnav)에 */
 export const PAGES = [
   { id: "write", label: "집필", children: [
@@ -54,6 +54,7 @@ export const PAGES = [
     { path: "/upscale", label: "업스케일링" },
     { path: "/images", label: "이미지 저작권 DB" },
     { path: "/recommend", label: "이미지 추천" },
+    { path: "/ai-generate", label: "이미지 AI 생성" },
     { path: "/ai-image", label: "이미지 AI 보완" },
   ] },
   { id: "finish", label: "마무리", children: [

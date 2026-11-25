@@ -30,3 +30,6 @@ scripts/.stdict_debug.xml
 
 # 업스케일 엔진 실행 파일(waifu2x-ncnn-vulkan 등 — 각자 내려받아 둠, git 제외)
 /tools/
+
+# 도표를 그릴 때 쓰는 글꼴 파일(KoPub 돋움체 등 — 각자 둠, git 제외)
+/fonts/

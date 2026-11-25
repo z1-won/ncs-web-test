@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import AiImagePage from "./pages/AiImagePage.jsx";
+import GeneratePage from "./pages/GeneratePage.jsx";
 import CasesPage from "./pages/CasesPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import ImageDbPage from "./pages/ImageDbPage.jsx";
@@ -38,7 +39,7 @@ function AuthGate({ children }) {
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {/* 페이지: / 처음 화면(최근 원고 미리 보기와 기능 바로 가기), /review 원고 검수, /plan 개발계획서 작성, /upscale 업스케일링, /images 이미지 저작권 DB, /recommend 이미지 추천, /ai-image 이미지 AI 보완, /rights 권리 증빙 점검, /volume 원고 분량 산정, /opinion 의견 반영 검토, /suggest 문장 추천, /progress 원고 진행 현황, /cases 세분류 건. 서버(ncs_web)는 /api 밖 404를 index.html로 돌려 새로 고침에도 열린다 */}
+    {/* 페이지: / 처음 화면(최근 원고 미리 보기와 기능 바로 가기), /review 원고 검수, /plan 개발계획서 작성, /upscale 업스케일링, /images 이미지 저작권 DB, /recommend 이미지 추천, /ai-generate 이미지 AI 생성, /ai-image 이미지 AI 보완, /rights 권리 증빙 점검, /volume 원고 분량 산정, /opinion 의견 반영 검토, /suggest 문장 추천, /progress 원고 진행 현황, /cases 세분류 건. 서버(ncs_web)는 /api 밖 404를 index.html로 돌려 새로 고침에도 열린다 */}
     <BrowserRouter>
       <AuthProvider>
       <AuthGate>
@@ -50,6 +51,7 @@ createRoot(document.getElementById("root")).render(
         <Route path="/upscale" element={<UpscalePage />} />
         <Route path="/images" element={<ImageDbPage />} />
         <Route path="/recommend" element={<RecommendPage />} />
+        <Route path="/ai-generate" element={<GeneratePage />} />
         <Route path="/ai-image" element={<AiImagePage />} />
         <Route path="/rights" element={<RightsPage />} />
         <Route path="/volume" element={<VolumePage />} />

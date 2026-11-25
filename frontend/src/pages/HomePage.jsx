@@ -31,6 +31,7 @@ const GROUPS = [
     { path: "/upscale", label: "업스케일링", desc: "해상도가 낮은 그림의 화질을 높인 제안본을 만듭니다.", files: "원고(hwpx)" },
     { path: "/images", label: "이미지 저작권 DB", desc: "그림과 권리 정보를 등록하고 기관이 확정합니다.", files: "그림 파일과 권리 정보(JSON)" },
     { path: "/recommend", label: "이미지 추천", desc: "문단에 어울리는 그림을 이미지 저작권 DB에서 찾아 줍니다.", files: "파일 없이 문단을 화면에 입력", ai: "켰을 때만 생성형 AI 사용" },
+    { path: "/ai-generate", label: "이미지 AI 생성", desc: "집필한 문단을 바탕으로 도표와 표를 만듭니다. 문단에 있는 말만 쓰는지 검사하고, 그림은 서버가 그립니다.", files: "파일 없이 문단을 화면에 입력", ai: "생성형 AI 사용(직접 적어 그릴 수도 있음)" },
     { path: "/ai-image", label: "이미지 AI 보완", desc: "AI로 만들거나 고친 그림에 활용 표기를 넣고, 서약서에 붙일 결과물 현황을 만듭니다.", files: "원고(hwp, hwpx). 출력본 PDF는 선택" },
   ] },
   { title: "마무리", items: [

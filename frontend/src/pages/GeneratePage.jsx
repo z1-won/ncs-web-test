@@ -1,0 +1,451 @@
+// 이미지 AI 생성(REQ-02-006 ① AI 생성) — 집필한 문단을 바탕으로 도표와 표를 만든다.
+// 생성형 AI(글)는 그림이 아니라 '명세'(칸과 글)를 쓰고, 그림은 서버의 코드가 그린다. 그래서 글자가 깨지지 않고 같은 명세는 같은 그림이 된다.
+// 흐름: 유의 안내 확인 → 문단 입력 → 후보(검사 통과/탈락과 까닭) → 하나를 골라 칸을 고침 → 그림(PNG)과 표기 줄 받기.
+// 검사는 둘이다. 근거(명세의 글이 문단에 있는 말인가): AI 후보는 지적이 있으면 쓰지 않는다. 사람이 고친 명세에는 알림만 보인다.
+//                빠진 내용(문단의 금지·주의, 한 줄에서 빠진 말): 알림만 보인다. 칸의 자리가 맞는지는 규칙이 보지 못하므로 사람이 문단과 견주어 본다.
+// 사진, 삽화, 그래프는 아직 만들지 않는다(사진·삽화는 이미지 생성 모델의 약관과 기관 승인이 먼저다).
+// 올린 글과 만든 그림은 서버에 남기지 않는다. 생성형 AI의 응답은 서버의 캐시에 보관 기한 동안 남는다(개인정보처리방침).
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+
+import { api, saveBlob } from "../lib/api.js";
+import { plainReason } from "../lib/plain.js";
+import { Spinner } from "../components/Badge.jsx";
+import { Footer, Header, TopButton } from "../components/Layout.jsx";
+import { PageAlert } from "../components/PageAlert.jsx";
+import { usePageTitle } from "../lib/hooks.js";
+import { copyText } from "../lib/clipboard.js";
+
+const ANCHORS = [{ id: "generate-input", label: "문단" }, { id: "generate-candidates", label: "후보" }, { id: "generate-edit", label: "고치고 받기" }];
+// 유형은 요구사항정의서 REQ-02-009의 태그(사진 / 삽화 / 도표 / 그래프)와 같은 말을 쓴다. 표는 도표와 따로 고른다
+const TYPES = [
+  { value: "diagram", label: "도표", hint: "순서, 순환, 구성, 비교" },
+  { value: "table", label: "표", hint: "여러 대상을 같은 기준으로 정리" },
+  { value: "graph", label: "그래프", off: "준비 중입니다." },
+  { value: "photo", label: "사진", off: "이미지 생성 모델을 쓰는 유형입니다. 쓸 서비스의 약관(출판, 권리 양도)과 기관 승인이 정해진 뒤에 엽니다." },
+  { value: "illustration", label: "삽화", off: "이미지 생성 모델을 쓰는 유형입니다. 쓸 서비스의 약관(출판, 권리 양도)과 기관 승인이 정해진 뒤에 엽니다." },
+];
+const KIND_LABEL = { sequence: "순서", cycle: "순환", structure: "구성", compare: "비교", table: "표" };
+const DIAGRAM_KINDS = ["sequence", "cycle", "structure", "compare"];
+const BLANK = {
+  sequence: { kind: "sequence", title: "", items: [{ label: "", note: "" }, { label: "", note: "" }, { label: "", note: "" }] },
+  cycle: { kind: "cycle", title: "", items: [{ label: "", note: "" }, { label: "", note: "" }, { label: "", note: "" }] },
+  structure: { kind: "structure", title: "", root: "", items: [{ label: "", children: [] }, { label: "", children: [] }] },
+  compare: { kind: "compare", title: "", items: [{ label: "", children: [""] }, { label: "", children: [""] }] },
+  table: { kind: "table", title: "", header: ["구분", "내용"], rows: [["", ""], ["", ""]] },
+};
+const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+// 명세 하나를 그려 보여 준다. 명세나 폭이 바뀌면 다시 그린다. onDrawn(blob, summary): 내려받기에 쓸 수 있게 올려 준다
+function Preview({ spec, width, alt, onDrawn }) {
+  const [state, setState] = useState({ status: "loading" });
+  const key = JSON.stringify(spec) + width;
+  useEffect(() => {
+    const controller = new AbortController();
+    let url = null;
+    setState({ status: "loading" });
+    api.generate.render(spec, width, controller.signal).then((result) => {
+      if (result.aborted) return;
+      if (!result.ok) { setState({ status: "error", error: result.error }); onDrawn?.(null, null); return; }
+      url = URL.createObjectURL(result.blob);
+      setState({ status: "ready", url, summary: result.summary });
+      onDrawn?.(result.blob, result.summary);
+    });
+    return () => { controller.abort(); if (url) URL.revokeObjectURL(url); };
+  }, [key]);                                                    // eslint-disable-line react-hooks/exhaustive-deps
+  if (state.status === "loading") return <div className="gen-preview is-loading"><Spinner label="그리는 중" /></div>;
+  if (state.status === "error") return <PageAlert kind="danger">{state.error}</PageAlert>;
+  return (
+    <figure className="gen-preview">
+      <img src={state.url} alt={alt} />
+      <figcaption className="meta">{state.summary.width}×{state.summary.height}px, 가로 {state.summary.width_mm}mm에 놓으면 {state.summary.dpi} DPI, 글꼴 {state.summary.font}</figcaption>
+    </figure>
+  );
+}
+
+function Notes({ problems, omissions }) {
+  if (!problems?.length && !omissions?.length) return null;
+  return (
+    <ul className="gen-notes">
+      {problems?.map((problem, i) => <li key={`p${i}`} className="is-problem"><strong>문단에 없는 말</strong> {problem.reason}<span className="meta"> ({problem.text})</span></li>)}
+      {omissions?.map((missing, i) => <li key={`o${i}`} className="is-omission"><strong>빠진 듯한 내용</strong> {missing.reason}<span className="meta"> 문단: {missing.sentence}</span></li>)}
+    </ul>
+  );
+}
+
+// 칸을 고치는 입력. 종류마다 칸의 모양이 다르다. 줄 바꿈으로 여러 줄을 적는 칸(children)은 한 줄이 한 항목이다
+function SpecEditor({ spec, onChange, disabled }) {
+  const set = (patch) => onChange({ ...spec, ...patch });
+  const setItem = (index, patch) => set({ items: spec.items.map((item, i) => (i === index ? { ...item, ...patch } : item)) });
+  const field = (id, label, value, change, props = {}) => (
+    <div className="gen-field">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} type="text" className="krds-input" value={value} disabled={disabled} onChange={(e) => change(e.target.value)} {...props} />
+    </div>
+  );
+  if (spec.kind === "table") {
+    const setCell = (r, c, value) => set({ rows: spec.rows.map((row, i) => (i === r ? row.map((cell, j) => (j === c ? value : cell)) : row)) });
+    return (
+      <div className="gen-editor">
+        {field("gen-title", "제목(그림 안에는 그리지 않고 제목 줄에 씁니다)", spec.title, (title) => set({ title }), { maxLength: 40 })}
+        <div className="gen-table-wrap">
+          <table className="gen-table">
+            <thead><tr>{spec.header.map((cell, c) => (
+              <th key={c}><input type="text" className="krds-input" aria-label={`${c + 1}열 이름`} maxLength={24} value={cell} disabled={disabled}
+                                 onChange={(e) => set({ header: spec.header.map((old, j) => (j === c ? e.target.value : old)) })} /></th>))}</tr></thead>
+            <tbody>{spec.rows.map((row, r) => (
+              <tr key={r}>{row.map((cell, c) => (
+                <td key={c}><input type="text" className="krds-input" aria-label={`${r + 1}줄 ${spec.header[c] || `${c + 1}열`}`} maxLength={60} value={cell} disabled={disabled}
+                                   onChange={(e) => setCell(r, c, e.target.value)} /></td>))}</tr>))}</tbody>
+          </table>
+        </div>
+        <div className="gen-editor-actions">
+          <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.rows.length >= 10} onClick={() => set({ rows: [...spec.rows, spec.header.map(() => "")] })}>줄 더하기</button>
+          <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.rows.length <= 1} onClick={() => set({ rows: spec.rows.slice(0, -1) })}>마지막 줄 빼기</button>
+          <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.header.length >= 6}
+                  onClick={() => set({ header: [...spec.header, ""], rows: spec.rows.map((row) => [...row, ""]) })}>열 더하기</button>
+          <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.header.length <= 2}
+                  onClick={() => set({ header: spec.header.slice(0, -1), rows: spec.rows.map((row) => row.slice(0, -1)) })}>마지막 열 빼기</button>
+        </div>
+      </div>
+    );
+  }
+  const withChildren = spec.kind === "structure" || spec.kind === "compare";
+  const limits = { sequence: [2, 8], cycle: [3, 6], structure: [2, 6], compare: [2, 4] }[spec.kind];
+  return (
+    <div className="gen-editor">
+      {field("gen-title", "제목(그림 안에는 그리지 않고 제목 줄에 씁니다)", spec.title, (title) => set({ title }), { maxLength: 40 })}
+      {spec.kind === "structure" && field("gen-root", "맨 위 칸", spec.root, (root) => set({ root }), { maxLength: 24 })}
+      <ol className="gen-items">
+        {spec.items.map((item, i) => (
+          <li key={i}>
+            {field(`gen-label-${i}`, `${i + 1}번 칸`, item.label, (label) => setItem(i, { label }), { maxLength: 24 })}
+            {withChildren ? (
+              <div className="gen-field">
+                <label htmlFor={`gen-children-${i}`}>아래 줄(한 줄에 하나, 6줄까지)</label>
+                <textarea id={`gen-children-${i}`} className="krds-input" rows={3} disabled={disabled} value={(item.children || []).join("\n")}
+                          onChange={(e) => setItem(i, { children: e.target.value.split("\n") })} />
+              </div>
+            ) : field(`gen-note-${i}`, "설명(선택)", item.note || "", (note) => setItem(i, { note }), { maxLength: 40 })}
+          </li>
+        ))}
+      </ol>
+      <div className="gen-editor-actions">
+        <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.items.length >= limits[1]}
+                onClick={() => set({ items: [...spec.items, withChildren ? { label: "", children: [] } : { label: "", note: "" }] })}>칸 더하기</button>
+        <button type="button" className="krds-btn small tertiary" disabled={disabled || spec.items.length <= limits[0]} onClick={() => set({ items: spec.items.slice(0, -1) })}>마지막 칸 빼기</button>
+      </div>
+    </div>
+  );
+}
+
+// 입력 칸의 값을 서버에 보낼 명세로: 빈 설명과 빈 줄을 뺀다
+function tidy(spec) {
+  if (spec.kind === "table") return spec;
+  return { ...spec, items: spec.items.map((item) => {
+    const out = { label: item.label };
+    if (item.note?.trim()) out.note = item.note;
+    const children = (item.children || []).map((line) => line.trim()).filter(Boolean);
+    if (children.length) out.children = children;
+    return out;
+  }) };
+}
+
+export default function GeneratePage() {
+  usePageTitle("이미지 AI 생성");
+  const [params] = useSearchParams();
+  const [notice, setNotice] = useState(null);
+  const [agreed, setAgreed] = useState(false);
+  const [status, setStatus] = useState(null);                 // 서버 상태 { 사용 가능, 이유, 도구, 글꼴, … } | "error"
+  const [form, setForm] = useState({ type: "diagram", kind: "", text: params.get("text") || "", criterion: params.get("criterion") || "", focus: "", width: 150 });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);                 // 후보 응답 { method, note, candidates, … }
+  const [asked, setAsked] = useState(null);                   // 후보를 만든 입력(문단, 수행준거) — 검사는 이 글로 한다
+  const [draft, setDraft] = useState(null);                   // 고치는 중인 명세(입력 칸의 값)
+  const [origin, setOrigin] = useState(null);                 // "ai"(생성형 AI 후보에서) | "manual"(직접 적음)
+  const [shown, setShown] = useState(null);                   // 마지막으로 그린 명세 { spec, problems, omissions }
+  const [drawing, setDrawing] = useState(false);
+  const [drawError, setDrawError] = useState(null);
+  const [mark, setMark] = useState({ tool: "", date: today(), number: "" });
+  const [marking, setMarking] = useState(null);               // { lines, note } | { error }
+  const [done, setDone] = useState(null);
+  const drawn = useRef(null);                                 // { blob, summary } — 마지막으로 그린 그림
+  const editRef = useRef(null);
+  const set = (key) => (value) => setForm((old) => ({ ...old, [key]: value }));
+
+  useEffect(() => {
+    api.aiImage.notice().then(({ ok, data }) => { if (ok) setNotice(data); });
+    api.generate.status().then(({ ok, data }) => {
+      setStatus(ok ? data : "error");
+      if (ok && data.도구) setMark((old) => ({ ...old, tool: old.tool || data.도구 }));
+    });
+  }, []);
+
+  const type = TYPES.find((entry) => entry.value === form.type);
+  const kind = form.type === "table" ? "table" : form.kind;
+  const ready = status && status !== "error";
+  const canAsk = ready && !type.off && form.text.trim().length > 0 && !busy;
+
+  async function ask(event) {
+    event.preventDefault();
+    setBusy(true); setError(null); setResult(null); setDone(null);
+    const body = { text: form.text, criterion: form.criterion, kind, focus: form.focus };
+    const { ok, data, error: message } = await api.generate.spec(body);
+    setBusy(false);
+    if (!ok) { setError(message); return; }
+    setAsked({ text: form.text, criterion: form.criterion });
+    setResult(data);
+    setTimeout(() => document.getElementById("generate-candidates")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
+
+  function open(spec, from) {
+    if (!asked) setAsked({ text: form.text, criterion: form.criterion });
+    const filled = spec.kind === "table" ? clone(spec) : { ...clone(spec), items: spec.items.map((item) => ({ note: "", children: [], ...clone(item) })) };
+    setDraft(filled); setOrigin(from); setShown(null); setDrawError(null); setMarking(null); setDone(null);
+    drawn.current = null;
+    if (from === "ai") draw(filled);
+    setTimeout(() => editRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
+
+  // 고친 명세를 검사하고(모양이 틀리면 까닭을 보인다) 다시 그린다
+  async function draw(spec = draft) {
+    setDrawing(true); setDrawError(null); setDone(null);
+    const source = asked || { text: form.text, criterion: form.criterion };
+    const { ok, data, error: message } = await api.generate.check(tidy(spec), source.text, source.criterion);
+    setDrawing(false);
+    if (!ok) { setDrawError(message); return; }
+    setShown({ spec: data.spec, problems: data.problems, omissions: data.omissions });
+  }
+
+  useEffect(() => {
+    if (!shown || origin !== "ai" || !mark.tool.trim()) { setMarking(null); return undefined; }
+    let alive = true;
+    api.generate.marking({ title: shown.spec.title, tool: mark.tool, date: mark.date, kind: shown.spec.kind, number: mark.number }).then(({ ok, data, error: message }) => {
+      if (alive) setMarking(ok ? data : { error: message });
+    });
+    return () => { alive = false; };
+  }, [shown, origin, mark.tool, mark.date, mark.number]);
+
+  const fileName = (shown?.spec.title || "도표").replace(/[\\/:*?"<>|]+/g, "_");
+  function savePng() {
+    if (!drawn.current?.blob) return;
+    saveBlob(drawn.current.blob, `${fileName}.png`);
+    setDone("그림을 내려받았습니다. 원고에 넣을 때 가로 크기를 위에 적힌 mm로 맞추면 300 DPI가 됩니다.");
+  }
+  async function copyTable() {
+    const html = await api.generate.tableText(shown.spec, "html");
+    const tsv = await api.generate.tableText(shown.spec, "tsv");
+    if (!html.ok || !tsv.ok) { setDone(null); setDrawError(html.error || tsv.error); return; }
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html.text], { type: "text/html" }), "text/plain": new Blob([tsv.text], { type: "text/plain" }) })]);
+      setDone("표를 복사했습니다. 한글 프로그램에 붙여 넣으면 표가 됩니다.");
+    } catch {
+      setDone((await copyText(tsv.text)) ? "표를 탭으로 나눈 글로 복사했습니다." : "복사하지 못했습니다. 브라우저의 복사 권한을 확인해 주세요.");
+    }
+  }
+
+  const candidates = result?.candidates || [];
+  const dirty = draft && shown && JSON.stringify(tidy(draft)) !== JSON.stringify(shown.spec);
+  return (
+    <>
+    <Header anchors={result || draft ? ANCHORS : []} hasHistory={false} hasResult={false} />
+    <main id="container" className="inner page image-db-page generate-page">
+      <h1 className="page-title">이미지 AI 생성</h1>
+      <p className="page-desc">
+        집필한 문단을 바탕으로 <strong>도표와 표</strong>를 만듭니다. 생성형 AI는 그림이 아니라 칸과 글(명세)을 쓰고, 그림은 서버가 그립니다.
+        그래서 글자가 깨지지 않고, 문단에 없는 말이 들어간 후보는 걸러집니다. 그림을 그리는 데에는 외부 전송이 없습니다.
+      </p>
+      <p className="page-desc">
+        실을 수 있는 기존 그림이 있는지는 <Link to="/recommend">이미지 추천</Link>에서 먼저 찾아볼 수 있습니다.
+        바깥 도구로 만든 그림의 표기와 결과물 현황은 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.
+      </p>
+
+      <section className="ai-notice" aria-labelledby="gen-notice-title">
+        <h2 className="section-title" id="gen-notice-title">AI를 쓰기 전에 확인할 것</h2>
+        {notice ? (<>
+          <ol className="ai-notice-list">{notice.항목.map((item) => <li key={item.제목}><strong>{item.제목}</strong><span>{item.내용}</span></li>)}</ol>
+          <p className="meta">근거: {notice.근거}</p>
+        </>) : <p className="meta">안내를 불러오는 중입니다.</p>}
+        <div className="krds-form-check">
+          <input type="checkbox" id="gen-agreed" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+          <label htmlFor="gen-agreed">위 내용을 확인했습니다</label>
+        </div>
+      </section>
+
+      {status === null && <Spinner label="서버 상태를 확인하는 중" />}
+      {status === "error" && <PageAlert kind="danger">서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요. 계속되면 관리자에게 문의해 주세요.</PageAlert>}
+      {ready && !status["사용 가능"] && (
+        <PageAlert kind="info">지금은 생성형 AI로 후보를 만들 수 없습니다. {plainReason(status.이유)}{"\n"}칸을 직접 적어 그리는 것은 할 수 있습니다.</PageAlert>
+      )}
+      {ready && status["글꼴 안내"] && <PageAlert kind="warning">그림을 그릴 수 없습니다. {status["글꼴 안내"]}</PageAlert>}
+
+      {ready && (
+      <section id="generate-input" className="nav-anchor image-section">
+        <h2 className="section-title">문단</h2>
+        <form className="fieldset review-form is-sectioned" onSubmit={ask}>
+          <div className="form-section" role="radiogroup" aria-labelledby="gen-type-title">
+            <h3 className="form-section-title" id="gen-type-title">만들 그림의 유형</h3>
+            <div className="krds-check-area gen-types">
+              {TYPES.map((entry) => (
+                <div className="krds-form-check" key={entry.value}>
+                  <input type="radio" id={`gen-type-${entry.value}`} name="gen-type" checked={form.type === entry.value} onChange={() => set("type")(entry.value)} />
+                  <label htmlFor={`gen-type-${entry.value}`}>{entry.label}{entry.off && <span className="meta"> (아직 없음)</span>}</label>
+                </div>
+              ))}
+            </div>
+            {type.off ? <PageAlert kind="info">{type.label}은(는) 아직 만들 수 없습니다. {type.off}</PageAlert> : <p className="form-hint">{type.hint}</p>}
+            {form.type === "diagram" && (
+              <div className="form-group gen-kind">
+                <div className="form-tit"><label htmlFor="gen-kind">도표의 종류</label></div>
+                <div className="form-conts">
+                  <select id="gen-kind" className="krds-form-select" value={form.kind} onChange={(e) => set("kind")(e.target.value)}>
+                    <option value="">생성형 AI가 고르기</option>
+                    {DIAGRAM_KINDS.map((value) => <option key={value} value={value}>{KIND_LABEL[value]}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+          {!type.off && (<>
+          <div className="form-section">
+            <div className="form-group form-group-wide">
+              <div className="form-tit"><label htmlFor="gen-text">집필한 문단</label></div>
+              <div className="form-conts">
+                <div className="textarea-wrap">
+                  <textarea id="gen-text" className="krds-input recommend-text" rows={7} maxLength={4000} value={form.text} aria-describedby="gen-text-hint"
+                            placeholder="도표나 표로 나타낼 문단을 붙여 넣으세요." onChange={(e) => set("text")(e.target.value)} />
+                  <p className="textarea-count"><span className="sr-only">적은 글자 수 </span><span className="count-now">{form.text.length}</span><span className="count-total">/4000</span></p>
+                </div>
+              </div>
+              <p className="form-hint" id="gen-text-hint">그림의 글은 이 문단(과 수행준거)에 있는 말로만 씁니다. 후보를 만들면 이 글이 외부 생성형 AI 서비스로 전송됩니다.</p>
+            </div>
+            <div className="form-group form-group-wide">
+              <div className="form-tit"><label htmlFor="gen-criterion">수행준거 <span className="meta">(선택)</span></label></div>
+              <div className="form-conts"><input id="gen-criterion" type="text" className="krds-input" maxLength={400} value={form.criterion}
+                                                 placeholder="예: 1.1 예약 접수 절차에 따라 예약을 접수할 수 있다." onChange={(e) => set("criterion")(e.target.value)} /></div>
+            </div>
+            <div className="form-group form-group-wide">
+              <div className="form-tit"><label htmlFor="gen-focus">그림으로 나타낼 부분 <span className="meta">(선택)</span></label></div>
+              <div className="form-conts"><input id="gen-focus" type="text" className="krds-input" maxLength={200} value={form.focus}
+                                                 placeholder="예: 예약 접수의 순서" onChange={(e) => set("focus")(e.target.value)} /></div>
+              <p className="form-hint">문단이 길 때 어느 부분을 그릴지 알려 줍니다. 여기 적은 말은 그림에 쓰이지 않습니다.</p>
+            </div>
+            <div className="form-group">
+              <div className="form-tit"><label htmlFor="gen-width">원고에 놓을 가로 크기(mm)</label></div>
+              <div className="form-conts"><input id="gen-width" type="number" className="krds-input" min={40} max={170} step={5} value={form.width}
+                                                 onChange={(e) => set("width")(Math.min(170, Math.max(40, Number(e.target.value) || 150)))} /></div>
+              <p className="form-hint">이 크기에서 300 DPI가 되도록 그립니다. 글자의 인쇄 크기는 같습니다.</p>
+            </div>
+          </div>
+          <div className="form-group form-group-wide form-actions">
+            {error && <PageAlert kind="danger">{error}</PageAlert>}
+            <div className="run-buttons image-actions">
+              <button type="submit" className="krds-btn large primary" disabled={!canAsk || !status["사용 가능"]}>{busy ? "후보를 만드는 중" : "후보 만들기"}</button>
+              <button type="button" className="krds-btn large secondary" disabled={busy} onClick={() => open(BLANK[kind || "sequence"], "manual")}>칸을 직접 적기</button>
+            </div>
+          </div>
+          </>)}
+        </form>
+      </section>
+      )}
+
+      {result && (
+      <section id="generate-candidates" className="nav-anchor image-section" aria-live="polite">
+        <h2 className="section-title">후보<span className="meta"> {candidates.length}개 가운데 {result.usable}개 통과</span></h2>
+        <p className="recommend-method">
+          <span className={`krds-badge ${result.method === "llm" ? "bg-light-information" : "bg-light-gray"}`}>{result.method === "llm" ? `생성형 AI${result.model ? `(${result.model})` : ""}` : "생성형 AI 사용 안 함"}</span>
+          <span className="meta"> {plainReason(result.note)}{result.reason ? ` 생성형 AI의 설명: ${result.reason}` : ""}</span>
+        </p>
+        <ul className="gen-candidates">
+          {candidates.map((entry, i) => (
+            <li key={i} className={`gen-candidate${entry.ok ? "" : " is-rejected"}`}>
+              <h3>후보 {i + 1}{entry.spec && <span className="meta"> {KIND_LABEL[entry.spec.kind]}{entry.spec.title ? `, ${entry.spec.title}` : ""}</span>}
+                <span className={`krds-badge ${entry.ok ? "bg-light-success" : "bg-light-danger"}`}>{entry.ok ? "검사 통과" : "쓰지 않음"}</span>
+                {entry.ok && entry.omissions?.length > 0 && <span className="krds-badge bg-light-warning">빠진 듯한 내용 {entry.omissions.length}건</span>}</h3>
+              {entry.error && <p className="form-hint-invalid">{entry.error}</p>}
+              <Notes problems={entry.problems} omissions={entry.ok ? entry.omissions : []} />
+              {entry.ok && <Preview spec={entry.spec} width={form.width} alt={`후보 ${i + 1} ${entry.spec.title || KIND_LABEL[entry.spec.kind]}`} />}
+              {entry.spec && (
+                <div className="gen-candidate-actions">
+                  <button type="button" className={`krds-btn small ${entry.ok ? "primary" : "tertiary"}`} onClick={() => open(entry.spec, "ai")}>
+                    {entry.ok ? "이 후보 고르기" : "고쳐서 쓰기"}<span className="sr-only"> 후보 {i + 1}</span></button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+        {candidates.length === 0 && result.method === "llm" && <PageAlert kind="info">이 문단에서는 도표나 표로 나타낼 것을 찾지 못했습니다. 종류를 바꾸거나 칸을 직접 적어 그릴 수 있습니다.</PageAlert>}
+      </section>
+      )}
+
+      {draft && (
+      <section id="generate-edit" className="nav-anchor image-section" ref={editRef}>
+        <h2 className="section-title">고치고 받기<span className="meta"> {KIND_LABEL[draft.kind]}{origin === "manual" ? ", 직접 적음" : ", 생성형 AI 후보"}</span></h2>
+        <PageAlert kind="warning">칸의 자리가 문단의 뜻과 맞는지는 자동으로 검사하지 못합니다. 아래 문단과 그림을 견주어 보고, 틀린 칸은 고친 뒤 다시 그려 주세요.</PageAlert>
+        <div className="gen-work">
+          <div className="gen-work-left">
+            {(asked?.text || form.text) && <blockquote className="gen-source"><strong>문단</strong>{asked?.text || form.text}</blockquote>}
+            {origin === "manual" && (
+              <div className="gen-field">
+                <label htmlFor="gen-switch">종류</label>
+                <select id="gen-switch" className="krds-form-select" value={draft.kind} onChange={(e) => { setDraft(clone(BLANK[e.target.value])); setShown(null); }}>
+                  {Object.keys(BLANK).map((value) => <option key={value} value={value}>{KIND_LABEL[value]}</option>)}
+                </select>
+              </div>
+            )}
+            <SpecEditor spec={draft} onChange={setDraft} disabled={drawing} />
+            {drawError && <PageAlert kind="danger">{drawError}</PageAlert>}
+            <div className="run-buttons image-actions">
+              <button type="button" className="krds-btn medium primary" disabled={drawing} onClick={() => draw()}>{drawing ? "그리는 중" : shown ? "다시 그리기" : "그리기"}</button>
+            </div>
+          </div>
+          <div className="gen-work-right" aria-live="polite">
+            {shown ? (<>
+              {dirty && <PageAlert kind="info">칸을 고쳤습니다. [다시 그리기]를 눌러야 그림에 반영됩니다.</PageAlert>}
+              <Preview spec={shown.spec} width={form.width} alt={shown.spec.title || KIND_LABEL[shown.spec.kind]} onDrawn={(blob, summary) => { drawn.current = blob ? { blob, summary } : null; }} />
+              <Notes problems={shown.problems} omissions={shown.omissions} />
+              {shown.problems.length > 0 && <p className="form-hint">문단에 없는 말은 집필자가 직접 고쳐 넣은 것이라면 그대로 쓸 수 있습니다. 생성형 AI가 넣은 말이라면 문단의 말로 바꿔 주세요.</p>}
+            </>) : <p className="meta">칸을 적고 [그리기]를 누르면 여기에 그림이 보입니다.</p>}
+          </div>
+        </div>
+
+        {shown && (<>
+        <h3 className="form-section-title gen-mark-title">원고에 붙일 표기</h3>
+        {origin === "manual" ? (
+          <p className="form-hint">생성형 AI를 쓰지 않고 직접 적어 그린 그림입니다. AI 활용 줄 없이 출처 줄(출처: 집필진 제작(연도))과 그림 번호, 제목만 적습니다.</p>
+        ) : (<>
+          <div className="gen-mark-fields">
+            <div className="gen-field"><label htmlFor="gen-tool">활용한 AI 도구</label>
+              <input id="gen-tool" type="text" className="krds-input" maxLength={40} value={mark.tool} placeholder="예: Claude" onChange={(e) => setMark((old) => ({ ...old, tool: e.target.value }))} /></div>
+            <div className="gen-field"><label htmlFor="gen-date">활용 일자</label>
+              <input id="gen-date" type="date" className="krds-input" value={mark.date} onChange={(e) => setMark((old) => ({ ...old, date: e.target.value || today() }))} /></div>
+            <div className="gen-field"><label htmlFor="gen-number">번호 <span className="meta">(선택)</span></label>
+              <input id="gen-number" type="text" className="krds-input" maxLength={10} value={mark.number} placeholder="예: 1-2" onChange={(e) => setMark((old) => ({ ...old, number: e.target.value.trim() }))} /></div>
+          </div>
+          {marking?.error && <p className="form-hint-invalid" role="alert">{marking.error}</p>}
+          {marking?.lines && (
+            <div className="recommend-credit gen-mark-lines">
+              <code>{marking.lines.map((line) => <span key={line}>{line}</span>)}</code>
+              <button type="button" className="krds-btn small secondary" onClick={async () => setDone((await copyText(marking.lines.join("\n"))) ? "표기 줄을 복사했습니다." : "복사하지 못했습니다.")}>표기 줄 복사</button>
+            </div>
+          )}
+          {marking?.note && <p className="form-hint">{marking.note}</p>}
+          <p className="form-hint">AI 도구 사용 표기 예 1(집필진이 내용을 작성하고 AI로 이미지를 만든 경우)의 꼴입니다. 서약서에 붙일 결과물 현황은 그림을 원고에 넣은 뒤 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.</p>
+        </>)}
+        {!agreed && <PageAlert kind="warning">위의 ‘AI를 쓰기 전에 확인할 것’을 확인해 주세요. 확인해야 내려받을 수 있습니다.</PageAlert>}
+        {done && <PageAlert kind="success">{done}</PageAlert>}
+        <div className="run-buttons image-actions">
+          <button type="button" className="krds-btn medium primary" disabled={!agreed || dirty} onClick={savePng}>그림(PNG) 내려받기</button>
+          {shown.spec.kind === "table" && <button type="button" className="krds-btn medium secondary" disabled={!agreed || dirty} onClick={copyTable}>표로 복사(한글에 붙여 넣기)</button>}
+        </div>
+        </>)}
+      </section>
+      )}
+    </main>
+    <TopButton />
+    <Footer />
+    </>
+  );
+}

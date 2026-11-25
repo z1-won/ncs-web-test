@@ -87,6 +87,38 @@ class RecommendRequest(BaseModel):
     use_llm: bool = True
 
 
+class DiagramSpecRequest(BaseModel):
+    """도표·표 명세 후보(REQ-02-006 ①). 집필자가 쓴 문단이 있어야 한다. kind를 주면 그 종류만 받는다."""
+    text: str = Field(max_length=4000)
+    criterion: str = Field("", max_length=4000)      # 수행준거 글(선택) — 근거 검사의 글에 함께 넣는다
+    kind: Literal["", "sequence", "cycle", "structure", "compare", "table"] = ""
+    focus: str = Field("", max_length=200)           # 문단 가운데 그림으로 나타낼 부분(선택)
+
+
+class DiagramCheckRequest(BaseModel):
+    """명세의 모양과 근거 검사. text가 없으면 모양만 본다."""
+    spec: dict[str, Any]
+    text: str = Field("", max_length=4000)
+    criterion: str = Field("", max_length=4000)
+
+
+class DiagramRenderRequest(BaseModel):
+    """명세를 그린다. format: png 그림 / html·tsv 표를 한글 프로그램에 붙여 넣을 글(표 명세만)."""
+    spec: dict[str, Any]
+    width_mm: float = Field(150.0, ge=40.0, le=170.0)
+    dpi: int = Field(300, ge=72, le=600)
+    format: Literal["png", "html", "tsv"] = "png"
+
+
+class DiagramMarkingRequest(BaseModel):
+    """만든 도표·표 하나에 붙일 표기 줄(출처 줄, AI 활용 줄, 번호와 제목). date는 활용 일자."""
+    title: str = Field("", max_length=40)
+    tool: str = Field(max_length=40)
+    date: date
+    kind: Literal["sequence", "cycle", "structure", "compare", "table"]
+    number: str = Field("", max_length=10, pattern=r"^(\d+-\d*)?$")     # '1-2', 번호를 아직 모르면 '1-' 또는 빈 글
+
+
 class ImageRightsRequest(ImageActionRequest):
     """권리 정보 수정. rights의 모양은 이미지 레코드의 rights와 같다(docs/IMAGE_RECORD.md). null은 그 칸을 비운다."""
     rights: dict[str, Any]
