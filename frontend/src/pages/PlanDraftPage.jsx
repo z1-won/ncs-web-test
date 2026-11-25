@@ -103,11 +103,11 @@ export default function PlanDraftPage() {
     setDetail(data);
     setCatalog((prev) => prev && { ...prev, subclasses: prev.subclasses.map((s) => (s.duty === code ? { ...s, ready: true, units: data.units.length } : s)) });
     const change = data.변화;
-    if (data.처음) setFetchNote(`NCS에서 능력단위 ${data.units.length}개의 요소와 수행준거를 받아 왔습니다.`);
+    if (data.처음) setFetchNote(`NCS에서 능력단위 ${data.units.length}개의 요소와 수행준거를 불러왔습니다.`);
     else if (change) {
       const parts = [["추가", change.추가], ["삭제", change.삭제], ["변경", change.변경]].filter(([, list]) => list.length)
         .map(([name, list]) => `${name} ${list.length}개(${list.join(", ")})`);
-      setFetchNote(parts.length ? `NCS에서 다시 받아 왔습니다. 달라진 능력단위: ${parts.join(", ")}` : "NCS에서 다시 받아 왔습니다. 달라진 내용이 없습니다.");
+      setFetchNote(parts.length ? `NCS에서 다시 불러왔습니다. 달라진 능력단위: ${parts.join(", ")}` : "NCS에서 다시 불러왔습니다. 달라진 내용이 없습니다.");
     }
   }
   useEffect(() => {
@@ -240,9 +240,9 @@ export default function PlanDraftPage() {
     <main id="container" className="inner page">
       <h1 className="page-title">개발계획서 작성</h1>
       <p className="page-desc">
-        세분류를 고르면 NCS 능력단위, 요소, 수행준거를 개발계획서 양식(T01)에 자동으로 채운 초안(hwpx)을 내려받습니다.
-        학습 내용명, 선수학습 등 집필자가 정할 칸은 비워 두며, 초안은 바로 개발계획서 점검 ①~⑩을 거칩니다.
-        이어서 작성한 개발계획서는 ‘개발계획서 점검’ 탭에 올려 다시 점검합니다.
+        세분류를 선택하면 NCS 능력단위, 요소, 수행준거를 개발계획서 양식(T01)에 채운 초안(hwpx)을 내려받을 수 있습니다.
+        학습 내용명, 선수학습처럼 집필자가 정하는 칸은 비워 둡니다. 초안을 만들 때 점검 ①~⑩을 함께 실행합니다.
+        이어서 작성한 개발계획서는 ‘개발계획서 점검’ 탭에서 다시 점검해 주세요.
       </p>
 
       <div className="krds-tab-area page-tools">
@@ -278,8 +278,8 @@ export default function PlanDraftPage() {
           </div>
           <p className="form-hint" id="duty-hint" role="status">
             {detail && detail.duty === duty
-              ? `고른 세분류: ${detail.classes?.대분류 || ""} › ${detail.classes?.중분류 || ""} › ${detail.classes?.소분류 || ""} › ${detail.name} (${duty})`
-              : duty ? "세분류를 읽는 중입니다." : "세분류를 골라 주세요."}
+              ? `선택한 세분류: ${detail.classes?.대분류 || ""} › ${detail.classes?.중분류 || ""} › ${detail.classes?.소분류 || ""} › ${detail.name} (${duty})`
+              : duty ? "세분류 정보를 불러오는 중입니다." : "세분류를 선택해 주세요."}
           </p>
         </div>
 
@@ -288,16 +288,16 @@ export default function PlanDraftPage() {
         <div className="form-group form-group-wide plan-refdata" id="plan-refdata">
           <div className="form-tit"><span>NCS 기준정보</span></div>
           <div className="form-conts">
-            {fetching ? <Spinner label="NCS에서 요소와 수행준거를 받아 오는 중" />
+            {fetching ? <Spinner label="NCS에서 요소와 수행준거를 불러오는 중" />
               : subclass ? (
                 <p className="plan-refdata-line">
-                  <span>{subclass.fetched ? `${subclass.fetched}에 NCS에서 받아 온 자료입니다.` : "프로그램에 들어 있는 기본 자료입니다(받아 온 날 기록 없음)."}</span>
+                  <span>{subclass.fetched ? `${subclass.fetched}에 NCS에서 불러온 자료입니다.` : "기본으로 제공하는 자료입니다. 불러온 날짜는 기록되어 있지 않습니다."}</span>
                   {catalog?.can_fetch && (
-                    <button type="button" className="krds-btn small tertiary" disabled={busy} onClick={() => loadDetail(duty, { refresh: true })}>NCS에서 다시 받아 오기</button>
+                    <button type="button" className="krds-btn small tertiary" disabled={busy} onClick={() => loadDetail(duty, { refresh: true })}>NCS에서 다시 불러오기</button>
                   )}
                 </p>
               ) : detail && !detail.ready && !fetchError ? (
-                <p className="plan-refdata-line"><span>이 세분류는 요소와 수행준거를 아직 받아 두지 않았습니다. {catalog?.can_fetch ? "" : "이 서버는 NCS에서 받아 오도록 설정되어 있지 않습니다. 관리자에게 문의해 주세요."}</span></p>
+                <p className="plan-refdata-line"><span>이 세분류의 요소와 수행준거 자료가 아직 없습니다. {catalog?.can_fetch ? "" : "지금은 NCS에서 자료를 불러올 수 없습니다. 관리자에게 문의해 주세요."}</span></p>
               ) : null}
             <PageAlert kind="danger">{fetchError && (
               <>
@@ -307,18 +307,18 @@ export default function PlanDraftPage() {
             )}</PageAlert>
             <PageAlert kind="success">{fetchNote}</PageAlert>
           </div>
-          <p className="form-hint">NCS가 개정되면 [NCS에서 다시 받아 오기]로 최신 내용을 받습니다. 달라진 능력단위를 알려 줍니다.</p>
+          <p className="form-hint">NCS가 개정되면 [NCS에서 다시 불러오기]를 눌러 최신 내용으로 바꿔 주세요. 달라진 능력단위를 알려 드립니다.</p>
         </div>
         )}
         </div>
         </div>
 
         <div className="form-section" role="group" aria-labelledby="plan-content-title" aria-describedby="plan-content-desc">
-        <h2 className="form-section-title" id="plan-content-title">개발계획서에 적을 내용</h2>
-        <p className="form-section-desc" id="plan-content-desc">개발기관명과 영문 세분류명은 최종본에 꼭 적어야 하는 항목입니다(점검 ⑧). 초안 점검은 1차본(직능연) 기준이라 비워 두어도 됩니다.</p>
+        <h2 className="form-section-title" id="plan-content-title">개발계획서 입력 항목</h2>
+        <p className="form-section-desc" id="plan-content-desc">개발기관명과 영문 세분류명은 최종본의 필수 항목입니다(점검 ⑧). 초안 단계에서는 입력하지 않아도 됩니다.</p>
         <div className="form-section-grid">
         <div className="form-group form-group-wide">
-          <div className="form-tit"><span id="plan-kind-label">신규 / 개선</span></div>
+          <div className="form-tit"><span id="plan-kind-label">개발 구분</span></div>
           <div className="form-conts plan-stage" role="radiogroup" aria-labelledby="plan-kind-label">
             {KINDS.map(([value, label]) => (
               <div className="krds-form-check" key={value}>
@@ -327,7 +327,7 @@ export default function PlanDraftPage() {
               </div>
             ))}
           </div>
-          <p className="form-hint">개선을 고르면 개선 양식(NCS 변경 전·후 대조표, 총괄표의 개선 유형)에 채웁니다. 능력단위마다 개선 유형과 개선 전 능력단위번호를 적습니다.</p>
+          <p className="form-hint">개선을 선택하면 개선 양식(NCS 변경 전·후 대조표, 총괄표의 개선 유형)으로 초안을 만듭니다. 능력단위별로 개선 유형과 개선 전 능력단위번호를 입력해 주세요.</p>
         </div>
 
         <div className="form-group">
@@ -335,7 +335,7 @@ export default function PlanDraftPage() {
           <div className="form-conts">
             <input id="agency" type="text" className="krds-input" placeholder="예: (사)한국호텔전문경영인협회" value={agency} onChange={(e) => setAgency(e.target.value)} aria-describedby="agency-hint" aria-required="true" />
           </div>
-          <p className="form-hint" id="agency-hint">초안에서는 비워 두어도 됩니다.</p>
+          <p className="form-hint" id="agency-hint">초안 단계에서는 입력하지 않아도 됩니다.</p>
         </div>
 
         <div className="form-group">
@@ -343,7 +343,7 @@ export default function PlanDraftPage() {
           <div className="form-conts">
             <input id="english" type="text" className="krds-input" placeholder="예: Rooms Operation" value={english} onChange={(e) => setEnglish(e.target.value)} aria-describedby="english-hint" aria-required="true" />
           </div>
-          <p className="form-hint" id="english-hint">NCS 누리집 ‘환경 분석’의 영문명을 적습니다.</p>
+          <p className="form-hint" id="english-hint">NCS 누리집 ‘환경 분석’에 있는 영문명을 입력해 주세요.</p>
         </div>
 
         {subclass && (
@@ -351,8 +351,8 @@ export default function PlanDraftPage() {
             <div className="form-tit"><span id="units-title">능력단위 ({chosen.length}/{subclass.units.length})와 담당 집필진, 검토진 <span className="required"><i aria-hidden="true">*</i><span className="sr-only">필수</span></span></span></div>
             <div className="form-conts">
               {improve && (
-                <div className="plan-bulk" role="group" aria-label="체크한 능력단위에 한꺼번에 적용">
-                  <span className="plan-bulk-label">체크한 능력단위 {chosen.length}개의 개선 유형</span>
+                <div className="plan-bulk" role="group" aria-label="선택한 능력단위에 일괄 적용">
+                  <span className="plan-bulk-label">선택한 능력단위 {chosen.length}개의 개선 유형</span>
                   <div className="plan-bulk-buttons">
                     {TYPES.map((type) => {
                       const all = chosen.length > 0 && chosen.every((u) => people[u.code]?.type === type.value);
@@ -361,7 +361,7 @@ export default function PlanDraftPage() {
                       );
                     })}
                   </div>
-                  <button type="button" className="krds-btn small tertiary plan-bulk-fill" disabled={!chosen.some((u) => people[u.code]?.type)} onClick={() => setBulk("type", () => "")}>유형 지우기</button>
+                  <button type="button" className="krds-btn small tertiary plan-bulk-fill" disabled={!chosen.some((u) => people[u.code]?.type)} onClick={() => setBulk("type", () => "")}>유형 삭제</button>
                 </div>
               )}
               <div className="krds-table-wrap">
@@ -405,7 +405,7 @@ export default function PlanDraftPage() {
                                 {TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                               </select>
                             </td>
-                            <td><input type="text" className="krds-input small" aria-label={`${u.name} 개선 전 능력단위번호`} placeholder="없으면 ‘없음’" value={people[u.code]?.previous || ""} onChange={(e) => setPerson(u.code, "previous", e.target.value)} /></td>
+                            <td><input type="text" className="krds-input small" aria-label={`${u.name} 개선 전 능력단위번호`} placeholder="없으면 ‘없음’ 입력" value={people[u.code]?.previous || ""} onChange={(e) => setPerson(u.code, "previous", e.target.value)} /></td>
                           </>
                         )}
                         <td><input type="text" className="krds-input small" aria-label={`${u.name} 담당 집필진`} value={people[u.code]?.writer || ""} onChange={(e) => setPerson(u.code, "writer", e.target.value)} /></td>
@@ -417,10 +417,10 @@ export default function PlanDraftPage() {
               </div>
               {improve && (
                 <p className="form-hint">
-                  개선 유형은 직능연이 대상 학습모듈을 검토해 분류한 대로 고릅니다. 정해지지 않았으면 ‘선택’으로 두면 빈 칸으로 나갑니다. 유형을 바꿀 때는 직능연과 협의합니다.
-                  개선 전 능력단위번호는 NCS 변경전후대조표 파일에서 확인해 적습니다. 지금 번호나 기존 학습모듈 번호와 다를 수 있으니 두 파일을 모두 확인합니다.
-                  적은 번호가 지금 번호와 같으면 ‘변경 없음’, 다르면 ‘능력단위 코드 변경’, ‘없음’이면 ‘능력단위 신설’로 채웁니다. 비워 두면 대조표의 개선 전 칸도 비워 둡니다.
-                  개선 전 능력단위명은 해당 판의 NCS 파일을 보고 한글에서 적습니다.
+                  개선 유형은 직능연이 대상 학습모듈을 검토해 분류한 결과대로 선택해 주세요. 정해지지 않았으면 ‘선택’으로 두세요. 초안에는 빈칸으로 들어갑니다. 유형을 바꿀 때는 직능연과 협의해야 합니다.
+                  개선 전 능력단위번호는 NCS 변경전후대조표 파일에서 확인해 입력해 주세요. 현재 번호나 기존 학습모듈 번호와 다를 수 있으니 두 파일을 모두 확인해 주세요.
+                  입력한 번호가 현재 번호와 같으면 ‘변경 없음’, 다르면 ‘능력단위 코드 변경’, ‘없음’이면 ‘능력단위 신설’로 채웁니다. 비워 두면 대조표의 개선 전 칸도 비워 둡니다.
+                  개선 전 능력단위명은 해당 판의 NCS 파일을 확인해 한글 프로그램에서 직접 입력해 주세요.
                 </p>
               )}
             </div>
@@ -438,7 +438,7 @@ export default function PlanDraftPage() {
             </button>
           </div>
           {missing.length > 0 && !busy && (
-            <p className="form-hint" id="missing-hint">비어 있는 필수 항목: {missing.join(", ")}. 초안(1차본)에서는 비워 둘 수 있고, 최종본 점검 ⑧에서 확인합니다.</p>
+            <p className="form-hint" id="missing-hint">입력하지 않은 필수 항목: {missing.join(", ")}. 초안(1차본) 단계에서는 입력하지 않아도 됩니다. 최종본 점검 ⑧에서 확인합니다.</p>
           )}
           <PageAlert kind="danger">{error}</PageAlert>
         </div>
@@ -453,13 +453,13 @@ export default function PlanDraftPage() {
             meta={`${made.name} (${made.duty}), 능력단위 ${made.units}개, 요소 ${made.elements}개, 초안 점검 ①~⑩`}
             downloads={
               <>
-                <span className="meta">초안 파일은 내려받기 폴더에 저장됐습니다</span>
+                <span className="meta">초안 파일을 내려받기 폴더에 저장했습니다.</span>
                 <button type="button" className="krds-btn small tertiary" disabled={busy} onClick={submit} title="같은 설정으로 초안을 다시 만들어 내려받기">다시 내려받기</button>
               </>
             }
           />
           <h2 className="section-title">초안 점검 확인서</h2>
-          <p className="meta section-desc">1차본(직능연) 기준 점검입니다. 학습 내용명, 영문명, 집필진 등 기관이 적는 칸은 해당 없음으로 둡니다. 내려받은 hwpx를 한글에서 열어 이어서 작성하고, 완성본은 아래 ‘개발계획서 점검’에서 ‘최종본’으로 다시 점검하세요.</p>
+          <p className="meta section-desc">1차본(직능연) 기준으로 점검한 결과입니다. 학습 내용명, 영문명, 집필진처럼 개발기관이 입력하는 칸은 ‘해당 없음’으로 표시합니다. 내려받은 hwpx 파일을 한글 프로그램에서 열어 이어서 작성해 주세요. 완성본은 ‘개발계획서 점검’ 탭에서 ‘최종본’으로 다시 점검해 주세요.</p>
           <SheetTable sheet={check} findings={[]} />
         </section>
       )}
@@ -468,7 +468,7 @@ export default function PlanDraftPage() {
 
       <section id="plan-review" className="nav-anchor plan-review" role="tabpanel" aria-labelledby="plan-tab-review" hidden={tool !== "review"}>
         <h2 className="section-title sr-only">개발계획서 점검</h2>{/* 탭 이름과 같아 화면에는 감춘다(화면낭독기용 제목은 남긴다) */}
-        <p className="meta section-desc">작성한 개발계획서(hwp, hwpx)를 올리면 점검 ①~⑩을 실행합니다. 원고는 필요하지 않습니다. 1차본은 학습모듈명, 영문명, 기관명, 집필진, 학습 내용명이 비어 있어도 부적합으로 보지 않습니다. 이 칸들은 최종 단계에서 기관이 적습니다.</p>
+        <p className="meta section-desc">작성한 개발계획서(hwp, hwpx)를 올리면 점검 ①~⑩을 실행합니다. 원고는 필요하지 않습니다. 1차본은 학습모듈명, 영문명, 기관명, 집필진, 학습 내용명이 비어 있어도 부적합으로 판정하지 않습니다. 이 칸은 최종 단계에서 개발기관이 입력합니다.</p>
         <form className="fieldset review-form is-sectioned" onSubmit={runReview}>
           <div className="form-section-grid">
           {/* 다른 페이지의 업로드 칸과 같은 부품 — 파일 선택, 끌어다 놓기, 고른 파일 표시와 삭제 */}
@@ -485,7 +485,7 @@ export default function PlanDraftPage() {
                 </div>
               ))}
             </div>
-            <p className="form-hint">1차본은 기관이 적는 칸이 비어 있어도 됩니다.</p>
+            <p className="form-hint">1차본은 개발기관이 입력하는 칸이 비어 있어도 됩니다.</p>
           </div>
           </div>
 
@@ -523,8 +523,8 @@ export default function PlanDraftPage() {
       <section id="plan-type" className="nav-anchor plan-review" role="tabpanel" aria-labelledby="plan-tab-type" hidden={tool !== "type"}>
         <h2 className="section-title sr-only">개선 유형 판단 자료</h2>{/* 탭 이름과 같아 화면에는 감춘다(화면낭독기용 제목은 남긴다) */}
         <p className="meta section-desc">
-          기존 학습모듈 원고를 올리면 내용 수정이 필요하다는 신호를 찾아 보여 줍니다. 법령 기재, URL 기재, 안전·유의 사항의 ‘해당 사항 없음’, 학습 목표와 NCS 수행준거의 불일치입니다.
-          유형은 직능연이 대상 학습모듈을 검토해 분류하고, 바꿀 때는 직능연과 협의합니다. 이 화면은 유형을 정하지 않습니다.
+          기존 학습모듈 원고를 올리면 내용 수정이 필요한지 판단할 때 참고할 신호를 찾아 보여 줍니다. 찾는 신호는 법령 기재, URL 기재, 안전·유의 사항의 ‘해당 사항 없음’, 학습 목표와 NCS 수행준거의 불일치입니다.
+          개선 유형은 직능연이 대상 학습모듈을 검토해 분류합니다. 유형을 바꿀 때는 직능연과 협의해야 합니다. 이 화면에서는 유형을 정하지 않습니다.
         </p>
         <form className="fieldset review-form is-sectioned" onSubmit={runSignals}>
           <div className="form-section-grid">
@@ -532,7 +532,7 @@ export default function PlanDraftPage() {
             <div className="form-group">
               <div className="form-tit"><label htmlFor="plan-signal-code">학습모듈 코드</label></div>
               <div className="form-conts"><input id="plan-signal-code" type="text" className="krds-input" placeholder="예: LM1203020201_24v3" value={signalCode} onChange={(e) => setSignalCode(e.target.value)} aria-describedby="plan-signal-code-hint" /></div>
-              <p className="form-hint" id="plan-signal-code-hint">비워 두면 파일명에서 찾습니다. 수행준거 대조에 씁니다.</p>
+              <p className="form-hint" id="plan-signal-code-hint">비워 두면 파일 이름에서 찾습니다. 수행준거를 대조할 때 사용합니다.</p>
             </div>
           </div>
           <div className="form-actions">
@@ -555,7 +555,7 @@ export default function PlanDraftPage() {
               <div className="krds-table-wrap">
                 <table className="tbl col data plan-signal-table">
                   <caption>기존 학습모듈 원고에서 찾은 내용 수정 신호</caption>
-                  <thead><tr><th scope="col">신호</th><th scope="col">건수</th><th scope="col">지침이 말하는 유형</th><th scope="col">찾은 것</th><th scope="col">근거</th></tr></thead>
+                  <thead><tr><th scope="col">신호</th><th scope="col">건수</th><th scope="col">지침상 유형</th><th scope="col">찾은 내용</th><th scope="col">근거</th></tr></thead>
                   <tbody>
                     {signals.신호.map((item) => (
                       <tr key={item.신호}>
@@ -577,7 +577,7 @@ export default function PlanDraftPage() {
       {/* ── 계획서 비교 ── 사람 작업의 '결과 비교': 최종결과 예시나 앞 판본과 칸별로 견준다. 판정은 하지 않는다 */}
       <section id="plan-compare" className="nav-anchor plan-review" role="tabpanel" aria-labelledby="plan-tab-compare" hidden={tool !== "compare"}>
         <h2 className="section-title sr-only">계획서 비교</h2>{/* 탭 이름과 같아 화면에는 감춘다(화면낭독기용 제목은 남긴다) */}
-        <p className="meta section-desc">개발계획서 둘을 칸별로 견줍니다. 기준에는 최종결과 예시나 앞 판본을, 대상에는 지금 계획서를 올립니다. 같은 칸은 세기만 하고 다른 칸만 보여 줍니다. 판정은 하지 않습니다.</p>
+        <p className="meta section-desc">개발계획서 두 개를 칸별로 비교합니다. 기준에는 최종결과 예시나 이전 판본을, 대상에는 현재 계획서를 올려 주세요. 내용이 같은 칸은 개수만 세고, 다른 칸만 보여 줍니다. 판정은 하지 않습니다.</p>
         <form className="fieldset review-form is-sectioned" onSubmit={runCompare}>
           <div className="form-section-grid">
             <FileSlot id="plan-base" label="기준 계획서" required accept=".hwp,.hwpx" file={baseFile} disabled={comparing} onChange={(picked) => { setBaseFile(picked); setCompareError(null); }} />
@@ -597,15 +597,15 @@ export default function PlanDraftPage() {
           <section aria-live="polite">
             <ResultHead
               status={<span className={`krds-badge large ${compared.차이.length ? "bg-light-warning" : "bg-light-success"}`}>{compared.차이.length ? `다른 칸 ${compared.차이.length}개` : "다른 칸 없음"}</span>}
-              meta={`기준 ${compared["기준 파일"]} (능력단위 ${compared.요약.능력단위.기준}개), 대상 ${compared["대상 파일"]} (능력단위 ${compared.요약.능력단위.대상}개), 견준 칸 ${compared.요약["견준 칸"]}개 중 같음 ${compared.요약.같음}개`}
+              meta={`기준 ${compared["기준 파일"]} (능력단위 ${compared.요약.능력단위.기준}개), 대상 ${compared["대상 파일"]} (능력단위 ${compared.요약.능력단위.대상}개), 비교한 칸 ${compared.요약["견준 칸"]}개 중 같은 칸 ${compared.요약.같음}개`}
             />
             {compared.요약["수정 금지 칸 변경"] > 0 && (
-              <PageAlert kind="danger">NCS 쪽 칸(능력단위명, 정의, 요소명, 수행준거, 분류)이 {compared.요약["수정 금지 칸 변경"]}개 다릅니다. 이 칸들은 고치는 칸이 아니므로 어느 쪽이 NCS와 같은지 확인하세요.</PageAlert>
+              <PageAlert kind="danger">NCS 쪽 칸(능력단위명, 정의, 요소명, 수행준거, 분류)이 {compared.요약["수정 금지 칸 변경"]}개 다릅니다. 이 칸은 수정하면 안 되는 칸입니다. 어느 쪽이 NCS와 같은지 확인해 주세요.</PageAlert>
             )}
             {compared["개선 유형 변경"].length > 0 && (
               <>
                 <h3 className="section-title">개선 유형이 달라진 능력단위 ({compared["개선 유형 변경"].length})</h3>
-                <p className="meta section-desc">개선 유형이 바뀌면 최종 개발계획서와 결과물 목록에 똑같이 반영해야 합니다(최소개선 유형 세부 지침).</p>
+                <p className="meta section-desc">개선 유형이 바뀌면 최종 개발계획서와 결과물 목록에 동일하게 반영해야 합니다(최소개선 유형 세부 지침).</p>
                 <div className="krds-table-wrap">
                   <table className="tbl col data">
                     <caption>개선 유형이 달라진 능력단위</caption>
@@ -622,22 +622,22 @@ export default function PlanDraftPage() {
             {compared.차이.length > 0 && (
               <>
                 <h3 className="section-title">다른 칸</h3>
-                <div className="plan-bulk" role="group" aria-label="고른 칸 반영">
+                <div className="plan-bulk" role="group" aria-label="선택한 칸 반영">
                   <span className="plan-bulk-label">반영할 칸 {picks.length}개</span>
-                  <span className="meta">체크한 칸을 대상 계획서의 사본에 기준 글로 바꿔 넣습니다. 처음에는 NCS 쪽 칸 가운데 글자가 다른 것만 체크되어 있습니다. 띄어쓰기만 다른 칸은 NCS 원문을 확인한 뒤 고르세요. 한쪽이 빈 칸은 한글에서 직접 적습니다.</span>
-                  <button type="button" className="krds-btn small secondary plan-bulk-fill" disabled={applying || !picks.length || !targetIsHwpx} onClick={runApply}>{applying ? "반영하는 중" : "고른 칸을 반영한 사본 내려받기"}</button>
+                  <span className="meta">선택한 칸을 대상 계획서 사본에 기준 계획서의 내용으로 바꿔 넣습니다. 처음에는 NCS 쪽 칸 가운데 글자가 다른 칸만 선택되어 있습니다. 띄어쓰기만 다른 칸은 NCS 원문을 확인한 뒤 선택해 주세요. 한쪽이 빈칸이면 한글 프로그램에서 직접 입력해 주세요.</span>
+                  <button type="button" className="krds-btn small secondary plan-bulk-fill" disabled={applying || !picks.length || !targetIsHwpx} onClick={runApply}>{applying ? "반영하는 중" : "선택한 칸을 반영한 사본 내려받기"}</button>
                 </div>
-                {!targetIsHwpx && <PageAlert kind="warning">반영은 hwpx 대상 계획서에만 할 수 있습니다. hwp 파일은 한글에서 hwpx로 저장해 다시 비교해 주세요.</PageAlert>}
+                {!targetIsHwpx && <PageAlert kind="warning">hwpx 형식의 대상 계획서에만 반영할 수 있습니다. hwp 파일은 한글 프로그램에서 hwpx로 저장한 뒤 다시 비교해 주세요.</PageAlert>}
                 <PageAlert kind="danger">{applyNote?.error}</PageAlert>
                 {applyNote?.report && (
                   <PageAlert kind={applyNote.report["반영 못 함"].length ? "warning" : "success"}>
-                    <p>{applyNote.report.반영}개 칸을 반영한 사본을 내려받았습니다. 원본은 그대로입니다. 한글에서 열어 확인하세요.</p>
+                    <p>{applyNote.report.반영}개 칸을 반영한 사본을 내려받았습니다. 원본은 바뀌지 않습니다. 한글 프로그램에서 열어 확인해 주세요.</p>
                     {applyNote.report["반영 못 함"].length > 0 && (
                       <ul className="plan-signal-list">{applyNote.report["반영 못 함"].map((row, i) => <li key={i}>{row.자리 || row.구역} {row.칸}: {row.사유}</li>)}</ul>
                     )}
                   </PageAlert>
                 )}
-                <div className="plan-compare-filter" role="group" aria-label="차이 종류로 거르기">
+                <div className="plan-compare-filter" role="group" aria-label="차이 종류별로 보기">
                   {["", ...Object.keys(DIFF_BADGE)].map((name) => {
                     const count = name ? compared.요약[name] : compared.차이.length;
                     return (name === "" || count > 0) && (
@@ -663,7 +663,7 @@ export default function PlanDraftPage() {
                                       <input type="checkbox" id={`apply-${row.index}`} checked={!!applyPick[row.index]} onChange={(e) => setApplyPick((prev) => ({ ...prev, [row.index]: e.target.checked }))} />
                                       <label htmlFor={`apply-${row.index}`}><span className="sr-only">{row.자리} {row.칸} 반영</span></label>
                                     </div>
-                                  ) : <span className="meta" title="한쪽이 빈 칸은 한글에서 직접 적습니다">-</span>}
+                                  ) : <span className="meta" title="한쪽이 빈칸이면 한글 프로그램에서 직접 입력해 주세요">-</span>}
                                 </td>
                                 <td><span className="code">{row.자리 || "-"}</span></td>
                                 <td>{row.칸}{row["수정 금지 칸"] && <><br /><span className="krds-badge small bg-light-danger">NCS 쪽</span></>}</td>
