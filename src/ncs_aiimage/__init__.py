@@ -9,7 +9,9 @@
   diagram.py  ① AI 생성 가운데 도표·표·그래프의 명세 — 모양 검사(read_spec)와 근거 검사(grounding: 명세의 글이 집필자가 쓴 글에 있는 말인가)
   draw.py     명세를 PNG로 그린다(Pillow, 놓을 폭 기준 300 DPI, 회색 단계). 그리는 것은 코드다
   generate.py 집필자가 쓴 문단 → 생성형 AI(글)가 낸 명세 후보 → 검사를 통과한 것만 그릴 후보
-사진·삽화를 만드는 일(①의 나머지)과 내용을 고치는 일(②의 일부)은 아직 없다. 화질 보정은 ncs_upscale이 하고, 그 결과에 표기를 넣는 길만 잇는다.
+  prompt.py   ① 가운데 사진·삽화의 프롬프트 — 문단 → 장면 후보(한국어, 영어), 프롬프트 검사(얼굴, 상표, 화풍 따라 하기), 고정 제한 문구
+  imagegen.py 사진·삽화를 만드는 엔진 — 서버에 직접 올리는 공개 모델(기본 꺼짐, 선택 설치). 외부로 보내는 것이 없다
+내용을 고치는 일(②의 일부)은 아직 없다. 화질 보정은 ncs_upscale이 하고, 그 결과에 표기를 넣는 길만 잇는다.
 """
 
 from .diagram import Spec, SpecError, grounding, omissions, read_spec, table_html, table_tsv

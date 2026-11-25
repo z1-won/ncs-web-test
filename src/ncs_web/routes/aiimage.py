@@ -13,13 +13,21 @@
   POST /api/ai-image/generate/marking  {title, tool, date, kind, number?} → 원고에 붙여 넣을 표기 줄(출처 줄, AI 활용 줄, 번호와 제목)
   POST /api/ai-image/generate/similar   {spec, width_mm?, limit?} → 이미지 저작권 DB에서 닮은 그림(같은 파일, 지각 해시, 임베딩). DB가 있는 서버만
   POST /api/ai-image/generate/register  {spec, width_mm?, ai, tool, date, module_code?, number?, by?} → 그린 PNG를 이미지 저작권 DB에 올린다(에디터·직능연)
+  POST /api/ai-image/generate/prompt    {text?, criterion?, kind: photo|illustration, focus?, scene?} → 사진·삽화의 장면 후보(한국어, 영어)와 검사
+  POST /api/ai-image/generate/image     {scene, scene_ko?, kind, shape?, count?, seed?} → 서버의 모델이 만든 그림들(PNG base64). 엔진이 꺼져 있으면 503
+  POST /api/ai-image/generate/inspect   {png, width_mm?, limit?} → 놓을 폭에서의 해상도, DB가 있으면 닮은 그림
+  POST /api/ai-image/generate/register-image  {png, kind, usage, title?, tool, date, …} → 만든 사진·삽화를 이미지 저작권 DB에 올린다(에디터·직능연)
 marks: [{"key": 그림 목록의 key, "tool": 도구 이름, "mode": "generated"|"modified", "date": "YYYY-MM-DD"}]
 실행은 ncs_aiimage가 맡는다. 올린 파일은 읽는 동안만 임시 폴더에 두고 지운다. 데이터베이스에 남기는 것은 generate/register가 올리는 그림과
 generate/similar가 채우는 지각 해시(image_phashes)뿐이다.
 generate/spec은 생성형 AI(글)를 부른다 — 보내는 것은 화면에 넣은 문단과 수행준거 글뿐이고, 키와 외부 전송 승인(LLM_ALLOW_UPLOAD=1)이 없으면 부르지 않는다.
 그림은 서버의 코드가 그린다(ncs_aiimage.draw). 그리는 데에는 외부 전송이 없다.
+generate/prompt도 생성형 AI(글)를 부른다(허용 작업 image_generate_prompt). 사진·삽화는 서버에 올린 모델이 만든다(ncs_aiimage.imagegen) — 외부 전송이 없고,
+만든 그림은 응답으로만 돌려주며 서버에 두지 않는다.
 """
 
+import base64
+import binascii
 import json
 import re
 import tempfile
@@ -31,7 +39,7 @@ from fastapi import FastAPI, File, Form, Request, Response, UploadFile
 
 from ..common import Services, actor, error_response
 from ..schemas import (DiagramCheckRequest, DiagramMarkingRequest, DiagramRegisterRequest, DiagramRenderRequest, DiagramSimilarRequest,
-                       DiagramSpecRequest, ErrorResponse)
+                       DiagramSpecRequest, ErrorResponse, ImageGenerateRequest, ImageInspectRequest, ImagePromptRequest, ImageRegisterRequest)
 
 MAX_BYTES = 200 << 20      # 원고 + 출력본 합계 상한(업로드 보관함과 같은 200MB)
 
@@ -136,7 +144,7 @@ def register(app: FastAPI, services: Services) -> None:
 
     @app.get("/api/ai-image/generate/status")
     def generate_status() -> dict:
-        from ncs_aiimage import draw, generate
+        from ncs_aiimage import draw, generate, imagegen
 
         try:
             fonts = [Path(path).name for path in draw.font_paths()]
@@ -144,6 +152,7 @@ def register(app: FastAPI, services: Services) -> None:
         except draw.FontError as error:
             fonts, font_note = [], str(error)
         return {**generate.status(), "글꼴": fonts, "글꼴 안내": font_note, "DB": bool(services.store.supports_history),
+                "그림 엔진": imagegen.status(),
                 "폭": {"기본": draw.DEFAULT_WIDTH, "범위": list(draw.WIDTH_RANGE)}, "dpi": draw.DEFAULT_DPI}
 
     @app.post("/api/ai-image/generate/spec", responses={400: {"model": ErrorResponse}})
@@ -199,11 +208,15 @@ def register(app: FastAPI, services: Services) -> None:
         except ValueError as error:
             return error_response(400, str(error))
         table = body.kind == "table"
+        if body.usage == 4 and body.kind not in ("photo", "illustration"):
+            return error_response(400, "표기 예 4(AI 창작)는 사진과 삽화에만 씁니다")
         number = body.number or "○-○"
         caption = (f"<표 {number}> " if table else f"[그림 {number}] ") + (body.title or "제목")
         note = ("표의 AI 활용 표기는 AI 도구 사용 표기 예(F08)에 따로 정해져 있지 않습니다. 그림과 같은 줄을 보이니 담당자에게 확인한 뒤 쓰세요."
                 if table else "")
-        return {"lines": [f"출처: 집필진 제작({body.date.year})", line, caption], "usage": 1, "mode": "generated", "note": note}
+        if body.usage == 4:
+            note = ("문단 없이 주제만 주고 만든 그림은 표기 예 4(AI 창작)에 해당합니다. 출처 줄은 AI 도구 사용 표기 예(F08)의 예 4에 맞는지 담당자에게 확인한 뒤 쓰세요.")
+        return {"lines": [f"출처: 집필진 제작({body.date.year})", line, caption], "usage": body.usage, "mode": "generated", "note": note}
 
     def _drawn(body: DiagramSimilarRequest):
         """명세를 다시 그린다 — 화면이 보낸 PNG가 아니라 서버가 그린 것만 DB와 견주고 올린다. → (Spec, Rendered) 또는 오류 응답."""
@@ -256,5 +269,75 @@ def register(app: FastAPI, services: Services) -> None:
         try:
             return image_generate.register(services.store.dsn, drawn[1].png, drawn[0], by=who, on=body.date, tool=body.tool, ai=body.ai,
                                            module_code=body.module_code, number=body.number)
+        except ValueError as error:
+            return error_response(400, str(error))
+
+    def _png(text: str) -> bytes:
+        try:
+            return base64.b64decode(text, validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("png는 base64로 적은 PNG여야 합니다") from None
+
+    @app.post("/api/ai-image/generate/prompt", responses={400: {"model": ErrorResponse}})
+    def generate_prompt(body: ImagePromptRequest) -> Any:
+        from ncs_aiimage import prompt
+
+        try:
+            return prompt.draft(body.text, body.criterion, kind=body.kind, focus=body.focus, scene=body.scene)
+        except ValueError as error:
+            return error_response(400, str(error))
+
+    @app.post("/api/ai-image/generate/image", responses={400: {"model": ErrorResponse}, 503: {"model": ErrorResponse}})
+    def generate_image(body: ImageGenerateRequest) -> Any:
+        """프롬프트 검사를 통과해야 만든다. 모델에 보내는 글은 장면 + 화풍 + 고정 제한 문구(얼굴·글자·로고 없음)다."""
+        from ncs_aiimage import imagegen, prompt
+
+        checked = prompt.check(body.scene_ko, body.scene)
+        if not checked["ok"]:
+            return error_response(400, "이 프롬프트로는 만들지 않습니다: " + " / ".join(problem["reason"] for problem in checked["problems"]),
+                                  problems=checked["problems"])
+        try:
+            sent = prompt.compose(body.scene, body.kind)
+            made = imagegen.generate(sent, count=body.count, seed=body.seed, shape=body.shape, runner=getattr(app.state, "imagegen_runner", None))
+        except ValueError as error:
+            return error_response(400, str(error))
+        except imagegen.EngineOff as error:
+            return error_response(503, str(error))
+        return {"prompt": sent, "notes": checked["notes"], "tool": imagegen.tool_name(), "model": imagegen.model_name(), "kind": body.kind,
+                "images": [{"png": base64.b64encode(one.png).decode("ascii"), "seed": one.seed, "width": one.width, "height": one.height} for one in made]}
+
+    app.state.imagegen_runner = None      # 테스트용 엔진 대역(runner(prompt, width, height, seed) → PNG)
+
+    @app.post("/api/ai-image/generate/inspect", responses={400: {"model": ErrorResponse}})
+    def generate_inspect(request: Request, body: ImageInspectRequest) -> Any:
+        from ncs_service.images import image_generate
+
+        try:
+            png = _png(body.png)
+            found = image_generate.inspect(png, body.width_mm)
+        except ValueError as error:
+            return error_response(400, str(error))
+        if services.store.supports_history:
+            from ncs_recommend import embed
+
+            manager = _manager(request)
+            found["닮은 그림"] = {**image_generate.similar(services.store.dsn, png, limit=body.limit, confirmed_only=not manager, embedder=embed.get()),
+                              "범위": "DB의 모든 그림" if manager else "기관이 확정한 그림"}
+        return found
+
+    @app.post("/api/ai-image/generate/register-image", responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}})
+    def generate_register_image(request: Request, body: ImageRegisterRequest) -> Any:
+        from ncs_service.images import image_generate
+
+        if not _manager(request):
+            return error_response(403, "이미지 저작권 DB에 올리는 일은 에디터와 직능연 계정만 할 수 있습니다")
+        if not services.store.supports_history:
+            return error_response(400, "이 서버에는 이미지 저작권 DB가 연결되어 있지 않습니다. 관리자에게 문의해 주세요")
+        who = actor(request, body.by)
+        if not who:
+            return error_response(400, "by(변경한 사람)가 필요합니다. 변경 이력에 남습니다")
+        try:
+            return image_generate.register_image(services.store.dsn, _png(body.png), kind=body.kind, usage=body.usage, title=body.title, by=who,
+                                                 on=body.date, tool=body.tool, module_code=body.module_code, number=body.number)
         except ValueError as error:
             return error_response(400, str(error))

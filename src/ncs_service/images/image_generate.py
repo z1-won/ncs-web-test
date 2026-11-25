@@ -26,6 +26,10 @@ NEAR = 10            # 지각 해시 해밍 거리(64비트 가운데) — ncs_f
 COSINE = 0.9         # 임베딩 코사인 유사도
 FILL = 300           # 한 번의 대조에서 새로 채우는 지각 해시 수
 AI_USAGE_FROM_TEXT = 1      # AI 도구 사용 표기 예 1(image_terms.AI_USAGE)
+AI_USAGE_CREATED = 4        # 표기 예 4: AI 창작(문단 없이 주제만 주고 만든 그림)
+TARGET_DPI = 300
+PNG_HEAD = b"\x89PNG\r\n\x1a\n"
+MAX_IMAGE_BYTES = 20 << 20
 
 
 def fill_phashes(connection, limit: int = FILL) -> int:
@@ -87,18 +91,58 @@ def register(dsn: str, png: bytes, spec: Spec, *, by: str, on: date, tool: str =
     """→ {'id', '새 그림': bool, '확정 유지': bool, '수록 위치': 넣은 수}. 거부되면 ValueError(사유).
 
     ai=False: 집필자가 칸을 모두 직접 적어 그린 것 — AI 활용 정보를 적지 않는다. number: '1-2' 꼴(모듈 코드와 함께 주면 수록 위치를 적는다)."""
+    return _load(dsn, png, title=spec.title, asset_kind=ASSET_KIND[spec.kind], table=spec.kind == "table", by=by, on=on, tool=tool,
+                 usage=AI_USAGE_FROM_TEXT if ai else None, module_code=module_code, number=number)
+
+
+def register_image(dsn: str, png: bytes, *, kind: str, usage: int, title: str = "", by: str, on: date, tool: str,
+                   module_code: str = "", number: str = "") -> dict:
+    """이미지 생성 모델로 만든 사진·삽화를 올린다. kind: 'photo' | 'illustration', usage: 표기 예 1(문단 기반) 또는 4(AI 창작).
+    화면이 보낸 PNG를 받으므로(다시 만들 수 없다) PNG인지와 크기만 본다. 돌려주는 것은 register와 같다."""
+    if kind not in ("photo", "illustration"):
+        raise ValueError("kind는 photo 또는 illustration이어야 합니다")
+    if usage not in (AI_USAGE_FROM_TEXT, AI_USAGE_CREATED):
+        raise ValueError("usage는 1(문단을 바탕으로 생성) 또는 4(AI 창작)여야 합니다")
+    check_png(png)
+    return _load(dsn, png, title=" ".join((title or "").split()), asset_kind=kind, table=False, by=by, on=on, tool=tool, usage=usage,
+                 module_code=module_code, number=number)
+
+
+def check_png(png: bytes) -> None:
+    if not png.startswith(PNG_HEAD):
+        raise ValueError("PNG 그림이 아닙니다")
+    if len(png) > MAX_IMAGE_BYTES:
+        raise ValueError(f"그림이 너무 큽니다({MAX_IMAGE_BYTES >> 20}MB까지)")
+
+
+def inspect(png: bytes, width_mm: float) -> dict:
+    """받기 전에 볼 것 가운데 규칙으로 잴 수 있는 것 — 놓을 폭에서의 해상도. → {'width', 'height', 'dpi', '충분', '300 DPI 폭'(mm)}."""
+    from ncs_core.pictures import image_header
+
+    check_png(png)
+    header = image_header(png)
+    if header is None or not header[1] or not header[2]:
+        raise ValueError("그림의 크기를 읽지 못했습니다")
+    _format, width, height = header
+    dpi = round(width / (width_mm / 25.4))
+    return {"width": width, "height": height, "width_mm": width_mm, "dpi": dpi, "충분": dpi >= TARGET_DPI,
+            "300 DPI 폭": int(width / TARGET_DPI * 25.4)}
+
+
+def _load(dsn: str, png: bytes, *, title: str, asset_kind: str, table: bool, by: str, on: date, tool: str, usage: int | None,
+          module_code: str, number: str) -> dict:
     tool = " ".join((tool or "").split())
-    if ai and not tool:
+    if usage and not tool:
         raise ValueError("AI로 만든 그림은 도구 이름이 필요합니다")
     if number and not module_code.strip():
         raise ValueError("번호를 적으려면 모듈 코드가 필요합니다")
-    title = spec.title or None
-    record: dict = {"content": png, "title": title, "filename": f"{spec.title or '도표'}.png", "kind": ASSET_KIND[spec.kind],
+    record: dict = {"content": png, "title": title or None, "filename": f"{title or '그림'}.png", "kind": asset_kind,
                     "rights": {"category": "author_made"}}
-    if ai:
-        record["rights"]["ai"] = {"used": True, "usage": AI_USAGE_FROM_TEXT, "tool": tool, "date": on.isoformat()}
+    title = title or None
+    if usage:
+        record["rights"]["ai"] = {"used": True, "usage": usage, "tool": tool, "date": on.isoformat()}
     if module_code.strip():
-        label = (("표 " if spec.kind == "table" else "그림 ") + number) if number else ""
+        label = (("표 " if table else "그림 ") + number) if number else ""
         record["placements"] = [{"module_code": module_code.strip(), "label": label, "caption": title,
                                  "source_line": f"출처: 집필진 제작({on.year})"}]
     report = image_db.load_records(dsn, [record], changed_by=by)

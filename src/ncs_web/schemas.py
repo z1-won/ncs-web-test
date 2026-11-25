@@ -115,8 +115,48 @@ class DiagramMarkingRequest(BaseModel):
     title: str = Field("", max_length=40)
     tool: str = Field(max_length=40)
     date: date
-    kind: Literal["sequence", "cycle", "structure", "compare", "table", "bar", "line", "pie"]
+    kind: Literal["sequence", "cycle", "structure", "compare", "table", "bar", "line", "pie", "photo", "illustration"]
     number: str = Field("", max_length=10, pattern=r"^(\d+-\d*)?$")     # '1-2', 번호를 아직 모르면 '1-' 또는 빈 글
+    usage: Literal[1, 4] = 1                                             # 표기 예 번호. 4(AI 창작)는 사진·삽화를 문단 없이 만들었을 때
+
+
+class ImagePromptRequest(BaseModel):
+    """사진·삽화의 장면 후보(REQ-02-006 ①). 문단 없이 focus(주제)만 줄 수도 있다. scene: 집필자가 고친 한국어 장면 — 그 하나만 영어로 옮긴다."""
+    text: str = Field("", max_length=4000)
+    criterion: str = Field("", max_length=4000)
+    kind: Literal["photo", "illustration"]
+    focus: str = Field("", max_length=400)
+    scene: str = Field("", max_length=400)
+
+
+class ImageGenerateRequest(BaseModel):
+    """장면 글(영어)로 사진·삽화를 만든다. scene_ko는 검사에만 쓴다. seed를 주면 같은 그림이 다시 나온다."""
+    scene: str = Field(min_length=1, max_length=800)
+    scene_ko: str = Field("", max_length=400)
+    kind: Literal["photo", "illustration"]
+    shape: Literal["landscape", "portrait", "square"] = "landscape"
+    count: int = Field(2, ge=1, le=4)
+    seed: int | None = Field(None, ge=0, le=2**31 - 1)
+
+
+class ImageInspectRequest(BaseModel):
+    """만든 그림 한 장(PNG, base64)을 받기 전에 본다 — 놓을 폭에서의 해상도, 이미지 저작권 DB의 닮은 그림(DB가 있는 서버)."""
+    png: str = Field(min_length=1, max_length=28_000_000)
+    width_mm: float = Field(150.0, ge=40.0, le=170.0)
+    limit: int = Field(5, ge=1, le=20)
+
+
+class ImageRegisterRequest(BaseModel):
+    """만든 사진·삽화를 이미지 저작권 DB에 올린다(에디터와 직능연)."""
+    png: str = Field(min_length=1, max_length=28_000_000)
+    kind: Literal["photo", "illustration"]
+    usage: Literal[1, 4] = 1
+    title: str = Field("", max_length=40)
+    tool: str = Field(max_length=40)
+    date: date
+    module_code: str = Field("", max_length=30)
+    number: str = Field("", max_length=10, pattern=r"^(\d+-\d+)?$")
+    by: str = Field("", max_length=80)
 
 
 class DiagramSimilarRequest(BaseModel):

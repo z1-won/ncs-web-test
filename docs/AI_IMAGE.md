@@ -4,7 +4,7 @@
 
 | 정의서 항목 | 상태 | 어디 |
 |---|---|---|
-| ① AI 생성 | 도표·표·그래프(화면 `/ai-generate`), 만든 그림의 DB 등록과 닮은 그림 대조 | `ncs_aiimage/diagram.py`, `draw.py`, `generate.py`, `ncs_service/images/image_generate.py`. 사진·삽화는 이미지 생성 모델과 약관(출판, 권리 양도)이 정해져야 합니다 |
+| ① AI 생성 | 도표·표·그래프(화면 `/ai-generate`), 만든 그림의 DB 등록과 닮은 그림 대조 | `ncs_aiimage/diagram.py`, `draw.py`, `generate.py`, `ncs_service/images/image_generate.py`. 사진·삽화는 서버에 올리는 공개 모델로 만드는 길을 넣는 중입니다(`prompt.py`, `imagegen.py`, API까지. 화면과 실제 모델 확인은 아직) |
 | ② AI 수정 보완 | 화질 보정만 | `ncs_upscale`(업스케일링 화면). 보정한 그림을 이미지 저작권 DB에 AI 활용 정보와 함께 올립니다. 내용 수정은 없습니다 |
 | ③ 표기 문구 자동 삽입 | 구현 | `ncs_core/figures.py`(줄 쓰기), `ncs_aiimage/marking.py`(원고에 넣기) |
 | ④ 생성형 AI 결과물 현황 자동 작성 | 구현(xlsx) | `ncs_aiimage/results.py` |
@@ -50,6 +50,18 @@
 - **닮은 그림 대조**(`similar`): 그린 그림을 DB의 그림과 견줍니다. ① 같은 파일(sha256) ② 지각 해시(pHash 64비트)의 해밍 거리 10 이하 ③ 임베딩을 켠 서버에서는 코사인 유사도 0.9 이상. 지각 해시는 `image_phashes`(마이그레이션 `023_image_phashes`)에 두고, 없는 그림은 대조할 때 300장씩 채웁니다(응답의 '남은 그림'이 0이 아니면 일부만 견준 것). 집필진에게는 기관이 확정해 추천에 나오는 그림하고만 견줍니다. 기준값 10과 0.9는 실제 그림으로 맞춘 값이 아닙니다. 틀이 같은 도표(같은 칸 수의 순서도)는 내용이 달라도 닮은 그림으로 나올 수 있습니다 — 알림이지 판정이 아닙니다.
 - **등록**(`register`, 에디터·직능연): 서버가 명세로 다시 그린 PNG를 이미지 레코드로 적재합니다(`image_db.load_records`). 종류는 도표·표 → `table`(DB의 '도표'), 그래프 → `graph`. 분류는 집필진 제작, AI 활용 유형 1(집필진 작성 내용 기반 AI 생성)·도구·일자. 직접 적어 그린 그림은 AI 활용 정보를 적지 않습니다. 모듈 코드를 주면 번호와 함께 수록 위치를 남깁니다. 권리 귀속과 재사용 범위는 정하지 않으므로 기관이 확정하기 전에는 추천에 나오지 않습니다.
 - **Recall@k 재기**: `scripts/probe/similar_recall.py`가 DB의 그림을 줄임·JPEG 재저장·흑백·가장자리 자름·밝기 바꿈으로 바꿔 넣고 원래 그림이 상위 k에 나오는 비율을 찍습니다. 2026-11-25, 점검용 DB의 그림 8장, 지각 해시만: 40건 가운데 39건(97.5%), 놓친 1건은 가장자리 5% 자름. 그림이 8장뿐이라 이 수치로 기준을 정할 수는 없습니다. 뜻이 비슷한 다른 그림을 찾는 일은 정답 세트가 있어야 잽니다.
+
+### 사진·삽화 (2026-11-25, API까지)
+
+외부 서비스의 약관(출판, 권리 양도)이 정해지지 않아, **서버에 직접 올리는 공개 모델**로 만듭니다. 외부로 보내는 것이 없고 서비스 약관이 없습니다. 모델의 라이선스만 봅니다.
+
+- **엔진**(`ncs_aiimage/imagegen.py`): 기본 꺼짐. `NCS_IMAGEGEN_ENGINE=diffusers`와 `requirements/imagegen.txt` 설치로 켭니다. 기본 모델은 `black-forest-labs/FLUX.1-schnell`(모델 카드: Apache 2.0, 상업 목적 허용)이고 `NCS_IMAGEGEN_MODEL`로 바꿉니다. 다른 모델을 쓰면 그 모델의 라이선스를 먼저 확인합니다. 그림은 1024×768(가로), 768×1024(세로), 1024×1024 가운데 하나로, 한 번에 4장까지 만듭니다.
+- **프롬프트**(`ncs_aiimage/prompt.py`): 생성형 AI(글)가 문단에서 장면 후보(한국어, 영어)를 최대 3개 씁니다(허용 작업 `image_generate_prompt`). 집필자가 한국어 장면을 고치면 그 장면만 다시 영어로 옮깁니다. 모델에 보내는 글은 영어 장면 + 유형별 화풍 + **고정 제한 문구**(얼굴이 드러난 사람 없음, 글자·로고·워터마크 없음)입니다.
+- **프롬프트 검사**: 얼굴이 드러나는 그림을 청하는 말(얼굴, 표정, portrait 등), 상표·상품명, 특정 작가·작품의 화풍을 따르라는 말이 있으면 만들지 않습니다. 뒷모습, 멀리 있는 모습, 손은 됩니다. 글자를 청하는 말은 알림만 합니다. **실존 인물의 이름은 사전이 없어 잡지 못합니다.** 만든 그림에 얼굴이 나왔는지도 자동으로 보지 않습니다 — 사람이 확인합니다.
+- **받기 전 확인**(`image_generate.inspect`): 놓을 폭에서의 DPI(1024px은 150mm에서 173 DPI, 300 DPI가 되는 폭은 86mm), DB가 있으면 닮은 그림. 그림 속 글자(OCR) 확인은 아직 잇지 않았습니다.
+- **표기**: 문단을 바탕으로 만들면 표기 예 1, 문단 없이 주제만 주면 표기 예 4(AI 창작). 예 4의 출처 줄은 F08과 맞는지 확인이 필요합니다.
+- **실제 모델로 돌려 보지 않았습니다.** `scripts/probe/imagegen_probe.py`가 모델을 올리고 그림을 만들어 걸린 시간을 찍습니다. FLUX.1 schnell은 큰 모델이라 개발용 컴퓨터의 메모리로 올라가는지부터 확인해야 합니다.
+- AI가 만든 그림에 저작권이 인정되는지, 그 권리를 정부로 넘길 수 있는지는 모델 라이선스와 별개의 법률 문제입니다. 기관의 확인이 필요합니다.
 
 ### 실제 원고로 재기
 
@@ -118,6 +130,10 @@ ChatGPT를 활용하여 수정 보완함. 2026. 7. 20.  ← 넣는 줄
 | `POST /api/ai-image/generate/render` | `{spec, width_mm?, dpi?, format?}` → PNG, 표는 `html`·`tsv`도 |
 | `POST /api/ai-image/generate/similar` | `{spec, width_mm?, limit?}` → 이미지 저작권 DB의 닮은 그림(DB가 있는 서버만) |
 | `POST /api/ai-image/generate/register` | `{spec, width_mm?, ai, tool, date, module_code?, number?, by?}` → 그린 그림을 DB에 올림(에디터·직능연) |
+| `POST /api/ai-image/generate/prompt` | `{text?, criterion?, kind: photo\|illustration, focus?, scene?}` → 사진·삽화의 장면 후보와 검사 |
+| `POST /api/ai-image/generate/image` | `{scene, scene_ko?, kind, shape?, count?, seed?}` → 서버의 모델이 만든 그림(PNG base64). 엔진이 꺼져 있으면 503 |
+| `POST /api/ai-image/generate/inspect` | `{png, width_mm?}` → 놓을 폭에서의 해상도, DB의 닮은 그림 |
+| `POST /api/ai-image/generate/register-image` | `{png, kind, usage, title?, tool, date, …}` → 만든 사진·삽화를 DB에 올림(에디터·직능연) |
 
 ## 검증 (2026-11-23)
 

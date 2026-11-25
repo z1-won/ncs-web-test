@@ -29,6 +29,7 @@
 | `ncs_api_probe.py` | 공공데이터포털 NCS API의 호출 경로와 응답 모양을 알아봅니다 |
 | `diagram_probe.py` | 도표·표·그래프 생성을 실제 생성형 AI로 돌려 후보와 검사 결과를 찍습니다. `--report`로 사람이 채울 판정표를 쓰고 `--tally`로 셉니다(문단이 외부로 전송됨) |
 | `manuscript_paragraphs.py` | 원고(hwp·hwpx)에서 `diagram_probe.py`에 넣을 문단을 뽑습니다(외부 전송 없음, 결과는 `_workspace*/`에) |
+| `imagegen_probe.py` | 사진·삽화 생성 엔진(서버에 올리는 공개 모델)이 이 컴퓨터에서 도는지, 한 장에 얼마나 걸리는지 봅니다(외부 전송 없음, 모델 내려받기만) |
 | `similar_recall.py` | 닮은 그림 대조의 Recall@k를 잽니다: DB의 그림을 조금 바꿔 넣었을 때 원래 그림이 상위 k에 나오는가(외부 전송 없음) |
 
 ## measure/ — 요구사항정의서 검증 기준(P열) 실측

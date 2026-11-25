@@ -105,6 +105,28 @@ class ImageGenerateTests(unittest.TestCase):
         # 확정한 그림하고만 견주면 확정 전 그림은 나오지 않는다
         self.assertEqual([e for e in image_generate.similar(DSN, png, confirmed_only=True)["닮은 그림"] if e["id"] == done["id"]], [])
 
+    def test_generated_photo_is_registered_with_usage_and_inspected(self):
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.effect_noise((1024, 768), 60).convert("RGB").save(buffer, "PNG")      # 그림마다 다른 바이트
+        png = buffer.getvalue() + b""
+        self.used.append(hashlib.sha256(png).hexdigest())
+        done = image_generate.register_image(DSN, png, kind="photo", usage=4, title=f"용접 보호구 {self.tag}", by="에디터", on=date(2026, 11, 25), tool="FLUX")
+        with psycopg.connect(DSN) as connection:
+            row = connection.execute("SELECT a.kind, r.category, r.ai_usage, r.ai_mode, r.ai_tool, r.status FROM image_assets a "
+                                     "JOIN image_rights r ON r.image_id = a.id WHERE a.id = %s", (done["id"],)).fetchone()
+        self.assertEqual(row, ("photo", "author_made", 4, "generated", "FLUX", "auto"))
+        self.assertEqual(image_generate.inspect(png, 150)["dpi"], 173)
+        for bad in ({"kind": "table"}, {"usage": 3}, {"tool": ""}):
+            with self.assertRaises(ValueError):
+                image_generate.register_image(DSN, png, **{"kind": "photo", "usage": 1, "by": "에디터", "on": date(2026, 11, 25), "tool": "FLUX", **bad})
+        with self.assertRaises(ValueError):
+            image_generate.register_image(DSN, b"not a png", kind="photo", usage=1, by="에디터", on=date(2026, 11, 25), tool="FLUX")
+        import base64
+        seen = self.client.post("/api/ai-image/generate/inspect", json={"png": base64.b64encode(png).decode()}).json()
+        self.assertEqual(seen["닮은 그림"]["같은 파일"], done["id"])
+
     def test_web_similar_and_register(self):
         raw = spec(self.tag)
         self.draw(raw)

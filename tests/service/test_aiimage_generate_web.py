@@ -101,6 +101,57 @@ class GenerateWebTests(unittest.TestCase):
             self.assertEqual(response.status_code, 400, response.text)
             self.assertIn("이미지 저작권 DB", response.json()["error"])
 
+    def test_image_engine_is_off_by_default(self):
+        self.assertFalse(self.client.get("/api/ai-image/generate/status").json()["그림 엔진"]["사용 가능"])
+        response = self.client.post("/api/ai-image/generate/image", json={"scene": "a workbench", "kind": "photo"})
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertIn("꺼져", response.json()["error"])
+
+    def test_image_with_a_runner_and_prompt_checks(self):
+        import base64
+        import io
+
+        from PIL import Image
+
+        def runner(prompt, width, height, seed):
+            self.sent = prompt
+            buffer = io.BytesIO()
+            Image.new("RGB", (width, height), (seed % 255, 100, 100)).save(buffer, "PNG")
+            return buffer.getvalue()
+
+        self.client.app.state.imagegen_runner = runner
+        refused = self.client.post("/api/ai-image/generate/image", json={"scene": "portrait of a welder", "kind": "photo"})
+        self.assertEqual(refused.status_code, 400)
+        self.assertEqual(refused.json()["problems"][0]["kind"], "face")
+        refused = self.client.post("/api/ai-image/generate/image", json={"scene": "a welder from behind", "scene_ko": "웃는 작업자", "kind": "photo"})
+        self.assertEqual(refused.status_code, 400)
+        body = self.client.post("/api/ai-image/generate/image", json={"scene": "a welder from behind", "kind": "photo", "count": 2, "seed": 7}).json()
+        self.assertEqual([(one["seed"], one["width"], one["height"]) for one in body["images"]], [(7, 1024, 768), (8, 1024, 768)])
+        self.assertIn("No visible human faces", self.sent)
+        self.assertEqual(body["prompt"], self.sent)
+        png = body["images"][0]["png"]
+        self.assertEqual(base64.b64decode(png)[:4], b"\x89PNG")
+        seen = self.client.post("/api/ai-image/generate/inspect", json={"png": png, "width_mm": 150}).json()
+        self.assertEqual((seen["dpi"], seen["충분"], seen["300 DPI 폭"]), (173, False, 86))
+        self.assertNotIn("닮은 그림", seen)                       # 데이터베이스가 없는 서버
+        self.assertEqual(self.client.post("/api/ai-image/generate/inspect", json={"png": "!!"}).status_code, 400)
+        self.assertEqual(self.client.post("/api/ai-image/generate/inspect", json={"png": base64.b64encode(b"jpeg").decode()}).status_code, 400)
+
+    def test_prompt_without_ai_and_bad_input(self):
+        body = self.client.post("/api/ai-image/generate/prompt", json={"text": TEXT, "kind": "photo"}).json()
+        self.assertEqual((body["method"], body["scenes"], body["usage"]), ("none", [], 1))
+        self.assertEqual(self.client.post("/api/ai-image/generate/prompt", json={"kind": "photo"}).status_code, 400)
+        self.assertEqual(self.client.post("/api/ai-image/generate/prompt", json={"text": TEXT, "kind": "bar"}).status_code, 400)
+
+    def test_marking_for_a_generated_picture(self):
+        body = self.client.post("/api/ai-image/generate/marking", json={"title": "용접 보호구", "tool": "FLUX", "date": "2026-11-25", "kind": "photo",
+                                                                        "number": "1-3", "usage": 4}).json()
+        self.assertEqual(body["lines"][1:], ["FLUX를 활용하여 생성함. 2026. 11. 25.", "[그림 1-3] 용접 보호구"])
+        self.assertEqual(body["usage"], 4)
+        self.assertIn("표기 예 4", body["note"])
+        bad = self.client.post("/api/ai-image/generate/marking", json={"title": "x", "tool": "A", "date": "2026-11-25", "kind": "bar", "usage": 4})
+        self.assertEqual(bad.status_code, 400)
+
     def test_render_without_font_is_503(self):
         from unittest import mock
 
