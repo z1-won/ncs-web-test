@@ -1,0 +1,4 @@
+# 빌드에 보내는 것은 두 파일뿐이다(원고 표본·가상 환경·node_modules를 보내지 않는다)
+*
+!requirements/ocr.txt
+!src/ncs_figures/data/paddle_ocr.py

@@ -20,5 +20,15 @@ services:
       timeout: 3s
       retries: 12
 
+  # 그림 속 글자 읽기(PaddleOCR) 이미지. 띄워 두는 서비스가 아니다 — 검수 서버가 그림을 읽을 때 docker run으로 잠깐 쓴다
+  # (.env의 FIG_OCR_DOCKER=ncs-ocr). 만들기: docker compose build ocr   설명: docs/WEB.md '그림 속 글자 읽기'
+  ocr:
+    image: ncs-ocr:latest
+    build:
+      context: .
+      dockerfile: docker/ocr/Dockerfile
+    profiles: ["build"]          # docker compose up 으로는 뜨지 않는다
+    network_mode: none
+
 volumes:
   postgres_data:

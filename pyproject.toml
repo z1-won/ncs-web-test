@@ -27,7 +27,7 @@ ncs-knowledge = "ncs_knowledge.__main__:main"
 
 [tool.setuptools.package-data]
 ncs_core = ["data/*.txt", "data/*.tsv", "data/*.hwpx"]
-ncs_figures = ["data/*.tsv", "prompts/*.md"]
+ncs_figures = ["data/*.tsv", "data/*.ps1", "data/paddle_ocr.py", "prompts/*.md"]
 ncs_llmreview = ["prompts/*.md"]
 ncs_opinion = ["prompts/*.md"]
 ncs_suggest = ["prompts/*.md"]
