@@ -16,6 +16,8 @@
 (출력본의 줄 읽기는 어림이라 부적합으로 올리지 않는다).
 받는 곳: 지적마다 누가 움직여야 하는지를 붙인다 — 서류를 내거나 원고·목록을 고쳐야 하는 것은 개발기관,
 같은 것인지 사람이 가려야 하는 것은 에디팅 기관. 결과의 '알림'이 받는 곳별 목록과 보낼 글이다.
+캡션 없는 그림: 캡션([그림 N-M])이 없는 그림은 번호·제목이 없어 목록·증빙과 맞출 수 없다. 빼지 않고 현황표에 '대조 불가' 줄(판단불가)로
+싣는다 — 본문 그림인데 캡션을 빠뜨린 것인지, 장식·양식 그림인지는 사람이 가린다(에디팅 기관). 찾는 일은 service.uncaptioned_pictures.
 기한: 수록 현황 목록은 1차 검토 이후 4주 이내 제출(원고 집필 계약서 제5조 1항). 기한 항목은 언제나 결과에 넣는다
 (검증 기준 '기한 경과 항목 알림 누락 0건').
 """
@@ -44,7 +46,7 @@ RECIPIENTS = (DEVELOPER, EDITOR)
 # 에디팅 기관이 가려야 하는 지적 — 두 서류가 가리키는 것이 같은지, 그림에 무엇이 있는지처럼 사람이 봐야 정해지는 것.
 # 여기 없는 종류(누락·미표시·미기재)는 서류를 내거나 고쳐야 하므로 개발기관이 받는다
 EDITOR_KINDS = frozenset({"제목 다름", "번호 다름", "유형 다름", "출처 확인", "초상권 확인", "활용 AI 다름", "AI 표시 확인",
-                          "현황에만 있음", "그림 없음", "쪽수 다름", "쪽 확인"})
+                          "현황에만 있음", "그림 없음", "쪽수 다름", "쪽 확인", "캡션 없음"})
 
 
 @dataclass
@@ -324,6 +326,22 @@ def _figure_row(figure: Figure | None, listed: dict | None, how: str, forms: For
     }
 
 
+def _uncaptioned_row(picture: dict) -> dict:
+    """캡션 없는 그림 한 개의 현황표 한 줄 — 목록·증빙과 맞출 번호·제목이 없어 대조하지 않고 판단불가로 둔다."""
+    width, height = picture["mm"]
+    size = f"({width}×{height}mm)" if width and height else ""
+    near = f" 앞 문단 「{picture['앞 글']}」." if picture.get("앞 글") else ""
+    issue = _issue(UNDECIDED, "캡션 없음",
+                   f"문단 {picture['para']}의 그림{size}에 캡션([그림 N-M])이 없어 수록 현황 목록·증빙과 대조하지 못했습니다.{near}",
+                   "본문 그림이면 캡션을 달고 수록 현황 목록에 올림. 장식·양식 그림이면 그대로 둠")
+    return {
+        "그림 번호": "", "그림명": f"캡션 없는 그림 — 문단 {picture['para']}{size}", "원고": True, "목록": None, "캡션 없음": True,
+        "제작 방식": [], "방식 코드": [], "유형": {}, "출처 줄": "", "AI 표기": "", "AI 방식": None, "AI 도구": None, "AI 일자": None,
+        "결과물 현황": "", "쪽": "", "쪽 번호": [], "쪽수 대조": "", "증빙": [], "지적": [issue], "비고": [issue["내용"]],
+        "판정": UNDECIDED, "문단": None, "그림 자리": [picture["section"], picture["para"]],
+    }
+
+
 def _deadline(options: Options, has_list: bool) -> dict:
     today = options.today or date.today()
     out = {"1차 검토일": options.first_review_on.isoformat() if options.first_review_on else None,
@@ -378,10 +396,11 @@ def _notices(findings: list[dict], module: str) -> list[dict]:
 
 
 def check(figures: list[Figure], forms: Forms, options: Options | None = None,
-          pages: dict[str, list[dict]] | None = None) -> dict:
+          pages: dict[str, list[dict]] | None = None, uncaptioned: list[dict] | None = None) -> dict:
     """현황표와 누락 목록. 반환: {'요약', '기한', '서류', '현황표', '지적사항', '알림', '안내'}.
 
     pages: 출력본 PDF에서 읽은 그림별 쪽(pages.figure_pages). 주면 결과물 현황의 쪽수를 대조하고 현황표에 쪽을 싣는다.
+    uncaptioned: 캡션 없는 그림(service.uncaptioned_pictures). 주면 현황표 끝에 '대조 불가' 줄로 싣는다.
     """
     options = options or Options()
     inclusion, note = _pick_inclusion(forms, figures)
@@ -406,6 +425,9 @@ def check(figures: list[Figure], forms: Forms, options: Options | None = None,
             if row["판정"] == PASS:
                 row["판정"] = UNDECIDED
 
+    # 캡션 없는 그림은 제작 방식을 따질 대상이 아니므로 위의 목록 미제출 비고 뒤에 붙인다
+    rows += [_uncaptioned_row(picture) for picture in uncaptioned or []]
+
     deadline = _deadline(options, has_list)
     findings = []
     if not figures:
@@ -418,9 +440,10 @@ def check(figures: list[Figure], forms: Forms, options: Options | None = None,
         findings.append({"그림": "제출 기한", **_issue(deadline["판정"], "기한", deadline["내용"], "1차 검토 이후 4주 이내 제출(원고 집필 계약서 제5조 1항)",
                                                     to=DEVELOPER if waiting else EDITOR)})
     for row in rows:
-        findings += [{"그림": f"[{row['그림 번호']}] {row['그림명']}".strip(), **issue} for issue in row["지적"]]
+        name = row["그림명"] if row.get("캡션 없음") else f"[{row['그림 번호']}] {row['그림명']}".strip()
+        findings += [{"그림": name, **issue} for issue in row["지적"]]
     # 현황에는 있는데 원고·목록 어디에도 짝이 없는 AI 결과물
-    known = {(_key(row["그림 번호"]), title_key(row["그림명"])) for row in rows}
+    known = {(_key(row["그림 번호"]), title_key(row["그림명"])) for row in rows if not row.get("캡션 없음")}
     for result in forms.ai_results:
         if not any((result["label"] and _key(result["label"]) == label) or title_key(result["title"]) == title for label, title in known):
             findings.append({"그림": result["name"], **_issue(UNDECIDED, "현황에만 있음", "서약서의 결과물 현황에 있는데 원고와 수록 현황 목록에서 찾지 못했습니다", "결과물 명과 그림 번호를 확인")})
@@ -429,7 +452,8 @@ def check(figures: list[Figure], forms: Forms, options: Options | None = None,
     missing = sum(issue["수준"] == FAIL for issue in findings)
     overall = FAIL if any(f["수준"] == FAIL for f in findings) else UNDECIDED if findings else PASS
     return {
-        "요약": {"판정": overall, "원고 그림": len(figures), "목록 행": len(listed_rows) if has_list else None,
+        "요약": {"판정": overall, "원고 그림": len(figures), "캡션 없는 그림": len(uncaptioned or []),
+                "목록 행": len(listed_rows) if has_list else None,
                 "학습모듈명": inclusion["module"] if inclusion else "", **counts, "누락": missing,
                 "확인 필요": sum(f["수준"] == UNDECIDED for f in findings)},
         "기한": deadline,

@@ -39,8 +39,8 @@ def png(seed: int, width: int = 40, height: int = 30) -> bytes:
             + chunk(b"IDAT", zlib.compress(data, 9)) + chunk(b"IEND", b""))
 
 
-def _pic(bin_id: str) -> str:
-    return (f'<hp:p><hp:run charPrIDRef="0"><hp:pic><hp:sz width="14400" height="10800"/>'
+def _pic(bin_id: str, width: int = 14400, height: int = 10800) -> str:
+    return (f'<hp:p><hp:run charPrIDRef="0"><hp:pic><hp:sz width="{width}" height="{height}"/>'
             f'<hc:img binaryItemIDRef="{bin_id}"/></hp:pic></hp:run></hp:p>')
 
 
@@ -59,12 +59,17 @@ def _write(path: Path, parts: list[str], images: dict[str, bytes] | None = None)
     return path
 
 
-def manuscript(folder: Path, figures=FIGURES, name: str = MANUSCRIPT_NAME) -> Path:
-    """그림 → 출처 줄 → (AI 줄) → 캡션 순서로 놓은 원고. 본문에는 그림을 가리키는 문장도 넣는다(캡션으로 세면 안 됨)."""
+def manuscript(folder: Path, figures=FIGURES, name: str = MANUSCRIPT_NAME, loose=()) -> Path:
+    """그림 → 출처 줄 → (AI 줄) → 캡션 순서로 놓은 원고. 본문에는 그림을 가리키는 문장도 넣는다(캡션으로 세면 안 됨).
+
+    loose: 캡션 없이 원고 끝에 놓을 그림의 크기 [(가로, 세로)](HWP 단위, 7200 = 1인치). 그림마다 앞에 본문 문단 넷을 둔다."""
     parts, images = [p("학습 1. 학습모듈 이해하기"), p("학습모듈의 구조는 [그림 1-1]과 같이 나타낸다.")], {}
     for index, (label, title, source, ai) in enumerate(figures, 1):
         images[f"image{index}"] = png(index)
         parts += [_pic(f"image{index}"), p(source)] + ([p(ai)] if ai else []) + [p(f"[{label}] {title}"), p("이어지는 본문 문장이다.")]
+    for index, (width, height) in enumerate(loose, 1):
+        images[f"loose{index}"] = png(100 + index)
+        parts += [p("캡션 없는 그림 앞의 본문 문장이다.")] * 3 + [p(f"설비 {index}의 모습은 [그림 1-1]과 같이 다음과 같다."), _pic(f"loose{index}", width, height)]
     return _write(folder / name, parts, images)
 
 

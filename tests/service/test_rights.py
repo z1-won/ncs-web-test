@@ -202,6 +202,78 @@ class CheckTests(RightsCase):
         self.assertIn(("원고", "그림 없음"), [(f["그림"], f["종류"]) for f in no_figures["지적사항"]])
 
 
+class UncaptionedTests(RightsCase):
+    """캡션 없는 그림은 빼지 않고 '대조 불가' 줄(판단불가)로 싣는다."""
+
+    def check_loose(self, loose, forms=None, **options) -> dict:
+        forms = S.full_forms(self.folder) if forms is None else forms
+        return run(S.manuscript(self.folder, loose=loose), forms, Options(**{**COMPLETE, **options}))
+
+    def test_uncaptioned_picture_gets_its_own_undecided_row(self):
+        report = self.check_loose([(14400, 10800)])
+        rows = [row for row in report["현황표"] if row.get("캡션 없음")]
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual((row["그림 번호"], row["판정"], row["원고"], row["목록"], row["문단"]), ("", "판단불가", True, None, None))
+        self.assertEqual(report["현황표"][-1], row, "캡션 있는 그림과 목록 행 뒤에 놓는다")
+        self.assertIn("51×38mm", row["그림명"])
+        self.assertIn("앞 문단 「설비 1의 모습은 [그림 1-1]과 같이 다음과 같다.」", row["비고"][0], "본문의 참조 문장은 캡션이 아니다")
+        summary = report["요약"]
+        self.assertEqual((summary["원고 그림"], summary["캡션 없는 그림"], summary["적합"], summary["부적합"], summary["판단불가"]),
+                         (8, 1, 7, 2, 1), "캡션 있는 그림의 판정은 그대로")
+        finding = next(f for f in report["지적사항"] if f["종류"] == "캡션 없음")
+        self.assertEqual((finding["그림"], finding["수준"], finding["받는 곳"]), (row["그림명"], "판단불가", "에디팅 기관"))
+        self.assertEqual(report["요약"]["누락"], 2, "부적합 건수에는 넣지 않는다")
+
+    def test_template_pictures_and_captioned_pictures_are_not_listed(self):
+        page, banner = (60000, 84000), (26000, 2300)             # 쪽 전체(약 212×296mm), 띠(약 92×8mm)
+        report = self.check_loose([page, banner])
+        self.assertEqual((report["요약"]["캡션 없는 그림"], [r for r in report["현황표"] if r.get("캡션 없음")]), (0, []))
+        self.assertEqual(self.check()["요약"]["캡션 없는 그림"], 0)
+        self.assertEqual(len(self.check()["현황표"]), 9)
+
+    def test_known_template_pictures_are_left_out(self):
+        from ncs_core.figures import manuscript_figures
+        from ncs_rights.service import uncaptioned_pictures
+
+        path = S.manuscript(self.folder, loose=[(14400, 10800), (14400, 10800)])
+        document = load_document(path)
+        figures = manuscript_figures(document)
+        self.assertEqual(len(uncaptioned_pictures(document, figures)), 2)
+        only_second = uncaptioned_pictures(document, figures, lambda data: data == S.png(101))
+        self.assertEqual(len(only_second), 1)
+        self.assertEqual(run(path, [], Options(**COMPLETE), is_template=lambda data: True)["요약"]["캡션 없는 그림"], 0)
+        from ncs_figures.templates import template_checker
+
+        self.assertFalse(template_checker()(S.png(101)))
+        self.assertFalse(template_checker()(b"not an image"))
+
+    def test_only_uncaptioned_pictures_make_the_result_undecided(self):
+        figures = [("그림 1-2", "NCS학습모듈 활용 예시", "출처: 홍길동(2024). 직업교육 사례집. 한국출판. p.12.", "")]
+        rows = [["1", "[그림 1-2] NCS학습모듈 활용 예시", "", "", "", "", "", M, "", "", ""]]
+        forms = [self.form("c.hwpx", S.inclusion_table(rows), S.license_table())]
+        clean = run(S.manuscript(self.folder, figures), forms, Options(**COMPLETE))
+        loose = run(S.manuscript(self.folder, figures, loose=[(14400, 10800)]), forms, Options(**COMPLETE))
+        self.assertEqual((clean["요약"]["판정"], loose["요약"]["판정"]), ("적합", "판단불가"), "문제가 안 보인다고 적합으로 두지 않는다")
+
+    def test_without_the_list_the_row_does_not_repeat_the_list_note(self):
+        report = self.check_loose([(14400, 10800)], forms=[])
+        row = next(row for row in report["현황표"] if row.get("캡션 없음"))
+        self.assertEqual(len(row["비고"]), 1)
+
+    def test_xlsx_and_notice_carry_the_row(self):
+        from openpyxl import load_workbook
+
+        report = self.check_loose([(14400, 10800)])
+        book = load_workbook(io.BytesIO(build_xlsx(report)))
+        sheet = book["증빙 제출 현황"]
+        self.assertEqual(sheet.max_row, 6 + 10)
+        self.assertEqual((sheet.cell(sheet.max_row, 1).value, sheet.cell(sheet.max_row, 10).value), ("캡션 없음", "판단불가"))
+        self.assertIn("캡션 없는 그림 1개 따로", sheet["A3"].value)
+        editor = next(notice for notice in report["알림"] if notice["받는 곳"] == "에디팅 기관")
+        self.assertEqual((editor["건수"], "캡션([그림 N-M])이 없어" in editor["글"]), (1, True))
+
+
 class DeadlineTests(RightsCase):
     """원고 집필 계약서 제5조 1항: 1차 검토 이후 4주 이내. 기한 항목은 어떤 입력에서도 결과에 있다(알림 누락 0건)."""
 

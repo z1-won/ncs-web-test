@@ -20,6 +20,15 @@ def load_templates(path: Path) -> frozenset[str]:
         return frozenset(row["image_id"] for row in csv.DictReader(f, delimiter="\t") if row.get("image_id"))
 
 
+def template_checker(path: Path | None = None):
+    """그림 파일 바이트 → 양식 그림 목록에 있는가(읽지 못한 그림은 False). 권리 증빙 점검이 캡션 없는 그림에서 양식 그림을 뺄 때 웹 층이 받아 넘긴다."""
+    from .config import DEFAULT_CONFIG
+    from .ids import image_id
+
+    known = load_templates(path or DEFAULT_CONFIG.templates_path)
+    return lambda data: image_id(data) in known
+
+
 def build_templates(paths: list[Path], *, min_modules: int = 2) -> list[dict]:
     """최종본 원고들에서 양식 그림 후보. 캡션 없는 그림만 본다(캡션이 있으면 본문 그림)."""
     from ncs_core.documents import load_document

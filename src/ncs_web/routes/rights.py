@@ -33,6 +33,17 @@ def _day(text: str, name: str) -> date | None:
         raise HTTPException(400, f"{name}은(는) YYYY-MM-DD 날짜여야 합니다") from None
 
 
+def _template_checker():
+    """캡션 없는 그림에서 양식 그림(여러 학습모듈에 똑같이 든 띠·표지)을 빼는 판별 — 그림 검수의 양식 그림 목록을 쓴다.
+    Pillow가 없으면 None(크기로만 뺀다)."""
+    try:
+        from ncs_figures.templates import template_checker
+
+        return template_checker()
+    except ImportError:
+        return None
+
+
 def register(app: FastAPI, services: Services) -> None:
     store = services.store
 
@@ -95,7 +106,7 @@ def register(app: FastAPI, services: Services) -> None:
             form_paths = [keep(item, "forms") for item in named]
             print_path = keep(print_copy, "print") if print_copy is not None and print_copy.filename else None
             try:
-                report = run(manuscript_path, form_paths, options, print_copy=print_path)
+                report = run(manuscript_path, form_paths, options, print_copy=print_path, is_template=_template_checker())
             except ValueError as error:
                 raise HTTPException(400, str(error)) from None
             report["저장"] = None

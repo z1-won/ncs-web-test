@@ -44,6 +44,8 @@ def save_to_image_db(dsn: str, manuscript: str | Path, module_code: str, report:
     pictures = _pictures_by_caption(load_document(manuscript), report["현황표"])
     records, evidence, skipped = [], [], 0
     for row in report["현황표"]:
+        if row.get("캡션 없음"):          # 번호·제목이 없어 수록 위치로 올릴 수 없다 — 건너뛴 수에도 넣지 않는다(현황표에서 사람이 봄)
+            continue
         picture = pictures.get(tuple(row["문단"])) if row["원고"] and row.get("문단") else None
         if picture is None:
             skipped += bool(row["원고"])

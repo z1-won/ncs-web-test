@@ -171,7 +171,8 @@ export default function RightsPage() {
           </div>
           <dl className="upscale-summary image-summary">
             <div><dt>원고의 그림</dt><dd><strong>{summary["원고 그림"]}</strong>개</dd>
-              <dd className="meta">{summary["목록 행"] === null ? "수록 현황 목록 없음" : `수록 현황 목록 ${summary["목록 행"]}행${summary.학습모듈명 ? `, ${summary.학습모듈명}` : ""}`}</dd></div>
+              <dd className="meta">{summary["목록 행"] === null ? "수록 현황 목록 없음" : `수록 현황 목록 ${summary["목록 행"]}행${summary.학습모듈명 ? `, ${summary.학습모듈명}` : ""}`}</dd>
+              {summary["캡션 없는 그림"] > 0 && <dd className="meta">캡션 없는 그림 {summary["캡션 없는 그림"]}개는 대조하지 못해 표 끝에 따로 실음</dd>}</div>
             <div><dt>적합</dt><dd><strong>{summary.적합}</strong>개</dd></div>
             <div><dt>부적합</dt><dd><strong>{summary.부적합}</strong>개</dd><dd className="meta">누락 또는 불일치 {summary.누락}건</dd></div>
             <div><dt>판단불가</dt><dd><strong>{summary.판단불가}</strong>개</dd><dd className="meta">담당자 확인 {summary["확인 필요"]}건</dd></div>
@@ -194,7 +195,7 @@ export default function RightsPage() {
                 <thead><tr><th scope="col">그림</th><th scope="col">원고</th><th scope="col">목록</th><th scope="col">제작 방식</th><th scope="col">증빙</th><th scope="col">AI 표기</th><th scope="col">판정</th><th scope="col">비고</th></tr></thead>
                 <tbody>{report.현황표.map((row, index) => (
                   <tr key={index}>
-                    <td><strong>{row["그림 번호"] || "번호 없음"}</strong><span className="sub">{row.그림명}</span>{row.쪽 && <span className="sub">출력본 {row.쪽}</span>}</td>
+                    <td><strong>{row["그림 번호"] || (row["캡션 없음"] ? "캡션 없음" : "번호 없음")}</strong><span className="sub">{row.그림명}</span>{row.쪽 && <span className="sub">출력본 {row.쪽}</span>}</td>
                     <td className="center">{mark(row.원고)}</td>
                     <td className="center">{mark(row.목록)}</td>
                     <td>{row["제작 방식"].length ? row["제작 방식"].map((name) => <span className="line" key={name}>{name}</span>) : "-"}</td>

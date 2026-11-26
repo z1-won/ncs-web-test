@@ -46,7 +46,8 @@ def build_xlsx(report: dict) -> bytes:
     put(ws, 1, 1, "권리 증빙 제출 현황표", bold=True).font = Font(size=14, bold=True)
     lines = [
         f"원고: {report.get('원고', {}).get('파일', '')}    학습모듈명(목록): {summary.get('학습모듈명') or '—'}",
-        f"판정: {summary['판정']}    그림 {summary['원고 그림']}개 · 적합 {summary['적합']} · 부적합 {summary['부적합']} · 판단불가 {summary['판단불가']}",
+        f"판정: {summary['판정']}    그림 {summary['원고 그림']}개"
+        + (f"(캡션 없는 그림 {summary['캡션 없는 그림']}개 따로)" if summary.get("캡션 없는 그림") else "") + f" · 적합 {summary['적합']} · 부적합 {summary['부적합']} · 판단불가 {summary['판단불가']}",
         f"제출 기한: {deadline['내용']}",
     ]
     for offset, line in enumerate(lines):
@@ -57,7 +58,7 @@ def build_xlsx(report: dict) -> bytes:
         ws.column_dimensions[get_column_letter(col)].width = WIDTHS[col - 1]
     for index, row in enumerate(report["현황표"], 1):
         r = top + index
-        values = (row["그림 번호"], row["그림명"], row.get("쪽", ""), _mark(row["원고"]), _mark(row["목록"]), "\n".join(row["제작 방식"]),
+        values = (row["그림 번호"] or ("캡션 없음" if row.get("캡션 없음") else ""), row["그림명"], row.get("쪽", ""), _mark(row["원고"]), _mark(row["목록"]), "\n".join(row["제작 방식"]),
                   "\n".join(f"{e['증빙']}: {e['상태']}" for e in row["증빙"]), row["AI 표기"], row["결과물 현황"], row["판정"],
                   "\n".join(row["비고"]))
         for col, value in enumerate(values, 1):
