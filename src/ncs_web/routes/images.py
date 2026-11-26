@@ -3,7 +3,8 @@
 PostgreSQL 저장소일 때만 붙는다(/api/health의 image_db가 그 여부). 실제 일은 ncs_service.images.image_store가 한다.
 
   GET  /api/images/terms                      허용값 코드 → 이름(화면의 선택 목록)
-  GET  /api/images                            관리용 목록 — 모든 그림. status=none은 권리 정보가 없는 그림
+  GET  /api/images                            관리용 목록 — 모든 그림. status=none은 권리 정보가 없는 그림.
+                                              description=none|unchecked|checked로 그림 설명의 확인 여부를 거른다
   GET  /api/images/{id}                       그림 1건: 수록 위치·권리 정보·증빙·수행준거·변경 이력
   GET  /api/images/{id}/file[?upscaled=true]  그림 파일(확정하려면 봐야 하므로 관리용은 모두 내준다)
   POST /api/images/{id}/rights                권리 정보 수정 {by, version?, rights} — 자동 태깅 상태에서만
@@ -11,6 +12,8 @@ PostgreSQL 저장소일 때만 붙는다(/api/health의 image_db가 그 여부).
   POST /api/images/{id}/unconfirm             확정 취소 {by, version?}
   POST /api/images/{id}/evidence              증빙 1건 직접 등록 {by, kind, file_ref?, submitted_on?, note?} — 서류 파일은 받지 않는다
   POST /api/images/{id}/evidence/{증빙 id}/delete   증빙 1건 삭제 {by}
+  POST /api/images/{id}/description           그림 설명 한 벌을 사람이 읽고 확인 {by, engine, check, kind, scene, objects, visible_text, keywords}
+                                              — 고친 내용이 있으면 함께 저장. check=false면 확인만 푼다(REQ-02-011 설명 색인)
   POST /api/images/load                       레코드 JSON 1개 + 그림 파일들을 올려 적재(또는 check_only로 형식만 검사).
                                               이미지 레코드(docs/IMAGE_RECORD.md)와 공공누리 수집 JSON(0.1-PoC, REQ-02-012) 둘 다 받는다
   GET  /api/images/recommendable              추천용 목록 — 기관 확정 + 재사용 범위 확인 + 비공개 아님(REQ-02-011, 생성형 AI가 부르는 쪽)
@@ -28,7 +31,7 @@ from fastapi import FastAPI, File, Form, Query, Request, Response, UploadFile
 from starlette.exceptions import HTTPException
 
 from ..common import Services, actor
-from ..schemas import ImageActionRequest, ImageEvidenceRequest, ImageRightsRequest
+from ..schemas import ImageActionRequest, ImageDescriptionRequest, ImageEvidenceRequest, ImageRightsRequest
 
 LOAD_MAX_BYTES = 50 << 20     # 한 번에 올리는 레코드 JSON + 그림 파일 합계 상한(50MB)
 LOAD_MAX_FILES = 300
@@ -147,11 +150,11 @@ def register(app: FastAPI, services: Services) -> None:
     def images(status: str | None = None, category: str | None = None, license_scheme: str | None = None,
                kogl_type: int | None = Query(None, ge=0, le=4), reuse_scope: str | None = None,
                module_code: str | None = None, unit_code: str | None = None, keyword: str | None = None,
-               q: str | None = Query(None, max_length=100), kind: str | None = None,
+               q: str | None = Query(None, max_length=100), kind: str | None = None, description: str | None = None,
                limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0)) -> dict:
         return run(image_store.list_images, status=status, category=category, license_scheme=license_scheme,
                    kogl_type=kogl_type, reuse_scope=reuse_scope, module_code=module_code, unit_code=unit_code,
-                   keyword=keyword, q=q, kind=kind, limit=limit, offset=offset)
+                   keyword=keyword, q=q, kind=kind, description=description or None, limit=limit, offset=offset)
 
     @app.get("/api/images/{image_id}")
     def image_detail(image_id: str) -> dict:
@@ -187,6 +190,15 @@ def register(app: FastAPI, services: Services) -> None:
     @app.post("/api/images/{image_id}/unconfirm")
     def image_unconfirm(image_id: str, body: ImageActionRequest, request: Request) -> dict:
         return run(image_store.unconfirm, image_id, by=who(request, body.by), version=body.version)
+
+    @app.post("/api/images/{image_id}/description")
+    def image_description(image_id: str, body: ImageDescriptionRequest, request: Request) -> dict:
+        """그림 설명을 사람이 읽고 확인한다(고친 내용 저장 포함). 추천은 사람이 확인한 설명을 먼저 읽는다."""
+        by = who(request, body.by)
+        if not body.check:
+            return run(image_store.uncheck_description, image_id, body.engine, by=by)
+        description = {"kind": body.kind, "scene": body.scene, "objects": body.objects, "visible_text": body.visible_text, "keywords": body.keywords}
+        return run(image_store.check_description, image_id, body.engine, description, by=by)
 
     @app.post("/api/images/{image_id}/evidence")
     def image_evidence_add(image_id: str, body: ImageEvidenceRequest, request: Request) -> dict:

@@ -383,6 +383,71 @@ class ImageApiIntegrationTests(unittest.TestCase):
         after = self.upload(files, by="수집 담당")
         self.assertEqual(len(after["확정 유지"]), 1)
 
+    # ── 그림 설명 확인(REQ-02-011 설명 색인) ──
+    def describe(self, image_id: str, engine: str = "fake:vision", **fields) -> None:
+        """모델이 쓴 설명 한 벌을 넣는다(그림 설명 만들기가 하는 일)."""
+        row = {"kind": "photo", "scene": "호텔 로비의 접수대에 직원 두 명이 서 있다.", "objects": [{"name": "접수대", "detail": "나무", "position": "가운데"}],
+               "visible_text": ["FRONT"], "keywords": ["접수대", "프런트 데스크", "호텔 로비"], **fields}
+        with psycopg.connect(DSN) as connection:
+            connection.execute(
+                "INSERT INTO image_descriptions (image_id, engine, kind, scene, objects, visible_text, keywords) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (image_id, engine, row["kind"], row["scene"], json.dumps(row["objects"]), row["visible_text"], row["keywords"]))
+
+    def test_description_is_read_edited_and_checked_by_a_person(self):
+        image_id = self.confirmed(title="설명을 확인할 그림")             # 기관 확정된 그림의 설명도 고칠 수 있다(권리 정보가 아니다)
+        plain = self.add(title="설명이 없는 그림")
+        self.assertEqual(self.client.get(f"/api/images/{plain}").json()["descriptions"], [])
+        self.describe(image_id)
+        before = self.client.get(f"/api/images/{image_id}").json()
+        self.assertEqual([(d["engine"], d["checked_by"], d["keywords"]) for d in before["descriptions"]],
+                         [("fake:vision", None, ["접수대", "프런트 데스크", "호텔 로비"])])
+        self.assertEqual({row["id"]: (row["description_count"], row["description_checked"]) for row in self.listed()["items"]},
+                         {image_id: (1, False), plain: (0, False)})
+        self.assertEqual([row["id"] for row in self.listed(description="unchecked")["items"]], [image_id])
+        self.assertEqual([row["id"] for row in self.listed(description="none")["items"]], [plain])
+        self.assertEqual(self.listed(description="checked")["total"], 0)
+        self.assertEqual(self.client.get("/api/images", params={"description": "maybe"}).status_code, 400)
+
+        edited = {"engine": "fake:vision", "kind": "photo", "scene": "  호텔 로비의 접수대에 직원 한 명이 서 있다. ",
+                  "objects": before["descriptions"][0]["objects"], "visible_text": ["FRONT", "FRONT", "  "],
+                  "keywords": ["접수대", "프런트 데스크", "체크인"]}
+        done = self.post(image_id, "description", by="김확인", **edited)
+        one = done["descriptions"][0]
+        self.assertEqual((one["scene"], one["keywords"], one["visible_text"], one["checked_by"], bool(one["checked_at"])),
+                         ("호텔 로비의 접수대에 직원 한 명이 서 있다.", ["접수대", "프런트 데스크", "체크인"], ["FRONT"], "김확인", True))
+        self.assertEqual(one["objects"], before["descriptions"][0]["objects"])
+        self.assertEqual((done["rights"]["version"], len(done["history"])), (before["rights"]["version"], len(before["history"])),
+                         "설명은 권리 정보의 버전과 변경 이력을 건드리지 않는다")
+        self.assertEqual([row["id"] for row in self.listed(description="checked")["items"]], [image_id])
+        self.assertEqual(self.listed(description="unchecked")["total"], 0)
+
+        # 검사에서 떨어지는 내용은 저장하지 않는다(모델의 답과 같은 검사)
+        for bad, reason in (({**edited, "scene": "짧다"}, "너무 짧음"), ({**edited, "keywords": ["접수대"]}, "핵심어가 2개 미만"),
+                            ({**edited, "kind": "painting"}, "그림 종류가 목록에 없음")):
+            response = self.client.post(f"/api/images/{image_id}/description", json={"by": "김확인", **bad})
+            self.assertEqual(response.status_code, 400, response.text)
+            self.assertIn(reason, response.text)
+        self.assertEqual(self.client.get(f"/api/images/{image_id}").json()["descriptions"][0]["scene"], one["scene"])
+        self.post(image_id, "description", expect=404, **{**edited, "engine": "other:model"})
+        self.post(plain, "description", expect=404, **edited)
+
+        # 확인 취소: 내용은 그대로, 확인만 풀린다. 확인되지 않은 것을 또 풀면 409
+        opened = self.post(image_id, "description", engine="fake:vision", check=False)
+        self.assertEqual((opened["descriptions"][0]["checked_by"], opened["descriptions"][0]["scene"]), (None, one["scene"]))
+        self.post(image_id, "description", expect=409, engine="fake:vision", check=False)
+
+    def test_checked_description_comes_first_among_engines(self):
+        image_id = self.confirmed(title="엔진이 둘인 그림")
+        self.describe(image_id, "fake:first")
+        self.describe(image_id, "fake:second", scene="호텔 로비의 접수대를 위에서 내려다본 사진이다.")
+        row = self.client.get(f"/api/images/{image_id}").json()["descriptions"][0]
+        payload = {key: row[key] for key in ("engine", "kind", "scene", "objects", "visible_text", "keywords")}
+        other = "fake:first" if row["engine"] == "fake:second" else "fake:second"
+        payload = {**payload, "engine": other, "scene": "호텔 로비의 접수대와 직원 두 명이 보이는 사진이다."}
+        done = self.post(image_id, "description", **payload)
+        self.assertEqual([(d["engine"], d["checked_by"]) for d in done["descriptions"]][0], (other, "에디팅기관"))
+        self.assertEqual(len(done["descriptions"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -252,13 +252,16 @@ export const api = {
     // 사진·삽화: 장면 후보(생성형 AI), 서버의 모델이 만든 그림(PNG base64 — 몇 분이 걸릴 수 있다), 받기 전 확인, DB에 올리기
     prompt: (body) => postJson("/api/ai-image/generate/prompt", body),
     image: (body) => postJson("/api/ai-image/generate/image", body),
+    // 만드는 동안의 진행 상황과 취소. job은 화면이 정해 image에 함께 보낸 작업 번호
+    progress: (job) => request(`/api/ai-image/generate/progress/${job}`),
+    cancel: (job) => request(`/api/ai-image/generate/cancel/${job}`, { method: "POST" }),
     inspect: (body) => postJson("/api/ai-image/generate/inspect", body),
     registerImage: (body) => postJson("/api/ai-image/generate/register-image", body),
   },
   // 이미지 저작권 DB(REQ-02-010). 서버가 PostgreSQL일 때만 있다(/api/health의 image_db)
   images: {
     terms: () => request("/api/images/terms"),
-    // params: status·category·license_scheme·kogl_type·reuse_scope·module_code·unit_code·keyword·kind·q·limit·offset (빈 값은 보내지 않는다)
+    // params: status·category·license_scheme·kogl_type·reuse_scope·module_code·unit_code·keyword·kind·q·description·limit·offset (빈 값은 보내지 않는다)
     list: (params = {}) => request(`/api/images${queryString(params)}`),
     recommendable: (params = {}) => request(`/api/images/recommendable${queryString(params)}`),
     get: (id) => request(`/api/images/${id}`),
@@ -272,6 +275,10 @@ export const api = {
     addEvidence: (id, { kind, fileRef, submittedOn, note }) => postJson(`/api/images/${id}/evidence`, {
       kind, file_ref: (fileRef || "").trim() || null, submitted_on: submittedOn || null, note: (note || "").trim() || null }),
     removeEvidence: (id, evidenceId) => postJson(`/api/images/${id}/evidence/${evidenceId}/delete`, {}),
+    // 그림 설명(REQ-02-011 설명 색인) 한 벌을 사람이 읽고 확인한다. 고친 내용이 있으면 함께 저장된다. uncheck는 확인만 푼다(내용은 그대로)
+    checkDescription: (id, { engine, kind, scene, objects, visibleText, keywords }) => postJson(`/api/images/${id}/description`, {
+      engine, check: true, kind, scene, objects: objects || [], visible_text: visibleText || [], keywords: keywords || [] }),
+    uncheckDescription: (id, engine) => postJson(`/api/images/${id}/description`, { engine, check: false }),
     // files: 레코드 JSON 1개 + 그 레코드가 가리키는 그림 파일들. checkOnly면 DB에 넣지 않고 형식만 검사
     load: (files, { checkOnly }) => request("/api/images/load", { method: "POST", body: multipart({ check_only: checkOnly ? "true" : "false" }, files) }),
   },

@@ -1,4 +1,6 @@
-// 이미지 저작권 DB — 그림 1건 상세: 그림 보기, 수록 위치·수행준거, 권리 정보 입력, 기관 확정/확정 취소, 증빙 등록·삭제, 변경 이력.
+// 이미지 저작권 DB — 그림 1건 상세: 그림 보기, 수록 위치·수행준거, 권리 정보 입력, 기관 확정/확정 취소, 증빙 등록·삭제, 그림 설명 확인, 변경 이력.
+// 그림 설명(REQ-02-011 설명 색인)은 그림을 본 모델이 쓴 글이다. 에디터와 직능연이 그림과 견주어 읽고, 틀린 곳을 고쳐 확인한다.
+// 추천은 사람이 확인한 설명을 먼저 읽는다. 설명은 권리 정보가 아니라서 기관 확정 여부와 상관없이 고칠 수 있다.
 // 증빙은 기관 확정 여부와 상관없이 등록·삭제할 수 있다. 서류 파일은 올리지 않고 종류·파일 이름(보관 위치)·제출일·비고만 남긴다.
 // 권리 정보는 자동 태깅 상태에서만 고칠 수 있다(확정된 것은 확정을 푼 뒤). 저장·확정 요청에는 화면이 열어 본 버전을 실어
 // 그사이 다른 사람이 바꿨으면 서버가 409로 거절한다 — 그때는 다시 읽어 온다.
@@ -14,6 +16,91 @@ import { PageAlert } from "./PageAlert.jsx";
 
 const TEXT_FIELDS = ["author", "source_org", "source_url", "credit_line"];
 const NEW_EVIDENCE = { kind: "", fileRef: "", submittedOn: "", note: "" };
+// 그림 설명의 그림 종류(ncs_recommend.describe.KINDS)와 검사 기준(clean: 장면 10자 이상, 핵심어 2개 이상)
+const DESCRIPTION_KIND_OPTIONS = [
+  { value: "photo", label: "사진" }, { value: "illustration", label: "삽화" }, { value: "diagram", label: "도해" }, { value: "flowchart", label: "흐름도" },
+  { value: "table", label: "표" }, { value: "graph", label: "그래프" }, { value: "screenshot", label: "화면 캡처" }, { value: "other", label: "기타" },
+];
+const MIN_SCENE = 10;
+const MIN_KEYWORDS = 2;
+
+const descriptionForm = (item) => ({ kind: item.kind || "other", scene: item.scene || "", keywords: (item.keywords || []).join(", "),
+                                     visibleText: (item.visible_text || []).join("\n") });
+const splitList = (text, pattern) => [...new Set(text.split(pattern).map((word) => word.trim()).filter(Boolean))];
+
+// 그림 설명 한 벌(엔진 하나의 것): 읽고, 고치고, 확인한다. 대상 목록은 읽기만 한다(고치지 않고 그대로 보낸다)
+function DescriptionCard({ item, index, readOnly, busy, onCheck, onUncheck }) {
+  const [form, setForm] = useState(() => descriptionForm(item));
+  useEffect(() => { setForm(descriptionForm(item)); }, [item]);
+  const id = `image-description-${index}`;
+  const dirty = JSON.stringify(form) !== JSON.stringify(descriptionForm(item));
+  const keywords = splitList(form.keywords, /[,\n]/);
+  const visibleText = splitList(form.visibleText, /\n/);
+  const problem = form.scene.trim().length < MIN_SCENE ? `장면 설명을 ${MIN_SCENE}자 이상 적어 주세요.`
+    : keywords.length < MIN_KEYWORDS ? `핵심어를 ${MIN_KEYWORDS}개 이상 적어 주세요.` : "";
+  const checked = !!item.checked_by;
+  const text = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  return (
+    <div className="fieldset review-form is-sectioned image-evidence-form">
+      <div className="form-section" role="group" aria-labelledby={`${id}-title`}>
+        <h4 className="form-section-title" id={`${id}-title`}>
+          {item.engine}{" "}
+          <span className={`krds-badge ${checked ? "bg-light-success" : "bg-light-warning"}`}>{checked ? "사람이 확인함" : "확인 전"}</span>
+          <span className="meta"> {checked ? `${item.checked_by}, ${formatDate(item.checked_at)}` : `모델이 씀, ${formatDate(item.created_at)}`}</span>
+        </h4>
+        <div className="form-section-grid">
+          <div className="form-group">
+            <div className="form-tit"><label htmlFor={`${id}-kind`}>그림 종류</label></div>
+            <div className="form-conts">
+              {readOnly
+                ? <input id={`${id}-kind`} type="text" className="krds-input" value={DESCRIPTION_KIND_OPTIONS.find((o) => o.value === form.kind)?.label || ""} disabled readOnly />
+                : <KrdsSelect id={`${id}-kind`} value={form.kind} options={DESCRIPTION_KIND_OPTIONS} onChange={(value) => setForm((prev) => ({ ...prev, kind: value }))} title="그림 종류 선택" />}
+            </div>
+          </div>
+          <div className="form-group form-group-wide is-full">
+            <div className="form-tit"><label htmlFor={`${id}-scene`}>장면 설명</label></div>
+            <div className="form-conts">
+              <textarea id={`${id}-scene`} className="krds-input" rows={4} maxLength={600} value={form.scene} onChange={text("scene")} disabled={readOnly} />
+            </div>
+            <p className="form-hint">그림에 보이는 것만 적습니다. 용도나 의도를 짐작해 쓴 문장은 지워 주세요.</p>
+          </div>
+          <div className="form-group form-group-wide is-full">
+            <div className="form-tit"><label htmlFor={`${id}-keywords`}>핵심어</label></div>
+            <div className="form-conts">
+              <input id={`${id}-keywords`} type="text" className="krds-input" value={form.keywords} onChange={text("keywords")} disabled={readOnly} />
+            </div>
+            <p className="form-hint">쉼표로 나눠 적습니다. 추천이 문단의 낱말과 맞춰 보는 글입니다. 그림에 없는 낱말은 지우고, 같은 대상의 다른 이름은 더해 주세요(10개까지).</p>
+          </div>
+          <div className="form-group form-group-wide is-full">
+            <div className="form-tit"><label htmlFor={`${id}-text`}>그림 속 글자</label></div>
+            <div className="form-conts">
+              <textarea id={`${id}-text`} className="krds-input" rows={3} value={form.visibleText} onChange={text("visibleText")} disabled={readOnly} />
+            </div>
+            <p className="form-hint">한 줄에 하나씩. 그림에 적힌 그대로인지 봐 주세요. 없으면 비워 둡니다.</p>
+          </div>
+        </div>
+        {(item.objects || []).length > 0 && (
+          <p className="form-hint">모델이 본 대상: {item.objects.map((object) => `${object.name}${object.position ? `(${object.position})` : ""}`).join(", ")}.
+            대상 이름도 추천이 낱말로 맞춰 봅니다. 이 목록은 여기서 고치지 않습니다.</p>
+        )}
+      </div>
+      {!readOnly && (
+        <div className="form-actions">
+          {problem && <PageAlert kind="warning">{problem}</PageAlert>}
+          <div className="run-buttons image-actions">
+            {checked && !dirty && <button type="button" className="krds-btn large tertiary" disabled={!!busy} onClick={() => onUncheck(item)}>확인 취소</button>}
+            {(!checked || dirty) && (
+              <button type="button" className="krds-btn large secondary" disabled={!!busy || !!problem}
+                      onClick={() => onCheck(item, { engine: item.engine, kind: form.kind, scene: form.scene.trim(), objects: item.objects || [], visibleText, keywords }, dirty)}>
+                {busy === "description" ? "처리하는 중" : dirty ? "고친 내용 저장하고 확인" : "그림과 맞음, 확인"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // 서버의 rights → 입력칸 상태(모두 문자열·불리언)
 function toForm(rights) {
@@ -84,7 +171,7 @@ export function ImageDetail({ imageId, terms, readOnly = false, onChanged, onClo
   const [form, setForm] = useState(() => toForm(null));
   const [busy, setBusy] = useState(null);     // "save" | "confirm" | "unconfirm" | "evidence"
   const [evidence, setEvidence] = useState(NEW_EVIDENCE);   // 새로 등록할 증빙의 입력칸
-  const [message, setMessage] = useState(null);   // { kind, text, at } — at: 알림을 보일 자리("rights" | "evidence")
+  const [message, setMessage] = useState(null);   // { kind, text, at } — at: 알림을 보일 자리("rights" | "evidence" | "description")
   const [upscaledView, setUpscaledView] = useState(false);
 
   function accept(data) {
@@ -130,7 +217,7 @@ export function ImageDetail({ imageId, terms, readOnly = false, onChanged, onClo
     setBusy(kind);
     setMessage(null);
     const { ok, data: next, error, status } = await call();
-    const at = kind === "evidence" ? "evidence" : "rights";
+    const at = kind === "evidence" || kind === "description" ? kind : "rights";
     setBusy(null);
     if (!ok) {
       setMessage({ kind: "danger", text: error, at });
@@ -166,6 +253,10 @@ export function ImageDetail({ imageId, terms, readOnly = false, onChanged, onClo
     if (added) setEvidence(NEW_EVIDENCE);
   }
   const removeEvidence = (item) => send("evidence", () => api.images.removeEvidence(imageId, item.id), "증빙을 삭제했습니다.");
+  const checkDescription = (item, payload, edited) => send("description", () => api.images.checkDescription(imageId, payload),
+    edited ? "고친 설명을 저장하고 확인했습니다. 추천은 이 설명을 먼저 읽습니다." : "설명을 확인했습니다. 추천은 이 설명을 먼저 읽습니다.");
+  const uncheckDescription = (item) => send("description", () => api.images.uncheckDescription(imageId, item.engine), "확인을 취소했습니다. 설명의 내용은 그대로입니다.");
+  const descriptions = data.descriptions || [];
 
   const name = data.placements[0]?.caption || data.title || data.filename || "이름 없는 그림";
   const field = (id, label, control, hint) => (
@@ -351,6 +442,14 @@ export function ImageDetail({ imageId, terms, readOnly = false, onChanged, onClo
           </div>
         </div>
       </div>
+
+      <h3 className="sub-title">그림 설명 {descriptions.length}벌<span className="meta"> 그림을 본 모델이 쓴 글입니다. 그림과 견주어 읽고, 틀린 곳을 고쳐 확인해 주세요</span></h3>
+      {descriptions.length === 0
+        ? <p className="empty">이 그림에는 설명이 없습니다. 설명은 관리자가 그림 설명 만들기를 돌려야 생깁니다.</p>
+        : descriptions.map((item, index) => (
+          <DescriptionCard key={item.engine} item={item} index={index} readOnly={readOnly} busy={busy} onCheck={checkDescription} onUncheck={uncheckDescription} />
+        ))}
+      {message && message.at === "description" && <PageAlert kind={message.kind}>{message.text}</PageAlert>}
 
       <h3 className="sub-title">변경 이력</h3>
       <ul className="image-history">

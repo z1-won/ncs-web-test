@@ -24,6 +24,8 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from ncs_recommend import describe as picture_description
+
 from . import image_terms
 from .image_records import RecordError, rights_changes
 
@@ -38,6 +40,14 @@ ASSET_COLUMNS = ("id", "sha256", "source_id", "created_at", "filename", "title",
 MEDIA_TYPES = {"png": "image/png", "jpeg": "image/jpeg", "jpeg-progressive": "image/jpeg", "jpg": "image/jpeg",
                "bmp": "image/bmp", "gif": "image/gif"}
 REQUIRED_TO_CONFIRM = {"category": "분류 체계", "ownership": "권리 귀속"}
+# 그림 설명(REQ-02-011 설명 색인)을 목록에서 거르는 값: 설명이 없음 / 있지만 사람이 확인한 것이 없음 / 사람이 확인한 설명이 있음
+DESCRIPTION_FILTERS = {
+    "none": "NOT EXISTS (SELECT 1 FROM image_descriptions d WHERE d.image_id = a.id)",
+    "unchecked": "EXISTS (SELECT 1 FROM image_descriptions d WHERE d.image_id = a.id) "
+                 "AND NOT EXISTS (SELECT 1 FROM image_descriptions d WHERE d.image_id = a.id AND d.checked_by IS NOT NULL)",
+    "checked": "EXISTS (SELECT 1 FROM image_descriptions d WHERE d.image_id = a.id AND d.checked_by IS NOT NULL)",
+}
+DESCRIPTION_FIELDS = ("kind", "scene", "objects", "visible_text", "keywords")
 
 
 class ImageNotFound(LookupError):
@@ -93,6 +103,8 @@ SELECT a.id, a.sha256, a.source_id, a.title, a.filename, a.kind, a.format, a.wid
        (SELECT count(*) FROM image_placements p WHERE p.image_id = a.id) AS placement_count,
        (SELECT count(DISTINCT p.module_code) FROM image_placements p WHERE p.image_id = a.id) AS module_count,
        (SELECT count(*) FROM image_evidence e WHERE e.image_id = a.id) AS evidence_count,
+       (SELECT count(*) FROM image_descriptions d WHERE d.image_id = a.id) AS description_count,
+       EXISTS (SELECT 1 FROM image_descriptions d WHERE d.image_id = a.id AND d.checked_by IS NOT NULL) AS description_checked,
        first.module_code, first.label, first.caption
 FROM image_assets a
 LEFT JOIN image_rights r ON r.image_id = a.id
@@ -129,9 +141,14 @@ def _filters(*, module_code=None, unit_code=None, keyword=None, q=None, kind=Non
 def list_images(dsn: str, *, status: str | None = None, category: str | None = None, license_scheme: str | None = None,
                 kogl_type: int | None = None, reuse_scope: str | None = None, module_code: str | None = None,
                 unit_code: str | None = None, keyword: str | None = None, q: str | None = None,
-                kind: str | None = None, limit: int = 50, offset: int = 0) -> dict:
-    """관리용 목록 — {'total', 'items'}. status='none'은 권리 정보가 아직 없는 그림."""
+                kind: str | None = None, description: str | None = None, limit: int = 50, offset: int = 0) -> dict:
+    """관리용 목록 — {'total', 'items'}. status='none'은 권리 정보가 아직 없는 그림.
+    description: 그림 설명으로 거른다 — 'none' 설명 없음 / 'unchecked' 사람이 확인하지 않음 / 'checked' 사람이 확인함."""
     where, params = _filters(module_code=module_code, unit_code=unit_code, keyword=keyword, q=q, kind=kind)
+    if description:
+        if description not in DESCRIPTION_FILTERS:
+            raise ValueError(f"description은 {', '.join(DESCRIPTION_FILTERS)} 가운데 하나입니다: {description}")
+        where.append(DESCRIPTION_FILTERS[description])
     if status == "none":
         where.append("r.image_id IS NULL")
     elif status:
@@ -180,6 +197,10 @@ def get_image(dsn: str, image_id: str) -> dict:
                              "WHERE image_id = %s ORDER BY created_at, id"),
             "history": many("SELECT changed_at, changed_by, action, version, changes FROM image_history "
                             "WHERE image_id = %s ORDER BY changed_at DESC, id DESC"),
+            # 그림 설명(REQ-02-011): 엔진마다 한 벌. 사람이 확인한 것이 앞 — 추천이 읽는 순서와 같다(image_recommend)
+            "descriptions": many("SELECT engine, kind, scene, objects, visible_text, keywords, checked_by, checked_at, created_at "
+                                 "FROM image_descriptions WHERE image_id = %s "
+                                 "ORDER BY (checked_by IS NOT NULL) DESC, created_at DESC, engine"),
         }
 
 
@@ -257,6 +278,51 @@ def _history(connection, image_id: str, by: str, action: str, version: int, chan
     connection.execute(
         "INSERT INTO image_history (image_id, changed_by, action, version, changes) VALUES (%s, %s, %s, %s, %s)",
         (image_id, by, action, version, Jsonb(changes)))
+
+
+def check_description(dsn: str, image_id: str, engine: str, description: dict, *, by: str) -> dict:
+    """그림 설명 한 벌(그 엔진의 것)을 사람이 읽고 확인한다 → 그림 상세(get_image). 고친 내용이 있으면 함께 저장한다(REQ-02-011).
+
+    description: {'kind', 'scene', 'objects', 'visible_text', 'keywords'} — 모델의 답과 같은 검사(ncs_recommend.describe.clean)를 거친다.
+    검사에서 떨어지면(장면이 너무 짧음, 종류가 목록에 없음, 핵심어 2개 미만) ValueError. 그 엔진의 설명이 없으면 ImageNotFound.
+    확인한 사람과 시각이 설명에 남는다(checked_by, checked_at). 권리 정보의 버전과 변경 이력은 건드리지 않는다 — 설명은 권리 정보가 아니다.
+    """
+    by = _who(by)
+    image_id = _uuid(image_id)
+    engine = (engine or "").strip()
+    if not engine:
+        raise ValueError("engine(어느 엔진의 설명인지)이 필요합니다")
+    cleaned, problems = picture_description.clean(description)
+    if cleaned is None:
+        raise ValueError("그림 설명을 저장하지 못했습니다: " + "; ".join(problems))
+    with psycopg.connect(dsn) as connection:
+        if connection.execute("SELECT 1 FROM image_assets WHERE id = %s FOR UPDATE", (image_id,)).fetchone() is None:
+            raise ImageNotFound("그림을 찾을 수 없습니다")
+        updated = connection.execute(
+            "UPDATE image_descriptions SET kind = %s, scene = %s, objects = %s, visible_text = %s, keywords = %s, "
+            "checked_by = %s, checked_at = now() WHERE image_id = %s AND engine = %s",
+            (cleaned["kind"], cleaned["scene"], Jsonb(cleaned["objects"]), cleaned["visible_text"], cleaned["keywords"], by, image_id, engine))
+        if updated.rowcount == 0:
+            raise ImageNotFound("그 엔진의 그림 설명을 찾을 수 없습니다")
+    return get_image(dsn, image_id)
+
+
+def uncheck_description(dsn: str, image_id: str, engine: str, *, by: str) -> dict:
+    """그림 설명의 사람 확인을 푼다(내용은 그대로) → 그림 상세. 잘못 확인했을 때 쓴다. 확인되지 않은 설명이면 ImageConflict."""
+    _who(by)
+    image_id = _uuid(image_id)
+    with psycopg.connect(dsn) as connection:
+        if connection.execute("SELECT 1 FROM image_assets WHERE id = %s FOR UPDATE", (image_id,)).fetchone() is None:
+            raise ImageNotFound("그림을 찾을 수 없습니다")
+        row = connection.execute("SELECT checked_by FROM image_descriptions WHERE image_id = %s AND engine = %s FOR UPDATE",
+                                 (image_id, (engine or "").strip())).fetchone()
+        if row is None:
+            raise ImageNotFound("그 엔진의 그림 설명을 찾을 수 없습니다")
+        if row[0] is None:
+            raise ImageConflict("사람이 확인하지 않은 설명입니다")
+        connection.execute("UPDATE image_descriptions SET checked_by = NULL, checked_at = NULL WHERE image_id = %s AND engine = %s",
+                           (image_id, engine.strip()))
+    return get_image(dsn, image_id)
 
 
 def update_rights(dsn: str, image_id: str, rights, *, by: str, version: int | None = None) -> dict:

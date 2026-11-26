@@ -24,6 +24,11 @@ const STATUS_OPTIONS = [
   { value: "", label: "전체" }, { value: "none", label: "권리 정보 없음" }, { value: "auto", label: "자동 태깅" }, { value: "confirmed", label: "기관 확정" },
 ];
 
+// 그림 설명(REQ-02-011 설명 색인)의 사람 확인 여부로 거른다 — 확인할 것을 모아 보려면 '확인 전'
+const DESCRIPTION_OPTIONS = [
+  { value: "", label: "전체" }, { value: "unchecked", label: "확인 전" }, { value: "checked", label: "사람이 확인함" }, { value: "none", label: "설명 없음" },
+];
+
 function Thumb({ src, alt }) {
   return src ? <img className="image-thumb" src={src} alt={alt} loading="lazy" /> : <span className="image-thumb none" aria-label="그림 파일 없음">파일 없음</span>;
 }
@@ -179,7 +184,7 @@ export default function ImageDbPage() {
   usePageTitle("이미지 저작권 DB");
   const [ready, setReady] = useState(null);       // null 확인 중 | true | false(DB 없음) | "error"
   const [terms, setTerms] = useState(null);
-  const [filters, setFilters] = useState({ status: "", category: "", q: "" });
+  const [filters, setFilters] = useState({ status: "", category: "", description: "", q: "" });
   const [query, setQuery] = useState("");         // 검색칸에 적는 중인 글 — [검색]을 눌러야 filters.q가 된다
   const [page, setPage] = useState(1);
   const [list, setList] = useState({ status: "loading" });
@@ -268,6 +273,8 @@ export default function ImageDbPage() {
               <KrdsSelect id="filter-status" value={filters.status} options={STATUS_OPTIONS} onChange={(v) => changeFilter("status", v)} title="확정 상태 선택" /></div>
             <div className="filter"><label htmlFor="filter-category">분류 체계</label>
               <KrdsSelect id="filter-category" value={filters.category} options={categoryOptions} onChange={(v) => changeFilter("category", v)} title="분류 체계 선택" /></div>
+            <div className="filter"><label htmlFor="filter-description">그림 설명</label>
+              <KrdsSelect id="filter-description" value={filters.description} options={DESCRIPTION_OPTIONS} onChange={(v) => changeFilter("description", v)} title="그림 설명 확인 여부 선택" /></div>
             <div className="filter grow"><label htmlFor="filter-q">검색</label>
               <input id="filter-q" type="search" className="krds-input" maxLength={100} value={query} placeholder="제목, 그림명, 키워드, 수집 번호, 그림 사용 문장" onChange={(e) => setQuery(e.target.value)} /></div>
             <button type="submit" className="krds-btn medium secondary">검색</button>
@@ -291,7 +298,8 @@ export default function ImageDbPage() {
                         <td><strong>{rowName(row)}</strong>
                           <span className="sub">{row.module_code ? `${row.module_code}${row.placement_count > 1 ? ` 외 ${row.placement_count - 1}곳(모듈 ${row.module_count}개)` : ""}` : `수록 위치 없음(수집 자료${row.source_id ? ` ${row.source_id}` : ""})`}</span></td>
                         <td>{terms?.category?.[row.category] || "-"}</td>
-                        <td>{licenseLabel(row, terms)}{row.ai_used && <span className="sub">AI 활용</span>}</td>
+                        <td>{licenseLabel(row, terms)}{row.ai_used && <span className="sub">AI 활용</span>}
+                          {row.description_count > 0 && <span className="sub">그림 설명 {row.description_checked ? "확인함" : "확인 전"}</span>}</td>
                         <td>{row.status ? terms?.reuse_scope?.[row.reuse_scope] || row.reuse_scope : "-"}
                           {row.status === "confirmed" && row.reuse_scope === "unknown" && <span className="krds-badge bg-light-danger scope-badge">추천 제외</span>}</td>
                         <td><span className={`krds-badge ${tone}`}>{statusText}</span></td>

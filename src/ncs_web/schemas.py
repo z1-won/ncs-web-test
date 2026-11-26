@@ -69,6 +69,18 @@ class ImageActionRequest(BaseModel):
     version: int | None = Field(None, ge=1)   # 화면이 열어 본 버전. 주면 그 버전일 때만 바꾼다
 
 
+class ImageDescriptionRequest(BaseModel):
+    """그림 설명 한 벌을 사람이 읽고 확인(REQ-02-011 설명 색인). 고친 내용이 있으면 함께 저장된다. check=false면 확인만 푼다(내용은 그대로)."""
+    by: str = Field(default="", max_length=50)
+    engine: str = Field(min_length=1, max_length=200)       # 어느 엔진(제공자:모델)의 설명인지
+    check: bool = True
+    kind: str = Field(default="", max_length=30)
+    scene: str = Field(default="", max_length=2000)
+    objects: list[dict[str, Any]] = Field(default_factory=list, max_length=50)
+    visible_text: list[str] = Field(default_factory=list, max_length=100)
+    keywords: list[str] = Field(default_factory=list, max_length=100)
+
+
 class ImageEvidenceRequest(BaseModel):
     """이미지 저작권 DB에 증빙 1건을 직접 등록(REQ-02-010). 서류 파일은 받지 않는다 — 종류와 파일 이름(또는 보관 위치)만 남긴다."""
     by: str = Field(default="", max_length=50)
@@ -137,6 +149,7 @@ class ImageGenerateRequest(BaseModel):
     shape: Literal["landscape", "portrait", "square"] = "landscape"
     count: int = Field(2, ge=1, le=4)
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
+    job: str = Field("", max_length=64, pattern=r"^[A-Za-z0-9-]*$")      # 화면이 정한 작업 번호 — 진행 상황을 묻고 취소할 때 쓴다
 
 
 class ImageInspectRequest(BaseModel):
