@@ -1,15 +1,11 @@
 // 결과 표 셋: 검수 확인서(SheetTable), 지적사항(FindingsTable), 전체 체크리스트(ChecklistTable).
 import React, { useState } from "react";
 import { Badge, MARK } from "./Badge.jsx";
+import { CHANGE_LABEL, findingsOfRow, isChangeCheck } from "../lib/checks.js";
 import { asText, withBoxNumbers } from "../lib/format.jsx";
 
 /* F02 검수 확인서 모양: 구성요소 | 체크 항목 | 검수 결과(적합/부적합/판단불가) | 비고 */
-// 확인서 행에 속한 지적사항: item_id가 그 번호로 끝나거나(F02-필요지식-⑤), 체크 이름이 그 번호로 시작(위치 ②③④처럼 한 item_id를 나눠 쓰는 엔진)
-// 여러 구성요소를 한 표에 모을 때는 행·지적사항에 _check(엔진 이름)를 붙여 같은 번호(차례 ①·개요 ①)가 섞이지 않게 한다.
-export function findingsOfRow(findings, row) {
-  return (findings || []).filter((f) => (!row._check || !f._check || f._check === row._check)
-    && (f.item_id.endsWith(row.번호) || String(f.check).startsWith(row.번호)));
-}
+// 확인서 행에 속한 지적사항 찾기(findingsOfRow)와 '변경 확인' 후보 가리기(isChangeCheck)는 lib/checks.js에 있다.
 
 const rowKey = (row) => `${row._check || ""}-${row.번호}`;
 
@@ -76,7 +72,11 @@ export function SheetTable({ sheet, findings }) {
                   <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "적합" ? "✓" : ""}</td>
                   <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "부적합" ? "✓" : ""}</td>
                   <td className={`mark ${MARK[row.검수결과] || ""}`}>{row.검수결과 === "판단불가" ? "△" : ""}</td>
-                  <td style={{ whiteSpace: "pre-line" }}>{withBoxNumbers(row.비고)}</td>
+                  <td style={{ whiteSpace: "pre-line" }}>
+                    {/* 변경 확인 후보: F02 양식의 판정 칸은 셋(적합, 부적합, 판단불가)이라 그대로 두고, 비고 맨 앞에 표시한다 */}
+                    {isChangeCheck(row, own) && <span className="krds-badge small bg-light-secondary sheet-change" title="낱말만 바뀐 학습 목표입니다. 용어나 법령 사유의 허용 변경인지 확인해 주세요.">{CHANGE_LABEL}</span>}
+                    {withBoxNumbers(row.비고)}
+                  </td>
                 </tr>
                 {open && (
                   <tr className="sheet-detail" id={`sheet-detail-${key}`}>

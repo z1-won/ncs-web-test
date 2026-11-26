@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 
 import { api } from "../lib/api.js";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
-import { useAuth } from "../lib/auth.jsx";
+import { useAuth, useCanManage } from "../lib/auth.jsx";
 import { usePageTitle } from "../lib/hooks.js";
 import { StageBar } from "./ProgressPage.jsx";
 
@@ -24,7 +24,7 @@ const GROUPS = [
   { title: "검수", items: [
     { path: "/review", label: "원고 검수", desc: "검수 확인서 항목별로 적합 여부와 위치, 사유를 보여 줍니다.", main: true,
       files: "원고(hwp, hwpx). 개발계획서와 출력본 PDF는 선택", ai: "일부 항목에 생성형 AI 사용" },
-    { path: "/opinion", label: "의견 반영 검토", desc: "검토의견서와 심의의견서의 의견이 최종 원고에 반영되었는지 대조합니다.",
+    { path: "/opinion", label: "의견 반영 검토", desc: "검토의견서와 심의의견서의 의견이 최종 원고에 반영되었는지 대조합니다.", manager: true,
       files: "검토의견서 또는 심의의견서, 최종 원고", ai: "생성형 AI 사용" },
   ] },
   { title: "이미지", items: [
@@ -46,6 +46,7 @@ export default function HomePage() {
   const [todo, setTodo] = useState(null);      // 내 할 일(세분류 건). null이면 그 자리를 그리지 않는다
   const { status } = useAuth();
   const signedOut = status === "out";            // 로그인 전에도 이 화면은 보인다 — 기능을 누르면 로그인 화면이 나온다
+  const canManage = useCanManage();              // manager 표시가 있는 기능은 에디터와 직능연 계정에만 보인다(로그인 전에는 무엇이 있는지 모두 보인다)
 
   useEffect(() => {
     if (signedOut) { setList(null); setTodo(null); return undefined; }
@@ -134,7 +135,7 @@ export default function HomePage() {
             <div key={group.title} className="home-group">
               <h3 className="home-group-title">{group.title}</h3>
               <ul>
-                {group.items.map((item) => (
+                {group.items.filter((item) => signedOut || canManage || !item.manager).map((item) => (
                   <li key={item.path}>
                     <Link to={item.path} className={item.main ? "is-main" : ""}>
                       <strong className="home-card-title">{item.label}</strong>

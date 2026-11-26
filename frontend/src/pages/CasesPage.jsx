@@ -381,7 +381,7 @@ function StageAction({ detail, volume, standing, onChange }) {
           {latest.review ? (
             <p>
               검수 결과: <Badge value={latest.review.verdict} /> <span className="meta">검수 {latest.review.checks}개, {Object.entries(latest.review.counts).map(([k, n]) => `${k} ${n}`).join(", ")}, {when(latest.review.at)}</span>{" "}
-              <Link to={`/review?group=${latest.review.group}`} className="krds-btn small text">결과 자세히 보기</Link>
+              <Link to={`/review?group=${latest.review.group}&case=${detail.id}&version=${latest.id}`} className="krds-btn small text">결과 자세히 보기</Link>
             </p>
           ) : <p className="meta">이 판본은 검수 전입니다.</p>}
           <VersionChecks checks={latest.checks} />
@@ -425,6 +425,7 @@ function StageAction({ detail, volume, standing, onChange }) {
         </div>
       )}
 
+      {/* 의견 반영 검토는 확인하는 쪽(에디터, 직능연)이 돌린다 — 집필진에게는 그 도구의 단추를 보이지 않는다(기록은 보인다) */}
       {volume && standing.tools.length > 0 && (
         <div className="cases-review">
           <p>이 단계의 근거 기록{records.length === 0 && <span className="meta">이 없습니다. 아래 도구를 여기서 열어 실행하면 이 단계의 근거 기록으로 남습니다.</span>}</p>
@@ -435,7 +436,7 @@ function StageAction({ detail, volume, standing, onChange }) {
             </ul>
           )}
           <p>
-            {standing.tools.map((tool) => (
+            {standing.tools.filter((tool) => tool !== "opinion" || detail.can_manage).map((tool) => (
               <Link key={tool} className="krds-btn medium secondary" to={toolLink(tool)}>
                 {TOOLS[tool][1]} 열기
               </Link>
@@ -552,7 +553,7 @@ function VolumePanel({ detail, volume, onChange, onClose }) {
                   <td><a href={api.cases.versionFileUrl(detail.id, version.id)}>{version.filename}</a><span className="meta">{sizeText(version.byte_size)}</span></td>
                   <td>{version.by}<span className="meta">{when(version.at)}</span></td>
                   <td>{version.review ? (
-                    <><Badge value={version.review.verdict} /> <Link to={`/review?group=${version.review.group}`} className="krds-btn small text">결과 보기</Link></>
+                    <><Badge value={version.review.verdict} /> <Link to={`/review?group=${version.review.group}&case=${detail.id}&version=${version.id}`} className="krds-btn small text">결과 보기</Link></>
                   ) : "검수 전"}<VersionChecks checks={version.checks} compact /></td>
                 </tr>
               ))}

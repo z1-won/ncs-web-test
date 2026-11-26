@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-import { useAuth } from "../lib/auth.jsx";
+import { useAuth, useCanManage } from "../lib/auth.jsx";
 import { useCssHeightVar, useScrollY } from "../lib/hooks.js";
 
 /* 맨 위로(TOP) 버튼 — KRDS 아이콘 버튼 규격(app.css .krds-btn-top). 화면 높이의 절반 넘게 내려가면 나타나고, 누르면 맨 위로 올린 뒤 포커스를 본문(#container)으로 옮긴다. */
@@ -30,7 +30,7 @@ export function TopButton({ target = "#container" }) {
 export const NAV_ITEMS = [   // 화면 순서와 같다: 실행 → 결과(주 동선) → 이력(부차)
   { id: "review-run", label: "검수 실행" },
   { id: "review-result", label: "검수 결과" },
-  { id: "llm-review", label: "LLM 검토", afterResult: true },
+  { id: "llm-review", label: "LLM 검토", afterResult: true, manager: true },     // manager: 에디터와 직능연 계정에만 보인다
   { id: "figures", label: "그림 검수", afterResult: true },
   { id: "sources", label: "표 출처 검토", afterResult: true },
   { id: "review-history", label: "검수 이력" },
@@ -47,8 +47,8 @@ export const PAGES = [
   ] },
   { id: "review", label: "검수", children: [
     { path: "/review", label: "원고 검수" },
-    { path: "/review/batch", label: "원고 폴더 일괄 검수" },
-    { path: "/opinion", label: "의견 반영 검토" },
+    { path: "/review/batch", label: "원고 폴더 일괄 검수", manager: true },     // manager: 에디터와 직능연 계정에만 보인다(lib/auth.jsx)
+    { path: "/opinion", label: "의견 반영 검토", manager: true },
   ] },
   { id: "image", label: "이미지", children: [
     { path: "/upscale", label: "업스케일링" },
@@ -70,7 +70,9 @@ function MenuGroup({ group, pathname }) {
   const [open, setOpen] = useState(false);
   const item = useRef(null);
   const trigger = useRef(null);
-  const here = group.children.some((child) => child.path === pathname);
+  const canManage = useCanManage();
+  const children = group.children.filter((child) => canManage || !child.manager);
+  const here = children.some((child) => child.path === pathname);
   const panelId = `gnb-${group.id}`;
 
   useEffect(() => {
@@ -98,7 +100,7 @@ function MenuGroup({ group, pathname }) {
       <div className={`gnb-toggle-wrap${open ? " is-open" : ""}`} id={panelId}>
         <div className="gnb-main-list" data-has-submenu="false">
           <ul>
-            {group.children.map((child) => (
+            {children.map((child) => (
               <li key={child.path}>
                 <Link to={child.path} className={`gnb-sub-trigger is-link${pathname === child.path ? " active" : ""}`}
                       aria-current={pathname === child.path ? "page" : undefined} onClick={() => setOpen(false)}>{child.label}</Link>
@@ -115,9 +117,11 @@ export function Header({ hasHistory, hasResult, anchors = NAV_ITEMS }) {
   const location = useLocation();
   const { status, account, logOut } = useAuth();
   const signedOut = status === "out";     // 로그인 전: 메뉴를 숨긴다. 처음 화면에는 [로그인]만, 로그인 화면에는 로고만 보인다
+  const canManage = useCanManage();
   const items = useMemo(
-    () => anchors.filter((item) => (item.id === "review-history" ? hasHistory : item.id === "review-result" || item.afterResult ? hasResult : true)),
-    [anchors, hasHistory, hasResult],
+    () => anchors.filter((item) => (canManage || !item.manager)
+      && (item.id === "review-history" ? hasHistory : item.id === "review-result" || item.afterResult ? hasResult : true)),
+    [anchors, hasHistory, hasResult, canManage],
   );
   const header = useRef(null);
   useCssHeightVar(header, "--header-height");   // app.css의 앵커 scroll-margin-top이 이 값을 읽는다

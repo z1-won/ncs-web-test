@@ -3,7 +3,7 @@
 // 누가 표시했는지는 로그인한 계정에서 서버가 읽는다(화면에서 이름을 받지 않는다).
 // 화면 짜임은 이미지 저작권 DB와 같다: 위쪽 입력 묶음(모듈 코드로 열기) → 목록 → 고른 원고의 상세가 목록 아래에 열리고 [닫기].
 // 서버가 DB 이력을 쓸 때만(/api/health의 history) 목록이 있다. 고른 원고는 주소(?code=)에 남아 새로 고침·공유에도 같은 화면이 열린다.
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { api } from "../lib/api.js";
@@ -17,7 +17,6 @@ import { usePageTitle } from "../lib/hooks.js";
 const STAGE_COUNT = 7;
 const CHECK_LABEL = Object.fromEntries(CHECKS.map((c) => [c.value, c.label]));
 const CHECK_ORDER = CHECKS.map((c) => c.value);   // 편집 검수 표는 확인서 순서로
-const ANCHORS = [{ id: "progress-list", label: "원고 목록" }, { id: "progress-detail", label: "단계와 진행도" }];
 const day = (iso) => (iso ? formatDate(iso) : "-");
 const dateOnly = (iso) => (iso ? new Date(iso).toLocaleDateString("ko-KR") : "");
 
@@ -33,12 +32,14 @@ export function StageBar({ done }) {
 
 // 남은 일 한 칸 — 편집·내용·저작권 검수를 모두 "남은 것 / 전체"로 보인다(서버 progress.remaining과 같은 값).
 // left: {남음, 전체, …} 또는 null(기록 없음). unit: 전체 뒤에 붙는 말('항목', '개'). what: 남은 것의 이름('부적합', '미반영')
-export function Remaining({ left, what, unit, extra }) {
+// 배지 색은 검수 결과 배지(components/Badge.jsx)와 같은 규칙: 남은 것이 없으면 적합의 초록, 남아 있으면 부적합의 빨강.
+// 크기도 KRDS 배지 그대로(기본, 요약 칸의 큰 줄에서는 large) — 글자 크기를 따로 바꾸지 않는다
+export function Remaining({ left, what, unit, extra, large = false }) {
   if (!left || left.전체 == null) return <span className="meta">{extra || "기록 없음"}</span>;   // 권리 증빙만 점검한 원고는 누락 수만 보인다
   const clear = left.남음 === 0;
   return (
     <span className="progress-left">
-      <span className={`krds-badge ${clear ? "bg-light-success" : "bg-light-warning"}`}>{what} {left.남음}</span>
+      <span className={`krds-badge ${large ? "large " : ""}${clear ? "bg-light-success" : "bg-light-danger"}`}>{what} {left.남음}</span>
       <span className="progress-left-total"> / {left.전체}{unit}</span>
       {extra && <span className="meta">{extra}</span>}
     </span>
@@ -66,7 +67,6 @@ export default function ProgressPage() {
   const [detailError, setDetailError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [typed, setTyped] = useState("");            // 목록에 없는 원고를 모듈 코드로 여는 칸
-  const detailBox = useRef(null);
 
   async function refreshList() {
     const { ok, data, error } = await api.manuscripts.list();
@@ -96,7 +96,7 @@ export default function ProgressPage() {
       setLoading(false);
       if (ok) {
         setDetail(data);
-        requestAnimationFrame(() => detailBox.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
+        window.scrollTo(0, 0);      // 원고 하나만 보이는 화면으로 바뀌므로 맨 위에서 시작한다
       } else { setDetail(null); setDetailError(error); }
     })();
     return () => { alive = false; };
@@ -110,17 +110,31 @@ export default function ProgressPage() {
 
   return (
     <>
-    <Header anchors={history ? ANCHORS : []} hasHistory={false} hasResult={false} />
+    <Header anchors={[]} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page progress-page">
-      <h1 className="page-title">원고 진행 현황</h1>
-      <p className="page-desc">
-        원고마다 편집, 내용, 저작권 검수에서 남은 일과 단계 7개의 완료 여부를 보여 줍니다. 숫자는 가장 최근 검수 기록에서 모은 값이고, 단계의 완료는 담당자가 직접 표시합니다.
-      </p>
+      {/* 원고를 하나 열면 그 원고의 이름이 페이지 제목이다 — 목록용 설명은 빼고, 목록으로 돌아가는 버튼을 제목 줄 오른쪽에 둔다 */}
+      {code ? (
+        <div className="page-head-row">
+          <h1 className="page-title">
+            {detail ? (detail.학습모듈명 || detail.module_code) : "원고 진행 현황"}
+            {detail?.학습모듈명 && <span className="meta">{detail.module_code}</span>}
+          </h1>
+          <button type="button" className="krds-btn small tertiary" onClick={() => setParams({})}>원고 목록으로</button>
+        </div>
+      ) : (
+        <>
+        <h1 className="page-title">원고 진행 현황</h1>
+        <p className="page-desc">
+          원고마다 편집, 내용, 저작권 검수에서 남은 일과 단계 7개의 완료 여부를 보여 줍니다. 숫자는 가장 최근 검수 기록에서 모은 값이고, 단계의 완료는 담당자가 직접 표시합니다.
+        </p>
+        </>
+      )}
 
       {history === null && <Spinner label="기록을 확인하는 중" />}
       {history === false && <PageAlert kind="info">데이터베이스가 연결된 서버에서만 진행 현황을 볼 수 있습니다. 관리자에게 문의해 주세요.</PageAlert>}
 
-      {history && (
+      {/* 원고를 하나 열면(?code=) 그 원고만 보인다 — 코드 입력 칸과 목록은 접는다. 목록으로는 상세의 [원고 목록으로]로 돌아간다 */}
+      {history && !code && (
         <form className="fieldset review-form is-sectioned" onSubmit={openTyped}>
           <div className="form-section-grid">
             <div className="form-group">
@@ -136,7 +150,7 @@ export default function ProgressPage() {
         </form>
       )}
 
-      {history && (
+      {history && !code && (
         <section id="progress-list" className="nav-anchor">
           <div className="section-head">
             <h2 className="section-title">원고 목록{list ? <span className="meta"> {list.length}건, 최근 기록순</span> : null}</h2>
@@ -178,12 +192,12 @@ export default function ProgressPage() {
         </section>
       )}
 
-      <div id="progress-detail" ref={detailBox} className="nav-anchor">
+      <div id="progress-detail" className="nav-anchor">
         {loading && <Spinner label="진행 현황을 불러오는 중" />}
         <PageAlert kind="danger">{detailError}</PageAlert>
         {detail && !loading && (
           <ProgressDetail detail={detail}
-                          onChange={(next) => { setDetail(next); refreshList(); }} onClose={() => setParams({})} />
+                          onChange={(next) => { setDetail(next); refreshList(); }} />
         )}
       </div>
       <TopButton />
@@ -212,7 +226,7 @@ function ListSummary({ list }) {
   );
 }
 
-function ProgressDetail({ detail, onChange, onClose }) {
+function ProgressDetail({ detail, onChange }) {
   const [marking, setMarking] = useState(null);      // 메모를 적으려고 연 단계 번호
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -230,15 +244,9 @@ function ProgressDetail({ detail, onChange, onClose }) {
   }
 
   return (
-    <section className="progress-detail" aria-labelledby="progress-detail-title">
-      <div className="section-head">
-        <h2 className="section-title" id="progress-detail-title">
-          {detail.학습모듈명 || detail.module_code}{detail.학습모듈명 && <span className="meta"> {detail.module_code}</span>}
-        </h2>
-        <button type="button" className="krds-btn small tertiary" onClick={onClose}>닫기</button>
-      </div>
-      <ProgressFigures detail={detail} />
-      {!detail.건 && <p className="progress-overall"><StageBar done={detail["완료 단계 수"]} /></p>}
+    <section className="progress-detail" aria-label={`${detail.학습모듈명 || detail.module_code} 진행 현황`}>
+      {/* 읽는 순서: 남은 일(요약) → 단계(지금 어디인가) → 구성요소·차수별 표(자세한 값) */}
+      <ProgressSummary detail={detail} />
 
       {detail.건 ? (
         <PageAlert kind="info">
@@ -248,6 +256,7 @@ function ProgressDetail({ detail, onChange, onClose }) {
       ) : (
         <>
       <h3 className="table-title" id="progress-steps-title">단계 <span className="meta">{detail["단계 근거"]}</span></h3>
+      <p className="progress-overall"><StageBar done={detail["완료 단계 수"]} /></p>
       <PageAlert kind="danger">{markError}</PageAlert>
       <ol className="progress-steps" aria-labelledby="progress-steps-title">
         {detail.단계.map((stage) => (
@@ -258,24 +267,25 @@ function ProgressDetail({ detail, onChange, onClose }) {
                 <h4><span className="sr-only">{stage.번호}단계 </span>{stage.이름}</h4>
                 <span className={`krds-badge ${stage.완료 ? "bg-light-success" : "bg-light-gray"}`}>{stage.완료 ? "완료" : "완료 전"}</span>
                 <span className="progress-step-who">{stage.담당}</span>
-                {stage.완료 ? (
-                  <button type="button" className="krds-btn small tertiary" disabled={saving} onClick={() => mark(stage.번호, false)}>
-                    되돌리기<span className="sr-only"> {stage.이름}</span>
-                  </button>
-                ) : (
-                  <button type="button" className="krds-btn small secondary" disabled={saving} aria-expanded={marking === stage.번호}
-                          onClick={() => { setMarking(marking === stage.번호 ? null : stage.번호); setNote(""); setMarkError(null); }}>
-                    완료로 표시<span className="sr-only"> {stage.이름}</span>
-                  </button>
-                )}
+                {/* 오른쪽 자리는 줄마다 같다: 그 단계의 기능 열기 → 완료 표시(또는 되돌리기). 자주 쓰는 '열기'가 버튼이고 되돌리기는 글자 버튼으로 약하게 */}
+                <span className="progress-step-actions">
+                  <Link className="krds-btn small tertiary" to={stage.경로}>{stage.기능} 열기</Link>
+                  {stage.완료 ? (
+                    <button type="button" className="krds-btn small text" disabled={saving} onClick={() => mark(stage.번호, false)}>
+                      되돌리기<span className="sr-only"> {stage.이름}</span>
+                    </button>
+                  ) : (
+                    <button type="button" className="krds-btn small secondary" disabled={saving} aria-expanded={marking === stage.번호}
+                            onClick={() => { setMarking(marking === stage.번호 ? null : stage.번호); setNote(""); setMarkError(null); }}>
+                      완료로 표시<span className="sr-only"> {stage.이름}</span>
+                    </button>
+                  )}
+                </span>
               </div>
               {stage.완료 && (
                 <p className="progress-step-done">{stage["완료한 사람"]}, {dateOnly(stage["완료 시각"])}{stage.메모 && <span className="meta"> {stage.메모}</span>}</p>
               )}
-              <p className="meta">
-                근거 기록: {stage.내용 ? <>{stage.내용}{stage.일시 && ` (${dateOnly(stage.일시)})`}</> : "없음"}
-                <Link className="progress-step-link" to={stage.경로}>{stage.기능} 열기</Link>
-              </p>
+              <p className="meta">근거 기록: {stage.내용 ? <>{stage.내용}{stage.일시 && ` (${dateOnly(stage.일시)})`}</> : "없음"}</p>
               {marking === stage.번호 && !stage.완료 && (
                 <form className="progress-mark" onSubmit={(e) => { e.preventDefault(); mark(stage.번호, true); }}>
                   <label htmlFor={`mark-note-${stage.번호}`}>메모(선택)</label>
@@ -312,12 +322,23 @@ function ProgressDetail({ detail, onChange, onClose }) {
 
         </>
       )}
+      <ProgressTables detail={detail} />
     </section>
   );
 }
 
-// 검수 진행도 — 남아 있는 기록에서 모은 값(편집·내용·저작권 검수, 분량)과 그 표. 세분류 건의 권 화면도 같은 것을 쓴다
+// 남은 일 칸의 내역 한 줄 — 이름(왼쪽, 한 열로 맞춤)과 값(오른쪽)
+function Row({ label, children }) {
+  return <dd className="progress-row"><span className="progress-row-label">{label}</span><span className="progress-row-value">{children}</span></dd>;
+}
+
+// 검수 진행도 — 남아 있는 기록에서 모은 값(편집·내용·저작권 검수, 분량)과 그 표. 세분류 건의 권 화면은 둘을 이어서 쓴다
 export function ProgressFigures({ detail }) {
+  return <><ProgressSummary detail={detail} /><ProgressTables detail={detail} /></>;
+}
+
+// 남은 일 — 칸 넷(편집 검수, 내용 검수, 저작권 검수, 원고 분량)
+export function ProgressSummary({ detail }) {
   const progress = detail.진행도;
   const editing = progress["편집 검수"];
   const content = progress["내용 검수"];
@@ -329,69 +350,82 @@ export function ProgressFigures({ detail }) {
   const confirmed = content.확정;                           // 의견 반영 검토의 담당자 확정
   const volume = progress.분량;
   const left = detail["남은 일"] || {};                       // 서버 progress.remaining — 목록과 같은 값
+  // 칸의 첫 줄: 남은 것 / 전체. 기록이 없는 칸은 네 칸 모두 같은 작은 글 '기록 없음' 한 줄로 맞춘다
+  const head = (key, what, unit) => (left[key]?.전체 != null
+    ? <dd className="progress-headline"><Remaining left={left[key]} what={what} unit={unit} large /></dd>
+    : <dd className="progress-empty">기록 없음</dd>);
+  const unread = figures ? Math.max(0, (figures["검수 대상"] ?? figures.그림 ?? 0) - (figures.고위험 || 0) - (figures["확인 필요"] || 0) - (figures.문제없음 || 0)) : 0;
   return (
     <>
       <h3 className="table-title" id="progress-numbers-title">남은 일 <span className="meta">가장 최근 검수 기록에서 모은 값(남은 것 / 전체)</span></h3>
-      <dl className="upscale-summary" aria-labelledby="progress-numbers-title">
-        <div>
+      {/* 칸 안의 글은 세 층: 이름(굵게) → 남은 것 / 전체(큰 글) → 구분선 아래 내역 줄(작은 글, '무엇 | 값'). 내역 줄의 이름은 한 열로 맞춘다 */}
+      <dl className="upscale-summary progress-summary" aria-labelledby="progress-numbers-title">
+        <div className={left["편집 검수"]?.전체 != null ? "" : "is-empty"}>
           <dt>편집 검수</dt>
-          <dd><Remaining left={left["편집 검수"]} what="부적합" unit="항목" /></dd>
-          {editing.항목 && <dd className="meta">적합 {editing.항목.적합}, 부적합 {editing.항목.부적합}, 판단불가 {editing.항목.판단불가}. 판단불가는 담당자가 확인할 항목입니다.</dd>}
+          {head("편집 검수", "부적합", "항목")}
+          {editing.항목 && <Row label="판정">적합 {editing.항목.적합}, 부적합 {editing.항목.부적합}, 판단불가 {editing.항목.판단불가}</Row>}
           {editing.쪽 && (
-            <dd className="meta">
-              쪽 기준: 진행완료 {editing.쪽.완료}쪽 / 총 {editing.쪽.전체}쪽. 부적합이 놓인 쪽은 {editing.쪽.남음}쪽입니다.
-              {editing.쪽["못 찾은 항목"] > 0 && ` 자리를 찾지 못한 부적합 ${editing.쪽["못 찾은 항목"]}개는 쪽에 넣지 못했습니다.`}
-            </dd>
+            <Row label="쪽 기준">
+              진행완료 {editing.쪽.완료}쪽 / 총 {editing.쪽.전체}쪽
+              <span className="progress-row-note">부적합이 놓인 쪽 {editing.쪽.남음}쪽{editing.쪽["못 찾은 항목"] > 0 && `, 자리를 찾지 못한 부적합 ${editing.쪽["못 찾은 항목"]}개는 뺌`}</span>
+            </Row>
           )}
+          {editing.항목?.판단불가 > 0 && <dd className="progress-note">판단불가는 담당자가 확인할 항목입니다.</dd>}
         </div>
-        <div>
+        <div className={left["내용 검수"]?.전체 != null || content.합계 ? "" : "is-empty"}>
           <dt>내용 검수(의견 반영)</dt>
-          <dd><Remaining left={left["내용 검수"]} what="미반영" unit="개" /></dd>
+          {head("내용 검수", "미반영", "개")}
           {content.합계 && (
             <>
-              <dd className="meta">의견 {content.합계["총 의견"]}개: 반영 후보 {content.합계["반영 후보"]}, 미반영 후보 {content.합계["미반영 후보"]}, 확인 필요 {content.합계["확인 필요"]}</dd>
-              <dd className="meta">{confirmed
-                ? `담당자 확정 ${confirmed.확정}개: 반영 ${confirmed.반영}, 미반영 ${confirmed.미반영}${confirmed.오차율 ? ` (후보 대비 오차율 ${confirmed.오차율})` : ""}`
-                : "담당자가 확정하기 전의 값입니다."}</dd>
+              <Row label="의견">{content.합계["총 의견"]}개: 반영 후보 {content.합계["반영 후보"]}, 미반영 후보 {content.합계["미반영 후보"]}, 확인 필요 {content.합계["확인 필요"]}</Row>
+              <Row label="담당자 확정">{confirmed
+                ? `${confirmed.확정}개: 반영 ${confirmed.반영}, 미반영 ${confirmed.미반영}${confirmed.오차율 ? ` (후보 대비 오차율 ${confirmed.오차율})` : ""}`
+                : "확정 전"}</Row>
             </>
           )}
         </div>
         <div>
           <dt>저작권 검수</dt>
-          <dd><Remaining left={left["저작권 검수"]} what="정정 필요" unit="개" /></dd>
-          {!copyright && <dd className="meta">그림 검수와 출처 검토 기록 없음</dd>}
-          {figures && <dd className="meta">그림 검수: 그림 {figures.그림}개 중 고위험 {figures.고위험}, 확인 필요 {figures["확인 필요"]}, 문제없음 {figures.문제없음}</dd>}
-          {cited && <dd className="meta">출처 검토: 출처 {cited["총 출처"]}개 중 부적합 {cited.부적합}, 판단불가 {cited.판단불가}, 적합 {cited.적합}</dd>}
-          {rights ? (
-            <>
-              <dd>권리 증빙 <Badge value={rights.판정} /></dd>
-              <dd className="meta">원고 그림 {rights["원고 그림"] ?? "-"}개, 누락 {rights.누락 ?? "-"}건, 확인 필요 {rights["확인 필요"] ?? "-"}건</dd>
-            </>
-          ) : <dd className="meta">권리 증빙 점검 기록 없음</dd>}
-          <dd className="meta">이미지 저작권 DB: 그림 {images.그림}개 중 확정 {images.확정}개</dd>
+          {copyright ? head("저작권 검수", "정정 필요", "개") : <dd className="progress-empty">그림 검수와 출처 검토 기록 없음</dd>}
+          {figures && <Row label="그림 검수">{figures.그림}개: 고위험 {figures.고위험}, 확인 필요 {figures["확인 필요"]}, 문제없음 {figures.문제없음}{unread > 0 && <span className="progress-row-note">그림 판독 전이라 판정하지 않은 그림 {unread}개</span>}</Row>}
+          {cited && <Row label="출처 검토">{cited["총 출처"]}개: 부적합 {cited.부적합}, 판단불가 {cited.판단불가}, 적합 {cited.적합}</Row>}
+          <Row label="권리 증빙">{rights
+            ? <><b className={rights.판정 === "적합" ? "" : "progress-flag"}>{rights.판정}</b>, 원고 그림 {rights["원고 그림"] ?? "-"}개 중 누락 {rights.누락 ?? "-"}건, 확인 필요 {rights["확인 필요"] ?? "-"}건</>
+            : "점검 기록 없음"}</Row>
+          <Row label="이미지 DB">그림 {images.그림}개 중 확정 {images.확정}개</Row>
         </div>
-        <div>
+        <div className={volume ? "" : "is-empty"}>
           <dt>원고 분량</dt>
           {volume ? (
             <>
-              <dd><strong>{volume.pages}</strong>매{volume.estimated && " (추정)"}</dd>
-              <dd className="meta">집필료 {volume.fee.toLocaleString()}원, {dateOnly(volume.created_at)} 산정</dd>
+              <dd className="progress-headline"><strong>{volume.pages}</strong>매{volume.estimated && " (추정)"}</dd>
+              <Row label="집필료">{volume.fee.toLocaleString()}원</Row>
+              <Row label="산정한 날">{dateOnly(volume.created_at)}</Row>
             </>
-          ) : <dd className="meta">기록 없음</dd>}
+          ) : <dd className="progress-empty">기록 없음</dd>}
         </div>
       </dl>
+    </>
+  );
+}
 
+// 구성요소별(편집 검수), 차수별(내용 검수) 표 — 숫자 열은 가운데로 맞추고 검수한 때는 날짜만 적는다(시각까지는 검수 이력에 있다)
+export function ProgressTables({ detail }) {
+  const editing = detail.진행도["편집 검수"];
+  const content = detail.진행도["내용 검수"];
+  return (
+    <>
       {editing.구성요소.length > 0 && (
         <>
           <h3 className="table-title" id="progress-editing-title">편집 검수 <span className="meta">구성요소마다 가장 최근 검수의 확인서 항목 수</span></h3>
           <div className="krds-table-wrap">
-            <table className="tbl col data" aria-labelledby="progress-editing-title">
+            <table className="tbl col data progress-numbers" aria-labelledby="progress-editing-title">
               <thead><tr><th scope="col">구성요소</th><th scope="col">판정</th><th scope="col">적합</th><th scope="col">부적합</th><th scope="col">판단불가</th><th scope="col">검수한 때</th></tr></thead>
               <tbody>
                 {[...editing.구성요소].sort((a, b) => CHECK_ORDER.indexOf(a.검수) - CHECK_ORDER.indexOf(b.검수)).map((row) => (
                   <tr key={row.검수}>
                     <th scope="row">{CHECK_LABEL[row.검수] || row.검수}</th><td><Badge value={row.판정} /></td>
-                    <td>{row.적합}</td><td>{row.부적합}</td><td>{row.판단불가}</td><td>{day(row.일시)}</td>
+                    <td>{row.적합}</td><td>{row.부적합}</td><td>{row.판단불가}</td><td>{dateOnly(row.일시)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -404,13 +438,13 @@ export function ProgressFigures({ detail }) {
         <>
           <h3 className="table-title" id="progress-content-title">내용 검수 <span className="meta">차수마다 가장 최근 의견 반영 검토의 개수</span></h3>
           <div className="krds-table-wrap">
-            <table className="tbl col data" aria-labelledby="progress-content-title">
+            <table className="tbl col data progress-numbers" aria-labelledby="progress-content-title">
               <thead><tr><th scope="col">차수</th><th scope="col">총 의견</th><th scope="col">반영 후보</th><th scope="col">미반영 후보</th><th scope="col">확인 필요</th><th scope="col">조치 불필요</th><th scope="col">검토한 때</th></tr></thead>
               <tbody>
                 {content.차수.map((row) => (
                   <tr key={row.차수}>
                     <th scope="row">{row.차수}</th><td>{row["총 의견"]}</td><td>{row["반영 후보"]}</td><td>{row["미반영 후보"]}</td>
-                    <td>{row["확인 필요"]}</td><td>{row["조치 불필요"]}</td><td>{day(row.일시)}</td>
+                    <td>{row["확인 필요"]}</td><td>{row["조치 불필요"]}</td><td>{dateOnly(row.일시)}</td>
                   </tr>
                 ))}
               </tbody>

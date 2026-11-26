@@ -6,7 +6,8 @@ import { ResultHead } from "./ResultHead.jsx";
 import { ReviewDecisions } from "./ReviewDecisions.jsx";
 import { ChecklistTable, FindingsTable, SheetTable } from "./Tables.jsx";
 import { api } from "../lib/api.js";
-import { countVerdicts, overallVerdict } from "../lib/checks.js";
+import { CHANGE_LABEL, countVerdicts, isChangeCheck, overallVerdict } from "../lib/checks.js";
+import { decisionKey } from "../lib/decisions.js";
 import { applyDecisions, loadDecisions, saveDecisions } from "../lib/decisions.js";
 import { formatDate } from "../lib/format.jsx";
 import { applyLlm, llmTouches } from "../lib/llm.js";
@@ -18,14 +19,14 @@ export function ItemStatus({ item }) {
   if (item.status === "skipped") return <span className="krds-badge bg-light-gray">실행 안 함(개발계획서 없음)</span>;
   if (item.status === "cancelled") return <span className="krds-badge bg-light-gray">취소됨</span>;
   if (item.status === "error") return <span className="krds-badge bg-light-danger">오류</span>;
-  const counts = countVerdicts(item.data?.검수확인서);
+  const counts = countVerdicts(item.data?.검수확인서, item.data?.지적사항);
   return (
     <span className="item-status">
       <Badge value={item.data?.요약?.검수결과} />
       <span className="counts">
         <span className="count pass">적합 {counts.적합}</span>
         <span className="count fail">부적합 {counts.부적합}</span>
-        <span className="count undecided">판단불가 {counts.판단불가}</span>
+        <span className="count undecided">판단불가 {counts.판단불가}{counts[CHANGE_LABEL] > 0 && ` (그중 ${CHANGE_LABEL} ${counts[CHANGE_LABEL]})`}</span>
       </span>
     </span>
   );
@@ -43,9 +44,9 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken, llm })
   const finished = items.filter((i) => i.status === "done");
   const verdict = overallVerdict(finished.map((i) => i.data?.요약?.검수결과));
   const total = finished.reduce((acc, i) => {
-    const c = countVerdicts(i.data?.검수확인서);
-    return { 적합: acc.적합 + c.적합, 부적합: acc.부적합 + c.부적합, 판단불가: acc.판단불가 + c.판단불가 };
-  }, { 적합: 0, 부적합: 0, 판단불가: 0 });
+    const c = countVerdicts(i.data?.검수확인서, i.data?.지적사항);
+    return { 적합: acc.적합 + c.적합, 부적합: acc.부적합 + c.부적합, 판단불가: acc.판단불가 + c.판단불가, [CHANGE_LABEL]: acc[CHANGE_LABEL] + c[CHANGE_LABEL] };
+  }, { 적합: 0, 부적합: 0, 판단불가: 0, [CHANGE_LABEL]: 0 });
   const moduleCode = finished[0]?.data?.module_code || run.module_code || "";
   // 담당자 판정 확정 — 검수 이력을 두는 서버에서는 검수 묶음마다 서버에 저장한다(다른 컴퓨터, 다른 담당자도 같은 확정을 본다. 누가 언제 정했는지 남는다).
   // 서버에 둘 수 없으면(검수 이력이 없는 서버, 묶음 없는 실행, 확정할 수 없는 계정) 이 브라우저에 기억한다. 내려받는 확인서에 반영한다
@@ -88,6 +89,8 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken, llm })
     }, 600);
   }
   const sheetRows = finished.flatMap((i) => i.data.검수확인서 || []);
+  // 판정 확정 표가 '변경 확인' 후보를 알아보게 그 행의 키를 넘긴다(확인서 행에는 지적사항이 없어 여기서 가린다)
+  const changeKeys = new Set(finished.flatMap((i) => (i.data.검수확인서 || []).filter((row) => isChangeCheck(row, i.data.지적사항)).map(decisionKey)));
   const openable = items.filter((i) => i.status !== "pending" && i.status !== "running").map((i) => i.check);
 
   function toggle(check) {
@@ -100,7 +103,7 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken, llm })
         status={run.running
           ? <Spinner label={`검수하는 중: ${items.filter((i) => i.status === "done" || i.status === "error" || i.status === "skipped").length}/${items.length} 구성요소 완료`} />
           : verdict ? <Badge value={verdict} large /> : <span className="krds-badge large bg-light-gray">결과 없음</span>}
-        meta={`${moduleCode}${moduleCode ? ", " : ""}전체 실행${run.created_at ? `, ${formatDate(run.created_at)}` : ""}: 적합 ${total.적합}개, 부적합 ${total.부적합}개, 판단불가 ${total.판단불가}개`}
+        meta={`${moduleCode}${moduleCode ? ", " : ""}전체 실행${run.created_at ? `, ${formatDate(run.created_at)}` : ""}: 적합 ${total.적합}개, 부적합 ${total.부적합}개, 판단불가 ${total.판단불가}개${total[CHANGE_LABEL] ? `(그중 ${CHANGE_LABEL} ${total[CHANGE_LABEL]}개)` : ""}`}
         badges={
           <>
             {run.roles && !run.roles.plan && <span className="krds-badge bg-light-warning">개발계획서 없음(위치 실행 안 함)</span>}
@@ -187,7 +190,7 @@ export function AllResults({ run, checks, onError, onNotice, uploadToken, llm })
       </section>}
 
       {!run.running && finished.length > 0 && (
-        <ReviewDecisions rows={sheetRows} decisions={decisions} onChange={changeDecisions} saved={saved} onServer={onServer} moduleCode={moduleCode} groupId={run.group} />
+        <ReviewDecisions rows={sheetRows} decisions={decisions} onChange={changeDecisions} saved={saved} onServer={onServer} moduleCode={moduleCode} groupId={run.group} changeKeys={changeKeys} />
       )}
     </section>
   );

@@ -36,7 +36,9 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={{ ...state, logIn, logOut }}>{children}</AuthContext.Provider>;
 }
 
-// 건을 만들고 이미지 저작권 DB를 바꾸는 역할(에디터, 직능연). 로그인을 쓰지 않는 서버에서는 누구나 — 서버의 flow.MANAGER_ROLES와 같다
+// 건을 만들고 이미지 저작권 DB를 바꾸는 역할(에디터, 직능연). 로그인을 쓰지 않는 서버에서는 누구나 — 서버의 flow.MANAGER_ROLES와 같다.
+// 판정을 정하는 일과 비용이 드는 검토도 이 역할만 한다: 판정 확정, LLM 검토, 그림 판독, 의견 반영 검토, 원고 폴더 일괄 검수
+// (서버는 ncs_web.common.manager_only가 같은 일을 403으로 막는다). 집필진은 올리기, 작성 도움, 규칙 검수 결과 보기까지다.
 export function useCanManage() {
   const { status, account } = useAuth();
   return status === "open" || ["editor", "krivet"].includes(account?.role);

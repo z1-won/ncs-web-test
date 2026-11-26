@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Badge } from "./Badge.jsx";
 import { PageAlert } from "./PageAlert.jsx";
 import { api } from "../lib/api.js";
+import { CHANGE_LABEL } from "../lib/checks.js";
 import { useCanManage } from "../lib/auth.jsx";
 import { compareSheets, decisionKey } from "../lib/decisions.js";
 import { formatDate } from "../lib/format.jsx";
@@ -14,8 +15,13 @@ import { formatDate } from "../lib/format.jsx";
 const CHOICES = ["", "적합", "부적합"];
 const CHANGE_CLASS = { "해결": "bg-light-success", "새 부적합": "bg-light-danger", "그대로 부적합": "bg-light-warning", "판정 바뀜": "bg-light-gray" };
 
-export function ReviewDecisions({ rows, decisions, onChange, saved, onServer = false, moduleCode, groupId }) {
+export function ReviewDecisions({ rows, decisions, onChange, saved, onServer = false, moduleCode, groupId, changeKeys }) {
   const open = useMemo(() => (rows || []).filter((row) => row.검수결과 === "부적합" || row.검수결과 === "판단불가"), [rows]);
+  // '변경 확인' 후보(낱말만 바뀐 학습 목표 — 허용 변경인지 확인할 것)만 골라 볼 수 있다
+  const isChange = (row) => !!changeKeys?.has(decisionKey(row));
+  const changes = open.filter(isChange).length;
+  const [onlyChange, setOnlyChange] = useState(false);
+  const shown = onlyChange && changes ? open.filter(isChange) : open;
   const decided = open.filter((row) => decisions[decisionKey(row)]?.verdict).length;
   const canDecide = useCanManage();
   const [groups, setGroups] = useState(null);     // 같은 학습모듈의 앞 검수 묶음. null: 아직 안 물음
@@ -62,29 +68,38 @@ export function ReviewDecisions({ rows, decisions, onChange, saved, onServer = f
               ? (saved ? " 확정한 내용은 서버에 저장되어 다른 담당자도 같은 확정을 봅니다. 누가 언제 정했는지 함께 남습니다." : " 서버에 저장하지 못했습니다. 잠시 후 다시 고쳐 보고, 계속되면 확인서를 내려받아 주세요.")
               : (saved ? " 확정한 내용은 이 브라우저에 저장됩니다." : " 이 브라우저에 저장하지 못했습니다. 창을 닫기 전에 확인서를 내려받아 주세요.")}
           </p>
+          {changes > 0 && (
+            <div className="decide-filter">
+              <span className="krds-form-check small">
+                <input type="checkbox" id="decide-only-change" checked={onlyChange} onChange={(e) => setOnlyChange(e.target.checked)} />
+                <label htmlFor="decide-only-change">{CHANGE_LABEL} {changes}개만 보기</label>
+              </span>
+              <span className="form-hint">낱말만 바뀐 학습 목표입니다. 용어나 법령 사유의 허용 변경이면 ‘적합(허용 변경)’으로 확정하고 사유를 적어 주세요.</span>
+            </div>
+          )}
           <div className="krds-table-wrap">
             <table className="tbl col data decide-table">
               <caption className="sr-only">판정 확정: 항목, 자동 판정, 담당자 확정, 사유</caption>
               <colgroup><col style={{ width: "13%" }} /><col /><col style={{ width: "9%" }} /><col className="decide-col" /><col style={{ width: "26%" }} /></colgroup>
               <thead><tr><th scope="col">구성요소</th><th scope="col">체크 항목</th><th scope="col">자동 판정</th><th scope="col">담당자 확정</th><th scope="col">사유</th></tr></thead>
               <tbody>
-                {open.map((row) => {
+                {shown.map((row) => {
                   const key = decisionKey(row);
                   const mine = decisions[key] || {};
                   return (
                     <tr key={key}>
                       <td>{row.구성요소}</td>
                       <td>{row.번호} {row["체크 항목"]}</td>
-                      <td><Badge value={row.검수결과} /></td>
+                      <td><Badge value={row.검수결과} />{isChange(row) && <span className="krds-badge small bg-light-secondary decide-change">{CHANGE_LABEL}</span>}</td>
                       <td>
                         <select className="krds-form-select small" aria-label={`${row.구성요소} ${row.번호} 담당자 확정`} value={mine.verdict || ""}
                                 onChange={(e) => set(row, { verdict: e.target.value })}>
-                          {CHOICES.map((c) => <option key={c} value={c}>{c || "확정 안 함"}</option>)}
+                          {CHOICES.map((c) => <option key={c} value={c}>{c ? (c === "적합" && isChange(row) ? "적합(허용 변경)" : c) : "확정 안 함"}</option>)}
                         </select>
                       </td>
                       <td>
                         <input type="text" className="krds-input small" maxLength={200} aria-label={`${row.구성요소} ${row.번호} 확정 사유`}
-                               value={mine.reason || ""} onChange={(e) => set(row, { reason: e.target.value })} placeholder="확정한 까닭" />
+                               value={mine.reason || ""} onChange={(e) => set(row, { reason: e.target.value })} placeholder={isChange(row) ? "예: 법령 개정으로 바뀐 용어" : "확정한 까닭"} />
                         {mine.by && <span className="meta">{mine.by}, {formatDate(mine.at)}</span>}
                       </td>
                     </tr>

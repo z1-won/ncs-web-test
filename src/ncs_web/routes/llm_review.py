@@ -11,10 +11,13 @@ from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import FastAPI, Form, Response
+from fastapi import FastAPI, Form, Request, Response
 from fastapi.responses import JSONResponse
 
-from ..common import Services, error_response, logger
+from ..common import Services, error_response, logger, manager_only
+
+
+WHAT = "LLM 검토는"      # manager_only가 403에 적는 주어
 
 
 def register(app: FastAPI, services: Services) -> None:
@@ -55,7 +58,8 @@ def register(app: FastAPI, services: Services) -> None:
         return _call(action)
 
     @app.get("/api/uploads/{token}/llm-review")
-    def llm_review_previous(token: str) -> Response:
+    def llm_review_previous(token: str, request: Request) -> Response:
+        manager_only(request, WHAT)
         def action():
             _, work = _upload(token)
             path = work / "result.json"
@@ -65,8 +69,9 @@ def register(app: FastAPI, services: Services) -> None:
         return _call(action)
 
     @app.post("/api/uploads/{token}/llm-review")
-    def llm_review_run(token: str, tasks: Annotated[str, Form()] = "", module_code: Annotated[str, Form()] = "") -> Response:
-        """tasks: 쉼표로 구분한 항목(비우면 전부). 원고 크기에 따라 수십 초~수 분."""
+    def llm_review_run(token: str, request: Request, tasks: Annotated[str, Form()] = "", module_code: Annotated[str, Form()] = "") -> Response:
+        """tasks: 쉼표로 구분한 항목(비우면 전부). 원고 크기에 따라 수십 초~수 분. 비용이 드는 검토라 에디터와 직능연 계정만 한다."""
+        manager_only(request, WHAT)
         def action():
             from ncs_llmreview import review_manuscript
             manuscript, work = _upload(token)
@@ -79,7 +84,8 @@ def register(app: FastAPI, services: Services) -> None:
         return _call(action)
 
     @app.get("/api/uploads/{token}/llm-review/result.json")
-    def llm_review_json(token: str) -> Response:
+    def llm_review_json(token: str, request: Request) -> Response:
+        manager_only(request, WHAT)
         def action():
             manuscript, work = _upload(token)
             path = work / "result.json"
@@ -91,8 +97,9 @@ def register(app: FastAPI, services: Services) -> None:
         return _call(action)
 
     @app.get("/api/uploads/{token}/llm-review/memo")
-    def llm_review_memo(token: str) -> Response:
+    def llm_review_memo(token: str, request: Request) -> Response:
         """LLM 수정 후보를 메모로 단 원고 사본(hwpx만). 원고 본문은 바꾸지 않는다."""
+        manager_only(request, WHAT)
         def action():
             from ncs_llmreview import to_rows
             from ncs_service.annotate import annotate_hwpx

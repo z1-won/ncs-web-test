@@ -18,6 +18,7 @@ import { ResultHead } from "../components/ResultHead.jsx";
 import { Footer, Header, TopButton } from "../components/Layout.jsx";
 import { PageAlert } from "../components/PageAlert.jsx";
 import { Pagination } from "../components/Pagination.jsx";
+import { useCanManage } from "../lib/auth.jsx";
 import { IMAGE_DPI_DEFAULT, IMAGE_DPI_OPTIONS } from "../lib/dpi.js";
 import { usePageTitle } from "../lib/hooks.js";
 import { applyLlm } from "../lib/llm.js";
@@ -45,6 +46,7 @@ export default function ReviewPage() {
   // 집필자 제출 서류(수록 현황 목록·제작 목록·동의서·서약서) — 그림 검수 ⑥⑦에만 쓴다. 업로드 토큰이 생기면 그 토큰으로 보낸다.
   const [submitFiles, setSubmitFiles] = useState([]);
   const [llmResult, setLlmResult] = useState(null);   // LLM 검토 결과 — 확인서 행에 합쳐 보인다
+  const canManage = useCanManage();                   // LLM 검토는 에디터와 직능연 계정만(LlmReviewPanel이 스스로 숨는다)
   const [submitted, setSubmitted] = useState({ key: 0, status: "idle", error: null });
   const sentFor = useRef(null);   // 서류를 보낸 업로드 토큰 — 비울 때만 지우기 요청
   const filled = useMemo(() => SLOTS.filter((slot) => slots[slot.role]), [slots]);
@@ -100,6 +102,7 @@ export default function ReviewPage() {
   useEffect(() => {
     const previous = uploadRef.current.token;
     if (previous) api.uploads.remove(previous);
+    setFromVersion(false);
     if (!files.length) { setUpload({ status: "idle" }); return undefined; }
     const controller = new AbortController();
     setUpload({ status: "uploading" });
@@ -247,13 +250,27 @@ export default function ReviewPage() {
 
   // 세분류 건의 판본 검수 결과에서 넘어오면(?group=) 그 묶음을 바로 연다. 검수 목록(reviewChecks)이 준비된 뒤 한 번만
   // 실행 하나(?run=)도 같다 — 건의 개발계획서 점검 결과가 이 길로 온다
-  const linked = useRef({ group: new URLSearchParams(window.location.search).get("group"), run: new URLSearchParams(window.location.search).get("run") });
+  // 건의 판본에서 왔으면(?case=&version=) 보관한 판본 파일도 함께 꺼내, 그림 검수·표 출처 검토·수정 메모 원고가 이 화면에서 다시 나오게 한다
+  const linked = useRef(Object.fromEntries(["group", "run", "case", "version"].map((key) => [key, new URLSearchParams(window.location.search).get(key)])));
+  const [fromVersion, setFromVersion] = useState(false);   // 지금의 업로드 토큰이 건에 보관한 판본 파일에서 왔는가(안내 줄)
   useEffect(() => {
-    const { group, run } = linked.current;
+    const { group, run, case: caseId, version } = linked.current;
     if ((!group && !run) || !history || !reviewChecks.length) return;
     linked.current = {};
     if (group) openGroup(group); else openHistory(run);
+    if (group && caseId && version) openVersionFile(caseId, version);
   }, [history, reviewChecks]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 보관한 판본 파일을 서버의 임시 업로드로 꺼내 토큰을 받는다(검수를 돌리지는 않는다 — 그림 검수와 출처 검토가 이 토큰으로 파일을 읽는다).
+  // 에디터와 직능연 계정만 된다. 그 밖의 계정이거나 판본을 찾지 못하면 아래의 '지금은 할 수 없습니다' 안내가 그대로 보인다.
+  // 원고 칸에 새 파일을 고르면 위의 올리기 효과가 이 토큰을 반납하고 새 토큰으로 바꾼다
+  async function openVersionFile(caseId, versionId) {
+    const { ok, data } = await api.cases.versionUpload(caseId, versionId);
+    if (!ok || uploadRef.current.status !== "idle") return;
+    if (data.module_code) setModuleCode(data.module_code);
+    setUpload({ status: "ready", token: data.upload, group: data.group, roles: { manuscript: true, plan: !!data.plan } });
+    setFromVersion(true);
+  }
 
   async function openHistory(id) {
     setError(null);
@@ -415,8 +432,17 @@ export default function ReviewPage() {
       {/* 형식 검수 결과가 나온 뒤:
           ① 그림 검수·태깅(규칙만, API 없음) — 바로 불러 보여 준다
           ② API를 쓰는 검토(LLM 검토·그림 판독) — 누를 때만 실행(토큰·비용) */}
-      {(allRun || result) && !busy && (
+      {/* 세 가지 모두 올린 원고 파일을 다시 읽는다. 원고가 없으면(검수 이력에서 연 결과, 파일을 뺀 뒤) 할 수 있는 것이 없으므로
+          빈 제목과 눌리지 않는 버튼을 늘어놓지 않고 까닭 한 줄만 보인다. 하위 메뉴의 세 자리(llm-review, figures, sources)는 이 줄로 온다 */}
+      {(allRun || result) && !busy && upload.status !== "ready" && (
+        <section id="figures" className="nav-anchor">
+          <span id="llm-review" /><span id="sources" />
+          <p className="empty">{canManage ? "LLM 검토, " : ""}그림 검수, 표 출처 검토는 원고 파일을 다시 읽어야 해서 지금은 할 수 없습니다. 검수 이력에서 연 결과에는 원고 파일이 남아 있지 않습니다. 원고를 다시 올려 검수하면 이 자리에 나옵니다.</p>
+        </section>
+      )}
+      {(allRun || result) && !busy && upload.status === "ready" && (
         <>
+          {fromVersion && <PageAlert kind="info">세분류 건에 보관한 판본 파일로 그림 검수와 표 출처 검토를 불러왔습니다. 원고를 다시 올릴 필요가 없습니다.</PageAlert>}
           <LlmReviewPanel uploadToken={upload.status === "ready" ? upload.token : null} moduleCode={moduleCode} result={llmResult} onResult={setLlmResult}
                           components={allRun ? Object.entries(allRun.items || {}).filter(([, v]) => v.status === "done").map(([check, v]) => ({ check, data: v.data }))
                             : result ? [{ check: result.check, data: result }] : []} />

@@ -85,10 +85,31 @@ export const ALL_OPTION = {
 };
 
 // 확인서 행의 검수결과 집계 → { 적합, 부적합, 판단불가, 미검사 }
-export function countVerdicts(sheet) {
-  const counts = { 적합: 0, 부적합: 0, 판단불가: 0, 미검사: 0 };
-  (sheet || []).forEach((row) => { if (row.검수결과 in counts) counts[row.검수결과] += 1; });
+// findings를 주면 판단불가 가운데 '변경 확인' 후보의 수(counts["변경 확인"])도 센다. 판단불가 수에는 그대로 들어 있다
+export function countVerdicts(sheet, findings) {
+  const counts = { 적합: 0, 부적합: 0, 판단불가: 0, 미검사: 0, "변경 확인": 0 };
+  (sheet || []).forEach((row) => {
+    if (row.검수결과 in counts) counts[row.검수결과] += 1;
+    if (findings && isChangeCheck(row, findings)) counts["변경 확인"] += 1;
+  });
   return counts;
+}
+
+// 확인서 행에 속한 지적사항: item_id가 그 번호로 끝나거나(F02-필요지식-⑤), 체크 이름이 그 번호로 시작(위치 ②③④처럼 한 item_id를 나눠 쓰는 엔진)
+// 여러 구성요소를 한 표에 모을 때는 행·지적사항에 _check(엔진 이름)를 붙여 같은 번호(차례 ①·개요 ①)가 섞이지 않게 한다.
+export function findingsOfRow(findings, row) {
+  return (findings || []).filter((f) => (!row._check || !f._check || f._check === row._check)
+    && (f.item_id.endsWith(row.번호) || String(f.check).startsWith(row.번호)));
+}
+
+// '변경 확인' 후보(정의서 V0.23 REQ-02-002 ① 표준 지침) — 학습 목표가 수행준거와 짝은 맞는데 낱말만 바뀐 항목. 오류가 아니라
+// 용어·법령 사유의 허용 변경(F04 준용 집필 기준 2-1·2-2)인지 사람이 확인할 것이라 판단불가 안에서 따로 보인다.
+// 엔진은 판정을 판단불가(△)로 두고 사유 끝에 이 말을 단다(ncs_core.goals.CHANGE_NOTE — 그 문구를 바꾸면 여기도 바꾼다).
+// 확인서 비고는 길이를 잘라 이 말이 빠질 수 있어 지적사항의 사유에서 찾는다.
+export const CHANGE_LABEL = "변경 확인";
+const CHANGE_MARK = "변경 확인:";
+export function isChangeCheck(row, findings) {
+  return row?.검수결과 === "판단불가" && findingsOfRow(findings, row).some((f) => String(f.reason || "").includes(CHANGE_MARK));
 }
 
 // 묶음 판정: 부적합 하나라도 있으면 부적합 → 판단불가 → 적합 (서버 group_verdict와 같은 규칙)

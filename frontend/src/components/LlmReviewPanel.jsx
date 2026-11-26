@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api.js";
+import { useCanManage } from "../lib/auth.jsx";
 import { plainReason } from "../lib/plain.js";
 import { Spinner } from "./Badge.jsx";
 import { PageAlert } from "./PageAlert.jsx";
@@ -11,7 +12,12 @@ import { llmRows } from "../lib/llm.js";
 // 본문 전체를 보내 비용이 큰 항목은 기본으로 끔(고르면 실행)
 const DEFAULT_OFF = new Set(["misc3_names", "src_unquoted"]);
 
-export function LlmReviewPanel({ uploadToken, moduleCode, result, onResult, components }) {
+// 비용이 드는 검토라 에디터와 직능연 계정에만 보인다(서버도 403으로 막는다). 집필진 계정에는 이 자리를 그리지 않는다
+export function LlmReviewPanel(props) {
+  return useCanManage() ? <LlmReviewForManagers {...props} /> : null;
+}
+
+function LlmReviewForManagers({ uploadToken, moduleCode, result, onResult, components }) {
   const [status, setStatus] = useState(null);       // { available, problem, model, tasks }
   const [picked, setPicked] = useState([]);
   const [running, setRunning] = useState(false);
