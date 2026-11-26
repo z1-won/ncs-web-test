@@ -5,6 +5,7 @@
   POST /api/ai-image/preview   + marks(JSON) → 그림마다 표기 세 줄과 결과물 현황 줄(원고는 바꾸지 않는다)
   POST /api/ai-image/marked    manuscript(hwpx) + marks → AI 활용 줄을 넣은 원고 사본(hwpx). 요약은 X-Ai-Summary 머리글
   POST /api/ai-image/results   manuscript + print_copy + marks → 생성형 AI 결과물 현황 xlsx
+  GET  /api/ai-image/generate/progress/{job}  사진·삽화를 만드는 동안의 진행 상황(장, 단계, 남은 시간). POST …/generate/cancel/{job} 멈추기
   POST /api/ai-image/source    manuscript(hwpx) + key(그림) + credit(출처 문구) → 그 그림의 캡션 위에 출처 줄을 넣은 원고 사본(이미지 추천이 쓴다)
   GET  /api/ai-image/generate/status   도표·표 명세를 생성형 AI로 만들 수 있는지, 그릴 수 있는 종류, 글꼴이 있는지
   POST /api/ai-image/generate/spec     {text, criterion?, kind?, focus?} → 명세 후보(검사를 통과한 것과 떨어진 것, 까닭)
@@ -17,7 +18,8 @@
   POST /api/ai-image/generate/image     {scene, scene_ko?, kind, shape?, count?, seed?} → 서버의 모델이 만든 그림들(PNG base64). 엔진이 꺼져 있으면 503
   POST /api/ai-image/generate/inspect   {png, width_mm?, limit?} → 놓을 폭에서의 해상도, DB가 있으면 닮은 그림
   POST /api/ai-image/generate/register-image  {png, kind, usage, title?, tool, date, …} → 만든 사진·삽화를 이미지 저작권 DB에 올린다(에디터·직능연)
-marks: [{"key": 그림 목록의 key, "tool": 도구 이름, "mode": "generated"|"modified", "date": "YYYY-MM-DD"}]
+marks: [{"key": 그림 목록의 key, "tool": 도구 이름, "mode": "generated"|"modified", "date": "YYYY-MM-DD", "source": "출처: …"(선택)}]
+       source는 출처 줄이 없는 그림에 AI 활용 줄과 함께 넣을 출처 줄이다(사용자가 고르거나 적은 것). 이미 출처 줄이 있는 그림에 주면 400
 실행은 ncs_aiimage가 맡는다. 올린 파일은 읽는 동안만 임시 폴더에 두고 지운다. 데이터베이스에 남기는 것은 generate/register가 올리는 그림과
 generate/similar가 채우는 지각 해시(image_phashes)뿐이다.
 generate/spec은 생성형 AI(글)를 부른다 — 보내는 것은 화면에 넣은 문단과 수행준거 글뿐이고, 키와 외부 전송 승인(LLM_ALLOW_UPLOAD=1)이 없으면 부르지 않는다.
@@ -106,7 +108,7 @@ def register(app: FastAPI, services: Services) -> None:
             content, summary = marked_copy(path, _marks(marks))
             filename = f"{path.stem}_AI표기.hwpx"
             brief = {"넣음": len(summary["넣음"]), "이미 있음": len(summary["이미 있음"]), "넣지 못함": len(summary["넣지 못함"]),
-                     "다시 읽기": summary["다시 읽기"]}
+                     "다시 읽기": summary["다시 읽기"], "출처 줄": len(summary["출처 줄 넣음"])}
             return Response(content, media_type="application/hwp+zip", headers={
                 "Content-Disposition": f"attachment; filename=ai_marked.hwpx; filename*=UTF-8''{quote(filename)}",
                 "X-Ai-Summary": json.dumps(brief), "Cache-Control": "no-store"})
@@ -298,15 +300,36 @@ def register(app: FastAPI, services: Services) -> None:
                                   problems=checked["problems"])
         try:
             sent = prompt.compose(body.scene, body.kind)
-            made = imagegen.generate(sent, count=body.count, seed=body.seed, shape=body.shape, runner=getattr(app.state, "imagegen_runner", None))
+            made = imagegen.generate(sent, count=body.count, seed=body.seed, shape=body.shape, runner=getattr(app.state, "imagegen_runner", None),
+                                     job=body.job or None)
         except ValueError as error:
             return error_response(400, str(error))
+        except imagegen.Cancelled as error:
+            return error_response(409, str(error), cancelled=True)
         except imagegen.EngineOff as error:
             return error_response(503, str(error))
-        return {"prompt": sent, "notes": checked["notes"], "tool": imagegen.tool_name(), "model": imagegen.model_name(), "kind": body.kind,
+        actual = imagegen.sent_to_model(sent)      # 모델 계열에 따라 실제로 간 글(Stable Diffusion 계열은 제한을 부정 프롬프트로 보낸다)
+        return {"prompt": sent, "sent": {"prompt": actual["prompt"], "negative": actual["negative"]},
+                "notes": checked["notes"] + ([actual["note"]] if actual["note"] else []),
+                "tool": imagegen.tool_name(), "model": imagegen.model_name(), "kind": body.kind,
                 "images": [{"png": base64.b64encode(one.png).decode("ascii"), "seed": one.seed, "width": one.width, "height": one.height} for one in made]}
 
     app.state.imagegen_runner = None      # 테스트용 엔진 대역(runner(prompt, width, height, seed) → PNG)
+
+    @app.get("/api/ai-image/generate/progress/{job}", responses={404: {"model": ErrorResponse}})
+    def generate_progress(job: str) -> Any:
+        """그림 만들기의 진행 상황 — 몇 번째 장의 몇 단계인지, 걸린 시간과 남은 시간(어림). 화면이 만드는 동안 2초마다 묻는다."""
+        from ncs_aiimage import imagegen
+
+        found = imagegen.progress(job)
+        return found if found is not None else error_response(404, "진행 상황을 찾을 수 없습니다")
+
+    @app.post("/api/ai-image/generate/cancel/{job}")
+    def generate_cancel(job: str) -> dict:
+        """그림 만들기를 멈춘다 — 만드는 중이면 다음 단계에서 멈추고, 만들던 그림은 버린다."""
+        from ncs_aiimage import imagegen
+
+        return {"cancelled": imagegen.cancel(job)}
 
     @app.post("/api/ai-image/generate/inspect", responses={400: {"model": ErrorResponse}})
     def generate_inspect(request: Request, body: ImageInspectRequest) -> Any:

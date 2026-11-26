@@ -99,14 +99,14 @@ def propose(text: str, criterion: str = "", *, kind: str = "", focus: str = "", 
     empty = {"method": "none", "model": "", "tool": TOOL, "candidates": [], "usable": 0, "reason": ""}
     cfg = _settings()
     if asker is None and not cfg.ready:
-        return {**empty, "note": f"생성형 AI를 쓸 수 없어 명세를 만들지 않았습니다({cfg.why_not}). 칸을 직접 적어 그릴 수 있습니다"}
+        return {**empty, "note": f"생성형 AI를 쓸 수 없어 명세를 만들지 않았습니다({cfg.why_not}). [직접 입력]을 눌러 내용을 직접 적어 그릴 수 있습니다"}
     user = ((f"[수행준거]\n{criterion}\n\n" if criterion else "") + f"[문단]\n{text}"
             + (f"\n\n[그림으로 나타낼 부분]\n{focus}" if focus else "")
             + (f"\n\n[종류]\n{' | '.join(f'{name} ({KIND_NAMES[name]})' for name in wanted)} — 이 종류로만 낸다" if wanted else ""))
     try:
         answer = asker(SYSTEM, user) if asker is not None else llm.ask_json(TASK, SYSTEM, user, cfg=cfg, max_output_tokens=2000).__dict__
     except llm.LlmError as error:
-        return {**empty, "note": f"생성형 AI 호출에 실패했습니다({error}). 칸을 직접 적어 그릴 수 있습니다"}
+        return {**empty, "note": f"생성형 AI 호출에 실패했습니다({error}). [직접 입력]을 눌러 내용을 직접 적어 그릴 수 있습니다"}
     data = answer.get("data") if isinstance(answer.get("data"), dict) else {}
     raw = data.get("specs") if isinstance(data.get("specs"), list) else []
     found = candidates(raw, source, text)

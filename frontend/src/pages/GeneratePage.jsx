@@ -25,7 +25,6 @@ import { usePageTitle } from "../lib/hooks.js";
 import { copyText } from "../lib/clipboard.js";
 import { useAuth, useCanManage } from "../lib/auth.jsx";
 
-const ANCHORS = [{ id: "generate-input", label: "문단" }, { id: "generate-candidates", label: "후보" }, { id: "generate-edit", label: "수정과 내려받기" }];
 // 유형은 요구사항정의서 REQ-02-009의 태그(사진 / 삽화 / 도표 / 그래프)와 같은 말을 쓴다. 표는 도표와 따로 고른다
 const TYPES = [
   { value: "diagram", label: "도표", hint: "순서, 순환, 구성, 비교 가운데 하나로 그립니다. 종류를 선택하지 않으면 문단에 맞는 종류를 생성형 AI가 선택합니다." },
@@ -407,9 +406,12 @@ export default function GeneratePage() {
   const STEPS = ["확인", "문단", "후보", "수정", "내려받기"];
   return (
     <>
-    <Header anchors={entered && (result || draft || picture) ? ANCHORS.filter((anchor) => picture ? true : anchor.id === "generate-input" ? view.input : anchor.id === "generate-candidates" ? result && view.candidates : draft) : []} hasHistory={false} hasResult={false} />
+    {/* 구역 탭은 두지 않는다 — 5단계 표시와 완료한 단계 요약이 같은 일을 하고, 탭(3개)과 단계(5개)의 이름이 어긋났다 */}
+    <Header anchors={[]} hasHistory={false} hasResult={false} />
     <main id="container" className="inner page image-db-page generate-page">
       <h1 className="page-title">이미지 AI 생성</h1>
+      {/* 소개 글은 시작(1단계)에서만 — 뒤 단계에서는 화면을 밀어 내리기만 한다 */}
+      {!entered && (<>
       <p className="page-desc">
         집필한 문단으로 <strong>도표, 표, 그래프</strong>와 <strong>사진, 삽화</strong>를 만듭니다. 도표, 표, 그래프는 생성형 AI가 구성(항목과 글)만 작성하고 그림은 서버가 그립니다.
         그래서 글자가 깨지지 않고, 문단에 없는 내용이 들어간 후보는 제외됩니다. 사진과 삽화는 서버의 이미지 모델이 만듭니다. 그림은 외부로 전송하지 않습니다.
@@ -418,6 +420,7 @@ export default function GeneratePage() {
         사용할 수 있는 기존 그림은 <Link to="/recommend">이미지 추천</Link>에서 먼저 찾아볼 수 있습니다.
         다른 도구로 만든 그림의 표기와 결과물 현황은 <Link to="/ai-image">이미지 AI 보완</Link>에서 만듭니다.
       </p>
+      </>)}
 
       <ol className="krds-step-wrap gen-steps" aria-label="진행 단계">
         {STEPS.map((label, i) => (
@@ -435,8 +438,10 @@ export default function GeneratePage() {
             <button type="button" className="krds-btn small tertiary" onClick={() => setView((old) => ({ ...old, notice: true }))}>다시 보기</button>
           </li>
           {ready && !view.input && (
-            <li>
-              <span><strong>문단</strong> {type.label}{FAMILY[form.type] && form.kind ? `(${KIND_LABEL[form.kind]})` : ""}, {form.text.trim() ? `${form.text.trim().length}자: ${form.text.trim().slice(0, 60)}${form.text.trim().length > 60 ? "…" : ""}` : "문단 없이 직접 입력 중"}</span>
+            <li className="gen-trail-text">
+              {/* 집필한 문단은 줄이지 않고 전부 보인다 — 장면과 그림을 문단에 대어 보며 고르기 때문이다 */}
+              <span><strong>문단</strong> {type.label}{FAMILY[form.type] && form.kind ? `(${KIND_LABEL[form.kind]})` : ""}, {form.text.trim() ? `${form.text.trim().length}자` : "문단 없이 직접 입력 중"}
+                {form.text.trim() && <span className="gen-trail-full">{form.text.trim()}</span>}</span>
               <button type="button" className="krds-btn small tertiary" onClick={() => setView((old) => ({ ...old, input: true }))}>문단 수정</button>
             </li>
           )}

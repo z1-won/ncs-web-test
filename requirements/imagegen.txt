@@ -1,5 +1,6 @@
 # 사진·삽화 생성 엔진(REQ-02-006 ① AI 생성, ncs_aiimage/imagegen.py) — 선택 설치. 없으면 엔진은 꺼진 것으로 본다.
-# 모델은 처음 쓸 때 내려받는다(기본 black-forest-labs/FLUX.1-schnell, Apache 2.0, 약 34GB). 허깅페이스에서 접근 동의와 토큰이 필요할 수 있다.
+# 모델은 처음 쓸 때 내려받는다(기본 stabilityai/stable-diffusion-xl-base-1.0, CreativeML Open RAIL++-M, 16비트 파일 약 7GB).
+# 다른 모델(NCS_IMAGEGEN_MODEL)은 허깅페이스에서 접근 동의와 토큰이 필요할 수 있다. FLUX.1-schnell은 약 34GB라 메모리 16GB 컴퓨터에서는 올라가지 않는다.
 torch
 diffusers>=0.43
 transformers

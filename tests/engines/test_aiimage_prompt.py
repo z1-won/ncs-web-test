@@ -28,6 +28,13 @@ class CheckTests(unittest.TestCase):
             self.assertFalse(found["ok"], text)
             self.assertEqual(found["problems"][0]["kind"], "face")
 
+    def test_protective_gear_is_not_a_face(self):
+        for text in ("a worker wearing a welding face shield and leather gloves", "a dust face mask on the bench", "a full-face respirator hanging on the wall",
+                     "face shields and gloves on a shelf", "보안면과 가죽 장갑을 착용한 작업자의 뒷모습"):
+            self.assertTrue(prompt.check(text)["ok"], text)
+        for text in ("a worker's face behind a face shield", "the face of a welder"):
+            self.assertFalse(prompt.check(text)["ok"], text)
+
     def test_surface_is_not_a_face(self):
         self.assertTrue(prompt.check("a flat metal surface on a workbench")["ok"])
 
@@ -135,9 +142,130 @@ class EngineTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("NCS_IMAGEGEN_TOOL", None)
             os.environ.pop("NCS_IMAGEGEN_MODEL", None)
+            self.assertEqual(ai_line(imagegen.tool_name(), "generated", date(2026, 11, 25)), "Stable Diffusion XL을 활용하여 생성함. 2026. 11. 25.")
+        with mock.patch.dict(os.environ, {"NCS_IMAGEGEN_MODEL": "black-forest-labs/FLUX.1-schnell"}):
             self.assertEqual(ai_line(imagegen.tool_name(), "generated", date(2026, 11, 25)), "FLUX를 활용하여 생성함. 2026. 11. 25.")
         with mock.patch.dict(os.environ, {"NCS_IMAGEGEN_MODEL": "stabilityai/sdxl-turbo"}):
             ai_line(imagegen.tool_name(), "generated", date(2026, 11, 25))
+
+    def fake_engine(self, seen, cancel_at=None):
+        """모델 대신 쓰는 파이프라인 — 단계마다 diffusers처럼 callback_on_step_end를 부르고 _interrupt를 지킨다."""
+        from PIL import Image
+
+        class Generator:
+            def __init__(self, _device):
+                pass
+
+            def manual_seed(self, seed):
+                return seed
+
+        class Torch:
+            pass
+
+        Torch.Generator = Generator
+
+        class Pipe:
+            device = "cpu"
+            _interrupt = False
+
+            def __call__(self, *, num_inference_steps, callback_on_step_end=None, **kwargs):
+                self._interrupt = False
+                for step in range(num_inference_steps):
+                    if self._interrupt:
+                        break
+                    if callback_on_step_end is not None:
+                        callback_on_step_end(self, step, 0, {})
+                        seen.append(imagegen.progress("job-1"))
+                        if cancel_at is not None and len(seen) == cancel_at:
+                            self.cancelled = imagegen.cancel("job-1")
+
+                class Out:
+                    images = [Image.new("RGB", (kwargs["width"], kwargs["height"]), "white")]
+                return Out()
+
+        return mock.patch.multiple(imagegen, _pipeline=lambda: (Pipe(), Torch), _why_off=lambda: "")
+
+    def test_progress_follows_images_and_steps(self):
+        """만드는 동안 몇 번째 장의 몇 단계인지와 남은 시간(어림)을 알 수 있다."""
+        seen = []
+        imagegen._jobs.clear()
+        self.assertIsNone(imagegen.progress("job-1"))
+        with mock.patch.dict(os.environ, {"NCS_IMAGEGEN_STEPS": "5"}), self.fake_engine(seen):
+            made = imagegen.generate("a bench", count=2, seed=3, job="job-1")
+        self.assertEqual([(one.seed, one.png[:4]) for one in made], [(3, b"\x89PNG"), (4, b"\x89PNG")])
+        self.assertEqual([(p["state"], p["image"], p["step"], p["percent"]) for p in seen],
+                         [("running", 1, s, s * 10) for s in range(1, 6)] + [("running", 2, s, 50 + s * 10) for s in range(1, 6)])
+        self.assertEqual((seen[0]["count"], seen[0]["steps"], seen[0]["상태"]), (2, 5, "그림을 만드는 중"))
+        self.assertTrue(all(p["remaining"] is not None for p in seen[:-1]))
+        self.assertIsNone(seen[-1]["remaining"], "마지막 단계가 끝나면 남은 시간은 없다")
+        done = imagegen.progress("job-1")
+        self.assertEqual((done["state"], done["percent"], done["remaining"]), ("done", 100, None))
+        self.assertFalse(imagegen.cancel("job-1"), "끝난 작업은 취소할 것이 없다")
+        self.assertFalse(imagegen.cancel("unknown"))
+
+    def test_cancel_stops_at_the_next_step_and_keeps_nothing(self):
+        seen = []
+        imagegen._jobs.clear()
+        with mock.patch.dict(os.environ, {"NCS_IMAGEGEN_STEPS": "6"}), self.fake_engine(seen, cancel_at=2):
+            with self.assertRaises(imagegen.Cancelled):
+                imagegen.generate("a bench", count=3, seed=1, job="job-1")
+        self.assertLessEqual(len(seen), 3, "취소한 뒤 한 단계 안에 멈춘다")
+        stopped = imagegen.progress("job-1")
+        self.assertEqual((stopped["state"], stopped["image"], stopped["상태"]), ("cancelled", 1, "취소됨"))
+
+    def test_progress_with_a_runner_and_errors(self):
+        imagegen._jobs.clear()
+        states = []
+        made = imagegen.generate("a bench", count=2, job="job-2", runner=lambda *args: states.append(imagegen.progress("job-2")) or b"png")
+        self.assertEqual([(p["state"], p["image"], p["count"], p["steps"], p["percent"]) for p in states], [("running", 1, 2, 0, 0), ("running", 2, 2, 0, 0)])
+        self.assertEqual((len(made), imagegen.progress("job-2")["state"]), (2, "done"))
+
+        def broken(*args):
+            raise OSError("디스크가 가득 참")
+
+        with self.assertRaises(OSError):
+            imagegen.generate("a bench", count=1, job="job-3", runner=broken)
+        failed = imagegen.progress("job-3")
+        self.assertEqual((failed["state"], failed["error"]), ("error", "디스크가 가득 참"))
+        for n in range(imagegen.MAX_JOBS + 5):
+            imagegen.generate("a bench", count=1, job=f"many-{n}", runner=lambda *args: b"png")
+        self.assertEqual(len(imagegen._jobs), imagegen.MAX_JOBS, "작업 기록은 정해진 수만 남긴다")
+        self.assertIsNone(imagegen.progress("job-2"))
+
+    def test_settings_follow_the_model_family(self):
+        names = ("NCS_IMAGEGEN_MODEL", "NCS_IMAGEGEN_STEPS", "NCS_IMAGEGEN_GUIDANCE", "NCS_IMAGEGEN_VARIANT")
+        with mock.patch.dict(os.environ, {}, clear=False):
+            for name in names:
+                os.environ.pop(name, None)
+            self.assertEqual(imagegen.model_name(), "stabilityai/stable-diffusion-xl-base-1.0")
+            self.assertEqual(imagegen.settings(), {"family": "sdxl", "steps": 30, "guidance": 6.0, "variant": "fp16", "negative": True})
+            self.assertEqual(imagegen.status()["설정"]["family"], "sdxl")
+            for model in ("black-forest-labs/FLUX.1-schnell", "stabilityai/sdxl-turbo", "black-forest-labs/FLUX.2-klein-4B", "some/other-model"):
+                self.assertEqual(imagegen.settings(model), {"family": "distilled", "steps": 4, "guidance": 0.0, "variant": "", "negative": False}, model)
+            with mock.patch.dict(os.environ, {"NCS_IMAGEGEN_STEPS": "20", "NCS_IMAGEGEN_GUIDANCE": "7.5", "NCS_IMAGEGEN_VARIANT": "none"}):
+                self.assertEqual(imagegen.settings(), {"family": "sdxl", "steps": 20, "guidance": 7.5, "variant": "", "negative": True})
+
+    def test_restriction_goes_as_a_negative_prompt_for_stable_diffusion(self):
+        """Stable Diffusion 계열은 글 속의 'No text'를 따르지 못하고 앞의 77토큰만 읽는다 — 화풍을 앞에, 제한은 부정 프롬프트로."""
+        sent = prompt.compose("A welder seen from behind at a steel workbench", "photo")
+        plain = prompt.for_model(sent, negative=False)
+        self.assertEqual((plain["prompt"], plain["negative"], plain["note"]), (sent, "", ""))
+        split = prompt.for_model(sent, negative=True)
+        self.assertEqual(split["prompt"], prompt.STYLE["photo"] + " A welder seen from behind at a steel workbench.")
+        self.assertNotIn("No text", split["prompt"])
+        self.assertNotIn("No visible human faces", split["prompt"])
+        for word in ("human face", "text", "logos", "watermark"):
+            self.assertIn(word, split["negative"])
+        self.assertEqual(split["note"], "")
+        self.assertEqual(prompt.parts(prompt.compose("gloves on a bench", "illustration")), ("gloves on a bench.", prompt.STYLE["illustration"]))
+        self.assertEqual(prompt.parts("free text"), ("free text", ""))
+        long_scene = " ".join(["a worker tightens a bolt on the frame"] * 9)
+        self.assertIn("77토큰", prompt.for_model(prompt.compose(long_scene, "photo"), negative=True)["note"])
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NCS_IMAGEGEN_MODEL", None)
+            self.assertEqual(imagegen.sent_to_model(sent), split)
+        with mock.patch.dict(os.environ, {"NCS_IMAGEGEN_MODEL": "black-forest-labs/FLUX.1-schnell"}):
+            self.assertEqual(imagegen.sent_to_model(sent)["prompt"], sent)
 
 
 if __name__ == "__main__":

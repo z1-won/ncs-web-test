@@ -162,6 +162,50 @@ class MarkedManuscriptTests(unittest.TestCase):
                 source_copy(path, key, text)
             self.assertIn(word, str(caught.exception))
 
+    def test_chosen_source_line_goes_in_with_the_ai_line_only_where_there_is_none(self):
+        """출처 줄 넣기: 사용자가 고르거나 적은 출처 줄만, 출처 줄이 없는 그림에만, 출처 줄 → AI 활용 줄 → 그림 번호 순서로."""
+        figures = [("그림 1-1", "출처 없는 그림", "", ""), ("그림 1-2", "출처 있는 그림", "출처: 홍길동(2024). 사례집. 한국출판. p.12.", ""),
+                   ("그림 1-3", "변경금지로 적을 그림", "", "")]
+        path = S.manuscript(self.folder, figures, name="LM1203020201_24v3_출처없음.hwpx")
+        rows = {row["그림 번호"]: row for row in inspect(path)["그림"]}
+        own = "출처:   집필진 제작(2026)"
+
+        def mark(label, **extra):
+            return {"key": rows[label]["key"], "tool": "ChatGPT", "mode": "generated", "date": "2026-11-23", **extra}
+
+        shown = preview(path, [mark("그림 1-1", source=own), mark("그림 1-2")])
+        self.assertEqual(shown["표기"][0]["줄"], ["출처: 집필진 제작(2026)", "ChatGPT를 활용하여 생성함. 2026. 11. 23.", "[그림 1-1] 출처 없는 그림"])
+        self.assertEqual([(item["출처 줄 없음"], item["출처 줄 넣음"]) for item in shown["표기"]], [(False, True), (False, False)])
+        self.assertEqual(preview(path, [mark("그림 1-1")])["표기"][0]["출처 줄 없음"], True, "고르지 않으면 지어내지 않는다")
+
+        before = load_document(path)
+        content, summary = marked_copy(path, [mark("그림 1-1", source=own), mark("그림 1-2")])
+        self.assertEqual(summary["출처 줄 넣음"], [{"그림": "그림 1-1", "줄": "출처: 집필진 제작(2026)"}])
+        self.assertEqual(([item["그림"] for item in summary["넣음"]], summary["다시 읽기"]), (["그림 1-1", "그림 1-2"], 2))
+        copy = self.folder / "copy.hwpx"
+        copy.write_bytes(content)
+        after = load_document(copy)
+        texts = after.sections[0]
+        at = texts.index("[그림 1-1] 출처 없는 그림")
+        self.assertEqual(texts[at - 2:at], ["출처: 집필진 제작(2026)", "ChatGPT를 활용하여 생성함. 2026. 11. 23."])
+        read = {figure.label: figure for figure in manuscript_figures(after)}
+        self.assertEqual((read["그림 1-1"].source_line, read["그림 1-1"].ai.mode), ("출처: 집필진 제작(2026)", "generated"))
+        self.assertEqual(read["그림 1-2"].source_line, figures[1][2])
+        new = {"출처: 집필진 제작(2026)", "ChatGPT를 활용하여 생성함. 2026. 11. 23."}
+        self.assertEqual([text for text in texts if text not in new], before.sections[0], "넣은 줄 말고는 그대로")
+        self.assertEqual(inspect(copy)["요약"]["출처 줄 없음"], 1)
+
+        for bad, reason in ((mark("그림 1-2", source=own), "이미 출처 줄이 있어"), (mark("그림 1-1", source="집필진 제작(2026)"), "‘출처: ’로 시작"),
+                            (mark("그림 1-1", source="출처: " + "가" * 500), "500자까지")):
+            with self.assertRaises(ValueError) as caught:
+                marked_copy(path, [bad])
+            self.assertIn(reason, str(caught.exception))
+            self.assertIn(bad["key"] == rows["그림 1-2"]["key"] and "그림 1-2" or "그림 1-1", str(caught.exception))
+        locked = "출처: 고용노동부(2025). 직업훈련 통계. 공공누리 홈페이지(https://www.kogl.or.kr)에서 2026. 7. 1. 검색. 공공누리 제3유형."
+        with self.assertRaises(ValueError) as caught:
+            marked_copy(path, [mark("그림 1-3", source=locked)])
+        self.assertIn("변경금지", str(caught.exception), "넣으려는 출처 줄이 변경금지 원본이면 AI 표기를 넣지 않는다")
+
     def test_results_match_the_marks_in_the_manuscript(self):
         """현황표와 원고 표기 일치 100%: 표기를 넣은 원고와 그 현황으로 권리 증빙 점검을 돌리면 현황 쪽 지적이 없어야 한다."""
         marks = self.marks({"그림 1-2", "그림 2-2", "그림 2-5"}, tool="Midjourney", mode="generated", day="2026-08-03")
@@ -254,13 +298,25 @@ class WebTests(unittest.TestCase):
         self.assertEqual((len(shown["표기"]), len(shown["현황"]), shown["쪽수"]), (1, 2, False))
         marked = self.post("marked", marks)
         self.assertEqual(marked.status_code, 200, marked.text)
-        self.assertEqual(json.loads(marked.headers["x-ai-summary"]), {"넣음": 1, "이미 있음": 0, "넣지 못함": 0, "다시 읽기": 1})
+        self.assertEqual(json.loads(marked.headers["x-ai-summary"]), {"넣음": 1, "이미 있음": 0, "넣지 못함": 0, "다시 읽기": 1, "출처 줄": 0})
         self.assertIn("_AI%ED%91%9C%EA%B8%B0.hwpx", marked.headers["content-disposition"])
         again = self.client.post("/api/ai-image/figures", files={"manuscript": ("marked.hwpx", marked.content)}).json()
         self.assertEqual(again["그림"][2]["AI 표기"], {"도구": "ChatGPT 6.0", "방식": "modified", "일자": "2026. 11. 23.", "글": "ChatGPT 6.0을 활용하여 수정 보완함. 2026. 11. 23."})
         sheet = self.post("results", marks)
         self.assertEqual((sheet.status_code, json.loads(sheet.headers["x-ai-summary"])), (200, {"현황": 2}))
         self.assertEqual(sheet.content[:2], b"PK")
+
+    def test_marked_copy_reports_the_source_lines_it_added(self):
+        path = S.manuscript(self.folder, [("그림 1-1", "출처 없는 그림", "", "")], name="LM1203020201_24v3_출처웹.hwpx")
+        files = {"manuscript": (path.name, path.read_bytes())}
+        key = self.client.post("/api/ai-image/figures", files=files).json()["그림"][0]["key"]
+        marks = [{"key": key, "tool": "ChatGPT", "mode": "generated", "date": "2026-11-23", "source": "출처: 집필진 제작(2026)"}]
+        marked = self.client.post("/api/ai-image/marked", files=files, data={"marks": json.dumps(marks)})
+        self.assertEqual((marked.status_code, json.loads(marked.headers["x-ai-summary"])["출처 줄"]), (200, 1), marked.text)
+        again = self.client.post("/api/ai-image/figures", files={"manuscript": ("copy.hwpx", marked.content)}).json()
+        self.assertEqual((again["그림"][0]["출처 줄"], again["요약"]["출처 줄 없음"]), ("출처: 집필진 제작(2026)", 0))
+        marks[0]["source"] = "집필진 제작"
+        self.assertEqual(self.client.post("/api/ai-image/marked", files=files, data={"marks": json.dumps(marks)}).status_code, 400)
 
     def test_source_line_copy(self):
         files = {"manuscript": (self.manuscript.name, self.manuscript.read_bytes())}

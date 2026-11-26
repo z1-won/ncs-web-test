@@ -4,7 +4,8 @@
   preview      넣으려는 표기를 합쳐 그림마다 표기 세 줄과 결과물 현황 줄을 미리 만든다(원고는 바꾸지 않는다)
   marked_copy  표기를 넣은 원고 사본(hwpx)
   source_copy  출처 줄이 없는 그림에 출처 줄을 넣은 원고 사본(hwpx) — 이미지 추천의 출처 문구를 원고에 넣을 때
-넣으려는 표기(marks)는 [{'key': '구역:문단', 'tool', 'mode', 'date': 'YYYY-MM-DD'}] — 화면이 inspect의 key를 그대로 돌려준다.
+넣으려는 표기(marks)는 [{'key': '구역:문단', 'tool', 'mode', 'date': 'YYYY-MM-DD', 'source'(선택)}] — 화면이 inspect의 key를 그대로 돌려준다.
+source: 출처 줄이 없는 그림에 AI 활용 줄과 함께 넣을 출처 줄('출처: 집필진 제작(2026)'처럼 사용자가 고르거나 적은 것). 지어내지 않는다.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from ncs_core.source_line import kogl_terms
 from ncs_core.figures import MODE_WORDS, ai_line, clean_tool, figure_pages, manuscript_figures, marking_lines
 from ncs_core.pictures import picture_records, pictures_by_caption
 
-from .marking import Mark, insert_marks, insert_source_line
+from .marking import Mark, clean_source, insert_marks, insert_source_line
 from .notice import BASIS, NOTICE
 from .results import HEAD, result_rows
 
@@ -80,7 +81,15 @@ def parse_marks(marks: list, rows: list[dict]) -> list[Mark]:
             raise ValueError(f"{row['그림 번호']}: {message}") from None
         if item.get("mode") not in MODE_WORDS:
             raise ValueError(f"{row['그림 번호']}: 활용 방식을 골라 주세요(생성함 또는 수정 보완함)")
-        parsed.append(Mark(row["구역"], row["문단"], tool, item["mode"], on))
+        source = ""
+        if str(item.get("source") or "").strip():
+            if row["출처 줄"]:
+                raise ValueError(f"{row['그림 번호']}: 이미 출처 줄이 있어 출처 줄을 넣지 않습니다")
+            try:
+                source = clean_source(str(item["source"]))
+            except ValueError as error:
+                raise ValueError(f"{row['그림 번호']}: {error}") from None
+        parsed.append(Mark(row["구역"], row["문단"], tool, item["mode"], on, source))
     return parsed
 
 
@@ -88,12 +97,13 @@ LOCKED_BASIS = "REQ-02-006 ⑥: 공공누리 제3·4유형(변경금지) 원본�
 
 
 def split_locked(marks: list[Mark], rows: list[dict]) -> tuple[list[Mark], list[dict]]:
-    """(넣어도 되는 표기, 변경금지 원본이라 뺀 것 [{'그림', '이유'}]). 출처 줄에 공공누리 제3·4유형이 적힌 그림에는 AI 활용 표기를 넣지 않는다."""
+    """(넣어도 되는 표기, 변경금지 원본이라 뺀 것 [{'그림', '이유'}]). 출처 줄에 공공누리 제3·4유형이 적힌 그림에는 AI 활용 표기를 넣지 않는다.
+    함께 넣으려는 출처 줄(Mark.source)에 그 유형이 적혀 있어도 같다."""
     by_place = {(row["구역"], row["문단"]): row for row in rows}
     allowed, locked = [], []
     for mark in marks:
         row = by_place.get((mark.section, mark.para)) or {}
-        terms = row.get("공공누리")
+        terms = row.get("공공누리") or (kogl_terms(mark.source) if mark.source else None)
         if terms and terms["변경금지"]:
             locked.append({"그림": row["그림 번호"], "이유": f"출처가 {terms['이름']}(변경금지) — AI 수정 보완·생성에 쓸 수 없는 원본입니다({LOCKED_BASIS})"})
         else:
@@ -135,8 +145,8 @@ def preview(manuscript: str | Path, marks: list, *, print_copy: str | Path | Non
             continue
         row["AI 표기"] = {"도구": mark.tool, "방식": mark.mode, "일자": _day(mark.on), "글": ai_line(mark.tool, mark.mode, mark.on), "예정": True}
         lines.append({"key": row["key"], "그림": row["그림 번호"],
-                      "줄": marking_lines(source_line=row["출처 줄"], tool=mark.tool, mode=mark.mode, on=mark.on, label=row["그림 번호"], title=row["그림명"]),
-                      "출처 줄 없음": not row["출처 줄"]})
+                      "줄": marking_lines(source_line=row["출처 줄"] or mark.source, tool=mark.tool, mode=mark.mode, on=mark.on, label=row["그림 번호"], title=row["그림명"]),
+                      "출처 줄 없음": not (row["출처 줄"] or mark.source), "출처 줄 넣음": bool(mark.source and not row["출처 줄"])})
     return {"원고": Path(manuscript).name, "표기": lines, "이미 있음": skipped, "변경금지 원본 제외": locked, "현황 머리": list(HEAD),
             "현황": result_rows(rows, pages), "쪽수": pages is not None, "알림": [note] if note else []}
 

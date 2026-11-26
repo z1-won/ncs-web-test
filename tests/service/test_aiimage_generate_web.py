@@ -129,6 +129,23 @@ class GenerateWebTests(unittest.TestCase):
         self.assertEqual([(one["seed"], one["width"], one["height"]) for one in body["images"]], [(7, 1024, 768), (8, 1024, 768)])
         self.assertIn("No visible human faces", self.sent)
         self.assertEqual(body["prompt"], self.sent)
+        # 진행 상황과 취소: 화면이 정한 작업 번호로 묻는다
+        self.assertEqual(self.client.get("/api/ai-image/generate/progress/job-web-1").status_code, 404)
+        self.client.post("/api/ai-image/generate/image", json={"scene": "a welder from behind", "kind": "photo", "count": 1, "job": "job-web-1"})
+        state = self.client.get("/api/ai-image/generate/progress/job-web-1").json()
+        self.assertEqual((state["state"], state["count"], state["상태"]), ("done", 1, "완료"))
+        self.assertEqual(self.client.post("/api/ai-image/generate/cancel/job-web-1").json(), {"cancelled": False})
+        self.assertEqual(self.client.post("/api/ai-image/generate/image", json={"scene": "a bench", "kind": "photo", "job": "bad job!"}).status_code, 400)
+
+        def cancelling(prompt, width, height, seed):
+            self.client.post("/api/ai-image/generate/cancel/job-web-2")
+            return b"png"
+
+        self.client.app.state.imagegen_runner = cancelling
+        stopped = self.client.post("/api/ai-image/generate/image", json={"scene": "a welder from behind", "kind": "photo", "count": 2, "job": "job-web-2"})
+        self.assertEqual((stopped.status_code, stopped.json()["cancelled"]), (409, True))
+        self.assertEqual(self.client.get("/api/ai-image/generate/progress/job-web-2").json()["state"], "cancelled")
+        self.client.app.state.imagegen_runner = runner
         png = body["images"][0]["png"]
         self.assertEqual(base64.b64decode(png)[:4], b"\x89PNG")
         seen = self.client.post("/api/ai-image/generate/inspect", json={"png": png, "width_mm": 150}).json()

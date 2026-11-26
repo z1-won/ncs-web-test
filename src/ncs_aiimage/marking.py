@@ -6,6 +6,8 @@
     ChatGPT를 활용하여 수정 보완함. 2026. 7. 20.  ← 여기서 넣는 줄(캡션 문단 바로 앞에 새 문단)
     [그림 1-1] 생산 설비 주요 구성 요소           ← 있던 줄 그대로
 새 문단의 문단 모양과 글자 모양은 출처 줄의 것을 따르고, 출처 줄이 없으면 캡션의 것을 따른다. 출처 줄은 지어내지 않는다.
+출처 줄이 없는 그림은 사용자가 고르거나 적은 출처 줄(Mark.source, 예: '출처: 집필진 제작(2026)')을 AI 활용 줄 위에 함께 넣을 수 있다.
+이미 출처 줄이 있는 그림에는 넣지 않는다.
 이미 AI 활용 줄이 있는 그림에는 넣지 않는다(두 번 적히지 않게). 넣은 줄은 ncs_core.figures.parse_ai_mark로 다시 읽어 같은 값인지 확인한다.
 
 문단 번호는 읽은 문서(ncs_core.documents.Document)의 (구역, 문단)으로 받는다. 읽은 문서의 구역은 파일의 구역과 다를 수 있어
@@ -39,6 +41,17 @@ class Mark:
     tool: str
     mode: str          # 'generated'(생성함) | 'modified'(수정 보완함)
     on: date
+    source: str = ""   # 함께 넣을 출처 줄('출처: …', 사용자가 고르거나 적은 것). 출처 줄이 없는 그림에만
+
+
+def clean_source(text: str) -> str:
+    """넣을 출처 줄 — 공백을 한 칸으로 줄이고, '출처: '로 시작하지 않거나 너무 길면 ValueError(화면에 그대로 보일 말)."""
+    text = " ".join((text or "").split())
+    if not SOURCE.match(text):
+        raise ValueError("출처 줄은 ‘출처: ’로 시작해야 합니다")
+    if len(text) > SOURCE_MAX:
+        raise ValueError(f"출처 줄은 {SOURCE_MAX}자까지 넣을 수 있습니다")
+    return text
 
 
 def _template(paragraphs: list[ET.Element], para: int, captions: set[int]) -> ET.Element:
@@ -69,9 +82,10 @@ def _new_paragraph(template: ET.Element, text: str) -> ET.Element:
 
 
 def _edit(source: bytes, wanted: dict[int, object], known: dict[int, Figure], section_sizes: list[int], decide) -> tuple[bytes, list, list]:
-    """캡션 자리(문서 전체에서 몇 번째 문단)마다 새 문단 하나를 넣는다. → (hwpx 바이트, 넣은 것 [(그림, 요청, 새 문단)], 넣지 못한 것 [{그림, 이유}]).
+    """캡션 자리(문서 전체에서 몇 번째 문단)마다 새 문단을 넣는다. → (hwpx 바이트, 넣은 것 [(그림, 요청, 새 문단들)], 넣지 못한 것 [{그림, 이유}]).
 
-    decide(figure, paragraphs, para, captions, request) → (앞에 넣을 문단, 모양을 따를 문단, 넣을 글) 또는 넣지 않는 까닭(문자열).
+    decide(figure, paragraphs, para, captions, request) → (앞에 넣을 문단, 모양을 따를 문단, 넣을 글 또는 글의 목록) 또는 넣지 않는 까닭(문자열).
+    글이 여럿이면 적힌 순서대로 위에서 아래로 놓인다.
     읽은 문서의 구역은 파일의 구역과 다를 수 있다(ncs_core.documents.normalize_sections가 앞부분과 본문으로 다시 나눈다).
     문단의 순서는 같으므로 문서 전체에서 몇 번째 문단인지로 맞추고, 파일의 문단 수가 읽은 것과 다르면 아무것도 넣지 않는다.
     """
@@ -105,9 +119,11 @@ def _edit(source: bytes, wanted: dict[int, object], known: dict[int, Figure], se
                 if parent is None or anchor.find(f".//{HP}secPr") is not None:
                     failed.append({"그림": figure.label, "이유": "구역의 첫 문단이라 그 앞에 줄을 넣을 수 없습니다. 한글에서 직접 적어 주세요"})
                     continue
-                new = _new_paragraph(template, text)
-                parent.insert(list(parent).index(anchor), new)
-                done.append((figure, request, new))
+                news = [_new_paragraph(template, line) for line in ([text] if isinstance(text, str) else text)]
+                at = list(parent).index(anchor)
+                for offset, new in enumerate(news):
+                    parent.insert(at + offset, new)
+                done.append((figure, request, news))
                 inserted = True
             if inserted:
                 changed[name] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -141,10 +157,12 @@ def insert_marks(source: bytes, marks: list[Mark], figures: list[Figure], sectio
 
     figures: 그 원고의 manuscript_figures 결과(캡션 자리와 이미 있는 AI 표기를 안다).
     section_sizes: 읽은 문서의 구역별 문단 수([len(s) for s in document.sections]).
-    요약: {'넣음': [{'그림', '줄'}], '이미 있음': [그림 번호…], '넣지 못함': [{'그림', '이유'}], '다시 읽기': 넣은 줄 가운데 같은 값으로 다시 읽힌 수}
+    요약: {'넣음': [{'그림', '줄'}], '이미 있음': [그림 번호…], '넣지 못함': [{'그림', '이유'}], '다시 읽기': 넣은 줄 가운데 같은 값으로 다시 읽힌 수,
+           '출처 줄 넣음': [{'그림', '줄'}]}
+    표기에 출처 줄(Mark.source)이 있고 그 그림에 출처 줄이 없으면 AI 활용 줄 위에 함께 넣는다(출처 줄 → AI 활용 줄 → 그림 번호).
     """
     flat, known = _places(figures, section_sizes)
-    summary: dict = {"넣음": [], "이미 있음": [], "넣지 못함": [], "다시 읽기": 0}
+    summary: dict = {"넣음": [], "이미 있음": [], "넣지 못함": [], "다시 읽기": 0, "출처 줄 넣음": []}
     wanted: dict[int, Mark] = {}
     for mark in marks:
         place = flat(mark.section, mark.para)
@@ -156,12 +174,18 @@ def insert_marks(source: bytes, marks: list[Mark], figures: list[Figure], sectio
     def decide(figure, paragraphs, para, captions, mark):
         if figure.ai is not None:
             return ALREADY
-        return paragraphs[para], _template(paragraphs, para, captions), ai_line(mark.tool, mark.mode, mark.on)
+        line = ai_line(mark.tool, mark.mode, mark.on)
+        if mark.source and not figure.source_line:
+            return paragraphs[para], paragraphs[para], [clean_source(mark.source), line]
+        return paragraphs[para], _template(paragraphs, para, captions), line
 
     content, done, failed = _edit(source, wanted, known, section_sizes, decide)
     summary["이미 있음"] = [item["그림"] for item in failed if item["이유"] == ALREADY]
     summary["넣지 못함"] += [item for item in failed if item["이유"] != ALREADY]
-    for figure, mark, new in done:
+    for figure, mark, news in done:
+        new = news[-1]
+        if len(news) > 1:
+            summary["출처 줄 넣음"].append({"그림": figure.label, "줄": para_text(news[0])})
         read = parse_ai_mark(para_text(new))
         if read is not None and (read.tool, read.mode, read.on) == (clean_tool(mark.tool), mark.mode, mark.on):
             summary["다시 읽기"] += 1
@@ -175,11 +199,7 @@ def insert_source_line(source: bytes, section: int, para: int, text: str, figure
     이미지 추천(REQ-02-011 '출처 표기 자동 삽입')이 쓴다 — 넣는 글은 이미지 저작권 DB의 출처 문구다. 이미 출처 줄이 있는 그림에는 넣지 않는다.
     그림에 AI 활용 줄이 있으면 그 위에 넣는다(출처 줄 → AI 활용 줄 → 그림 번호 순서). 새 문단의 모양은 캡션을 따른다.
     """
-    text = " ".join((text or "").split())
-    if not SOURCE.match(text):
-        raise ValueError("출처 줄은 ‘출처: ’로 시작해야 합니다")
-    if len(text) > SOURCE_MAX:
-        raise ValueError(f"출처 줄은 {SOURCE_MAX}자까지 넣을 수 있습니다")
+    text = clean_source(text)
     flat, known = _places(figures, section_sizes)
     place = flat(section, para)
     if place is None or place not in known:
@@ -207,7 +227,7 @@ def insert_source_line(source: bytes, section: int, para: int, text: str, figure
     content, done, failed = _edit(source, {place: text}, known, section_sizes, decide)
     if not done:
         return source, {"넣음": None, "줄": text, "이유": failed[0]["이유"] if failed else "넣지 못했습니다"}
-    return content, {"넣음": done[0][0].label, "줄": para_text(done[0][2]), "이유": ""}
+    return content, {"넣음": done[0][0].label, "줄": para_text(done[0][2][0]), "이유": ""}
 
 
 def mark_pictures(manuscript: str | Path, content: bytes, tools: dict[str, str], *, on: date, mode: str = "modified") -> tuple[bytes, dict]:

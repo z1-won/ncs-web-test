@@ -1,6 +1,6 @@
 // 이미지 AI 보완(REQ-02-006) — AI로 만들거나 고친 그림의 표기와 현황을 맡는다.
 //   ⑤ 유의 안내를 확인하고 → 원고의 그림을 읽어 → ③ AI를 쓴 그림에 활용 줄('OO를 활용하여 생성함/수정 보완함. 일자')을 넣은 원고 사본을 받고
-//   → ④ 서약서에 붙일 생성형 AI 결과물 현황(xlsx)을 받는다. 화질 보정(②)은 업스케일링 화면에서 하고, 제안본을 만들 때 표기를 함께 넣는다.
+//   (출처 줄이 없는 그림에는 사용자가 고르거나 적은 출처 줄을 함께 넣을 수 있다) → ④ 서약서에 붙일 생성형 AI 결과물 현황(xlsx)을 받는다. 화질 보정(②)은 업스케일링 화면에서 하고, 제안본을 만들 때 표기를 함께 넣는다.
 // 그림을 AI로 새로 만드는 일(①)은 이 화면에 없다. 서버는 올린 파일을 읽는 동안만 두고 지운다(ncs_web.routes.aiimage).
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -20,6 +20,13 @@ const MODE_OPTIONS = [
   { value: "generated", label: "생성함 (AI로 새로 만듦)" },
 ];
 const MODE_WORD = { modified: "수정 보완함", generated: "생성함" };
+// 출처 줄이 없는 그림에 AI 활용 줄과 함께 넣을 출처 줄 — 사용자가 고르거나 적은 것만 넣는다(서버는 지어내지 않는다)
+const SOURCE_OPTIONS = [
+  { value: "none", label: "넣지 않음 (원고에 직접 적음)" },
+  { value: "author", label: "집필진 제작(연도)" },
+  { value: "custom", label: "직접 입력" },
+];
+const SOURCE_PREFIX = "출처: ";
 const stem = (name) => (name || "원고").replace(/\.[^.]+$/, "");
 
 const STEPS = ["확인", "원고", "표기", "내려받기"];      // 단계 표시 — 확인 사항을 확인해야 원고를 올릴 수 있다
@@ -39,17 +46,24 @@ export default function AiImagePage() {
   const [tool, setTool] = useState("");
   const [mode, setMode] = useState("modified");
   const [day, setDay] = useState("");
+  const [sourceKind, setSourceKind] = useState("none");
+  const [sourceText, setSourceText] = useState("");
   const [shown, setShown] = useState(null);            // 미리 보기(서버 preview)
 
   useEffect(() => { api.aiImage.notice().then(({ ok, data: body }) => { if (ok) setNotice(body); }); }, []);
   // 파일을 바꾸면 앞 결과는 그 파일의 것이 아니다
   useEffect(() => { setData(null); setShown(null); setPicked(new Set()); setError(null); setDone(null); }, [manuscript, printCopy]);
-  useEffect(() => { setShown(null); setDone(null); }, [picked, tool, mode, day]);
+  useEffect(() => { setShown(null); setDone(null); }, [picked, tool, mode, day, sourceKind, sourceText]);
 
-  const marks = useMemo(() => (data ? data.그림.filter((row) => picked.has(row.key)).map((row) => ({ key: row.key, tool: tool.trim(), mode, date: day })) : []),
-    [data, picked, tool, mode, day]);
+  // 넣을 출처 줄: '집필진 제작'은 활용 일자의 연도로 채워 두고 고칠 수 있게 한다. 이미 출처 줄이 있는 그림에는 보내지 않는다
+  const sourceLine = sourceKind === "none" ? "" : sourceText.trim();
+  const sourceOk = sourceKind === "none" || (sourceLine.startsWith(SOURCE_PREFIX.trim()) && sourceLine.length > SOURCE_PREFIX.length);
+  const marks = useMemo(() => (data ? data.그림.filter((row) => picked.has(row.key)).map((row) => ({
+    key: row.key, tool: tool.trim(), mode, date: day, ...(sourceLine && !row["출처 줄"] ? { source: sourceLine } : {}),
+  })) : []), [data, picked, tool, mode, day, sourceLine]);
+  const sourceCount = marks.filter((mark) => mark.source).length;
   const open = data ? data.그림.filter((row) => !row["AI 표기"]) : [];
-  const marksReady = marks.length > 0 && tool.trim() && day;
+  const marksReady = marks.length > 0 && tool.trim() && day && sourceOk;
   const hasResults = data && (data.요약["AI 표기 있음"] > 0 || marksReady);
 
   async function read(e) {
@@ -82,10 +96,16 @@ export default function AiImagePage() {
     setBusy(null);
     if (!ok) { setError(message); return; }
     if (kind === "marked") {
-      setDone(`그림 ${summary?.넣음 ?? marks.length}개에 AI 활용 줄을 넣은 원고 사본을 내려받았습니다. 넣은 줄 ${summary?.["다시 읽기"] ?? 0}개를 다시 읽어 같은 값인지 확인했습니다. 한글에서 열어 글자 모양을 확인해 주세요.`);
+      setDone(`그림 ${summary?.넣음 ?? marks.length}개에 AI 활용 줄을 넣은 원고 사본을 내려받았습니다.${summary?.["출처 줄"] ? ` 출처 줄이 없던 그림 ${summary["출처 줄"]}개에는 고른 출처 줄도 넣었습니다.` : ""} 넣은 줄 ${summary?.["다시 읽기"] ?? 0}개를 다시 읽어 같은 값인지 확인했습니다. 한글에서 열어 글자 모양을 확인해 주세요.`);
     } else {
       setDone(`결과물 ${summary?.현황 ?? ""}건을 적은 현황표를 내려받았습니다. 서약서의 생성형 AI 결과물 현황에 옮겨 적어 주세요.`);
     }
+  }
+
+  function pickSource(kind) {
+    setSourceKind(kind);
+    if (kind === "author") setSourceText(`${SOURCE_PREFIX}집필진 제작(${(day || data?.오늘 || "").slice(0, 4)})`);
+    else if (kind === "custom") setSourceText((current) => current || SOURCE_PREFIX);
   }
 
   function toggle(key) {
@@ -174,7 +194,7 @@ export default function AiImagePage() {
           <dl className="upscale-summary">
             <div><dt>AI 활용 표기가 있는 그림</dt><dd><strong>{data.요약["AI 표기 있음"]}</strong>개</dd></div>
             <div><dt>표기가 없는 그림</dt><dd><strong>{open.length}</strong>개</dd><dd className="meta">AI를 쓴 그림만 골라 표기를 넣습니다</dd></div>
-            <div><dt>출처 줄이 없는 그림</dt><dd><strong>{data.요약["출처 줄 없음"]}</strong>개</dd><dd className="meta">출처 줄은 넣어 드리지 않습니다. 원고에 직접 적어 주세요</dd></div>
+            <div><dt>출처 줄이 없는 그림</dt><dd><strong>{data.요약["출처 줄 없음"]}</strong>개</dd><dd className="meta">아래 ‘출처 줄’에서 고르거나 적은 것만 넣습니다. 고르지 않으면 원고에 직접 적어 주세요</dd></div>
           </dl>
           {data.알림.length > 0 && <PageAlert kind="info">{data.알림.map((text) => <p key={text}>{text}</p>)}</PageAlert>}
 
@@ -196,6 +216,23 @@ export default function AiImagePage() {
                 </div>
               </div>
               <KrdsDateField id="ai-day" label="활용 일자" value={day} onChange={setDay} hint="AI를 쓴 날짜입니다." />
+              <div className="form-group">
+                <div className="form-tit"><label htmlFor="ai-source-kind">출처 줄 (출처 줄이 없는 그림에만)</label></div>
+                <div className="form-conts">
+                  <KrdsSelect id="ai-source-kind" value={sourceKind} options={SOURCE_OPTIONS} onChange={pickSource} title="넣을 출처 줄 선택" />
+                </div>
+                {sourceKind !== "none" && (
+                  <div className="form-conts">
+                    <input id="ai-source-text" type="text" className="krds-input" maxLength={500} value={sourceText} aria-label="넣을 출처 줄"
+                           placeholder="출처: 집필진 제작(2026)" onChange={(e) => setSourceText(e.target.value)} />
+                  </div>
+                )}
+                <p className="form-hint">
+                  {sourceKind === "none" ? "출처를 알 수 없으면 넣지 않습니다. 없는 출처를 대신 지어 드리지 않습니다."
+                    : sourceOk ? "고른 그림 가운데 출처 줄이 없는 그림에만, AI 활용 줄 위에 이 줄을 그대로 넣습니다. 이미 출처 줄이 있는 그림은 그대로 둡니다."
+                      : "‘출처: ’로 시작하게 적어 주세요."}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -217,7 +254,9 @@ export default function AiImagePage() {
                     </td>
                     <th scope="row">[{row["그림 번호"]}]<span className="meta">{row.그림명}</span></th>
                     <td>
-                      {row["출처 줄"] || <span className="krds-badge bg-light-warning">출처 줄 없음</span>}
+                      {row["출처 줄"] || (picked.has(row.key) && sourceLine && sourceOk
+                        ? <><span className="krds-badge bg-light-information">넣을 출처 줄</span> <span className="ai-line">{sourceLine}</span></>
+                        : <span className="krds-badge bg-light-warning">출처 줄 없음</span>)}
                       {/* 변경금지 원본은 AI 수정 보완·생성의 재료가 아니다(REQ-02-006 ⑥) — 고를 수 없게 하고 이유를 보인다 */}
                       {row.공공누리?.변경금지 && <><br /><span className="krds-badge bg-light-danger">변경금지 원본</span> <span className="meta">AI 활용 표기 대상에서 제외</span></>}
                       {row.공공누리 && !row.공공누리.변경금지 && row.공공누리.비상업 && <><br /><span className="krds-badge bg-light-warning">비상업 원본</span> <span className="meta">결과물에 비상업 조건 표시</span></>}
@@ -241,7 +280,7 @@ export default function AiImagePage() {
             {error && <PageAlert kind="danger">{error}</PageAlert>}
             {done && !error && <PageAlert kind="success">{done}</PageAlert>}
             <div className="bar-row">
-              <span className="meta" role="status">고른 그림 <strong>{picked.size}</strong>개{marks.length > 0 && !marksReady ? ". 도구와 일자를 적어 주세요" : ""}</span>
+              <span className="meta" role="status">고른 그림 <strong>{picked.size}</strong>개{marks.length > 0 && !marksReady ? (sourceOk ? ". 도구와 일자를 적어 주세요" : ". 출처 줄을 ‘출처: ’로 시작하게 적어 주세요") : ""}{marksReady && sourceCount > 0 ? `. 출처 줄을 함께 넣을 그림 ${sourceCount}개` : ""}</span>
               <div className="bar-actions">
                 <button type="button" className="krds-btn medium tertiary" disabled={!!busy || !hasResults} onClick={() => act("preview")}>
                   {busy === "preview" ? "만드는 중" : "미리 보기"}
@@ -251,7 +290,7 @@ export default function AiImagePage() {
                   {busy === "results" ? "만드는 중" : "결과물 현황 내려받기"}
                 </button>
                 <button type="button" className="krds-btn medium primary" disabled={!!busy || !agreed || !marksReady || !data["표기 넣기"]} onClick={() => act("marked")}
-                        title="고른 그림의 캡션 위에 AI 활용 줄을 넣은 원고 사본(hwpx). 다른 글은 그대로입니다">
+                        title="고른 그림의 캡션 위에 AI 활용 줄(출처 줄을 골랐으면 출처 줄도)을 넣은 원고 사본(hwpx). 다른 글은 그대로입니다">
                   {busy === "marked" ? "만드는 중" : `표기 넣은 원고 내려받기(그림 ${marksReady ? marks.length : 0}개)`}
                 </button>
               </div>
@@ -283,7 +322,7 @@ function Preview({ shown }) {
           <ul className="ai-lines">
             {shown.표기.map((item) => (
               <li key={item.key}>
-                {item.줄.map((line, i) => <code key={i} className={i === item.줄.length - 2 ? "is-new" : undefined}>{line}</code>)}
+                {item.줄.map((line, i) => <code key={i} className={i === item.줄.length - 2 || (item["출처 줄 넣음"] && i === 0) ? "is-new" : undefined}>{line}</code>)}
                 {item["출처 줄 없음"] && <span className="krds-badge bg-light-warning">출처 줄 없음</span>}
               </li>
             ))}
